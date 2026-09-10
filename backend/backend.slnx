@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="FitSocial.Domain/FitSocial.Domain.csproj" />
+  <Project Path="FitSocial.Application/FitSocial.Application.csproj" />
+  <Project Path="FitSocial.Infrastructure/FitSocial.Infrastructure.csproj" />
+  <Project Path="FitSocial.API/FitSocial.API.csproj" />
+</Solution>

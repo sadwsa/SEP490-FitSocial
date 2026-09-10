@@ -1,0 +1,6 @@
+@FitSocial.API_HostAddress = http://localhost:5258
+
+GET {{FitSocial.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

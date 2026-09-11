@@ -1,0 +1,109 @@
+<div class="top-row ps-3 pe-3 navbar navbar-dark d-flex align-items-center justify-content-between">
+    <a class="navbar-brand d-flex align-items-center gap-2 fw-bold text-white text-decoration-none" href="">
+        <span class="fs-4">🏋️</span>
+        <span class="fs-5 tracking-wide">FitSocial</span>
+    </a>
+    <button title="Toggle navigation" class="navbar-toggler d-md-none" @onclick="ToggleNavMenu">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column px-2 py-3">
+        <!-- Menu chung cho mọi người dùng -->
+        <div class="nav-item">
+            <NavLink class="nav-link px-3 py-2" href="" Match="NavLinkMatch.All">
+                <span class="nav-icon">🏠</span>
+                <span>Bảng tin</span>
+            </NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link px-3 py-2" href="workouts">
+                <span class="nav-icon">💪</span>
+                <span>Bài tập & Lịch</span>
+            </NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link px-3 py-2" href="community">
+                <span class="nav-icon">👥</span>
+                <span>Cộng đồng</span>
+            </NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link px-3 py-2" href="profile">
+                <span class="nav-icon">👤</span>
+                <span>Trang cá nhân</span>
+            </NavLink>
+        </div>
+
+        <!-- Menu dành riêng cho Admin -->
+        <AuthorizeView Roles="@AppRoles.Admin">
+            <div class="text-uppercase text-muted px-3 mt-3 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">Quản trị</div>
+            <div class="nav-item">
+                <NavLink class="nav-link px-3 py-2" href="admin/users">
+                    <span class="nav-icon">🛡️</span>
+                    <span>Quản lý người dùng</span>
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link px-3 py-2" href="admin/reports">
+                    <span class="nav-icon">📊</span>
+                    <span>Báo cáo hệ thống</span>
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
+        <!-- Menu dành riêng cho Huấn luyện viên (PT) -->
+        <AuthorizeView Roles="@AppRoles.PersonalTrainer">
+            <div class="text-uppercase text-muted px-3 mt-3 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">HLV (PT)</div>
+            <div class="nav-item">
+                <NavLink class="nav-link px-3 py-2" href="pt/clients">
+                    <span class="nav-icon">📋</span>
+                    <span>Danh sách học viên</span>
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link px-3 py-2" href="pt/schedules">
+                    <span class="nav-icon">📅</span>
+                    <span>Lịch dạy & Đặt lịch</span>
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
+        <!-- Menu dành riêng cho Chủ phòng Gym (GymOwner) -->
+        <AuthorizeView Roles="@AppRoles.GymOwner">
+            <div class="text-uppercase text-muted px-3 mt-3 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">Chủ phòng Gym</div>
+            <div class="nav-item">
+                <NavLink class="nav-link px-3 py-2" href="gym/facilities">
+                    <span class="nav-icon">🏢</span>
+                    <span>Quản lý cơ sở</span>
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link px-3 py-2" href="gym/checkin">
+                    <span class="nav-icon">🎟️</span>
+                    <span>Check-in hội viên</span>
+                </NavLink>
+            </div>
+        </AuthorizeView>
+
+        <hr class="my-3 border-secondary opacity-25" />
+        <div class="nav-item">
+            <NavLink class="nav-link px-3 py-2" href="api-status">
+                <span class="nav-icon">⚡</span>
+                <span>Kiểm tra API & Roles</span>
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+}

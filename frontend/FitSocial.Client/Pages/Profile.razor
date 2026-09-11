@@ -1,0 +1,78 @@
+@page "/profile"
+@attribute [Authorize]
+@inject IAuthService AuthService
+
+<PageTitle>Trang cá nhân - FitSocial</PageTitle>
+
+<div class="fit-card mb-4">
+    <div class="row align-items-center g-3">
+        <div class="col-auto">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop" 
+                 class="fit-avatar fit-avatar-lg" alt="Avatar" />
+        </div>
+        <div class="col">
+            <h4 class="fw-bold mb-1">
+                <AuthorizeView>
+                    <Authorized>@context.User.Identity?.Name</Authorized>
+                    <NotAuthorized>Vận động viên FitSocial</NotAuthorized>
+                </AuthorizeView>
+            </h4>
+            <p class="text-muted mb-2">Đam mê rèn luyện thể thao & xây dựng lối sống tích cực 💪</p>
+            <div class="d-flex gap-4 text-secondary small">
+                <span><strong>128</strong> Bài viết</span>
+                <span><strong>1.4k</strong> Người theo dõi</span>
+                <span><strong>320</strong> Đang theo dõi</span>
+            </div>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-sm btn-outline-secondary">Chỉnh sửa hồ sơ</button>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="fit-card">
+            <h6 class="fw-bold mb-3">Thông số thể chất (Stats)</h6>
+            <ul class="list-unstyled mb-0">
+                <li class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">Chiều cao:</span>
+                    <strong>175 cm</strong>
+                </li>
+                <li class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">Cân nặng:</span>
+                    <strong>68 kg</strong>
+                </li>
+                <li class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">Tỉ lệ mỡ (Body fat):</span>
+                    <strong>14%</strong>
+                </li>
+                <li class="d-flex justify-content-between py-2">
+                    <span class="text-muted">Chuỗi tập liên tục:</span>
+                    <strong class="text-danger">🔥 14 ngày</strong>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="fit-card">
+            <h6 class="fw-bold mb-3">Nhật ký tập luyện gần đây</h6>
+            <div class="border rounded p-3 mb-2 bg-light">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong>Tập Lưng Xô (Pull Day)</strong>
+                    <span class="badge bg-success">Hoàn thành</span>
+                </div>
+                <div class="text-muted small">Deadlift 120kg x 3 reps, Lat Pulldown 60kg x 10 reps - 65 phút</div>
+            </div>
+
+            <div class="border rounded p-3 bg-light">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong>Chạy bộ phục hồi (Zone 2)</strong>
+                    <span class="badge bg-success">Hoàn thành</span>
+                </div>
+                <div class="text-muted small">Cự ly 6.2km - Pace 5:45 min/km - 35 phút</div>
+            </div>
+        </div>
+    </div>
+</div>

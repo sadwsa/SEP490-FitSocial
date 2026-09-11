@@ -1,0 +1,175 @@
+@page "/"
+@inject IPostService PostService
+
+<PageTitle>Bảng tin - FitSocial</PageTitle>
+
+<div class="row g-4">
+    <!-- Main Feed Column -->
+    <div class="col-lg-8">
+        <!-- Create Post Card Skeleton -->
+        <div class="fit-card">
+            <div class="d-flex gap-3 align-items-center mb-3">
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop" 
+                     class="fit-avatar" alt="My Avatar" />
+                <input type="text" @bind="newPostContent" 
+                       placeholder="Hôm nay bạn đã tập luyện thế nào? Chia sẻ thành tích ngay..." 
+                       class="form-control rounded-pill bg-light border-0 px-3 py-2" />
+            </div>
+            <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-light text-muted d-flex align-items-center gap-1">
+                        <span>📷</span> <span>Ảnh / Video</span>
+                    </button>
+                    <button class="btn btn-sm btn-light text-muted d-flex align-items-center gap-1">
+                        <span>🏷️</span> <span>Gắn thẻ bài tập</span>
+                    </button>
+                </div>
+                <button class="btn-fit-primary btn-sm" @onclick="HandleCreatePost" disabled="@string.IsNullOrWhiteSpace(newPostContent)">
+                    Đăng bài
+                </button>
+            </div>
+        </div>
+
+        <!-- Feed Posts List -->
+        @if (isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Đang tải bảng tin thể thao...</p>
+            </div>
+        }
+        else if (posts == null || !posts.Any())
+        {
+            <div class="fit-card text-center py-5">
+                <h4>Chưa có bài viết nào</h4>
+                <p class="text-muted">Hãy là người đầu tiên chia sẻ hành trình tập luyện hôm nay!</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var post in posts)
+            {
+                <div class="fit-card" @key="post.Id">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="d-flex gap-3 align-items-center">
+                            <img src="@(post.AuthorAvatar ?? "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop")" 
+                                 class="fit-avatar" alt="@post.AuthorName" />
+                            <div>
+                                <h6 class="mb-0 fw-bold">@post.AuthorName</h6>
+                                <small class="text-muted">@post.CreatedAt.ToLocalTime().ToString("g")</small>
+                            </div>
+                        </div>
+                        <span class="fit-badge fit-badge-primary">🔥 Tập luyện</span>
+                    </div>
+
+                    <p class="mb-3 text-secondary" style="white-space: pre-wrap;">@post.Content</p>
+
+                    <div class="d-flex justify-content-between align-items-center pt-3 border-top text-muted small">
+                        <button class="btn btn-sm @(post.IsLikedByCurrentUser ? "text-danger fw-bold" : "text-muted")" 
+                                @onclick="() => ToggleLike(post)">
+                            <span>@(post.IsLikedByCurrentUser ? "❤️" : "🤍")</span> 
+                            <span>@post.LikeCount Thích</span>
+                        </button>
+                        <button class="btn btn-sm text-muted">
+                            <span>💬</span> <span>@post.CommentCount Bình luận</span>
+                        </button>
+                        <button class="btn btn-sm text-muted">
+                            <span>↗️</span> <span>Chia sẻ</span>
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Right Sidebar Widgets -->
+    <div class="col-lg-4">
+        <!-- Daily Workout Target -->
+        <div class="fit-card mb-4">
+            <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                <span>🎯</span> Mục tiêu hôm nay
+            </h6>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between small mb-1">
+                    <span>Calo tiêu hao:</span>
+                    <strong class="text-primary">450 / 600 kcal</strong>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-warning" role="progressbar" style="width: 75%"></div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between small mb-1">
+                    <span>Thời gian tập:</span>
+                    <strong class="text-success">45 / 60 phút</strong>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: 75%"></div>
+                </div>
+            </div>
+            <a href="workouts" class="btn btn-sm btn-fit-outline w-100 mt-2">Bắt đầu tập luyện</a>
+        </div>
+
+        <!-- Suggested Athletes -->
+        <div class="fit-card">
+            <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                <span>⚡</span> Gợi ý kết nối
+            </h6>
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <div class="d-flex gap-2 align-items-center">
+                    <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&auto=format&fit=crop" 
+                         class="fit-avatar fit-avatar-sm" alt="Tuấn Trần" />
+                    <div>
+                        <div class="fw-semibold small">Tuấn Trần (PT)</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">Calisthenics Coach</div>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary py-0 px-2 rounded-pill small">+ Theo dõi</button>
+            </div>
+
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex gap-2 align-items-center">
+                    <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=80&auto=format&fit=crop" 
+                         class="fit-avatar fit-avatar-sm" alt="Hà My" />
+                    <div>
+                        <div class="fw-semibold small">Hà My Yoga</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">Yoga Instructor</div>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary py-0 px-2 rounded-pill small">+ Theo dõi</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<PostDto>? posts;
+    private bool isLoading = true;
+    private string newPostContent = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await PostService.GetFeedPostsAsync();
+        posts = response.Data ?? new List<PostDto>();
+        isLoading = false;
+    }
+
+    private async Task HandleCreatePost()
+    {
+        if (string.IsNullOrWhiteSpace(newPostContent)) return;
+
+        var request = new CreatePostRequest { Content = newPostContent };
+        var result = await PostService.CreatePostAsync(request);
+        if (result.Success && result.Data != null)
+        {
+            posts?.Insert(0, result.Data);
+            newPostContent = string.Empty;
+        }
+    }
+
+    private void ToggleLike(PostDto post)
+    {
+        post.IsLikedByCurrentUser = !post.IsLikedByCurrentUser;
+        post.LikeCount += post.IsLikedByCurrentUser ? 1 : -1;
+    }
+}

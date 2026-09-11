@@ -1,0 +1,51 @@
+.top-row {
+    height: 4rem;
+    background-color: rgba(15, 23, 42, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.navbar-brand {
+    font-size: 1.25rem;
+    letter-spacing: 0.5px;
+}
+
+.nav-icon {
+    font-size: 1.2rem;
+    width: 2rem;
+    display: inline-block;
+    text-align: center;
+}
+
+.nav-item {
+    font-size: 0.95rem;
+    margin-bottom: 0.35rem;
+}
+
+.nav-item ::deep a {
+    color: #94A3B8;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.nav-item ::deep a:hover {
+    color: #FFFFFF;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.nav-item ::deep a.active {
+    color: #FFFFFF;
+    background: linear-gradient(90deg, rgba(255, 87, 34, 0.25) 0%, rgba(255, 87, 34, 0.1) 100%);
+    border-left: 3px solid #FF5722;
+    font-weight: 600;
+}
+
+@media (min-width: 768px) {
+    .nav-scrollable {
+        height: calc(100vh - 4rem);
+        overflow-y: auto;
+    }
+}

@@ -1,0 +1,250 @@
+:root {
+    --primary-color: #FF5722;
+    --primary-hover: #E64A19;
+    --primary-light: #FFCCBC;
+    --secondary-color: #10B981;
+    --dark-bg: #0F172A;
+    --sidebar-bg: #1E293B;
+    --card-bg: #FFFFFF;
+    --text-primary: #1E293B;
+    --text-secondary: #64748B;
+    --border-color: #E2E8F0;
+    --surface-hover: #F8FAFC;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #F1F5F9;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* Page Layout */
+.page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+@media (min-width: 768px) {
+    .page {
+        flex-direction: row;
+    }
+}
+
+/* Sidebar */
+.sidebar {
+    background-color: var(--sidebar-bg);
+    color: #F8FAFC;
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .sidebar {
+        width: 260px;
+        min-height: 100vh;
+        position: sticky;
+        top: 0;
+    }
+}
+
+/* Main Area */
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* App Header */
+.app-header {
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.search-box {
+    position: relative;
+    max-width: 400px;
+    width: 100%;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 0.5rem 1rem 0.5rem 2.25rem;
+    border-radius: 9999px;
+    border: 1px solid var(--border-color);
+    background-color: #F8FAFC;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background-color: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(255, 87, 34, 0.15);
+}
+
+.search-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94A3B8;
+    pointer-events: none;
+}
+
+/* Content Container */
+.content-container {
+    padding: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Cards */
+.fit-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+    transition: box-shadow 0.2s;
+}
+
+.fit-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+/* Buttons */
+.btn-fit-primary {
+    background: linear-gradient(135deg, #FF6F00 0%, #FF5722 100%);
+    color: #FFFFFF;
+    border: none;
+    padding: 0.55rem 1.25rem;
+    border-radius: 8px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: transform 0.1s, opacity 0.2s;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn-fit-primary:hover {
+    opacity: 0.95;
+    color: #FFFFFF;
+    transform: translateY(-1px);
+}
+
+.btn-fit-outline {
+    background: transparent;
+    color: var(--primary-color);
+    border: 1.5px solid var(--primary-color);
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-fit-outline:hover {
+    background: var(--primary-color);
+    color: #FFFFFF;
+}
+
+/* Avatar */
+.fit-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #FFFFFF;
+    box-shadow: 0 0 0 1px var(--border-color);
+}
+
+.fit-avatar-sm {
+    width: 32px;
+    height: 32px;
+}
+
+.fit-avatar-lg {
+    width: 80px;
+    height: 80px;
+}
+
+/* Badges */
+.fit-badge {
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.fit-badge-success {
+    background-color: #DCFCE7;
+    color: #166534;
+}
+
+.fit-badge-primary {
+    background-color: #FFEDD5;
+    color: #C2410C;
+}
+
+/* Loading Spinner */
+.loading-progress {
+    position: relative;
+    display: block;
+    width: 6rem;
+    height: 6rem;
+    margin: 25vh auto 1rem auto;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: #e2e8f0;
+    stroke-width: 0.5rem;
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+}
+
+.loading-progress circle:last-child {
+    stroke: var(--primary-color);
+    stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
+    transition: stroke-dasharray 0.05s ease-in-out;
+}
+
+.loading-progress-text {
+    position: absolute;
+    text-align: center;
+    font-weight: 600;
+    color: var(--primary-color);
+    inset: calc(25vh + 2.25rem) 0 auto 0;
+}
+
+.loading-progress-text:after {
+    content: var(--blazor-load-percentage-text, "Đang tải FitSocial...");
+}

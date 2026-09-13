@@ -5,15 +5,17 @@
 @using Microsoft.AspNetCore.Components.Web
 @implements IDisposable
 @inject IAuthService AuthService
+@inject ISportService SportService
+@inject GoogleSignInService GoogleSignIn
 @inject NavigationManager Navigation
 
-<PageTitle>Tham gia cộng đồng FitSocial</PageTitle>
+<PageTitle>Join the FitSocial Community</PageTitle>
 
 <div class="reg-hero">
     <img src="Logo_FitSocial.jpg" alt="FitSocial" class="hero-logo" />
     <div class="hero-text">
-        <h1 class="hero-title">Tham Gia Cộng Đồng <span>FitSocial</span></h1>
-        <p class="hero-sub">Kích hoạt tiềm năng thể chất vô hạn, đồng bộ quá trình tập luyện thông minh và kết nối cùng hàng ngàn vận động viên, huấn luyện viên hàng đầu.</p>
+        <h1 class="hero-title">Join the <span>FitSocial</span> Community</h1>
+        <p class="hero-sub">Unlock your unlimited physical potential, sync your smart training journey and connect with thousands of athletes and top coaches.</p>
     </div>
 </div>
 
@@ -31,11 +33,18 @@
     </div>
 
     <!-- Google -->
-    <button type="button" class="btn-google" @onclick="HandleGoogleRegister">
-        <AppIcon Name="google" /> Đăng ký nhanh bằng Google
-    </button>
+    @if (GoogleSignIn.IsConfigured && googleButtonOk)
+    {
+        <div id="google-register-btn" class="google-btn-wrap"></div>
+    }
+    else
+    {
+        <button type="button" class="btn-google" @onclick="HandleGoogleRegister">
+            <AppIcon Name="google" /> Quick sign up with Google
+        </button>
+    }
 
-    <div class="divider"><span>HOẶC ĐĂNG KÝ BẰNG EMAIL</span></div>
+    <div class="divider"><span>OR SIGN UP WITH EMAIL</span></div>
 
     @if (!string.IsNullOrEmpty(infoMessage))
     {
@@ -54,16 +63,16 @@
         <DataAnnotationsValidator />
 
         <div class="field">
-            <label>Họ và tên <span class="req">*</span></label>
+            <label>Full name <span class="req">*</span></label>
             <div class="input-wrap">
                 <span class="input-icon"><AppIcon Name="person" /></span>
-                <InputText @bind-Value="registerModel.FullName" class="form-control has-icon" placeholder="Ví dụ: Hoàng Minh Long" />
+                <InputText @bind-Value="registerModel.FullName" class="form-control has-icon" placeholder="E.g.: John Smith" />
             </div>
             <ValidationMessage For="@(() => registerModel.FullName)" class="field-error" />
         </div>
 
         <div class="field">
-            <label>Địa chỉ Email <span class="req">*</span></label>
+            <label>Email address <span class="req">*</span></label>
             <div class="input-wrap">
                 <span class="input-icon"><AppIcon Name="envelope" /></span>
                 <InputText @bind-Value="registerModel.Email" class="form-control has-icon" placeholder="athlete@fitsocial.vn" />
@@ -72,11 +81,11 @@
         </div>
 
         <div class="field">
-            <label>Mật khẩu bảo mật <span class="req">*</span></label>
+            <label>Secure password <span class="req">*</span></label>
             <div class="input-wrap">
                 <span class="input-icon"><AppIcon Name="lock" /></span>
-                <InputText type="@(showPassword ? "text" : "password")" @bind-Value="registerModel.Password" class="form-control has-icon has-eye" placeholder="Tối thiểu 8 ký tự" />
-                <button type="button" class="eye-btn" @onclick="() => showPassword = !showPassword" title="Hiện/ẩn mật khẩu">
+                <InputText type="@(showPassword ? "text" : "password")" @bind-Value="registerModel.Password" class="form-control has-icon has-eye" placeholder="Minimum 8 characters" />
+                <button type="button" class="eye-btn" @onclick="() => showPassword = !showPassword" title="Show/hide password">
                     <AppIcon Name="@(showPassword ? "eye-slash" : "eye")" />
                 </button>
             </div>
@@ -84,29 +93,64 @@
         </div>
 
         <div class="field">
-            <label>Xác nhận mật khẩu <span class="req">*</span></label>
+            <label>Confirm password <span class="req">*</span></label>
             <div class="input-wrap">
                 <span class="input-icon"><AppIcon Name="lock" /></span>
-                <InputText type="@(showConfirmPassword ? "text" : "password")" @bind-Value="registerModel.ConfirmPassword" class="form-control has-icon has-eye" placeholder="Nhập lại mật khẩu" />
-                <button type="button" class="eye-btn" @onclick="() => showConfirmPassword = !showConfirmPassword" title="Hiện/ẩn mật khẩu">
+                <InputText type="@(showConfirmPassword ? "text" : "password")" @bind-Value="registerModel.ConfirmPassword" class="form-control has-icon has-eye" placeholder="Re-enter your password" />
+                <button type="button" class="eye-btn" @onclick="() => showConfirmPassword = !showConfirmPassword" title="Show/hide password">
                     <AppIcon Name="@(showConfirmPassword ? "eye-slash" : "eye")" />
                 </button>
             </div>
             <ValidationMessage For="@(() => registerModel.ConfirmPassword)" class="field-error" />
         </div>
 
-        <!-- Mục tiêu thể thao (lựa chọn hiển thị, không gửi lên API) -->
+        <!-- Mục tiêu thể thao (chọn nhiều, lưu vào UserFavoriteSports) -->
         <div class="field">
-            <label>Mục tiêu thể thao chính</label>
-            <div class="goal-grid">
-                @foreach (var g in goals)
+            <label class="goal-title">
+                Main sport goals
+                <span class="goal-hint">(you can select multiple)</span>
+                @if (selectedSportIds.Count > 0)
                 {
-                    <button type="button" class="goal-card @(selectedGoal == g.Value ? "active" : "")" @onclick="() => selectedGoal = g.Value">
-                        <span class="goal-icon"><AppIcon Name="@g.Icon" /></span>
-                        <span class="goal-label">@g.Label</span>
-                    </button>
+                    <span class="selected-count">Selected @selectedSportIds.Count</span>
                 }
-            </div>
+            </label>
+            @if (isLoadingSports)
+            {
+                <div class="sports-loading">
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    <span>Loading sports list...</span>
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(sportsError))
+            {
+                <div class="sports-error">
+                    <span>@sportsError</span>
+                    <button type="button" class="resend-link" @onclick="LoadSportsAsync">Retry</button>
+                </div>
+            }
+            else if (sports.Count == 0)
+            {
+                <div class="sports-empty">No sports data available.</div>
+            }
+            else
+            {
+                <div class="goal-grid">
+                    @foreach (var s in sports)
+                    {
+                        <button type="button"
+                                class="goal-card @(selectedSportIds.Contains(s.SportId) ? "active" : "")"
+                                @onclick="() => ToggleSport(s.SportId)"
+                                title="@s.SportName">
+                            @if (selectedSportIds.Contains(s.SportId))
+                            {
+                                <span class="goal-check"><AppIcon Name="check" /></span>
+                            }
+                            <span class="goal-icon"><AppIcon Name="@GetSportIcon(s.SportName)" /></span>
+                            <span class="goal-label">@s.SportName</span>
+                        </button>
+                    }
+                </div>
+            }
         </div>
 
         <!-- OTP -->
@@ -114,8 +158,8 @@
             <div class="otp-head">
                 <span class="otp-icon"><AppIcon Name="envelope" /></span>
                 <div>
-                    <strong>Xác thực mã OTP bảo mật</strong>
-                    <p>Mã xác thực OTP (6 chữ số) sẽ được gửi đến email của bạn để kích hoạt tài khoản ngay sau khi xác nhận.</p>
+                    <strong>Secure OTP verification</strong>
+                    <p>A 6-digit OTP code will be sent to your email to activate your account right after confirmation.</p>
                 </div>
             </div>
 
@@ -135,24 +179,24 @@
             </div>
             @if (showOtpError && CombinedOtp.Length != 6)
             {
-                <div class="field-error text-center">Vui lòng nhập đầy đủ mã OTP 6 chữ số.</div>
+                <div class="field-error text-center">Please enter the full 6-digit OTP code.</div>
             }
             <div class="otp-foot">
-                <span class="resend-hint">Chưa nhận được mã?</span>
+                <span class="resend-hint">Didn't receive the code?</span>
                 @if (!otpSent)
                 {
                     <button type="button" class="resend-link" @onclick="HandleSendOtp" disabled="@isSendingOtp">
-                        <AppIcon Name="refresh" /> Gửi mã OTP@(isSendingOtp ? "..." : "")
+                        <AppIcon Name="refresh" /> Send OTP@(isSendingOtp ? "..." : "")
                     </button>
                 }
                 else if (countdown > 0)
                 {
-                    <span class="resend-wait"><AppIcon Name="refresh" /> Gửi lại mã OTP (@(countdown)s)</span>
+                    <span class="resend-wait"><AppIcon Name="refresh" /> Resend OTP (@(countdown)s)</span>
                 }
                 else
                 {
                     <button type="button" class="resend-link" @onclick="HandleSendOtp" disabled="@isSendingOtp">
-                        <AppIcon Name="refresh" /> Gửi lại mã OTP@(isSendingOtp ? "..." : "")
+                        <AppIcon Name="refresh" /> Resend OTP@(isSendingOtp ? "..." : "")
                     </button>
                 }
             </div>
@@ -161,29 +205,29 @@
         <!-- Điều khoản -->
         <label class="terms">
             <input type="checkbox" @bind="agreedTerms" />
-            <span>Tôi đồng ý với <a href="" @onclick:preventDefault>Điều khoản dịch vụ</a> và <a href="" @onclick:preventDefault>Chính sách bảo mật</a> của nền tảng thể thao FitSocial.</span>
+            <span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> of the FitSocial sports platform.</span>
         </label>
         @if (showTermsError && !agreedTerms)
         {
-            <div class="field-error">Vui lòng đồng ý với điều khoản dịch vụ để tiếp tục.</div>
+            <div class="field-error">Please agree to the terms of service to continue.</div>
         }
 
         <button type="submit" class="btn-auth-primary" disabled="@isLoading">
             @if (isLoading)
             {
                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                <span>Đang tạo tài khoản...</span>
+                <span>Creating account...</span>
             }
             else
             {
-                <span>Tạo Tài Khoản Học Viên Ngay →</span>
+                <span>Create Trainee Account Now →</span>
             }
         </button>
     </EditForm>
 </div>
 
 <div class="reg-footer">
-    Đã có tài khoản? <a href="login">Đăng nhập ngay</a>
+    Already have an account? <a href="login">Log in now</a>
 </div>
 
 @code {
@@ -191,7 +235,6 @@
     private EditContext editContext = default!;
 
     private string selectedRole = "TRAINEE";
-    private string selectedGoal = "TANG_CO";
     private bool showPassword = false;
     private bool showConfirmPassword = false;
     private bool agreedTerms = false;
@@ -205,20 +248,18 @@
     private bool otpSent = false;
     private bool isSendingOtp = false;
     private bool isLoading = false;
+    private bool googleButtonOk = true;
     private string[] otpDigits = new string[6] { "", "", "", "", "", "" };
     private ElementReference[] otpRefs = new ElementReference[6];
 
     private int countdown = 60;
     private Timer? timer;
 
-    private record GoalOption(string Value, string Label, string Icon);
-    private readonly List<GoalOption> goals = new()
-    {
-        new("TANG_CO", "Tăng Cơ", "dumbbell"),
-        new("GIAM_MO", "Giảm Mỡ", "fire"),
-        new("POWER", "Powerlifting", "trophy"),
-        new("THE_LUC", "Thể Lực", "activity"),
-    };
+    // Danh sách môn thể thao tải từ API (GET api/sports), cho phép chọn nhiều
+    private List<SportDto> sports = new();
+    private HashSet<Guid> selectedSportIds = new();
+    private bool isLoadingSports = true;
+    private string? sportsError;
 
     private string CombinedOtp => string.Concat(otpDigits);
 
@@ -227,11 +268,95 @@
         editContext = new EditContext(registerModel);
     }
 
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSportsAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && GoogleSignIn.IsConfigured)
+        {
+            GoogleSignIn.OnCredential += HandleGoogleCredentialAsync;
+            googleButtonOk = await GoogleSignIn.RenderButtonAsync("google-register-btn", "signup_with");
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleGoogleCredentialAsync(string idToken)
+    {
+        errorMessage = null;
+        successMessage = null;
+        infoMessage = null;
+        isLoading = true;
+        StateHasChanged();
+
+        var result = await AuthService.LoginWithGoogleAsync(idToken);
+        if (result.Success)
+        {
+            successMessage = "Google sign-in successful! Redirecting...";
+            StateHasChanged();
+            await Task.Delay(1200);
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            errorMessage = result.Message ?? "Google sign-in failed. Please try again.";
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadSportsAsync()
+    {
+        isLoadingSports = true;
+        sportsError = null;
+
+        var result = await SportService.GetSportsAsync();
+        if (result.Success && result.Data != null)
+        {
+            sports = result.Data;
+        }
+        else
+        {
+            sportsError = result.Message ?? "Could not load the sports list.";
+        }
+
+        isLoadingSports = false;
+    }
+
+    private void ToggleSport(Guid sportId)
+    {
+        if (!selectedSportIds.Add(sportId))
+        {
+            selectedSportIds.Remove(sportId);
+        }
+    }
+
+    private static string GetSportIcon(string sportName)
+    {
+        var name = sportName.ToLowerInvariant();
+        if (name.Contains("gym") || name.Contains("hình") || name.Contains("tạ") || name.Contains("fitness") || name.Contains("power"))
+            return "dumbbell";
+        if (name.Contains("bóng đá") || name.Contains("bóng rổ") || name.Contains("bóng chuyền"))
+            return "trophy";
+        if (name.Contains("cầu") || name.Contains("tennis") || name.Contains("bóng bàn") || name.Contains("golf"))
+            return "ball";
+        if (name.Contains("chạy") || name.Contains("run") || name.Contains("đạp") || name.Contains("cardio") || name.Contains("thể lực"))
+            return "activity";
+        if (name.Contains("bơi") || name.Contains("lội") || name.Contains("swim"))
+            return "waves";
+        if (name.Contains("võ") || name.Contains("mma") || name.Contains("box") || name.Contains("karate") || name.Contains("judo") || name.Contains("muay"))
+            return "fire";
+        return "activity";
+    }
+
     private void SelectRole(string role)
     {
         if (role == "COACH")
         {
-            infoMessage = "Hiện chỉ hỗ trợ đăng ký tài khoản Học viên (Trainee).";
+            infoMessage = "Only Trainee accounts are supported for now.";
             return;
         }
         selectedRole = role;
@@ -240,7 +365,9 @@
 
     private void HandleGoogleRegister()
     {
-        infoMessage = "Đăng ký bằng Google hiện chưa được hỗ trợ. Vui lòng đăng ký bằng email.";
+        infoMessage = GoogleSignIn.IsConfigured
+            ? "Could not load the Google button (no network, ad blocker, or stale browser cache). Press Ctrl+F5 to reload."
+            : "Google sign-in is not configured. Please sign up with email.";
     }
 
     private async Task HandleSendOtp()
@@ -251,7 +378,7 @@
 
         if (string.IsNullOrWhiteSpace(registerModel.Email) || !registerModel.Email.Contains("@"))
         {
-            errorMessage = "Vui lòng nhập địa chỉ email hợp lệ trước khi yêu cầu mã OTP.";
+            errorMessage = "Please enter a valid email address before requesting an OTP code.";
             return;
         }
 
@@ -267,7 +394,7 @@
             otpSent = true;
             Array.Clear(otpDigits, 0, otpDigits.Length);
             StartCountdown();
-            successMessage = "Mã OTP đã được gửi đến email của bạn (hiệu lực 5 phút).";
+            successMessage = "The OTP code has been sent to your email (valid for 5 minutes).";
             if (otpRefs[0].Context != null)
             {
                 await otpRefs[0].FocusAsync();
@@ -275,7 +402,7 @@
         }
         else
         {
-            errorMessage = result.Message ?? "Gửi mã OTP thất bại. Vui lòng thử lại.";
+            errorMessage = result.Message ?? "Failed to send the OTP code. Please try again.";
         }
 
         isSendingOtp = false;
@@ -313,22 +440,22 @@
 
         if (!otpSent)
         {
-            errorMessage = "Vui lòng bấm \"Gửi mã OTP về email\" để nhận mã xác thực trước.";
+            errorMessage = "Please click \"Send OTP\" to receive a verification code first.";
             return;
         }
         if (!otpOk)
         {
-            errorMessage = "Vui lòng nhập đầy đủ mã OTP 6 chữ số.";
+            errorMessage = "Please enter the full 6-digit OTP code.";
             return;
         }
         if (!agreedTerms)
         {
-            errorMessage = "Vui lòng đồng ý với điều khoản dịch vụ để tiếp tục.";
+            errorMessage = "Please agree to the terms of service to continue.";
             return;
         }
         if (!formValid)
         {
-            errorMessage = "Vui lòng kiểm tra lại các thông tin đã nhập.";
+            errorMessage = "Please review the information you entered.";
             return;
         }
 
@@ -338,17 +465,19 @@
         registerModel.PhoneNumber = null;
         registerModel.Gender = null;
         registerModel.DateOfBirth = null;
+        // Các môn thể thao đã chọn -> lưu vào UserFavoriteSports
+        registerModel.FavoriteSportIds = selectedSportIds.ToList();
 
         var result = await AuthService.RegisterAsync(registerModel);
         if (result.Success)
         {
-            successMessage = "Tạo tài khoản thành công! Đang chuyển hướng vào hệ thống...";
+            successMessage = "Account created successfully! Redirecting...";
             await Task.Delay(1500);
             Navigation.NavigateTo("/");
         }
         else
         {
-            errorMessage = result.Message ?? "Đăng ký thất bại. Mã OTP không đúng hoặc đã hết hạn.";
+            errorMessage = result.Message ?? "Registration failed. The OTP code is incorrect or has expired.";
         }
 
         isLoading = false;
@@ -377,5 +506,6 @@
     public void Dispose()
     {
         timer?.Dispose();
+        GoogleSignIn.OnCredential -= HandleGoogleCredentialAsync;
     }
 }

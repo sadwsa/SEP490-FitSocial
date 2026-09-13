@@ -6,7 +6,7 @@ public class ApiResponseDto<T>
     public string Message { get; set; } = string.Empty;
     public T? Data { get; set; }
 
-    public static ApiResponseDto<T> Ok(T data, string message = "Thành công")
+    public static ApiResponseDto<T> Ok(T data, string message = "Success")
     {
         return new ApiResponseDto<T>
         {

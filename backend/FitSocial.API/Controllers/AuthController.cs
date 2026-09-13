@@ -18,7 +18,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Gửi mã xác thực OTP qua Email (UC_01)
+    /// Send the OTP verification code via Email (UC_01)
     /// </summary>
     [HttpPost("send-otp")]
     [EnableRateLimiting("OtpPolicy")]
@@ -29,7 +29,7 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
         {
             var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
-            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Dữ liệu không hợp lệ"));
+            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid data"));
         }
 
         var result = await _authService.SendOtpAsync(request);
@@ -42,7 +42,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Đăng ký tài khoản Học viên (Trainee) với xác thực mã OTP (UC_01)
+    /// Register a Trainee account with OTP verification (UC_01)
     /// </summary>
     [HttpPost("register-trainee")]
     [EnableRateLimiting("OtpPolicy")]
@@ -53,10 +53,33 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
         {
             var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
-            return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(firstError ?? "Dữ liệu không hợp lệ"));
+            return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(firstError ?? "Invalid data"));
         }
 
         var result = await _authService.RegisterTraineeAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Sign in / Sign up with a Google account (validates the Google-issued ID Token)
+    /// </summary>
+    [HttpPost("google")]
+    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.GoogleLoginAsync(request);
         if (!result.Success)
         {
             return BadRequest(result);

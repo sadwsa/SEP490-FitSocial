@@ -7,6 +7,7 @@ using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Http;
 using FitSocial.Client.Services.Posts;
 using FitSocial.Client.Services.Realtime;
+using FitSocial.Client.Services.Sports;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -26,6 +27,8 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseU
 // Core Services
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<GoogleSignInService>();
+builder.Services.AddScoped<ISportService, SportService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<INotificationHubClient, NotificationHubClient>();
 

@@ -7,6 +7,7 @@ public interface IApplicationDbContext
 {
     DbSet<User> Users { get; }
     DbSet<Otplog> Otplogs { get; }
+    DbSet<Sport> Sports { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

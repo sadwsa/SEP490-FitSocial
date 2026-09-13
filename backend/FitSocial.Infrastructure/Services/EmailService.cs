@@ -44,12 +44,12 @@ public class EmailService : IEmailService
             await client.SendAsync(emailMessage);
             await client.DisconnectAsync(true);
 
-            _logger.LogInformation("Đã gửi email thành công tới {ToEmail}", toEmail);
+            _logger.LogInformation("Email sent successfully to {ToEmail}", toEmail);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Lỗi khi gửi email tới {ToEmail}. Fallback sang Console logger.", toEmail);
-            _logger.LogInformation("[DEV EMAIL FALLBACK] Tiêu đề: {Subject}, Gửi tới: {ToEmail}", subject, toEmail);
+            _logger.LogError(ex, "Error sending email to {ToEmail}. Falling back to Console logger.", toEmail);
+            _logger.LogInformation("[DEV EMAIL FALLBACK] Subject: {Subject}, To: {ToEmail}", subject, toEmail);
         }
     }
 }

@@ -30,24 +30,24 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Cấu hình Rate Limiting chống spam OTP
+// Configure Rate Limiting against OTP spam
 builder.Services.AddRateLimiter(options =>
 {
     options.AddFixedWindowLimiter("OtpPolicy", opt =>
     {
-        opt.PermitLimit = 5; // Số request tối đa
-        opt.Window = TimeSpan.FromMinutes(1); // Khoảng thời gian
+        opt.PermitLimit = 5; // Max requests
+        opt.Window = TimeSpan.FromMinutes(1); // Time window
         opt.QueueLimit = 0;
     });
 
-    // Tùy chọn message trả về khi bị chặn do spam
+    // Custom message returned when blocked for spamming
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         await context.HttpContext.Response.WriteAsJsonAsync(new
         {
             success = false,
-            message = "Bạn đã gửi yêu cầu quá nhiều lần. Vui lòng thử lại sau.",
+            message = "You have sent too many requests. Please try again later.",
             data = false
         });
     };
@@ -76,7 +76,7 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey))
     };
 
-    // Thêm bộ lọc kiểm tra đa lớp (Blacklist Jti & TokenVersion) cho mọi request
+    // Multi-layer check filter (Blacklist Jti & TokenVersion) for every request
     options.Events = new JwtBearerEvents
     {
         OnTokenValidated = async context =>
@@ -84,25 +84,25 @@ builder.Services.AddAuthentication(options =>
             var dbContext = context.HttpContext.RequestServices.GetRequiredService<IApplicationDbContext>();
             var blacklistService = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
 
-            // 1. Lấy Jti và TokenVersion từ Claims của Access Token
+            // 1. Get Jti and TokenVersion from the Access Token claims
             var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
             var userIdStr = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var tokenVersionStr = context.Principal?.FindFirst("token_version")?.Value;
 
-            // Kiểm tra Lớp 1: Token có nằm trong danh sách đen Redis không (Đăng xuất)
+            // Check Layer 1: whether the token is in the Redis blacklist (logged out)
             if (!string.IsNullOrEmpty(jti) && await blacklistService.IsTokenRevokedAsync(jti))
             {
-                context.Fail("Token đã bị thu hồi (Đăng xuất).");
+                context.Fail("Token has been revoked (signed out).");
                 return;
             }
 
-            // Kiểm tra Lớp 2: Đối chiếu TokenVersion với Database (Đổi mật khẩu / Khóa tài khoản)
+            // Check Layer 2: compare TokenVersion with the database (password change / locked account)
             if (Guid.TryParse(userIdStr, out var userId) && int.TryParse(tokenVersionStr, out var tokenVersion))
             {
                 var user = await dbContext.Users.FindAsync(userId);
                 if (user == null || user.IsLocked == true || user.TokenVersion != tokenVersion)
                 {
-                    context.Fail("Tài khoản đã bị khóa, đổi mật khẩu hoặc phiên làm việc không còn hiệu lực.");
+                    context.Fail("Account has been locked, password changed, or the session is no longer valid.");
                 }
             }
         }

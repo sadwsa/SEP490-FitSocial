@@ -19,7 +19,7 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(provider => 
             provider.GetRequiredService<FitSocialDbContext>());
 
-        // Cấu hình Redis Distributed Cache
+        // Configure Redis Distributed Cache
         services.AddStackExchangeRedisCache(options =>
         {
             options.Configuration = configuration.GetConnectionString("Redis") ?? "localhost:6379";

@@ -144,6 +144,13 @@
     height: 17px;
 }
 
+/* Nút Google chính chủ do GIS render */
+.google-btn-wrap {
+    display: flex;
+    justify-content: center;
+    min-height: 44px;
+}
+
 .divider {
     display: flex;
     align-items: center;
@@ -293,7 +300,55 @@
     margin-top: 4px;
 }
 
-/* Mục tiêu */
+/* Mục tiêu (chọn nhiều môn) */
+.goal-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.goal-hint {
+    font-weight: 400;
+    color: #94a3b8;
+}
+
+.selected-count {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    background: #fff1ea;
+    border: 1px solid #ffd9c7;
+    border-radius: 999px;
+    padding: 2px 10px;
+}
+
+.sports-loading,
+.sports-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    color: #64748b;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.sports-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #b91c1c;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
 .goal-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -301,6 +356,7 @@
 }
 
 .goal-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -320,6 +376,26 @@
     color: var(--primary-color);
     background: #fff7f3;
     box-shadow: 0 0 0 2px rgba(255, 87, 34, 0.12);
+}
+
+.goal-check {
+    position: absolute;
+    top: -8px;
+    right: -6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.goal-check ::deep svg {
+    width: 12px;
+    height: 12px;
+    stroke-width: 2.5;
 }
 
 .goal-icon {

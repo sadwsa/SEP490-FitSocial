@@ -9,6 +9,7 @@ namespace FitSocial.Client.Services.Auth;
 public interface IAuthService
 {
     Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request);
+    Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken);
     Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
     Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
     Task LogoutAsync();
@@ -124,6 +125,47 @@ public class AuthService : IAuthService
                 Success = false,
                 Message = $"Lỗi kết nối: {ex.Message}"
             };
+        }
+    }
+
+    public async Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/google", new GoogleLoginRequest { IdToken = idToken });
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                if (result.Data != null)
+                {
+                    await PersistAuthAsync(result.Data);
+                }
+                return result;
+            }
+
+            return result ?? new ApiResponse<AuthResponse>
+            {
+                Success = false,
+                Message = $"Đăng nhập Google thất bại (Mã: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<AuthResponse>
+            {
+                Success = false,
+                Message = $"Lỗi kết nối: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task PersistAuthAsync(AuthResponse data)
+    {
+        if (!string.IsNullOrEmpty(data.AccessToken))
+        {
+            await _localStorage.SetItemAsync(AuthTokenKey, data.AccessToken);
+            await _localStorage.SetItemAsync(RefreshTokenKey, data.RefreshToken);
+            ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(data.AccessToken);
         }
     }
 

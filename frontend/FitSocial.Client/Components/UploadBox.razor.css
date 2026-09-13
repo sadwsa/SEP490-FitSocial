@@ -1,0 +1,145 @@
+.upload-box {
+    position: relative;
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 10px;
+    background: #fbfdff;
+    padding: 18px 14px;
+    text-align: center;
+}
+
+.upload-box.has-preview {
+    padding: 10px;
+}
+
+.upload-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    margin-bottom: 8px;
+}
+
+.upload-icon ::deep svg {
+    width: 26px;
+    height: 26px;
+}
+
+.upload-title {
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: #334155;
+    margin: 0 0 2px;
+}
+
+.upload-sub {
+    font-size: 0.74rem;
+    color: #94a3b8;
+    margin: 0 0 10px;
+}
+
+.upload-preview {
+    width: 100%;
+    max-height: 220px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.upload-browse {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    background: #fff1ea;
+    border: 1px solid #ffd9c7;
+    border-radius: 7px;
+    padding: 7px 16px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.upload-browse:hover {
+    background: #ffe6d9;
+}
+
+.upload-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-top: 10px;
+}
+
+.upload-file-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-top: 10px;
+    text-align: left;
+}
+
+.file-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ef4444;
+    flex-shrink: 0;
+}
+
+.file-icon ::deep svg {
+    width: 22px;
+    height: 22px;
+}
+
+.file-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.file-meta strong {
+    font-size: 0.78rem;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-meta small {
+    font-size: 0.72rem;
+    color: #64748b;
+}
+
+.file-remove {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 4px 6px;
+    flex-shrink: 0;
+}
+
+.file-remove:hover {
+    color: #dc2626;
+}
+
+.file-remove.floating {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}

@@ -1,0 +1,119 @@
+@* Ô chọn file từ thiết bị (ảnh CCCD / chứng chỉ PDF-ảnh), upload lên API, bind URL đã lưu. *@
+@inject IFileUploadService FileUploadService
+
+<div class="upload-box @(IsImage(Value) ? "has-preview" : "")">
+    @if (!string.IsNullOrEmpty(Value) && IsImage(Value))
+    {
+        <img src="@Value" alt="@Label" class="upload-preview" />
+    }
+    else
+    {
+        <span class="upload-icon"><AppIcon Name="upload" /></span>
+        <p class="upload-title">@UploadTitle</p>
+        <p class="upload-sub">@UploadSubtitle</p>
+    }
+
+    <label class="upload-browse">
+        <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.pdf" class="d-none" />
+        <span>@(isUploading ? "Uploading..." : (string.IsNullOrEmpty(Value) ? "Choose from device" : "Choose another file"))</span>
+    </label>
+
+    @if (isUploading)
+    {
+        <div class="upload-progress">
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            <span>Uploading, please wait...</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(fileError))
+    {
+        <div class="field-error text-center">@fileError</div>
+    }
+
+    @if (!string.IsNullOrEmpty(Value) && !IsImage(Value))
+    {
+        <div class="upload-file-chip">
+            <span class="file-icon"><AppIcon Name="doc" /></span>
+            <div class="file-meta">
+                <strong>@displayName</strong>
+                <small>@fileSizeText • Pending verification</small>
+            </div>
+            <button type="button" class="file-remove" @onclick="RemoveFile" title="Remove file">✕</button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Value) && IsImage(Value))
+    {
+        <button type="button" class="file-remove floating" @onclick="RemoveFile" title="Remove file">✕</button>
+    }
+</div>
+
+@code {
+    private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".pdf" };
+    private const long MaxFileBytes = 10 * 1024 * 1024;
+
+    private bool isUploading = false;
+    private string? fileError;
+    private string? displayName;
+    private string? fileSizeText;
+
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string UploadTitle { get; set; } = "Drag & drop files or choose from device";
+    [Parameter] public string UploadSubtitle { get; set; } = "JPG, PNG (max 10MB)";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    private static bool IsImage(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        var lower = url.Split('?')[0].ToLowerInvariant();
+        return lower.EndsWith(".jpg") || lower.EndsWith(".jpeg") || lower.EndsWith(".png");
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        fileError = null;
+        var file = e.File;
+        if (file == null) return;
+
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (!AllowedExtensions.Contains(ext))
+        {
+            fileError = "Only JPG, PNG images and PDF files are allowed.";
+            return;
+        }
+        if (file.Size > MaxFileBytes)
+        {
+            fileError = "File size must not exceed 10MB.";
+            return;
+        }
+
+        isUploading = true;
+        StateHasChanged();
+
+        var result = await FileUploadService.UploadAsync(file);
+        if (result.Success && !string.IsNullOrEmpty(result.Data))
+        {
+            displayName = file.Name;
+            fileSizeText = file.Size >= 1024 * 1024
+                ? $"{file.Size / 1024.0 / 1024.0:F1} MB"
+                : $"{file.Size / 1024.0:F0} KB";
+            await ValueChanged.InvokeAsync(result.Data);
+        }
+        else
+        {
+            fileError = result.Message ?? "Upload failed. Please try again.";
+        }
+
+        isUploading = false;
+    }
+
+    private async Task RemoveFile()
+    {
+        displayName = null;
+        fileSizeText = null;
+        fileError = null;
+        await ValueChanged.InvokeAsync(null);
+    }
+}

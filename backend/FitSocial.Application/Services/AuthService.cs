@@ -83,9 +83,62 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request)
     {
-        var normalizedEmail = request.Email.Trim().ToLower();
+        return await RegisterAsync(
+            request.FullName,
+            request.Email,
+            request.Password,
+            request.ConfirmPassword,
+            request.OtpCode,
+            request.PhoneNumber,
+            request.Gender,
+            request.DateOfBirth,
+            request.FavoriteSportIds,
+            OtpConstants.PurposeRegisterTrainee,
+            RoleConstants.Trainee);
+    }
 
-        if (request.Password != request.ConfirmPassword)
+    public async Task<ApiResponseDto<AuthResponseDto>> RegisterCoachAsync(RegisterCoachRequestDto request)
+    {
+        return await RegisterAsync(
+            request.FullName,
+            request.Email,
+            request.Password,
+            request.ConfirmPassword,
+            request.OtpCode,
+            request.PhoneNumber,
+            request.Gender,
+            request.DateOfBirth,
+            request.FavoriteSportIds,
+            OtpConstants.PurposeRegisterCoach,
+            RoleConstants.Coach,
+            request.ExperienceYears,
+            request.Biography,
+            request.CertificateUrl,
+            request.SpecialtySportIds,
+            request.IdentityCardUrl);
+    }
+
+    private async Task<ApiResponseDto<AuthResponseDto>> RegisterAsync(
+        string fullName,
+        string email,
+        string password,
+        string confirmPassword,
+        string otpCode,
+        string? phoneNumber,
+        string? gender,
+        DateOnly? dateOfBirth,
+        List<Guid>? favoriteSportIds,
+        string otpPurpose,
+        string roleCode,
+        int? experienceYears = null,
+        string? biography = null,
+        string? certificateUrl = null,
+        List<Guid>? specialtySportIds = null,
+        string? identityCardUrl = null)
+    {
+        var normalizedEmail = email.Trim().ToLower();
+
+        if (password != confirmPassword)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Passwords do not match.");
         }
@@ -99,11 +152,19 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("This email is already in use.");
         }
 
+        // Check for duplicate phone number (Users.PhoneNumber is UNIQUE)
+        var normalizedPhone = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim();
+        if (normalizedPhone != null &&
+            await _context.Users.AnyAsync(u => u.PhoneNumber == normalizedPhone))
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("This phone number is already in use.");
+        }
+
         // Verify the OTP
         var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(
-            normalizedEmail, 
-            request.OtpCode.Trim(), 
-            OtpConstants.PurposeRegisterTrainee);
+            normalizedEmail,
+            otpCode.Trim(),
+            otpPurpose);
 
         if (!otpValid)
         {
@@ -115,20 +176,48 @@ public class AuthService : IAuthService
         {
             UserId = Guid.NewGuid(),
             Email = normalizedEmail,
-            FullName = request.FullName.Trim(),
-            PasswordHash = _passwordHasher.HashPassword(request.Password),
-            PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
-            Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
-            DateOfBirth = request.DateOfBirth,
-            RoleCode = RoleConstants.Trainee,
+            FullName = fullName.Trim(),
+            PasswordHash = _passwordHasher.HashPassword(password),
+            PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim(),
+            Gender = string.IsNullOrWhiteSpace(gender) ? null : gender.Trim(),
+            DateOfBirth = dateOfBirth,
+            RoleCode = roleCode,
             IsInternal = false,
             IsLocked = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
 
+        // Coach accounts start with a pending approval profile
+        if (roleCode == RoleConstants.Coach)
+        {
+            newUser.CoachProfileCoach = new CoachProfile
+            {
+                CoachId = newUser.UserId,
+                ExperienceYears = experienceYears,
+                Bio = string.IsNullOrWhiteSpace(biography) ? null : biography.Trim(),
+                CertificateUrl = string.IsNullOrWhiteSpace(certificateUrl) ? null : certificateUrl.Trim(),
+                IdentityCardUrl = string.IsNullOrWhiteSpace(identityCardUrl) ? null : identityCardUrl.Trim(),
+                ApprovalStatus = "PENDING",
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            // Coaching specialties (multiple allowed) -> saved to CoachSports
+            var specialtyIds = specialtySportIds?.Distinct().ToList() ?? new List<Guid>();
+            if (specialtyIds.Count > 0)
+            {
+                var specialties = await _context.Sports
+                    .Where(s => specialtyIds.Contains(s.SportId))
+                    .ToListAsync();
+                foreach (var specialty in specialties)
+                {
+                    newUser.CoachProfileCoach.Sports.Add(specialty);
+                }
+            }
+        }
+
         // Attach favorite sports (if any) -> saved to UserFavoriteSports
-        var sportIds = request.FavoriteSportIds?.Distinct().ToList() ?? new List<Guid>();
+        var sportIds = favoriteSportIds?.Distinct().ToList() ?? new List<Guid>();
         if (sportIds.Count > 0)
         {
             var sports = await _context.Sports
@@ -141,12 +230,21 @@ public class AuthService : IAuthService
         }
 
         _context.Users.Add(newUser);
-        await _context.SaveChangesAsync();
 
-        // Sinh JWT Token
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // E.g. race on UNIQUE email/phone between the check above and the insert
+            return ApiResponseDto<AuthResponseDto>.Fail("Could not create the account. The email or phone number may already be in use.");
+        }
+
         var responseData = BuildAuthResponse(newUser);
 
-        return ApiResponseDto<AuthResponseDto>.Ok(responseData, "Account registered successfully!");
+        var roleLabel = roleCode == RoleConstants.Coach ? "Coach" : "Trainee";
+        return ApiResponseDto<AuthResponseDto>.Ok(responseData, $"{roleLabel} account registered successfully!");
     }
 
     public async Task<ApiResponseDto<AuthResponseDto>> GoogleLoginAsync(GoogleLoginRequestDto request)
@@ -190,6 +288,13 @@ public class AuthService : IAuthService
 
         if (user == null)
         {
+            // Google sign-up is Trainee-only. Coach accounts must use
+            // the application form (register-coach + activation payment).
+            if (string.Equals(request.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiResponseDto<AuthResponseDto>.Fail("Google sign-up is available for Trainee accounts only. To become a coach, please use the Coach application form.");
+            }
+
             // New email -> auto-create a Google-linked Trainee account
             user = new User
             {
@@ -205,6 +310,7 @@ public class AuthService : IAuthService
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
+
             _context.Users.Add(user);
         }
         else

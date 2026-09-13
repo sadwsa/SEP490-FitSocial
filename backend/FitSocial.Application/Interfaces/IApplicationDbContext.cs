@@ -8,6 +8,10 @@ public interface IApplicationDbContext
     DbSet<User> Users { get; }
     DbSet<Otplog> Otplogs { get; }
     DbSet<Sport> Sports { get; }
+    DbSet<Order> Orders { get; }
+    DbSet<OrderDetail> OrderDetails { get; }
+    DbSet<Payment> Payments { get; }
+    DbSet<CoachProfile> CoachProfiles { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

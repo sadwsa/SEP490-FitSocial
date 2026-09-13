@@ -4,8 +4,8 @@ using Microsoft.JSInterop;
 namespace FitSocial.Client.Services.Auth;
 
 /// <summary>
-/// Cầu nối Google Identity Services (nút Sign in with Google) với Blazor.
-/// ClientId lấy từ wwwroot/appsettings.json (mục Google:ClientId).
+/// Bridge between Google Identity Services (Sign in with Google button) and Blazor.
+/// ClientId is read from wwwroot/appsettings.json (Google:ClientId section).
 /// </summary>
 public class GoogleSignInService : IAsyncDisposable
 {
@@ -27,8 +27,8 @@ public class GoogleSignInService : IAsyncDisposable
         !string.IsNullOrWhiteSpace(ClientId) && !ClientId.Contains("YOUR_GOOGLE_CLIENT_ID");
 
     /// <summary>
-    /// Vẽ nút Google vào thẻ div có id tương ứng. text: "signin_with" | "signup_with".
-    /// Trả về true khi nút đã hiển thị, false khi không tải được GIS (mất mạng, bị chặn, cache cũ).
+    /// Renders the Google button into the div with the given id. text: "signin_with" | "signup_with".
+    /// Returns true when the button is displayed, false when GIS could not load (offline, blocked, stale cache).
     /// </summary>
     public async Task<bool> RenderButtonAsync(string elementId, string text = "signin_with")
     {
@@ -41,7 +41,7 @@ public class GoogleSignInService : IAsyncDisposable
 
         try
         {
-            // GIS load bất đồng bộ -> thử lại tối đa ~4 giây
+            // GIS loads asynchronously -> retry for ~4 seconds
             for (int i = 0; i < 8; i++)
             {
                 bool rendered = await _jsRuntime.InvokeAsync<bool>(
@@ -55,7 +55,7 @@ public class GoogleSignInService : IAsyncDisposable
         }
         catch
         {
-            // fitSocialGoogle chưa tồn tại (index.html cũ bị cache) hoặc JS lỗi
+            // fitSocialGoogle missing (stale cached index.html) or JS error
         }
 
         return false;

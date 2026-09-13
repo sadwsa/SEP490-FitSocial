@@ -44,6 +44,22 @@ public class RegisterRequest
     /// Danh sách ID môn thể thao yêu thích (chọn nhiều), gửi lên API để lưu vào UserFavoriteSports.
     /// </summary>
     public List<Guid> FavoriteSportIds { get; set; } = new();
+
+    // ---- Coach-only fields (sent to register-coach) ----
+    /// <summary>Primary coaching specialty -> CoachSports.</summary>
+    public List<Guid> SpecialtySportIds { get; set; } = new();
+
+    /// <summary>Years of coaching experience -> CoachProfiles.ExperienceYears.</summary>
+    public int? ExperienceYears { get; set; }
+
+    /// <summary>Short professional biography -> CoachProfiles.Bio.</summary>
+    public string? Biography { get; set; }
+
+    /// <summary>Link to certificates/credentials -> CoachProfiles.CertificateUrl.</summary>
+    public string? CertificateUrl { get; set; }
+
+    /// <summary>Link to the identity card image -> CoachProfiles.IdentityCardUrl.</summary>
+    public string? IdentityCardUrl { get; set; }
 }
 
 
@@ -61,6 +77,11 @@ public class LoginRequest
 public class GoogleLoginRequest
 {
     public string IdToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Desired role for newly created accounts only ("TRAINEE" or "COACH").
+    /// </summary>
+    public string? RoleCode { get; set; }
 }
 
 public class AuthResponse

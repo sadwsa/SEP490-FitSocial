@@ -7,6 +7,7 @@
 @inject IAuthService AuthService
 @inject ISportService SportService
 @inject GoogleSignInService GoogleSignIn
+@inject PendingCoachRegistration PendingCoach
 @inject NavigationManager Navigation
 
 <PageTitle>Join the FitSocial Community</PageTitle>
@@ -32,19 +33,36 @@
         </button>
     </div>
 
-    <!-- Google -->
-    @if (GoogleSignIn.IsConfigured && googleButtonOk)
+    <!-- Google (Trainee only, Coach must use the application form) -->
+    @if (!isCoach)
     {
-        <div id="google-register-btn" class="google-btn-wrap"></div>
-    }
-    else
-    {
-        <button type="button" class="btn-google" @onclick="HandleGoogleRegister">
-            <AppIcon Name="google" /> Quick sign up with Google
-        </button>
+        @if (GoogleSignIn.IsConfigured && googleButtonOk)
+        {
+            <div id="google-register-btn" class="google-btn-wrap"></div>
+        }
+        else
+        {
+            <button type="button" class="btn-google" @onclick="HandleGoogleRegister">
+                <AppIcon Name="google" /> Quick sign up with Google
+            </button>
+        }
     }
 
-    <div class="divider"><span>OR SIGN UP WITH EMAIL</span></div>
+    @if (isCoach)
+    {
+        <div class="coach-banner">
+            <span class="coach-banner-icon"><AppIcon Name="shield" /></span>
+            <div>
+                <strong>For Certified Professional Coaches</strong>
+                <p>Join the official FitSocial coaching network to offer 1-on-1 classes, publish lesson plans and earn from your sports expertise.</p>
+            </div>
+        </div>
+    }
+
+    @if (!isCoach)
+    {
+        <div class="divider"><span>OR SIGN UP WITH EMAIL</span></div>
+    }
 
     @if (!string.IsNullOrEmpty(infoMessage))
     {
@@ -63,16 +81,32 @@
         <DataAnnotationsValidator />
 
         <div class="field">
-            <label>Full name <span class="req">*</span></label>
+            <label>@(isCoach ? "Coach full name" : "Full name") <span class="req">*</span></label>
             <div class="input-wrap">
                 <span class="input-icon"><AppIcon Name="person" /></span>
-                <InputText @bind-Value="registerModel.FullName" class="form-control has-icon" placeholder="E.g.: John Smith" />
+                <InputText @bind-Value="registerModel.FullName" class="form-control has-icon" placeholder="@(isCoach ? "Coach: John Smith" : "E.g.: John Smith")" />
             </div>
             <ValidationMessage For="@(() => registerModel.FullName)" class="field-error" />
         </div>
 
         <div class="field">
-            <label>Email address <span class="req">*</span></label>
+            <label>@(isCoach ? "Contact phone number" : "Phone number") @if (isCoach)
+                   {
+                       <span class="req">*</span>
+                   }</label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="phone" /></span>
+                <InputText @bind-Value="registerModel.PhoneNumber" class="form-control has-icon" placeholder="0912345678" />
+            </div>
+            <ValidationMessage For="@(() => registerModel.PhoneNumber)" class="field-error" />
+            @if (showCoachErrors && isCoach && string.IsNullOrWhiteSpace(registerModel.PhoneNumber))
+            {
+                <div class="field-error">Please enter your contact phone number.</div>
+            }
+        </div>
+
+        <div class="field">
+            <label>@(isCoach ? "Professional work email" : "Email address") <span class="req">*</span></label>
             <div class="input-wrap">
                 <span class="input-icon"><AppIcon Name="envelope" /></span>
                 <InputText @bind-Value="registerModel.Email" class="form-control has-icon" placeholder="athlete@fitsocial.vn" />
@@ -104,54 +138,150 @@
             <ValidationMessage For="@(() => registerModel.ConfirmPassword)" class="field-error" />
         </div>
 
-        <!-- Mục tiêu thể thao (chọn nhiều, lưu vào UserFavoriteSports) -->
-        <div class="field">
-            <label class="goal-title">
-                Main sport goals
-                <span class="goal-hint">(you can select multiple)</span>
-                @if (selectedSportIds.Count > 0)
-                {
-                    <span class="selected-count">Selected @selectedSportIds.Count</span>
-                }
-            </label>
-            @if (isLoadingSports)
-            {
-                <div class="sports-loading">
-                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                    <span>Loading sports list...</span>
-                </div>
-            }
-            else if (!string.IsNullOrEmpty(sportsError))
-            {
-                <div class="sports-error">
-                    <span>@sportsError</span>
-                    <button type="button" class="resend-link" @onclick="LoadSportsAsync">Retry</button>
-                </div>
-            }
-            else if (sports.Count == 0)
-            {
-                <div class="sports-empty">No sports data available.</div>
-            }
-            else
-            {
-                <div class="goal-grid">
-                    @foreach (var s in sports)
+        @if (!isCoach)
+        {
+            <!-- Mục tiêu thể thao (chọn nhiều, lưu vào UserFavoriteSports) -->
+            <div class="field">
+                <label class="goal-title">
+                    Main sport goals
+                    <span class="goal-hint">(you can select multiple)</span>
+                    @if (selectedSportIds.Count > 0)
                     {
-                        <button type="button"
-                                class="goal-card @(selectedSportIds.Contains(s.SportId) ? "active" : "")"
-                                @onclick="() => ToggleSport(s.SportId)"
-                                title="@s.SportName">
-                            @if (selectedSportIds.Contains(s.SportId))
-                            {
-                                <span class="goal-check"><AppIcon Name="check" /></span>
-                            }
-                            <span class="goal-icon"><AppIcon Name="@GetSportIcon(s.SportName)" /></span>
-                            <span class="goal-label">@s.SportName</span>
-                        </button>
+                        <span class="selected-count">Selected @selectedSportIds.Count</span>
                     }
-                </div>
-            }
-        </div>
+                </label>
+                @if (isLoadingSports)
+                {
+                    <div class="sports-loading">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        <span>Loading sports list...</span>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(sportsError))
+                {
+                    <div class="sports-error">
+                        <span>@sportsError</span>
+                        <button type="button" class="resend-link" @onclick="LoadSportsAsync">Retry</button>
+                    </div>
+                }
+                else if (sports.Count == 0)
+                {
+                    <div class="sports-empty">No sports data available.</div>
+                }
+                else
+                {
+                    <div class="goal-grid">
+                        @foreach (var s in sports)
+                        {
+                            <button type="button"
+                                    class="goal-card @(selectedSportIds.Contains(s.SportId) ? "active" : "")"
+                                    @onclick="() => ToggleSport(s.SportId)"
+                                    title="@s.SportName">
+                                @if (selectedSportIds.Contains(s.SportId))
+                                {
+                                    <span class="goal-check"><AppIcon Name="check" /></span>
+                                }
+                                <span class="goal-icon"><AppIcon Name="@GetSportIcon(s.SportName)" /></span>
+                                <span class="goal-label">@s.SportName</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <!-- Hồ sơ HLV: chuyên môn (chọn nhiều, lưu vào CoachSports) -->
+            <div class="field">
+                <label class="goal-title">
+                    Specialties
+                    <span class="goal-hint">(you can select multiple)</span>
+                    @if (selectedSpecialtyIds.Count > 0)
+                    {
+                        <span class="selected-count">Selected @selectedSpecialtyIds.Count</span>
+                    }
+                </label>
+                @if (isLoadingSports)
+                {
+                    <div class="sports-loading">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        <span>Loading sports list...</span>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(sportsError))
+                {
+                    <div class="sports-error">
+                        <span>@sportsError</span>
+                        <button type="button" class="resend-link" @onclick="LoadSportsAsync">Retry</button>
+                    </div>
+                }
+                else if (sports.Count == 0)
+                {
+                    <div class="sports-empty">No sports data available.</div>
+                }
+                else
+                {
+                    <div class="goal-grid">
+                        @foreach (var s in sports)
+                        {
+                            <button type="button"
+                                    class="goal-card @(selectedSpecialtyIds.Contains(s.SportId) ? "active" : "")"
+                                    @onclick="() => ToggleSpecialty(s.SportId)"
+                                    title="@s.SportName">
+                                @if (selectedSpecialtyIds.Contains(s.SportId))
+                                {
+                                    <span class="goal-check"><AppIcon Name="check" /></span>
+                                }
+                                <span class="goal-icon"><AppIcon Name="@GetSportIcon(s.SportName)" /></span>
+                                <span class="goal-label">@s.SportName</span>
+                            </button>
+                        }
+                    </div>
+                }
+                @if (showCoachErrors && selectedSpecialtyIds.Count == 0)
+                {
+                    <div class="field-error">Please select at least one specialty.</div>
+                }
+            </div>
+
+            <div class="field">
+                <label>Years of experience <span class="req">*</span></label>
+                <InputNumber @bind-Value="registerModel.ExperienceYears" class="form-control" placeholder="E.g.: 4" min="0" max="60" />
+                @if (showCoachErrors && !(registerModel.ExperienceYears >= 0 && registerModel.ExperienceYears <= 60))
+                {
+                    <div class="field-error">Please enter years of experience (0-60).</div>
+                }
+            </div>
+
+            <div class="field">
+                <label>Identity card (CCCD) <span class="req">*</span></label>
+                <UploadBox Label="Identity card"
+                           UploadTitle="Tap to take a photo or choose your ID card"
+                           UploadSubtitle="JPG, PNG (max 10MB)"
+                           @bind-Value="registerModel.IdentityCardUrl" />
+                @if (showCoachErrors && string.IsNullOrWhiteSpace(registerModel.IdentityCardUrl))
+                {
+                    <div class="field-error">Please upload your identity card photo.</div>
+                }
+            </div>
+
+            <div class="field">
+                <label>Credentials & professional certificates <span class="req">*</span></label>
+                <UploadBox Label="Certificates"
+                           UploadTitle="Drag & drop certificates or choose from device"
+                           UploadSubtitle="NASM, CSCS, ACE accepted. PDF, PNG, JPG (max 10MB)"
+                           @bind-Value="registerModel.CertificateUrl" />
+                @if (showCoachErrors && string.IsNullOrWhiteSpace(registerModel.CertificateUrl))
+                {
+                    <div class="field-error">Please upload your certificates.</div>
+                }
+            </div>
+
+            <div class="field">
+                <label>Biography</label>
+                <InputTextArea @bind-Value="registerModel.Biography" class="form-control" rows="3" placeholder="Coaching background and data-driven approach" />
+            </div>
+        }
 
         <!-- OTP -->
         <div class="otp-panel">
@@ -212,11 +342,15 @@
             <div class="field-error">Please agree to the terms of service to continue.</div>
         }
 
-        <button type="submit" class="btn-auth-primary" disabled="@isLoading">
+        <button type="submit" class="btn-auth-primary @(isCoach ? "btn-coach" : "")" disabled="@isLoading">
             @if (isLoading)
             {
                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
                 <span>Creating account...</span>
+            }
+            else if (isCoach)
+            {
+                <span>Submit Pro Coach Application →</span>
             }
             else
             {
@@ -240,6 +374,7 @@
     private bool agreedTerms = false;
     private bool showTermsError = false;
     private bool showOtpError = false;
+    private bool showCoachErrors = false;
 
     private string? infoMessage;
     private string? errorMessage;
@@ -249,6 +384,8 @@
     private bool isSendingOtp = false;
     private bool isLoading = false;
     private bool googleButtonOk = true;
+    private bool googleSubscribed = false;
+    private bool needsGoogleRender = false;
     private string[] otpDigits = new string[6] { "", "", "", "", "", "" };
     private ElementReference[] otpRefs = new ElementReference[6];
 
@@ -258,14 +395,28 @@
     // Danh sách môn thể thao tải từ API (GET api/sports), cho phép chọn nhiều
     private List<SportDto> sports = new();
     private HashSet<Guid> selectedSportIds = new();
+    private HashSet<Guid> selectedSpecialtyIds = new();
     private bool isLoadingSports = true;
     private string? sportsError;
 
     private string CombinedOtp => string.Concat(otpDigits);
 
+    private bool isCoach => selectedRole == "COACH";
+
     protected override void OnInitialized()
     {
         editContext = new EditContext(registerModel);
+
+        // Restore the coach draft when returning from the payment page
+        if (PendingCoach.HasDraft && PendingCoach.Draft != null)
+        {
+            registerModel = PendingCoach.Draft;
+            selectedSportIds = new HashSet<Guid>(PendingCoach.SportIds);
+            selectedSpecialtyIds = new HashSet<Guid>(PendingCoach.SpecialtyIds);
+            selectedRole = "COACH";
+            editContext = new EditContext(registerModel);
+            infoMessage = "Welcome back! Your information has been restored. Please resend the OTP code to continue.";
+        }
     }
 
     protected override async Task OnInitializedAsync()
@@ -275,9 +426,15 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && GoogleSignIn.IsConfigured)
+        // The Google button div only exists on the Trainee tab; re-render when coming back to it
+        if (GoogleSignIn.IsConfigured && (firstRender || needsGoogleRender) && !isCoach)
         {
-            GoogleSignIn.OnCredential += HandleGoogleCredentialAsync;
+            needsGoogleRender = false;
+            if (!googleSubscribed)
+            {
+                GoogleSignIn.OnCredential += HandleGoogleCredentialAsync;
+                googleSubscribed = true;
+            }
             googleButtonOk = await GoogleSignIn.RenderButtonAsync("google-register-btn", "signup_with");
             StateHasChanged();
         }
@@ -291,7 +448,7 @@
         isLoading = true;
         StateHasChanged();
 
-        var result = await AuthService.LoginWithGoogleAsync(idToken);
+        var result = await AuthService.LoginWithGoogleAsync(idToken, selectedRole);
         if (result.Success)
         {
             successMessage = "Google sign-in successful! Redirecting...";
@@ -334,6 +491,14 @@
         }
     }
 
+    private void ToggleSpecialty(Guid sportId)
+    {
+        if (!selectedSpecialtyIds.Add(sportId))
+        {
+            selectedSpecialtyIds.Remove(sportId);
+        }
+    }
+
     private static string GetSportIcon(string sportName)
     {
         var name = sportName.ToLowerInvariant();
@@ -354,13 +519,24 @@
 
     private void SelectRole(string role)
     {
-        if (role == "COACH")
+        if (selectedRole != role)
         {
-            infoMessage = "Only Trainee accounts are supported for now.";
-            return;
+            // OTP is bound to the registration purpose, so reset it when switching tabs
+            otpSent = false;
+            Array.Clear(otpDigits, 0, otpDigits.Length);
+            timer?.Stop();
+            countdown = 60;
+            showCoachErrors = false;
         }
         selectedRole = role;
         infoMessage = null;
+
+        // Coming back to Trainee: the Google button div was removed, render it again
+        if (role == "TRAINEE" && GoogleSignIn.IsConfigured)
+        {
+            googleButtonOk = true;
+            needsGoogleRender = true;
+        }
     }
 
     private void HandleGoogleRegister()
@@ -386,7 +562,7 @@
         var result = await AuthService.SendOtpAsync(new SendOtpRequest
         {
             Email = registerModel.Email.Trim(),
-            Purpose = "REGISTER_TRAINEE"
+            Purpose = selectedRole == "COACH" ? "REGISTER_COACH" : "REGISTER_TRAINEE"
         });
 
         if (result.Success)
@@ -433,10 +609,40 @@
         successMessage = null;
         showTermsError = true;
         showOtpError = true;
+        showCoachErrors = true;
 
         registerModel.OtpCode = CombinedOtp;
         bool formValid = editContext.Validate();
         bool otpOk = otpSent && CombinedOtp.Length == 6;
+
+        if (isCoach)
+        {
+            if (string.IsNullOrWhiteSpace(registerModel.PhoneNumber))
+            {
+                errorMessage = "Please enter your contact phone number.";
+                return;
+            }
+            if (selectedSpecialtyIds.Count == 0)
+            {
+                errorMessage = "Please select at least one specialty.";
+                return;
+            }
+            if (!(registerModel.ExperienceYears >= 0 && registerModel.ExperienceYears <= 60))
+            {
+                errorMessage = "Please enter years of experience (0-60).";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(registerModel.IdentityCardUrl))
+            {
+                errorMessage = "Please upload your identity card photo.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(registerModel.CertificateUrl))
+            {
+                errorMessage = "Please upload your certificates.";
+                return;
+            }
+        }
 
         if (!otpSent)
         {
@@ -461,12 +667,32 @@
 
         isLoading = true;
 
-        // Trang này không thu thập SĐT / giới tính / ngày sinh (backend cho phép null)
-        registerModel.PhoneNumber = null;
+        // Trang này không thu thập giới tính / ngày sinh (backend cho phép null).
+        // SĐT: trainee không thu thập -> null; coach bắt buộc giữ lại.
+        if (!isCoach)
+        {
+            registerModel.PhoneNumber = null;
+        }
         registerModel.Gender = null;
         registerModel.DateOfBirth = null;
-        // Các môn thể thao đã chọn -> lưu vào UserFavoriteSports
+        // Các môn thể thao đã chọn -> lưu vào UserFavoriteSports (trainee) / CoachSports (coach)
         registerModel.FavoriteSportIds = selectedSportIds.ToList();
+        registerModel.SpecialtySportIds = selectedSpecialtyIds.ToList();
+
+        // Coach flow: go to the payment page first, the account is only
+        // created (register-coach) after successful payment.
+        if (isCoach)
+        {
+            PendingCoach.Draft = registerModel;
+            PendingCoach.SportIds = selectedSportIds.ToList();
+            PendingCoach.SpecialtyIds = selectedSpecialtyIds.ToList();
+            PendingCoach.SpecialtyNames = sports
+                .Where(s => selectedSpecialtyIds.Contains(s.SportId))
+                .Select(s => s.SportName)
+                .ToList();
+            Navigation.NavigateTo("/coach-payment");
+            return;
+        }
 
         var result = await AuthService.RegisterAsync(registerModel);
         if (result.Success)
@@ -506,6 +732,10 @@
     public void Dispose()
     {
         timer?.Dispose();
-        GoogleSignIn.OnCredential -= HandleGoogleCredentialAsync;
+        if (googleSubscribed)
+        {
+            GoogleSignIn.OnCredential -= HandleGoogleCredentialAsync;
+            googleSubscribed = false;
+        }
     }
 }

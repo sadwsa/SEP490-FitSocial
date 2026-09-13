@@ -2,17 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FitSocial.Client.Models.Auth;
 
-public class LoginRequest
-{
-    [Required(ErrorMessage = "Vui lòng nhập Email")]
-    [EmailAddress(ErrorMessage = "Email không đúng định dạng")]
-    public string Email { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Vui lòng nhập Mật khẩu")]
-    [MinLength(6, ErrorMessage = "Mật khẩu tối thiểu 6 ký tự")]
-    public string Password { get; set; } = string.Empty;
-}
-
 public class SendOtpRequest
 {
     [Required(ErrorMessage = "Vui lòng nhập Email")]
@@ -44,11 +33,24 @@ public class RegisterRequest
     [StringLength(6, MinimumLength = 6, ErrorMessage = "Mã OTP phải gồm 6 chữ số")]
     public string OtpCode { get; set; } = string.Empty;
 
+    [Phone(ErrorMessage = "Số điện thoại không đúng định dạng")]
     public string? PhoneNumber { get; set; }
 
     public string? Gender { get; set; } = "MALE";
 
     public DateOnly? DateOfBirth { get; set; }
+}
+
+
+public class LoginRequest
+{
+    [Required(ErrorMessage = "Vui lòng nhập Email")]
+    [EmailAddress(ErrorMessage = "Email không đúng định dạng")]
+    public string Email { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập Mật khẩu")]
+    [MinLength(6, ErrorMessage = "Mật khẩu tối thiểu 6 ký tự")]
+    public string Password { get; set; } = string.Empty;
 }
 
 public class AuthResponse

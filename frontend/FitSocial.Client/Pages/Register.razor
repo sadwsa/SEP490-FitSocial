@@ -1,280 +1,348 @@
 @page "/register"
+@layout AuthLayout
 @using System.Timers
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
 @implements IDisposable
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 
-<PageTitle>Đăng ký Học viên - FitSocial</PageTitle>
+<PageTitle>Tham gia cộng đồng FitSocial</PageTitle>
 
-<div class="row justify-content-center py-4">
-    <div class="col-md-8 col-lg-6">
-        <div class="fit-card p-4 shadow-sm border-0" style="border-radius: var(--radius-lg);">
-            <!-- Header -->
-            <div class="text-center mb-4">
-                <span class="fs-1">🔥</span>
-                <h4 class="fw-bold mt-2 text-dark">Đăng Ký Tài Khoản Học Viên</h4>
-                <p class="text-muted small">Khám phá lộ trình tập luyện và kết nối cộng đồng thể hình FitSocial</p>
+<div class="reg-hero">
+    <img src="Logo_FitSocial.jpg" alt="FitSocial" class="hero-logo" />
+    <div class="hero-text">
+        <h1 class="hero-title">Tham Gia Cộng Đồng <span>FitSocial</span></h1>
+        <p class="hero-sub">Kích hoạt tiềm năng thể chất vô hạn, đồng bộ quá trình tập luyện thông minh và kết nối cùng hàng ngàn vận động viên, huấn luyện viên hàng đầu.</p>
+    </div>
+</div>
+
+<div class="reg-card">
+    <!-- Chọn vai trò -->
+    <div class="role-tabs">
+        <button type="button" class="role-tab @(selectedRole == "TRAINEE" ? "active" : "")" @onclick='() => SelectRole("TRAINEE")'>
+            <span class="role-icon"><AppIcon Name="person" /></span>
+            <span>Trainee</span>
+        </button>
+        <button type="button" class="role-tab @(selectedRole == "COACH" ? "active" : "")" @onclick='() => SelectRole("COACH")'>
+            <span class="role-icon"><AppIcon Name="briefcase" /></span>
+            <span>Coach</span>
+        </button>
+    </div>
+
+    <!-- Google -->
+    <button type="button" class="btn-google" @onclick="HandleGoogleRegister">
+        <AppIcon Name="google" /> Đăng ký nhanh bằng Google
+    </button>
+
+    <div class="divider"><span>HOẶC ĐĂNG KÝ BẰNG EMAIL</span></div>
+
+    @if (!string.IsNullOrEmpty(infoMessage))
+    {
+        <div class="auth-alert info" role="alert"><AppIcon Name="info" /><span>@infoMessage</span></div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+    }
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="auth-alert success" role="alert"><AppIcon Name="check" /><span>@successMessage</span></div>
+    }
+
+    <EditForm EditContext="@editContext" OnSubmit="HandleCompleteRegister">
+        <DataAnnotationsValidator />
+
+        <div class="field">
+            <label>Họ và tên <span class="req">*</span></label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="person" /></span>
+                <InputText @bind-Value="registerModel.FullName" class="form-control has-icon" placeholder="Ví dụ: Hoàng Minh Long" />
             </div>
+            <ValidationMessage For="@(() => registerModel.FullName)" class="field-error" />
+        </div>
 
-            <!-- Stepper Indicator -->
-            <div class="d-flex justify-content-center align-items-center mb-4 px-2">
-                <div class="d-flex align-items-center">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm"
-                         style="width: 34px; height: 34px; background-color: @(currentStep == 1 ? "var(--primary-color)" : "var(--secondary-color)");">
-                        @(currentStep > 1 ? "✓" : "1")
-                    </div>
-                    <span class="ms-2 small fw-semibold @(currentStep == 1 ? "text-dark" : "text-muted")">
-                        Thông tin cá nhân
-                    </span>
-                </div>
-                <div class="flex-grow-1 mx-3" style="height: 2px; background-color: @(currentStep > 1 ? "var(--secondary-color)" : "#E2E8F0");"></div>
-                <div class="d-flex align-items-center">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm"
-                         style="width: 34px; height: 34px; background-color: @(currentStep == 2 ? "var(--primary-color)" : "#E2E8F0"); color: @(currentStep == 2 ? "white" : "#64748B");">
-                        2
-                    </div>
-                    <span class="ms-2 small fw-semibold @(currentStep == 2 ? "text-dark" : "text-muted")">
-                        Xác thực OTP
-                    </span>
-                </div>
+        <div class="field">
+            <label>Địa chỉ Email <span class="req">*</span></label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="envelope" /></span>
+                <InputText @bind-Value="registerModel.Email" class="form-control has-icon" placeholder="athlete@fitsocial.vn" />
             </div>
+            <ValidationMessage For="@(() => registerModel.Email)" class="field-error" />
+        </div>
 
-            <!-- Alerts -->
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger py-2 px-3 small rounded-3 d-flex align-items-center mb-3" role="alert">
-                    <span class="me-2">⚠️</span>
-                    <div>@errorMessage</div>
-                </div>
-            }
+        <div class="field">
+            <label>Mật khẩu bảo mật <span class="req">*</span></label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="lock" /></span>
+                <InputText type="@(showPassword ? "text" : "password")" @bind-Value="registerModel.Password" class="form-control has-icon has-eye" placeholder="Tối thiểu 8 ký tự" />
+                <button type="button" class="eye-btn" @onclick="() => showPassword = !showPassword" title="Hiện/ẩn mật khẩu">
+                    <AppIcon Name="@(showPassword ? "eye-slash" : "eye")" />
+                </button>
+            </div>
+            <ValidationMessage For="@(() => registerModel.Password)" class="field-error" />
+        </div>
 
-            @if (!string.IsNullOrEmpty(successMessage))
-            {
-                <div class="alert alert-success py-2 px-3 small rounded-3 d-flex align-items-center mb-3" role="alert">
-                    <span class="me-2">🎉</span>
-                    <div>@successMessage</div>
-                </div>
-            }
+        <div class="field">
+            <label>Xác nhận mật khẩu <span class="req">*</span></label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="lock" /></span>
+                <InputText type="@(showConfirmPassword ? "text" : "password")" @bind-Value="registerModel.ConfirmPassword" class="form-control has-icon has-eye" placeholder="Nhập lại mật khẩu" />
+                <button type="button" class="eye-btn" @onclick="() => showConfirmPassword = !showConfirmPassword" title="Hiện/ẩn mật khẩu">
+                    <AppIcon Name="@(showConfirmPassword ? "eye-slash" : "eye")" />
+                </button>
+            </div>
+            <ValidationMessage For="@(() => registerModel.ConfirmPassword)" class="field-error" />
+        </div>
 
-            <!-- BƯỚC 1: THÔNG TIN CÁ NHÂN -->
-            @if (currentStep == 1)
-            {
-                <EditForm Model="@registerModel" OnValidSubmit="HandleSendOtp">
-                    <DataAnnotationsValidator />
-
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold">Họ và Tên <span class="text-danger">*</span></label>
-                        <InputText @bind-Value="registerModel.FullName" class="form-control" placeholder="Ví dụ: Nguyễn Văn An" />
-                        <ValidationMessage For="@(() => registerModel.FullName)" class="text-danger small" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold">Email nhận OTP <span class="text-danger">*</span></label>
-                        <InputText @bind-Value="registerModel.Email" class="form-control" placeholder="name@fitsocial.vn" />
-                        <ValidationMessage For="@(() => registerModel.Email)" class="text-danger small" />
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label small fw-semibold">Số điện thoại</label>
-                            <InputText @bind-Value="registerModel.PhoneNumber" class="form-control" placeholder="0912345678" />
-                            <ValidationMessage For="@(() => registerModel.PhoneNumber)" class="text-danger small" />
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label small fw-semibold">Giới tính</label>
-                            <InputSelect @bind-Value="registerModel.Gender" class="form-select">
-                                <option value="MALE">Nam</option>
-                                <option value="FEMALE">Nữ</option>
-                                <option value="OTHER">Khác</option>
-                            </InputSelect>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label small fw-semibold">Mật khẩu <span class="text-danger">*</span></label>
-                            <InputText type="password" @bind-Value="registerModel.Password" class="form-control" placeholder="Tối thiểu 6 ký tự" />
-                            <ValidationMessage For="@(() => registerModel.Password)" class="text-danger small" />
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label small fw-semibold">Xác nhận mật khẩu <span class="text-danger">*</span></label>
-                            <InputText type="password" @bind-Value="registerModel.ConfirmPassword" class="form-control" placeholder="Nhập lại mật khẩu" />
-                            <ValidationMessage For="@(() => registerModel.ConfirmPassword)" class="text-danger small" />
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn-fit-primary w-100 justify-content-center py-2 mt-3" disabled="@isLoading">
-                        @if (isLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                            <span>Đang xử lý & gửi mã OTP...</span>
-                        }
-                        else
-                        {
-                            <span>Tiếp tục: Nhận mã xác thực OTP →</span>
-                        }
+        <!-- Mục tiêu thể thao (lựa chọn hiển thị, không gửi lên API) -->
+        <div class="field">
+            <label>Mục tiêu thể thao chính</label>
+            <div class="goal-grid">
+                @foreach (var g in goals)
+                {
+                    <button type="button" class="goal-card @(selectedGoal == g.Value ? "active" : "")" @onclick="() => selectedGoal = g.Value">
+                        <span class="goal-icon"><AppIcon Name="@g.Icon" /></span>
+                        <span class="goal-label">@g.Label</span>
                     </button>
-                </EditForm>
-            }
-
-            <!-- BƯỚC 2: XÁC THỰC OTP -->
-            @if (currentStep == 2)
-            {
-                <div class="text-center bg-light p-3 rounded-3 mb-4 border">
-                    <p class="small text-muted mb-1">Mã xác thực 6 số đã được gửi đến:</p>
-                    <p class="fw-bold text-dark mb-0 fs-6">@registerModel.Email</p>
-                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 mt-1 small" @onclick="GoBackToStep1">
-                        ✏️ Thay đổi email hoặc thông tin
-                    </button>
-                </div>
-
-                <div class="mb-4">
-                    <label class="form-label small fw-semibold text-center d-block">Nhập mã OTP (6 chữ số)</label>
-                    <input type="text"
-                           maxlength="6"
-                           @bind="registerModel.OtpCode"
-                           class="form-control form-control-lg text-center fw-bold fs-3"
-                           style="letter-spacing: 10px; font-family: monospace;"
-                           placeholder="------"
-                           autofocus />
-                    @if (showOtpError && string.IsNullOrWhiteSpace(registerModel.OtpCode))
-                    {
-                        <div class="text-danger small text-center mt-1">Vui lòng nhập mã OTP</div>
-                    }
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center mb-4 px-1">
-                    @if (countdown > 0)
-                    {
-                        <span class="small text-muted">
-                            ⏳ Gửi lại mã sau: <strong class="text-dark">@(countdown)s</strong>
-                        </span>
-                    }
-                    else
-                    {
-                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResendOtp" disabled="@isResending">
-                            @if (isResending)
-                            {
-                                <span class="spinner-border spinner-border-sm me-1"></span>
-                                <span>Đang gửi lại...</span>
-                            }
-                            else
-                            {
-                                <span>🔄 Gửi lại mã OTP</span>
-                            }
-                        </button>
-                    }
-                    <span class="badge bg-light text-secondary border">Thời hạn: 5 phút</span>
-                </div>
-
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-secondary py-2 px-3" @onclick="GoBackToStep1" disabled="@isLoading">
-                        ← Quay lại
-                    </button>
-                    <button type="button" class="btn-fit-primary flex-grow-1 justify-content-center py-2" @onclick="HandleCompleteRegister" disabled="@isLoading">
-                        @if (isLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                            <span>Đang xác thực & kích hoạt...</span>
-                        }
-                        else
-                        {
-                            <span>Hoàn tất đăng ký & Kích hoạt</span>
-                        }
-                    </button>
-                </div>
-            }
-
-            <!-- Footer -->
-            <div class="text-center mt-4 pt-3 border-top small text-muted">
-                Đã có tài khoản? <a href="login" class="fw-bold text-decoration-none" style="color: var(--primary-color);">Đăng nhập ngay</a>
+                }
             </div>
         </div>
-    </div>
+
+        <!-- OTP -->
+        <div class="otp-panel">
+            <div class="otp-head">
+                <span class="otp-icon"><AppIcon Name="envelope" /></span>
+                <div>
+                    <strong>Xác thực mã OTP bảo mật</strong>
+                    <p>Mã xác thực OTP (6 chữ số) sẽ được gửi đến email của bạn để kích hoạt tài khoản ngay sau khi xác nhận.</p>
+                </div>
+            </div>
+
+            <div class="otp-boxes">
+                @for (int i = 0; i < 6; i++)
+                {
+                    int idx = i;
+                    <input maxlength="1"
+                           inputmode="numeric"
+                           autocomplete="one-time-code"
+                           class="otp-box"
+                           value="@otpDigits[idx]"
+                           @oninput="(e) => OnOtpInput(e, idx)"
+                           @onkeydown="(e) => OnOtpKeyDown(e, idx)"
+                           @ref="otpRefs[idx]" />
+                }
+            </div>
+            @if (showOtpError && CombinedOtp.Length != 6)
+            {
+                <div class="field-error text-center">Vui lòng nhập đầy đủ mã OTP 6 chữ số.</div>
+            }
+            <div class="otp-foot">
+                <span class="resend-hint">Chưa nhận được mã?</span>
+                @if (!otpSent)
+                {
+                    <button type="button" class="resend-link" @onclick="HandleSendOtp" disabled="@isSendingOtp">
+                        <AppIcon Name="refresh" /> Gửi mã OTP@(isSendingOtp ? "..." : "")
+                    </button>
+                }
+                else if (countdown > 0)
+                {
+                    <span class="resend-wait"><AppIcon Name="refresh" /> Gửi lại mã OTP (@(countdown)s)</span>
+                }
+                else
+                {
+                    <button type="button" class="resend-link" @onclick="HandleSendOtp" disabled="@isSendingOtp">
+                        <AppIcon Name="refresh" /> Gửi lại mã OTP@(isSendingOtp ? "..." : "")
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Điều khoản -->
+        <label class="terms">
+            <input type="checkbox" @bind="agreedTerms" />
+            <span>Tôi đồng ý với <a href="" @onclick:preventDefault>Điều khoản dịch vụ</a> và <a href="" @onclick:preventDefault>Chính sách bảo mật</a> của nền tảng thể thao FitSocial.</span>
+        </label>
+        @if (showTermsError && !agreedTerms)
+        {
+            <div class="field-error">Vui lòng đồng ý với điều khoản dịch vụ để tiếp tục.</div>
+        }
+
+        <button type="submit" class="btn-auth-primary" disabled="@isLoading">
+            @if (isLoading)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <span>Đang tạo tài khoản...</span>
+            }
+            else
+            {
+                <span>Tạo Tài Khoản Học Viên Ngay →</span>
+            }
+        </button>
+    </EditForm>
+</div>
+
+<div class="reg-footer">
+    Đã có tài khoản? <a href="login">Đăng nhập ngay</a>
 </div>
 
 @code {
     private RegisterRequest registerModel = new();
-    private int currentStep = 1;
+    private EditContext editContext = default!;
+
+    private string selectedRole = "TRAINEE";
+    private string selectedGoal = "TANG_CO";
+    private bool showPassword = false;
+    private bool showConfirmPassword = false;
+    private bool agreedTerms = false;
+    private bool showTermsError = false;
+    private bool showOtpError = false;
+
+    private string? infoMessage;
     private string? errorMessage;
     private string? successMessage;
+
+    private bool otpSent = false;
+    private bool isSendingOtp = false;
     private bool isLoading = false;
-    private bool isResending = false;
-    private bool showOtpError = false;
+    private string[] otpDigits = new string[6] { "", "", "", "", "", "" };
+    private ElementReference[] otpRefs = new ElementReference[6];
 
     private int countdown = 60;
     private Timer? timer;
 
+    private record GoalOption(string Value, string Label, string Icon);
+    private readonly List<GoalOption> goals = new()
+    {
+        new("TANG_CO", "Tăng Cơ", "dumbbell"),
+        new("GIAM_MO", "Giảm Mỡ", "fire"),
+        new("POWER", "Powerlifting", "trophy"),
+        new("THE_LUC", "Thể Lực", "activity"),
+    };
+
+    private string CombinedOtp => string.Concat(otpDigits);
+
+    protected override void OnInitialized()
+    {
+        editContext = new EditContext(registerModel);
+    }
+
+    private void SelectRole(string role)
+    {
+        if (role == "COACH")
+        {
+            infoMessage = "Hiện chỉ hỗ trợ đăng ký tài khoản Học viên (Trainee).";
+            return;
+        }
+        selectedRole = role;
+        infoMessage = null;
+    }
+
+    private void HandleGoogleRegister()
+    {
+        infoMessage = "Đăng ký bằng Google hiện chưa được hỗ trợ. Vui lòng đăng ký bằng email.";
+    }
+
     private async Task HandleSendOtp()
     {
-        isLoading = true;
         errorMessage = null;
         successMessage = null;
+        infoMessage = null;
 
-        var request = new SendOtpRequest
+        if (string.IsNullOrWhiteSpace(registerModel.Email) || !registerModel.Email.Contains("@"))
+        {
+            errorMessage = "Vui lòng nhập địa chỉ email hợp lệ trước khi yêu cầu mã OTP.";
+            return;
+        }
+
+        isSendingOtp = true;
+        var result = await AuthService.SendOtpAsync(new SendOtpRequest
         {
             Email = registerModel.Email.Trim(),
             Purpose = "REGISTER_TRAINEE"
-        };
+        });
 
-        var result = await AuthService.SendOtpAsync(request);
         if (result.Success)
         {
-            currentStep = 2;
+            otpSent = true;
+            Array.Clear(otpDigits, 0, otpDigits.Length);
             StartCountdown();
-            successMessage = "Mã xác thực OTP đã được gửi đến email của bạn. Vui lòng kiểm tra!";
+            successMessage = "Mã OTP đã được gửi đến email của bạn (hiệu lực 5 phút).";
+            if (otpRefs[0].Context != null)
+            {
+                await otpRefs[0].FocusAsync();
+            }
         }
         else
         {
             errorMessage = result.Message ?? "Gửi mã OTP thất bại. Vui lòng thử lại.";
         }
 
-        isLoading = false;
+        isSendingOtp = false;
     }
 
-    private async Task ResendOtp()
+    private async Task OnOtpInput(ChangeEventArgs e, int idx)
     {
-        isResending = true;
-        errorMessage = null;
-        successMessage = null;
-
-        var request = new SendOtpRequest
+        var raw = e.Value?.ToString() ?? "";
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+        otpDigits[idx] = digits.Length > 0 ? digits[^1].ToString() : "";
+        if (!string.IsNullOrEmpty(otpDigits[idx]) && idx < 5)
         {
-            Email = registerModel.Email.Trim(),
-            Purpose = "REGISTER_TRAINEE"
-        };
-
-        var result = await AuthService.SendOtpAsync(request);
-        if (result.Success)
-        {
-            StartCountdown();
-            successMessage = "Đã gửi lại mã OTP mới. Vui lòng kiểm tra hộp thư!";
+            await otpRefs[idx + 1].FocusAsync();
         }
-        else
-        {
-            errorMessage = result.Message ?? "Không thể gửi lại mã OTP. Vui lòng thử lại.";
-        }
+    }
 
-        isResending = false;
+    private async Task OnOtpKeyDown(KeyboardEventArgs e, int idx)
+    {
+        if (e.Key == "Backspace" && string.IsNullOrEmpty(otpDigits[idx]) && idx > 0)
+        {
+            await otpRefs[idx - 1].FocusAsync();
+        }
     }
 
     private async Task HandleCompleteRegister()
     {
-        if (string.IsNullOrWhiteSpace(registerModel.OtpCode) || registerModel.OtpCode.Trim().Length != 6)
+        errorMessage = null;
+        successMessage = null;
+        showTermsError = true;
+        showOtpError = true;
+
+        registerModel.OtpCode = CombinedOtp;
+        bool formValid = editContext.Validate();
+        bool otpOk = otpSent && CombinedOtp.Length == 6;
+
+        if (!otpSent)
         {
-            showOtpError = true;
+            errorMessage = "Vui lòng bấm \"Gửi mã OTP về email\" để nhận mã xác thực trước.";
+            return;
+        }
+        if (!otpOk)
+        {
             errorMessage = "Vui lòng nhập đầy đủ mã OTP 6 chữ số.";
+            return;
+        }
+        if (!agreedTerms)
+        {
+            errorMessage = "Vui lòng đồng ý với điều khoản dịch vụ để tiếp tục.";
+            return;
+        }
+        if (!formValid)
+        {
+            errorMessage = "Vui lòng kiểm tra lại các thông tin đã nhập.";
             return;
         }
 
         isLoading = true;
-        errorMessage = null;
-        successMessage = null;
+
+        // Trang này không thu thập SĐT / giới tính / ngày sinh (backend cho phép null)
+        registerModel.PhoneNumber = null;
+        registerModel.Gender = null;
+        registerModel.DateOfBirth = null;
 
         var result = await AuthService.RegisterAsync(registerModel);
         if (result.Success)
         {
-            successMessage = "🎉 Đăng ký tài khoản thành công! Đang chuyển hướng vào hệ thống...";
+            successMessage = "Tạo tài khoản thành công! Đang chuyển hướng vào hệ thống...";
             await Task.Delay(1500);
             Navigation.NavigateTo("/");
         }
@@ -284,13 +352,6 @@
         }
 
         isLoading = false;
-    }
-
-    private void GoBackToStep1()
-    {
-        currentStep = 1;
-        errorMessage = null;
-        successMessage = null;
     }
 
     private void StartCountdown()

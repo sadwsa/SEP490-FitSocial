@@ -1,5 +1,7 @@
 @page "/login"
+@implements IDisposable
 @inject IAuthService AuthService
+@inject GoogleSignInService GoogleSignIn
 @inject NavigationManager Navigation
 
 <PageTitle>Đăng nhập - FitSocial</PageTitle>
@@ -48,6 +50,25 @@
                 </button>
             </EditForm>
 
+            <div class="d-flex align-items-center my-3">
+                <hr class="flex-grow-1" />
+                <span class="px-2 text-muted small">HOẶC</span>
+                <hr class="flex-grow-1" />
+            </div>
+
+            @if (GoogleSignIn.IsConfigured && googleButtonOk)
+            {
+                <div id="google-login-btn" class="d-flex justify-content-center"></div>
+            }
+            else
+            {
+                <div class="alert alert-secondary py-2 small text-center mb-0">
+                    @(GoogleSignIn.IsConfigured
+                        ? "Không tải được nút Google. Hãy bấm Ctrl+F5 tải lại trang."
+                        : "Đăng nhập Google chưa được cấu hình.")
+                </div>
+            }
+
             <div class="text-center mt-4 pt-3 border-top small text-muted">
                 Chưa có tài khoản? <a href="register" class="fw-bold text-decoration-none">Đăng ký ngay</a>
             </div>
@@ -59,6 +80,37 @@
     private LoginRequest loginModel = new();
     private string? errorMessage;
     private bool isLoading = false;
+    private bool googleButtonOk = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && GoogleSignIn.IsConfigured)
+        {
+            GoogleSignIn.OnCredential += HandleGoogleCredentialAsync;
+            googleButtonOk = await GoogleSignIn.RenderButtonAsync("google-login-btn", "signin_with");
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleGoogleCredentialAsync(string idToken)
+    {
+        isLoading = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        var result = await AuthService.LoginWithGoogleAsync(idToken);
+        if (result.Success)
+        {
+            Navigation.NavigateTo("");
+        }
+        else
+        {
+            errorMessage = result.Message ?? "Đăng nhập Google thất bại. Vui lòng thử lại.";
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
 
     private async Task HandleLogin()
     {
@@ -76,5 +128,10 @@
         }
 
         isLoading = false;
+    }
+
+    public void Dispose()
+    {
+        GoogleSignIn.OnCredential -= HandleGoogleCredentialAsync;
     }
 }

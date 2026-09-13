@@ -1,24 +1,23 @@
 namespace FitSocial.Client.Models.Auth;
 
 /// <summary>
-/// Định nghĩa các Roles trong hệ thống FitSocial
-/// Bạn có thể đổi tên role cho khớp chính xác với Backend Database/Identity
+/// Định nghĩa các Roles trong hệ thống FitSocial (Đồng bộ chuẩn Backend)
 /// </summary>
 public static class AppRoles
 {
-    public const string Admin = "Admin";
-    public const string PersonalTrainer = "PT";
-    public const string GymOwner = "GymOwner";
-    public const string Member = "Member";
+    public const string Trainee = "TRAINEE";
+    public const string Coach = "COACH";
+    public const string Staff = "STAFF";
+    public const string Admin = "ADMIN";
 
-    public static readonly string[] All = { Admin, PersonalTrainer, GymOwner, Member };
+    public static readonly string[] All = { Trainee, Coach, Staff, Admin };
 
     public static string GetDisplayName(string role) => role switch
     {
         Admin => "Quản trị viên (Admin)",
-        PersonalTrainer => "Huấn luyện viên (PT)",
-        GymOwner => "Chủ phòng Gym",
-        Member => "Hội viên / Người dùng",
+        Coach => "Huấn luyện viên (Coach)",
+        Staff => "Nhân viên (Staff)",
+        Trainee => "Hội viên (Trainee)",
         _ => role
     };
 }

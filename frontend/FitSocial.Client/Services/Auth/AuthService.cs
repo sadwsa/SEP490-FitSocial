@@ -9,6 +9,8 @@ namespace FitSocial.Client.Services.Auth;
 public interface IAuthService
 {
     Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request);
+    Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken);
+    Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
     Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
     Task LogoutAsync();
     Task<string?> GetTokenAsync();
@@ -38,19 +40,19 @@ public class AuthService : IAuthService
         try
         {
             var response = await _httpClient.PostAsJsonAsync("auth/login", request);
-            if (response.IsSuccessStatusCode)
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
             {
-                var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
-                if (result?.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
+                if (result.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
                 {
                     await _localStorage.SetItemAsync(AuthTokenKey, result.Data.AccessToken);
                     await _localStorage.SetItemAsync(RefreshTokenKey, result.Data.RefreshToken);
                     ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(result.Data.AccessToken);
                 }
-                return result ?? new ApiResponse<AuthResponse> { Success = false, Message = "Phản hồi không hợp lệ" };
+                return result;
             }
 
-            return new ApiResponse<AuthResponse>
+            return result ?? new ApiResponse<AuthResponse>
             {
                 Success = false,
                 Message = $"Đăng nhập thất bại (Mã: {response.StatusCode})"
@@ -66,18 +68,51 @@ public class AuthService : IAuthService
         }
     }
 
+    public async Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/send-otp", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (result != null)
+            {
+                return result;
+            }
+
+            return new ApiResponse<bool>
+            {
+                Success = response.IsSuccessStatusCode,
+                Message = response.IsSuccessStatusCode ? "Đã gửi mã OTP thành công" : $"Gửi mã OTP thất bại (Mã: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Lỗi kết nối: {ex.Message}"
+            };
+        }
+    }
+
     public async Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request)
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/register", request);
-            if (response.IsSuccessStatusCode)
+            var response = await _httpClient.PostAsJsonAsync("auth/register-trainee", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
             {
-                var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
-                return result ?? new ApiResponse<AuthResponse> { Success = false, Message = "Phản hồi không hợp lệ" };
+                if (result.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
+                {
+                    await _localStorage.SetItemAsync(AuthTokenKey, result.Data.AccessToken);
+                    await _localStorage.SetItemAsync(RefreshTokenKey, result.Data.RefreshToken);
+                    ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(result.Data.AccessToken);
+                }
+                return result;
             }
 
-            return new ApiResponse<AuthResponse>
+            return result ?? new ApiResponse<AuthResponse>
             {
                 Success = false,
                 Message = $"Đăng ký thất bại (Mã: {response.StatusCode})"
@@ -90,6 +125,47 @@ public class AuthService : IAuthService
                 Success = false,
                 Message = $"Lỗi kết nối: {ex.Message}"
             };
+        }
+    }
+
+    public async Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/google", new GoogleLoginRequest { IdToken = idToken });
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                if (result.Data != null)
+                {
+                    await PersistAuthAsync(result.Data);
+                }
+                return result;
+            }
+
+            return result ?? new ApiResponse<AuthResponse>
+            {
+                Success = false,
+                Message = $"Đăng nhập Google thất bại (Mã: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<AuthResponse>
+            {
+                Success = false,
+                Message = $"Lỗi kết nối: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task PersistAuthAsync(AuthResponse data)
+    {
+        if (!string.IsNullOrEmpty(data.AccessToken))
+        {
+            await _localStorage.SetItemAsync(AuthTokenKey, data.AccessToken);
+            await _localStorage.SetItemAsync(RefreshTokenKey, data.RefreshToken);
+            ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(data.AccessToken);
         }
     }
 

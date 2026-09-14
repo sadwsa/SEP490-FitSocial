@@ -66,6 +66,30 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Register a Coach account with OTP verification (creates a pending approval coach profile)
+    /// </summary>
+    [HttpPost("register-coach")]
+    [EnableRateLimiting("OtpPolicy")]
+    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RegisterCoach([FromBody] RegisterCoachRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.RegisterCoachAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Sign in / Sign up with a Google account (validates the Google-issued ID Token)
     /// </summary>
     [HttpPost("google")]

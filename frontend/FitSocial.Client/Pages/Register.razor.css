@@ -605,6 +605,52 @@
     cursor: not-allowed;
 }
 
+/* Nút xanh cho luồng Coach */
+.btn-auth-primary.btn-coach {
+    background: var(--secondary-color);
+}
+
+.btn-auth-primary.btn-coach:hover:not(:disabled) {
+    background: #0da271;
+}
+
+/* Banner xanh cho tab Coach */
+.coach-banner {
+    display: flex;
+    gap: 10px;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+}
+
+.coach-banner-icon {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    color: #059669;
+    flex-shrink: 0;
+    padding-top: 1px;
+}
+
+.coach-banner-icon ::deep svg {
+    width: 19px;
+    height: 19px;
+}
+
+.coach-banner strong {
+    font-size: 0.82rem;
+    color: #065f46;
+}
+
+.coach-banner p {
+    font-size: 0.76rem;
+    color: #047857;
+    margin: 2px 0 0;
+    line-height: 1.5;
+}
+
 @media (max-width: 480px) {
     .reg-hero {
         flex-direction: column;

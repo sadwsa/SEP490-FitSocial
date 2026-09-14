@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Blazored.LocalStorage;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Common;
@@ -9,12 +10,14 @@ namespace FitSocial.Client.Services.Auth;
 public interface IAuthService
 {
     Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request);
-    Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken);
+    Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken, string? roleCode = null);
     Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
     Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
+    Task<ApiResponse<AuthResponse>> RegisterCoachAsync(RegisterRequest request);
     Task LogoutAsync();
     Task<string?> GetTokenAsync();
     Task<bool> IsAuthenticatedAsync();
+    Task PersistLoginAsync(AuthResponse data);
 }
 
 public class AuthService : IAuthService
@@ -55,7 +58,7 @@ public class AuthService : IAuthService
             return result ?? new ApiResponse<AuthResponse>
             {
                 Success = false,
-                Message = $"Đăng nhập thất bại (Mã: {response.StatusCode})"
+                Message = $"Sign-in failed (Code: {response.StatusCode})"
             };
         }
         catch (Exception ex)
@@ -63,7 +66,7 @@ public class AuthService : IAuthService
             return new ApiResponse<AuthResponse>
             {
                 Success = false,
-                Message = $"Lỗi kết nối: {ex.Message}"
+                Message = $"Connection error: {ex.Message}"
             };
         }
     }
@@ -82,7 +85,7 @@ public class AuthService : IAuthService
             return new ApiResponse<bool>
             {
                 Success = response.IsSuccessStatusCode,
-                Message = response.IsSuccessStatusCode ? "Đã gửi mã OTP thành công" : $"Gửi mã OTP thất bại (Mã: {response.StatusCode})"
+                Message = response.IsSuccessStatusCode ? "OTP code sent successfully" : $"Failed to send OTP code (Code: {response.StatusCode})"
             };
         }
         catch (Exception ex)
@@ -90,17 +93,27 @@ public class AuthService : IAuthService
             return new ApiResponse<bool>
             {
                 Success = false,
-                Message = $"Lỗi kết nối: {ex.Message}"
+                Message = $"Connection error: {ex.Message}"
             };
         }
     }
 
     public async Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request)
     {
+        return await RegisterInternalAsync("auth/register-trainee", request);
+    }
+
+    public async Task<ApiResponse<AuthResponse>> RegisterCoachAsync(RegisterRequest request)
+    {
+        return await RegisterInternalAsync("auth/register-coach", request);
+    }
+
+    private async Task<ApiResponse<AuthResponse>> RegisterInternalAsync(string endpoint, RegisterRequest request)
+    {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/register-trainee", request);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            var response = await _httpClient.PostAsJsonAsync(endpoint, request);
+            var (result, rawPreview) = await ReadResponseAsync<AuthResponse>(response);
             if (response.IsSuccessStatusCode && result != null && result.Success)
             {
                 if (result.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
@@ -112,28 +125,30 @@ public class AuthService : IAuthService
                 return result;
             }
 
-            return result ?? new ApiResponse<AuthResponse>
+            if (result != null)
             {
-                Success = false,
-                Message = $"Đăng ký thất bại (Mã: {response.StatusCode})"
-            };
+                return result;
+            }
+
+            return UnexpectedResponse<AuthResponse>(
+                response, rawPreview, $"Registration failed (Code: {response.StatusCode})");
         }
         catch (Exception ex)
         {
             return new ApiResponse<AuthResponse>
             {
                 Success = false,
-                Message = $"Lỗi kết nối: {ex.Message}"
+                Message = $"Connection error: {ex.Message}"
             };
         }
     }
 
-    public async Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken)
+    public async Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken, string? roleCode = null)
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/google", new GoogleLoginRequest { IdToken = idToken });
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            var response = await _httpClient.PostAsJsonAsync("auth/google", new GoogleLoginRequest { IdToken = idToken, RoleCode = roleCode });
+            var (result, rawPreview) = await ReadResponseAsync<AuthResponse>(response);
             if (response.IsSuccessStatusCode && result != null && result.Success)
             {
                 if (result.Data != null)
@@ -143,20 +158,26 @@ public class AuthService : IAuthService
                 return result;
             }
 
-            return result ?? new ApiResponse<AuthResponse>
+            if (result != null)
             {
-                Success = false,
-                Message = $"Đăng nhập Google thất bại (Mã: {response.StatusCode})"
-            };
+                return result;
+            }
+
+            return UnexpectedResponse<AuthResponse>(
+                response, rawPreview, $"Google sign-in failed (Code: {response.StatusCode})");
         }
         catch (Exception ex)
         {
             return new ApiResponse<AuthResponse>
             {
                 Success = false,
-                Message = $"Lỗi kết nối: {ex.Message}"
+                Message = $"Connection error: {ex.Message}"
             };
         }
+    }
+    public async Task PersistLoginAsync(AuthResponse data)
+    {
+        await PersistAuthAsync(data);
     }
 
     private async Task PersistAuthAsync(AuthResponse data)
@@ -167,6 +188,54 @@ public class AuthService : IAuthService
             await _localStorage.SetItemAsync(RefreshTokenKey, data.RefreshToken);
             ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(data.AccessToken);
         }
+    }
+
+    /// <summary>
+    /// Reads the raw body first so a non-JSON server reply (proxy page, crash page, ...)
+    /// surfaces its real content instead of a cryptic "'X' is an invalid start" error.
+    /// </summary>
+    private static async Task<(ApiResponse<T>? Result, string? RawPreview)> ReadResponseAsync<T>(HttpResponseMessage response)
+    {
+        string raw;
+        try
+        {
+            raw = await response.Content.ReadAsStringAsync();
+        }
+        catch
+        {
+            return (null, null);
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return (null, null);
+        }
+
+        var preview = raw.Length > 300 ? raw[..300] : raw;
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<ApiResponse<T>>(
+                raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return (parsed, preview);
+        }
+        catch
+        {
+            return (null, preview);
+        }
+    }
+
+    private static ApiResponse<T> UnexpectedResponse<T>(HttpResponseMessage response, string? rawPreview, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(rawPreview))
+        {
+            return new ApiResponse<T>
+            {
+                Success = false,
+                Message = $"Unexpected server response (HTTP {(int)response.StatusCode}): {rawPreview}"
+            };
+        }
+
+        return new ApiResponse<T> { Success = false, Message = fallback };
     }
 
     public async Task LogoutAsync()

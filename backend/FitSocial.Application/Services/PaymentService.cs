@@ -1,29 +1,48 @@
-﻿using FitSocial.Application.DTOs.Auth;
+using FitSocial.Application.DTOs.Auth;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Payments;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
+using FitSocial.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace FitSocial.Application.Services;
 
 public class PaymentService : IPaymentService
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IUserRepository _users;
+    private readonly ISportRepository _sports;
+    private readonly IPriceRepository _prices;
+    private readonly IOrderRepository _orders;
+    private readonly IPaymentRepository _payments;
+    private readonly ICoachProfileRepository _coachProfiles;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IOtpService _otpService;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IPaymentGateway _paymentGateway;
 
     public PaymentService(
-        IApplicationDbContext context,
+        IUserRepository users,
+        ISportRepository sports,
+        IPriceRepository prices,
+        IOrderRepository orders,
+        IPaymentRepository payments,
+        ICoachProfileRepository coachProfiles,
+        IUnitOfWork unitOfWork,
         IOtpService otpService,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
         IPaymentGateway paymentGateway)
     {
-        _context = context;
+        _users = users;
+        _sports = sports;
+        _prices = prices;
+        _orders = orders;
+        _payments = payments;
+        _coachProfiles = coachProfiles;
+        _unitOfWork = unitOfWork;
         _otpService = otpService;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
@@ -37,18 +56,14 @@ public class PaymentService : IPaymentService
     {
         var normalizedEmail = request.Email.Trim().ToLower();
 
-        if (await _context.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
+        if (await _users.ExistsByEmailAsync(normalizedEmail))
         {
             return ApiResponseDto<CoachActivationPreviewDto>.Fail("This email is already in use.");
         }
 
-        // Lấy giá từ bảng Prices trong DB
-        var activePrice = await _context.Prices
-            .Where(p => p.IsActive == true)
-            .OrderByDescending(p => p.CreatedAt)
-            .FirstOrDefaultAsync();
+        var activePrice = await _prices.GetActiveAsync();
 
-        if (activePrice == null)
+        if (activePrice == null || activePrice.Amount == null)
         {
             return ApiResponseDto<CoachActivationPreviewDto>.Fail("Coach activation fee configuration not found.");
         }
@@ -62,157 +77,6 @@ public class PaymentService : IPaymentService
                 OrderType = PaymentConstants.OrderTypeCoachActivation
             },
             "Order preview created. Proceed to payment.");
-    }
-
-    /// <summary>
-    /// Verifies the payment, then creates the coach account + activation order + payment record
-    /// in a single transaction. The account only exists after successful payment.
-    /// </summary>
-    public async Task<ApiResponseDto<AuthResponseDto>> ConfirmCoachActivationAsync(ConfirmCoachActivationRequestDto request)
-    {
-        var normalizedEmail = request.Email.Trim().ToLower();
-
-        if (request.Password != request.ConfirmPassword)
-        {
-            return ApiResponseDto<AuthResponseDto>.Fail("Passwords do not match.");
-        }
-
-        if (await _context.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
-        {
-            return ApiResponseDto<AuthResponseDto>.Fail("This email is already in use.");
-        }
-
-        // Check for duplicate phone number (Users.PhoneNumber is UNIQUE)
-        var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-        if (normalizedPhone != null &&
-            await _context.Users.AnyAsync(u => u.PhoneNumber == normalizedPhone))
-        {
-            return ApiResponseDto<AuthResponseDto>.Fail("This phone number is already in use.");
-        }
-
-        // 1. Verify the payment with the gateway (mock: refs starting with "FAIL" are declined).
-        //    Replace with a real VNPay/MoMo verification call when merchant credentials exist.
-        if (string.IsNullOrWhiteSpace(request.TransactionRef) ||
-            request.TransactionRef.Trim().StartsWith("FAIL", StringComparison.OrdinalIgnoreCase))
-        {
-            return ApiResponseDto<AuthResponseDto>.Fail("Payment verification failed. No account was created.");
-        }
-
-        // 2. Verify the OTP (once)
-        var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(
-            normalizedEmail,
-            request.OtpCode.Trim(),
-            OtpConstants.PurposeRegisterCoach);
-
-        if (!otpValid)
-        {
-            return ApiResponseDto<AuthResponseDto>.Fail(otpMessage);
-        }
-
-        // Lấy giá động từ bảng Prices trong DB
-        var activePrice = await _context.Prices
-            .Where(p => p.IsActive == true)
-            .OrderByDescending(p => p.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        if (activePrice == null || activePrice.Amount == null)
-        {
-            return ApiResponseDto<AuthResponseDto>.Fail("Coach activation fee configuration not found.");
-        }
-
-        var fee = activePrice.Amount.Value;
-        var now = DateTime.UtcNow;
-
-        // 3. Create the coach user + pending approval profile
-        var newUser = new User
-        {
-            UserId = Guid.NewGuid(),
-            Email = normalizedEmail,
-            FullName = request.FullName.Trim(),
-            PasswordHash = _passwordHasher.HashPassword(request.Password),
-            PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
-            Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
-            DateOfBirth = request.DateOfBirth,
-            RoleCode = RoleConstants.Coach,
-            IsInternal = false,
-            IsLocked = false,
-            CreatedAt = now,
-            UpdatedAt = now,
-            CoachProfileCoach = new CoachProfile
-            {
-                ApprovalStatus = "PENDING",
-                ExperienceYears = request.ExperienceYears,
-                Bio = string.IsNullOrWhiteSpace(request.Biography) ? null : request.Biography.Trim(),
-                CertificateUrl = string.IsNullOrWhiteSpace(request.CertificateUrl) ? null : request.CertificateUrl.Trim(),
-                IdentityCardUrl = string.IsNullOrWhiteSpace(request.IdentityCardUrl) ? null : request.IdentityCardUrl.Trim(),
-                UpdatedAt = now
-            }
-        };
-        // CoachId shares the UserId (set explicitly for clarity)
-        newUser.CoachProfileCoach.CoachId = newUser.UserId;
-
-        // Coaching specialties (multiple allowed) -> CoachSports
-        var specialtyIds = request.SpecialtySportIds?.Distinct().ToList() ?? new List<Guid>();
-        if (specialtyIds.Count > 0)
-        {
-            var specialties = await _context.Sports
-                .Where(s => specialtyIds.Contains(s.SportId))
-                .ToListAsync();
-            foreach (var specialty in specialties)
-            {
-                newUser.CoachProfileCoach.Sports.Add(specialty);
-            }
-        }
-
-        _context.Users.Add(newUser);
-
-        // 4. Activation order + detail + payment record (Orders.TraineeID is NOT NULL -> created with the user)
-        var order = new Order
-        {
-            OrderId = Guid.NewGuid(),
-            TraineeId = newUser.UserId,
-            CoachId = newUser.UserId,
-            TotalAmount = fee,
-            OrderStatus = PaymentConstants.OrderStatusPaid,
-            OrderType = PaymentConstants.OrderTypeCoachActivation,
-            CreatedAt = now
-        };
-        order.OrderDetails.Add(new OrderDetail
-        {
-            OrderDetailsId = Guid.NewGuid(),
-            OrderId = order.OrderId,
-            PackagePrice = fee,
-            CreatedAt = now
-        });
-        order.Payments.Add(new Payment
-        {
-            PaymentId = Guid.NewGuid(),
-            OrderId = order.OrderId,
-            Amount = fee,
-            Currency = PaymentConstants.CurrencyVnd,
-            Method = string.IsNullOrWhiteSpace(request.Method) ? PaymentConstants.GatewayMock : request.Method.Trim(),
-            GatewayId = PaymentConstants.GatewayMock,
-            TransactionRef = request.TransactionRef.Trim(),
-            Status = PaymentConstants.PaymentStatusSuccess,
-            ProcessedAt = now,
-            CreatedAt = now,
-            UpdatedAt = now
-        });
-        _context.Orders.Add(order);
-
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            return ApiResponseDto<AuthResponseDto>.Fail("Could not create the account. The email or phone number may already be in use.");
-        }
-
-        // 5. Sign the coach in immediately
-        var responseData = BuildAuthResponse(newUser);
-
-        return ApiResponseDto<AuthResponseDto>.Ok(responseData, "Payment successful! Coach account created.");
     }
 
     /// <summary>
@@ -230,24 +94,20 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<ActivationLinkDto>.Fail("Passwords do not match.");
         }
 
-        var existing = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+        var existing = await _users.FindByEmailAsync(normalizedEmail);
 
         if (existing != null && existing.IsLocked != true)
         {
             return ApiResponseDto<ActivationLinkDto>.Fail("This email is already in use.");
         }
 
-        // Check for duplicate phone number (Users.PhoneNumber is UNIQUE, excluding self on retry)
         var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
         if (normalizedPhone != null &&
-            await _context.Users.AnyAsync(u => u.PhoneNumber == normalizedPhone &&
-                (existing == null || u.UserId != existing.UserId)))
+            await _users.ExistsByPhoneAsync(normalizedPhone, existing?.UserId))
         {
             return ApiResponseDto<ActivationLinkDto>.Fail("This phone number is already in use.");
         }
 
-        // Verify the OTP once (user may resend a fresh code for retries)
         var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(
             normalizedEmail,
             request.OtpCode.Trim(),
@@ -258,11 +118,7 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<ActivationLinkDto>.Fail(otpMessage);
         }
 
-        // Lấy giá động từ bảng Prices trong DB
-        var activePrice = await _context.Prices
-            .Where(p => p.IsActive == true)
-            .OrderByDescending(p => p.CreatedAt)
-            .FirstOrDefaultAsync();
+        var activePrice = await _prices.GetActiveAsync();
 
         if (activePrice == null || activePrice.Amount == null)
         {
@@ -287,7 +143,7 @@ public class PaymentService : IPaymentService
                 DateOfBirth = request.DateOfBirth,
                 RoleCode = RoleConstants.Coach,
                 IsInternal = false,
-                IsLocked = true, // Locked until the activation fee is paid
+                IsLocked = true, 
                 CreatedAt = now,
                 UpdatedAt = now,
                 CoachProfileCoach = new CoachProfile
@@ -297,40 +153,32 @@ public class PaymentService : IPaymentService
                 }
             };
             user.CoachProfileCoach.CoachId = user.UserId;
-            _context.Users.Add(user);
+            await _users.AddAsync(user);
             profile = user.CoachProfileCoach;
         }
         else
         {
-            // Retry: refresh the locked account with the latest form data
             user = existing;
             user.FullName = request.FullName.Trim();
             user.PasswordHash = _passwordHasher.HashPassword(request.Password);
             user.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
             user.UpdatedAt = now;
 
-            // Cancel its previous pending activation orders
-            var staleOrders = await _context.Orders
-                .Where(o => o.TraineeId == user.UserId
-                    && o.OrderType == PaymentConstants.OrderTypeCoachActivation
-                    && o.OrderStatus == PaymentConstants.OrderStatusPending)
-                .ToListAsync();
+            var staleOrders = await _orders.ListPendingActivationByUserAsync(
+                user.UserId, PaymentConstants.OrderTypeCoachActivation);
             foreach (var stale in staleOrders)
             {
                 stale.OrderStatus = PaymentConstants.OrderStatusCancelled;
             }
 
-            profile = await _context.CoachProfiles
-                .Include(p => p.Sports)
-                .FirstOrDefaultAsync(p => p.CoachId == user.UserId);
+            profile = await _coachProfiles.FindWithSportsByCoachIdAsync(user.UserId);
             if (profile == null)
             {
                 profile = new CoachProfile { CoachId = user.UserId };
-                _context.CoachProfiles.Add(profile);
+                await _coachProfiles.AddAsync(profile);
             }
         }
 
-        // Refresh profile fields + specialties on the coach profile
         profile.ApprovalStatus = "PENDING";
         profile.ExperienceYears = request.ExperienceYears;
         profile.Bio = string.IsNullOrWhiteSpace(request.Biography) ? null : request.Biography.Trim();
@@ -342,16 +190,13 @@ public class PaymentService : IPaymentService
         var specialtyIds = request.SpecialtySportIds?.Distinct().ToList() ?? new List<Guid>();
         if (specialtyIds.Count > 0)
         {
-            var specialties = await _context.Sports
-                .Where(s => specialtyIds.Contains(s.SportId))
-                .ToListAsync();
+            var specialties = await _sports.ListByIdsAsync(specialtyIds);
             foreach (var specialty in specialties)
             {
                 profile.Sports.Add(specialty);
             }
         }
 
-        // Unique PayOS order code: yyMMddHHmmss + 3 random digits
         var orderCode = long.Parse($"{DateTimeOffset.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}");
 
         var order = new Order
@@ -385,18 +230,17 @@ public class PaymentService : IPaymentService
             CreatedAt = now,
             UpdatedAt = now
         });
-        _context.Orders.Add(order);
+        await _orders.AddAsync(order);
 
         try
         {
-            await _context.SaveChangesAsync();
+            await _unitOfWork.SaveChangesAsync();
         }
         catch (DbUpdateException)
         {
             return ApiResponseDto<ActivationLinkDto>.Fail("Could not save your information. The email or phone number may already be in use.");
         }
 
-        // Create the PayOS VietQR payment link
         string frontend = string.IsNullOrWhiteSpace(originUrl) ? "https://localhost:7012" : originUrl.TrimEnd('/');
         PaymentLinkInfo link;
         try
@@ -434,15 +278,14 @@ public class PaymentService : IPaymentService
     /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> CompleteActivationAsync(long orderCode)
     {
-        var payment = await _context.Payments
-            .FirstOrDefaultAsync(p => p.GatewayTransactionId == orderCode.ToString());
+        var payment = await _payments.FindByGatewayTransactionIdAsync(orderCode.ToString());
 
         if (payment == null)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Payment order not found.");
         }
 
-        var order = await _context.Orders.FindAsync(payment.OrderId);
+        var order = await _orders.GetByIdAsync(payment.OrderId);
         if (order == null)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Payment order not found.");
@@ -450,7 +293,7 @@ public class PaymentService : IPaymentService
 
         if (order.OrderStatus == PaymentConstants.OrderStatusPaid)
         {
-            var existingUser = await _context.Users.FindAsync(order.TraineeId);
+            var existingUser = await _users.GetByIdAsync(order.TraineeId);
             if (existingUser == null || existingUser.IsLocked == true)
             {
                 return ApiResponseDto<AuthResponseDto>.Fail("Account is not available.");
@@ -473,7 +316,7 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<AuthResponseDto>.Fail("Payment has not been completed yet.");
         }
 
-        var user = await _context.Users.FindAsync(order.TraineeId);
+        var user = await _users.GetByIdAsync(order.TraineeId);
         if (user == null)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Account is not available.");
@@ -490,7 +333,7 @@ public class PaymentService : IPaymentService
 
         try
         {
-            await _context.SaveChangesAsync();
+            await _unitOfWork.SaveChangesAsync();
         }
         catch (DbUpdateException)
         {
@@ -502,15 +345,14 @@ public class PaymentService : IPaymentService
 
     public async Task<ApiResponseDto<bool>> CancelActivationAsync(long orderCode)
     {
-        var payment = await _context.Payments
-            .FirstOrDefaultAsync(p => p.GatewayTransactionId == orderCode.ToString());
+        var payment = await _payments.FindByGatewayTransactionIdAsync(orderCode.ToString());
 
         if (payment == null)
         {
             return ApiResponseDto<bool>.Fail("Payment order not found.");
         }
 
-        var order = await _context.Orders.FindAsync(payment.OrderId);
+        var order = await _orders.GetByIdAsync(payment.OrderId);
         if (order == null)
         {
             return ApiResponseDto<bool>.Fail("Payment order not found.");
@@ -526,7 +368,7 @@ public class PaymentService : IPaymentService
         payment.FailureReason = "Cancelled by user.";
         payment.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync();
 
         return ApiResponseDto<bool>.Ok(true, "Payment order cancelled.");
     }

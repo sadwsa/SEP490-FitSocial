@@ -48,31 +48,6 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// Verify the payment, then create the coach account + activation order + payment record.
-    /// The account only exists after successful payment.
-    /// </summary>
-    [HttpPost("coach-activation/confirm")]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ConfirmCoachActivation([FromBody] ConfirmCoachActivationRequestDto request)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(
-                FirstModelError() ?? "Invalid data"));
-        }
-
-        var result = await _paymentService.ConfirmCoachActivationAsync(request);
-        if (!result.Success)
-        {
-            return BadRequest(result);
-        }
-
-        return Ok(result);
-    }
-
-    /// <summary>
     /// Verify OTP + lock in the coach draft, then return a PayOS VietQR payment link.
     /// Call this when the user clicks Pay on the activation page.
     /// </summary>

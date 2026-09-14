@@ -2,16 +2,17 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Blazored.LocalStorage;
 using FitSocial.Client.Models.Common;
+using FitSocial.Client.Services.Auth;
 
 namespace FitSocial.Client.Services.Http;
 
 public class ApiClient
 {
     private readonly HttpClient _http;
-    private readonly ILocalStorageService _localStorage;
+    private readonly ITokenStorage _localStorage;
     private const string AuthTokenKey = "authToken";
 
-    public ApiClient(HttpClient http, ILocalStorageService localStorage)
+    public ApiClient(HttpClient http, ITokenStorage localStorage)
     {
         _http = http;
         _localStorage = localStorage;

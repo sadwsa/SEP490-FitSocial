@@ -10,10 +10,9 @@ namespace FitSocial.Client.Services.Auth;
 public interface IAuthService
 {
     Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request);
-    Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken, string? roleCode = null);
+    Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null);
     Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
     Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
-    Task<ApiResponse<AuthResponse>> RegisterCoachAsync(RegisterRequest request);
     Task LogoutAsync();
     Task<string?> GetTokenAsync();
     Task<bool> IsAuthenticatedAsync();
@@ -23,14 +22,14 @@ public interface IAuthService
 public class AuthService : IAuthService
 {
     private readonly HttpClient _httpClient;
-    private readonly ILocalStorageService _localStorage;
+    private readonly ITokenStorage _localStorage;
     private readonly AuthenticationStateProvider _authStateProvider;
     private const string AuthTokenKey = "authToken";
     private const string RefreshTokenKey = "refreshToken";
 
     public AuthService(
         HttpClient httpClient,
-        ILocalStorageService localStorage,
+        ITokenStorage localStorage,
         AuthenticationStateProvider authStateProvider)
     {
         _httpClient = httpClient;
@@ -100,19 +99,9 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request)
     {
-        return await RegisterInternalAsync("auth/register-trainee", request);
-    }
-
-    public async Task<ApiResponse<AuthResponse>> RegisterCoachAsync(RegisterRequest request)
-    {
-        return await RegisterInternalAsync("auth/register-coach", request);
-    }
-
-    private async Task<ApiResponse<AuthResponse>> RegisterInternalAsync(string endpoint, RegisterRequest request)
-    {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(endpoint, request);
+            var response = await _httpClient.PostAsJsonAsync("auth/register-trainee", request);
             var (result, rawPreview) = await ReadResponseAsync<AuthResponse>(response);
             if (response.IsSuccessStatusCode && result != null && result.Success)
             {
@@ -142,12 +131,16 @@ public class AuthService : IAuthService
             };
         }
     }
+    public async Task PersistLoginAsync(AuthResponse data)
+    {
+        await PersistAuthAsync(data);
+    }
 
-    public async Task<ApiResponse<AuthResponse>> LoginWithGoogleAsync(string idToken, string? roleCode = null)
+    public async Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null)
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/google", new GoogleLoginRequest { IdToken = idToken, RoleCode = roleCode });
+            var response = await _httpClient.PostAsJsonAsync("auth/google/code", new { code, roleCode, redirectUri });
             var (result, rawPreview) = await ReadResponseAsync<AuthResponse>(response);
             if (response.IsSuccessStatusCode && result != null && result.Success)
             {
@@ -174,10 +167,6 @@ public class AuthService : IAuthService
                 Message = $"Connection error: {ex.Message}"
             };
         }
-    }
-    public async Task PersistLoginAsync(AuthResponse data)
-    {
-        await PersistAuthAsync(data);
     }
 
     private async Task PersistAuthAsync(AuthResponse data)

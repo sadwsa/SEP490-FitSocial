@@ -22,7 +22,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         var secretKey = _configuration["Jwt:SecretKey"] ?? "FitSocial_Secret_Super_Secure_Key_2026_KeyForAuth_987654321";
         var issuer = _configuration["Jwt:Issuer"] ?? "FitSocial.API";
         var audience = _configuration["Jwt:Audience"] ?? "FitSocial.Client";
-        var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "1440"; // 1 day default
+        var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "15"; 
 
         if (!int.TryParse(expiryMinutesStr, out var expiryMinutes))
         {

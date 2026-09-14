@@ -33,19 +33,12 @@
         </button>
     </div>
 
-    <!-- Google (Trainee only, Coach must use the application form) -->
+    <!-- Google (Trainee only, redirect flow, works in Guest/Incognito) -->
     @if (!isCoach)
     {
-        @if (GoogleSignIn.IsConfigured && googleButtonOk)
-        {
-            <div id="google-register-btn" class="google-btn-wrap"></div>
-        }
-        else
-        {
-            <button type="button" class="btn-google" @onclick="HandleGoogleRegister">
-                <AppIcon Name="google" /> Quick sign up with Google
-            </button>
-        }
+        <button type="button" class="btn-google" @onclick="HandleGoogleButtonAsync">
+            <AppIcon Name="google" /><span>Sign in with Google</span>
+        </button>
     }
 
     @if (isCoach)
@@ -383,9 +376,6 @@
     private bool otpSent = false;
     private bool isSendingOtp = false;
     private bool isLoading = false;
-    private bool googleButtonOk = true;
-    private bool googleSubscribed = false;
-    private bool needsGoogleRender = false;
     private string[] otpDigits = new string[6] { "", "", "", "", "", "" };
     private ElementReference[] otpRefs = new ElementReference[6];
 
@@ -424,45 +414,19 @@
         await LoadSportsAsync();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        // The Google button div only exists on the Trainee tab; re-render when coming back to it
-        if (GoogleSignIn.IsConfigured && (firstRender || needsGoogleRender) && !isCoach)
-        {
-            needsGoogleRender = false;
-            if (!googleSubscribed)
-            {
-                GoogleSignIn.OnCredential += HandleGoogleCredentialAsync;
-                googleSubscribed = true;
-            }
-            googleButtonOk = await GoogleSignIn.RenderButtonAsync("google-register-btn", "signup_with");
-            StateHasChanged();
-        }
-    }
-
-    private async Task HandleGoogleCredentialAsync(string idToken)
+    private async Task HandleGoogleButtonAsync()
     {
         errorMessage = null;
         successMessage = null;
         infoMessage = null;
-        isLoading = true;
-        StateHasChanged();
 
-        var result = await AuthService.LoginWithGoogleAsync(idToken, selectedRole);
-        if (result.Success)
+        if (!GoogleSignIn.IsConfigured)
         {
-            successMessage = "Google sign-in successful! Redirecting...";
-            StateHasChanged();
-            await Task.Delay(1200);
-            Navigation.NavigateTo("/");
-        }
-        else
-        {
-            errorMessage = result.Message ?? "Google sign-in failed. Please try again.";
+            infoMessage = "Google sign-in is not configured.";
+            return;
         }
 
-        isLoading = false;
-        StateHasChanged();
+        await GoogleSignIn.BeginRedirectSignInAsync(selectedRole);
     }
 
     private async Task LoadSportsAsync()
@@ -530,20 +494,6 @@
         }
         selectedRole = role;
         infoMessage = null;
-
-        // Coming back to Trainee: the Google button div was removed, render it again
-        if (role == "TRAINEE" && GoogleSignIn.IsConfigured)
-        {
-            googleButtonOk = true;
-            needsGoogleRender = true;
-        }
-    }
-
-    private void HandleGoogleRegister()
-    {
-        infoMessage = GoogleSignIn.IsConfigured
-            ? "Could not load the Google button (no network, ad blocker, or stale browser cache). Press Ctrl+F5 to reload."
-            : "Google sign-in is not configured. Please sign up with email.";
     }
 
     private async Task HandleSendOtp()
@@ -732,10 +682,5 @@
     public void Dispose()
     {
         timer?.Dispose();
-        if (googleSubscribed)
-        {
-            GoogleSignIn.OnCredential -= HandleGoogleCredentialAsync;
-            googleSubscribed = false;
-        }
     }
 }

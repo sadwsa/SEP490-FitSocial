@@ -7,6 +7,6 @@ public interface IAuthService
 {
     Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request);
     Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request);
-    Task<ApiResponseDto<AuthResponseDto>> RegisterCoachAsync(RegisterCoachRequestDto request);
-    Task<ApiResponseDto<AuthResponseDto>> GoogleLoginAsync(GoogleLoginRequestDto request);
+    Task<ApiResponseDto<AuthResponseDto>> LoginAsync(LoginRequestDto request);
+    Task<ApiResponseDto<AuthResponseDto>> GoogleCodeLoginAsync(GoogleCodeRequestDto request);
 }

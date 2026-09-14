@@ -7,11 +7,11 @@ namespace FitSocial.Client.Services.Auth;
 
 public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 {
-    private readonly ILocalStorageService _localStorage;
+    private readonly ITokenStorage _localStorage;
     private static readonly ClaimsPrincipal Anonymous = new(new ClaimsIdentity());
     private const string AuthTokenKey = "authToken";
 
-    public CustomAuthenticationStateProvider(ILocalStorageService localStorage)
+    public CustomAuthenticationStateProvider(ITokenStorage localStorage)
     {
         _localStorage = localStorage;
     }

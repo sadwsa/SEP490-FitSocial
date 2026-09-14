@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace FitSocial.Infrastructure.Data;
 
-public partial class FitSocialDbContext : DbContext, IApplicationDbContext
+public partial class FitSocialDbContext : DbContext
 {
     public FitSocialDbContext(DbContextOptions<FitSocialDbContext> options)
         : base(options)

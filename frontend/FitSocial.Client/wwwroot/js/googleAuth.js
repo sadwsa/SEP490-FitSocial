@@ -1,37 +1,34 @@
-// Tích hợp nút đăng nhập Google (Google Identity Services) cho Blazor WASM.
+// Tích hợp nút đăng nhập Google (OAuth2 redirect flow) cho Blazor WASM.
 window.fitSocialGoogle = {
-    renderButton: function (elementId, clientId, text, dotNetRef) {
-        var el = document.getElementById(elementId);
-        if (!el) {
-            return false;
-        }
-        if (el.getAttribute("data-gis-rendered") === "1") {
-            return true;
-        }
-        if (typeof google === "undefined" || !google.accounts || !google.accounts.id) {
-            return false;
-        }
+    // OAuth2 redirect flow (không popup, không FedCM): sang trang Google rồi quay về /login-callback.
+    // Role được nhúng vào đầu state để trang callback gửi kèm lên backend.
+    signInRedirect: function (clientId, redirectUri, role) {
+        var safeRole = (role === "COACH" || role === "TRAINEE") ? role : "";
+        var state = safeRole + "." + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        var url = "https://accounts.google.com/o/oauth2/v2/auth" +
+            "?client_id=" + encodeURIComponent(clientId) +
+            "&redirect_uri=" + encodeURIComponent(redirectUri) +
+            "&response_type=code" +
+            "&scope=" + encodeURIComponent("openid email profile") +
+            "&state=" + encodeURIComponent(state) +
+            "&prompt=select_account";
+        window.location.href = url;
+    }
+};
+
+window.fitSocialStorage = {
+    sessionGet: function (key) {
         try {
-            google.accounts.id.initialize({
-                client_id: clientId,
-                callback: function (response) {
-                    dotNetRef.invokeMethodAsync("OnGoogleCredential", response.credential);
-                }
-            });
-            // Google chỉ cho phép width 200-400px: kẹp trong khoảng đó, nút căn giữa khung full-width
-            var w = Math.min(Math.max(el.offsetWidth || 300, 200), 400);
-            google.accounts.id.renderButton(el, {
-                theme: "outline",
-                size: "large",
-                width: w,
-                text: text || "signin_with",
-                shape: "rectangular"
-            });
-            el.setAttribute("data-gis-rendered", "1");
-            return true;
+            var raw = sessionStorage.getItem(key);
+            return raw === null || raw === undefined ? null : JSON.parse(raw);
         } catch (e) {
-            el.innerHTML = "";
-            return false;
+            return null;
         }
+    },
+    sessionSet: function (key, value) {
+        sessionStorage.setItem(key, JSON.stringify(value));
+    },
+    sessionRemove: function (key) {
+        sessionStorage.removeItem(key);
     }
 };

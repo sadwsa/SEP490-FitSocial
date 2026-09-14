@@ -1,6 +1,5 @@
-using FitSocial.Application;
 using FitSocial.Application.Interfaces;
-using FitSocial.Infrastructure;
+using FitSocial.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
@@ -8,6 +7,7 @@ using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
 using System.IdentityModel.Tokens.Jwt;
+using FitSocial.Domain.Interfaces;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -55,6 +55,7 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
+builder.Services.AddHttpClient();
 
 // JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? "FitSocial_Super_Secret_Key_For_Jwt_2026_SecureAuthenticationKey_1234567890";
@@ -81,7 +82,7 @@ builder.Services.AddAuthentication(options =>
     {
         OnTokenValidated = async context =>
         {
-            var dbContext = context.HttpContext.RequestServices.GetRequiredService<IApplicationDbContext>();
+            var userRepository = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
             var blacklistService = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
 
             // 1. Get Jti and TokenVersion from the Access Token claims
@@ -99,7 +100,7 @@ builder.Services.AddAuthentication(options =>
             // Check Layer 2: compare TokenVersion with the database (password change / locked account)
             if (Guid.TryParse(userIdStr, out var userId) && int.TryParse(tokenVersionStr, out var tokenVersion))
             {
-                var user = await dbContext.Users.FindAsync(userId);
+                var user = await userRepository.GetByIdAsync(userId);
                 if (user == null || user.IsLocked == true || user.TokenVersion != tokenVersion)
                 {
                     context.Fail("Account has been locked, password changed, or the session is no longer valid.");

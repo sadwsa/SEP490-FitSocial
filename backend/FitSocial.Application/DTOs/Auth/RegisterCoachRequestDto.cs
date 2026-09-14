@@ -32,26 +32,19 @@ public class RegisterCoachRequestDto
 
     public DateOnly? DateOfBirth { get; set; }
 
-    /// <summary>Coaching specialties (Sports table, multiple allowed) -> saved to CoachSports.</summary>
     [MinLength(1, ErrorMessage = "Please select at least one specialty")]
     public List<Guid>? SpecialtySportIds { get; set; }
 
-    /// <summary>Years of coaching experience -> CoachProfiles.ExperienceYears.</summary>
     [Required(ErrorMessage = "Please enter your years of experience")]
     [Range(0, 60, ErrorMessage = "Years of experience must be between 0 and 60")]
     public int? ExperienceYears { get; set; }
 
-    /// <summary>Short professional biography -> CoachProfiles.Bio.</summary>
     [StringLength(2000, ErrorMessage = "Biography must be under 2000 characters")]
     public string? Biography { get; set; }
 
-    /// <summary>Link to certificates/credentials -> CoachProfiles.CertificateUrl.</summary>
     [StringLength(2048, ErrorMessage = "Certificate link is too long")]
     public string? CertificateUrl { get; set; }
 
-    /// <summary>Link to the identity card image -> CoachProfiles.IdentityCardUrl.</summary>
     [StringLength(2048, ErrorMessage = "Identity card link is too long")]
     public string? IdentityCardUrl { get; set; }
-
-    public List<Guid>? FavoriteSportIds { get; set; }
 }

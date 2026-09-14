@@ -10,6 +10,7 @@ namespace FitSocial.Client.Services.Auth;
 public interface IAuthService
 {
     Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request);
+    Task<ApiResponse<AuthResponse>> AdminLoginAsync(LoginRequest request);
     Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null);
     Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
     Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
@@ -39,9 +40,19 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request)
     {
+        return await LoginInternalAsync("auth/login", request);
+    }
+
+    public async Task<ApiResponse<AuthResponse>> AdminLoginAsync(LoginRequest request)
+    {
+        return await LoginInternalAsync("auth/admin-login", request);
+    }
+
+    private async Task<ApiResponse<AuthResponse>> LoginInternalAsync(string endpoint, LoginRequest request)
+    {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/login", request);
+            var response = await _httpClient.PostAsJsonAsync(endpoint, request);
             var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
             if (response.IsSuccessStatusCode && result != null && result.Success)
             {

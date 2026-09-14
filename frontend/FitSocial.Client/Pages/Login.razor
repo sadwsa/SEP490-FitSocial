@@ -96,6 +96,9 @@
     [SupplyParameterFromQuery(Name = "authError")]
     public string? AuthError { get; set; }
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         rememberMe = await TokenStorage.GetRememberMeAsync();
@@ -106,24 +109,58 @@
             errorMessage = AuthError;
         }
 
-        // Already signed in -> skip the login page
+        // Already signed in -> skip the login page, routing by CURRENT role
+        // (an admin revisiting /login must go back to /admin, never to home)
         if (await AuthService.IsAuthenticatedAsync())
         {
-            NavigateAfterLogin();
+            NavigateAfterLogin(await GetCurrentRoleAsync());
         }
     }
 
-    private void NavigateAfterLogin()
+    private async Task<string?> GetCurrentRoleAsync()
     {
+        if (AuthState == null)
+        {
+            return null;
+        }
+
+        var user = (await AuthState).User;
+        if (user.IsInRole(AppRoles.Admin))
+        {
+            return AppRoles.Admin;
+        }
+        if (user.IsInRole(AppRoles.Staff))
+        {
+            return AppRoles.Staff;
+        }
+        if (user.IsInRole(AppRoles.Coach))
+        {
+            return AppRoles.Coach;
+        }
+        if (user.IsInRole(AppRoles.Trainee))
+        {
+            return AppRoles.Trainee;
+        }
+        return null;
+    }
+
+    private void NavigateAfterLogin(string? roleCode = null)
+    {
+        bool isBackOffice = string.Equals(roleCode?.Trim(), AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(roleCode?.Trim(), AppRoles.Staff, StringComparison.OrdinalIgnoreCase);
+
         if (!string.IsNullOrWhiteSpace(ReturnUrl) &&
             !ReturnUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
         {
-            Navigation.NavigateTo(ReturnUrl);
+            bool wantsAdminArea = ReturnUrl.TrimStart('/').StartsWith("admin", StringComparison.OrdinalIgnoreCase);
+            if (wantsAdminArea == isBackOffice)
+            {
+                Navigation.NavigateTo(ReturnUrl);
+                return;
+            }
         }
-        else
-        {
-            Navigation.NavigateTo("");
-        }
+
+        Navigation.NavigateTo(isBackOffice ? "/admin" : "home");
     }
 
     private async Task HandleLogin()
@@ -139,7 +176,7 @@
         var result = await AuthService.LoginAsync(loginModel);
         if (result.Success)
         {
-            NavigateAfterLogin();
+            NavigateAfterLogin(result.Data?.User?.RoleCode);
         }
         else
         {

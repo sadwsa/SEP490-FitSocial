@@ -1,0 +1,10 @@
+@inject NavigationManager Navigation
+
+@code {
+    // Unknown URL -> bounce to the role-based entry point (dispatcher),
+    // which forwards to login / home / admin as appropriate.
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("");
+    }
+}

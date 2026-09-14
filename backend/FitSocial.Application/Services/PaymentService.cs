@@ -1,4 +1,4 @@
-using FitSocial.Application.DTOs.Auth;
+﻿using FitSocial.Application.DTOs.Auth;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Payments;
 using FitSocial.Application.Interfaces;
@@ -42,11 +42,22 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<CoachActivationPreviewDto>.Fail("This email is already in use.");
         }
 
+        // Lấy giá từ bảng Prices trong DB
+        var activePrice = await _context.Prices
+            .Where(p => p.IsActive == true)
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (activePrice == null)
+        {
+            return ApiResponseDto<CoachActivationPreviewDto>.Fail("Coach activation fee configuration not found.");
+        }
+
         return ApiResponseDto<CoachActivationPreviewDto>.Ok(
             new CoachActivationPreviewDto
             {
                 Email = normalizedEmail,
-                AmountVnd = PaymentConstants.CoachActivationFeeVnd,
+                AmountVnd = activePrice.Amount.Value,
                 Currency = PaymentConstants.CurrencyVnd,
                 OrderType = PaymentConstants.OrderTypeCoachActivation
             },
@@ -98,8 +109,19 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<AuthResponseDto>.Fail(otpMessage);
         }
 
+        // Lấy giá động từ bảng Prices trong DB
+        var activePrice = await _context.Prices
+            .Where(p => p.IsActive == true)
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (activePrice == null || activePrice.Amount == null)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Coach activation fee configuration not found.");
+        }
+
+        var fee = activePrice.Amount.Value;
         var now = DateTime.UtcNow;
-        var fee = PaymentConstants.CoachActivationFeeVnd;
 
         // 3. Create the coach user + pending approval profile
         var newUser = new User
@@ -236,8 +258,19 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<ActivationLinkDto>.Fail(otpMessage);
         }
 
+        // Lấy giá động từ bảng Prices trong DB
+        var activePrice = await _context.Prices
+            .Where(p => p.IsActive == true)
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (activePrice == null || activePrice.Amount == null)
+        {
+            return ApiResponseDto<ActivationLinkDto>.Fail("Coach activation fee configuration not found.");
+        }
+
+        var fee = activePrice.Amount.Value;
         var now = DateTime.UtcNow;
-        var fee = PaymentConstants.CoachActivationFeeVnd;
 
         User user;
         CoachProfile? profile;

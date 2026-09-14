@@ -2,9 +2,6 @@ namespace FitSocial.Domain.Constants;
 
 public static class PaymentConstants
 {
-    /// <summary>One-time coach activation fee (VND).</summary>
-    public const decimal CoachActivationFeeVnd = 499000m;
-
     public const string CurrencyVnd = "VND";
 
     public const string OrderTypeCoachActivation = "COACH_ACTIVATION";

@@ -12,6 +12,7 @@ public interface IApplicationDbContext
     DbSet<OrderDetail> OrderDetails { get; }
     DbSet<Payment> Payments { get; }
     DbSet<CoachProfile> CoachProfiles { get; }
+    public DbSet<Price> Prices { get; set; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

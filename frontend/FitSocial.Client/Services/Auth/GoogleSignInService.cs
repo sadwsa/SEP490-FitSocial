@@ -1,78 +1,51 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
 
 namespace FitSocial.Client.Services.Auth;
 
 /// <summary>
-/// Bridge between Google Identity Services (Sign in with Google button) and Blazor.
-/// ClientId is read from wwwroot/appsettings.json (Google:ClientId section).
+/// Google sign-in via OAuth2 redirect flow (no popup, no FedCM dependency,
+/// works in Guest/Incognito windows). Google redirects back to /login-callback
+/// with an authorization code that the backend exchanges server-side.
 /// </summary>
-public class GoogleSignInService : IAsyncDisposable
+public class GoogleSignInService
 {
     private readonly IJSRuntime _jsRuntime;
     private readonly IConfiguration _configuration;
-    private DotNetObjectReference<GoogleSignInService>? _dotNetRef;
+    private readonly NavigationManager _navigationManager;
 
-    public GoogleSignInService(IJSRuntime jsRuntime, IConfiguration configuration)
+    public GoogleSignInService(
+        IJSRuntime jsRuntime,
+        IConfiguration configuration,
+        NavigationManager navigationManager)
     {
         _jsRuntime = jsRuntime;
         _configuration = configuration;
+        _navigationManager = navigationManager;
     }
-
-    public event Func<string, Task>? OnCredential;
 
     public string? ClientId => _configuration["Google:ClientId"];
 
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(ClientId) && !ClientId.Contains("YOUR_GOOGLE_CLIENT_ID");
 
+    public string CallbackUrl =>
+        _navigationManager.BaseUri.TrimEnd('/') + "/login-callback";
+
     /// <summary>
-    /// Renders the Google button into the div with the given id. text: "signin_with" | "signup_with".
-    /// Returns true when the button is displayed, false when GIS could not load (offline, blocked, stale cache).
+    /// Leaves the SPA for Google's account chooser. Role (TRAINEE/COACH/null)
+    /// travels inside the state parameter for the callback page to forward to the backend.
+    /// Null means shared login: no role check.
     /// </summary>
-    public async Task<bool> RenderButtonAsync(string elementId, string text = "signin_with")
+    public async Task BeginRedirectSignInAsync(string? role = null)
     {
         if (!IsConfigured || string.IsNullOrWhiteSpace(ClientId))
         {
-            return false;
+            return;
         }
 
-        _dotNetRef ??= DotNetObjectReference.Create(this);
-
-        try
-        {
-            // GIS loads asynchronously -> retry for ~4 seconds
-            for (int i = 0; i < 8; i++)
-            {
-                bool rendered = await _jsRuntime.InvokeAsync<bool>(
-                    "fitSocialGoogle.renderButton", elementId, ClientId, text, _dotNetRef);
-                if (rendered)
-                {
-                    return true;
-                }
-                await Task.Delay(500);
-            }
-        }
-        catch
-        {
-            // fitSocialGoogle missing (stale cached index.html) or JS error
-        }
-
-        return false;
-    }
-
-    [JSInvokable]
-    public async Task OnGoogleCredential(string credential)
-    {
-        if (OnCredential != null)
-        {
-            await OnCredential.Invoke(credential);
-        }
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        _dotNetRef?.Dispose();
-        return ValueTask.CompletedTask;
+        await _jsRuntime.InvokeVoidAsync(
+            "fitSocialGoogle.signInRedirect", ClientId, CallbackUrl, role);
     }
 }

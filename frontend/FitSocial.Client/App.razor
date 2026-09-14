@@ -3,11 +3,7 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                 <NotAuthorized>
-                    <div class="not-authorized-container text-center p-5">
-                        <h3>🔒 Yêu cầu đăng nhập</h3>
-                        <p class="text-muted">Bạn cần đăng nhập để truy cập trang này.</p>
-                        <a href="login" class="btn btn-primary mt-3">Đăng nhập ngay</a>
-                    </div>
+                    <RedirectToLogin />
                 </NotAuthorized>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />

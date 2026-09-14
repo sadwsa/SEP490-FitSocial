@@ -3,44 +3,53 @@ using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
+using FitSocial.Domain.Interfaces;
 using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using System.Net.Http;
 
 namespace FitSocial.Application.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IUserRepository _users;
+    private readonly ISportRepository _sports;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IOtpService _otpService;
     private readonly IEmailService _emailService;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IConfiguration _configuration;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public AuthService(
-        IApplicationDbContext context,
+        IUserRepository users,
+        ISportRepository sports,
+        IUnitOfWork unitOfWork,
         IOtpService otpService,
         IEmailService emailService,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory)
     {
-        _context = context;
+        _users = users;
+        _sports = sports;
+        _unitOfWork = unitOfWork;
         _otpService = otpService;
         _emailService = emailService;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
         _configuration = configuration;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
 
-        // Check whether the email already exists in the system
-        var emailExists = await _context.Users
-            .AnyAsync(u => u.Email.ToLower() == normalizedEmail);
+        var emailExists = await _users.ExistsByEmailAsync(normalizedEmail);
 
         if (emailExists)
         {
@@ -51,15 +60,14 @@ public class AuthService : IAuthService
             ? OtpConstants.PurposeRegisterTrainee 
             : request.Purpose;
 
-        // Generate the OTP and save its hash to OTPLogs
         var otpCode = await _otpService.GenerateOtpAsync(normalizedEmail, purpose);
 
-        // Send the email containing the OTP code
         var subject = "[FitSocial] Account registration verification code";
         var body = $@"
             <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;"">
                 <div style=""text-align: center; margin-bottom: 20px;"">
-                    <h2 style=""color: #FF5722; margin: 0;"">FitSocial 🔥</h2>
+                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitSocial"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
+                    <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitSocial</h2>
                     <p style=""color: #666; margin: 5px 0 0;"">Sports & Fitness Community</p>
                 </div>
                 <div style=""background: #fff3e0; border-left: 4px solid #FF5722; padding: 15px; margin-bottom: 20px;"">
@@ -81,8 +89,46 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, "The OTP verification code has been sent to your email.");
     }
 
-    public async Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request)
+    /// <summary>
+    /// Email + password sign-in shared by all roles (Trainee, Coach, ...).
+    /// The role travels in the JWT (ClaimTypes.Role) and AuthResponse.User.
+    /// </summary>
+    public async Task<ApiResponseDto<AuthResponseDto>> LoginAsync(LoginRequestDto request)
     {
+        var normalizedEmail = request.Email.Trim().ToLower();
+
+        var user = await _users.FindByEmailAsync(normalizedEmail);
+
+        if (user == null || string.IsNullOrEmpty(user.PasswordHash) ||
+            !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
+        }
+
+        if (user.IsLocked == true)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
+        }
+
+        if (!IsClientLoginAllowed(user.RoleCode))
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.RoleCode) &&
+            !string.Equals(user.RoleCode?.Trim(), request.RoleCode.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
+        }
+
+        user.LastActiveAt = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _unitOfWork.SaveChangesAsync();
+
+        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Signed in successfully!");
+    }
+
+    public async Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request)    {
         return await RegisterAsync(
             request.FullName,
             request.Email,
@@ -95,27 +141,6 @@ public class AuthService : IAuthService
             request.FavoriteSportIds,
             OtpConstants.PurposeRegisterTrainee,
             RoleConstants.Trainee);
-    }
-
-    public async Task<ApiResponseDto<AuthResponseDto>> RegisterCoachAsync(RegisterCoachRequestDto request)
-    {
-        return await RegisterAsync(
-            request.FullName,
-            request.Email,
-            request.Password,
-            request.ConfirmPassword,
-            request.OtpCode,
-            request.PhoneNumber,
-            request.Gender,
-            request.DateOfBirth,
-            request.FavoriteSportIds,
-            OtpConstants.PurposeRegisterCoach,
-            RoleConstants.Coach,
-            request.ExperienceYears,
-            request.Biography,
-            request.CertificateUrl,
-            request.SpecialtySportIds,
-            request.IdentityCardUrl);
     }
 
     private async Task<ApiResponseDto<AuthResponseDto>> RegisterAsync(
@@ -143,24 +168,20 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("Passwords do not match.");
         }
 
-        // Check for duplicate email
-        var emailExists = await _context.Users
-            .AnyAsync(u => u.Email.ToLower() == normalizedEmail);
+        var emailExists = await _users.ExistsByEmailAsync(normalizedEmail);
 
         if (emailExists)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("This email is already in use.");
         }
 
-        // Check for duplicate phone number (Users.PhoneNumber is UNIQUE)
         var normalizedPhone = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim();
         if (normalizedPhone != null &&
-            await _context.Users.AnyAsync(u => u.PhoneNumber == normalizedPhone))
+            await _users.ExistsByPhoneAsync(normalizedPhone))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("This phone number is already in use.");
         }
 
-        // Verify the OTP
         var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(
             normalizedEmail,
             otpCode.Trim(),
@@ -171,7 +192,6 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail(otpMessage);
         }
 
-        // Create the new user
         var newUser = new User
         {
             UserId = Guid.NewGuid(),
@@ -188,7 +208,6 @@ public class AuthService : IAuthService
             UpdatedAt = DateTime.UtcNow
         };
 
-        // Coach accounts start with a pending approval profile
         if (roleCode == RoleConstants.Coach)
         {
             newUser.CoachProfileCoach = new CoachProfile
@@ -202,13 +221,10 @@ public class AuthService : IAuthService
                 UpdatedAt = DateTime.UtcNow
             };
 
-            // Coaching specialties (multiple allowed) -> saved to CoachSports
             var specialtyIds = specialtySportIds?.Distinct().ToList() ?? new List<Guid>();
             if (specialtyIds.Count > 0)
             {
-                var specialties = await _context.Sports
-                    .Where(s => specialtyIds.Contains(s.SportId))
-                    .ToListAsync();
+                var specialties = await _sports.ListByIdsAsync(specialtyIds);
                 foreach (var specialty in specialties)
                 {
                     newUser.CoachProfileCoach.Sports.Add(specialty);
@@ -216,28 +232,24 @@ public class AuthService : IAuthService
             }
         }
 
-        // Attach favorite sports (if any) -> saved to UserFavoriteSports
         var sportIds = favoriteSportIds?.Distinct().ToList() ?? new List<Guid>();
         if (sportIds.Count > 0)
         {
-            var sports = await _context.Sports
-                .Where(s => sportIds.Contains(s.SportId))
-                .ToListAsync();
+            var sports = await _sports.ListByIdsAsync(sportIds);
             foreach (var sport in sports)
             {
                 newUser.Sports.Add(sport);
             }
         }
 
-        _context.Users.Add(newUser);
+        await _users.AddAsync(newUser);
 
         try
         {
-            await _context.SaveChangesAsync();
+            await _unitOfWork.SaveChangesAsync();
         }
         catch (DbUpdateException)
         {
-            // E.g. race on UNIQUE email/phone between the check above and the insert
             return ApiResponseDto<AuthResponseDto>.Fail("Could not create the account. The email or phone number may already be in use.");
         }
 
@@ -247,20 +259,65 @@ public class AuthService : IAuthService
         return ApiResponseDto<AuthResponseDto>.Ok(responseData, $"{roleLabel} account registered successfully!");
     }
 
-    public async Task<ApiResponseDto<AuthResponseDto>> GoogleLoginAsync(GoogleLoginRequestDto request)
+    /// <summary>
+    /// OAuth2 authorization-code flow (popup, no FedCM): exchanges the code for tokens
+    /// server-side, then signs the user in with the same link-or-create rules as ID-token login.
+    /// Works in Guest/Incognito windows where the FedCM button flow is blocked.
+    /// </summary>
+    public async Task<ApiResponseDto<AuthResponseDto>> GoogleCodeLoginAsync(GoogleCodeRequestDto request)
     {
         var clientId = _configuration["Google:ClientId"];
-        if (string.IsNullOrWhiteSpace(clientId))
+        var clientSecret = _configuration["Google:ClientSecret"];
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Google sign-in is not configured on the server.");
         }
 
-        // Validate the ID Token with Google (signature + audience + expiry)
+        string? idToken;
+        var redirectUri = string.IsNullOrWhiteSpace(request.RedirectUri)
+            ? "postmessage"
+            : request.RedirectUri.Trim();
+        try
+        {
+            var httpClient = _httpClientFactory.CreateClient();
+            using var tokenRequest = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["code"] = request.Code,
+                ["client_id"] = clientId,
+                ["client_secret"] = clientSecret,
+                ["redirect_uri"] = redirectUri,
+                ["grant_type"] = "authorization_code"
+            });
+            using var tokenResponse = await httpClient.PostAsync(
+                "https://oauth2.googleapis.com/token", tokenRequest);
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                return ApiResponseDto<AuthResponseDto>.Fail("Google authorization failed. Please try again.");
+            }
+
+            using var tokenJson = await System.Text.Json.JsonDocument.ParseAsync(
+                await tokenResponse.Content.ReadAsStreamAsync());
+            if (!tokenJson.RootElement.TryGetProperty("id_token", out var idTokenEl))
+            {
+                return ApiResponseDto<AuthResponseDto>.Fail("Google authorization failed. Please try again.");
+            }
+            idToken = idTokenEl.GetString();
+        }
+        catch
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Could not reach Google. Please check your connection and try again.");
+        }
+
+        if (string.IsNullOrWhiteSpace(idToken))
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Google authorization failed. Please try again.");
+        }
+
         GoogleJsonWebSignature.Payload payload;
         try
         {
             payload = await GoogleJsonWebSignature.ValidateAsync(
-                request.IdToken,
+                idToken,
                 new GoogleJsonWebSignature.ValidationSettings { Audience = new[] { clientId } });
         }
         catch (InvalidJwtException)
@@ -276,42 +333,22 @@ public class AuthService : IAuthService
         var googleSub = payload.Subject;
         var normalizedEmail = payload.Email.Trim().ToLower();
 
-        // Find the Google-linked user, otherwise find by email to link
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.GoogleProviderId == googleSub);
+        var user = await _users.FindByGoogleSubAsync(googleSub);
 
         if (user == null)
         {
-            user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+            user = await _users.FindByEmailAsync(normalizedEmail);
         }
 
         if (user == null)
         {
-            // Google sign-up is Trainee-only. Coach accounts must use
-            // the application form (register-coach + activation payment).
             if (string.Equals(request.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
             {
                 return ApiResponseDto<AuthResponseDto>.Fail("Google sign-up is available for Trainee accounts only. To become a coach, please use the Coach application form.");
             }
 
-            // New email -> auto-create a Google-linked Trainee account
-            user = new User
-            {
-                UserId = Guid.NewGuid(),
-                Email = normalizedEmail,
-                FullName = string.IsNullOrWhiteSpace(payload.Name) ? normalizedEmail : payload.Name.Trim(),
-                PasswordHash = null,
-                GoogleProviderId = googleSub,
-                AvatarUrl = string.IsNullOrWhiteSpace(payload.Picture) ? null : payload.Picture,
-                RoleCode = RoleConstants.Trainee,
-                IsInternal = false,
-                IsLocked = false,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _context.Users.Add(user);
+            user = BuildGoogleUser(payload, normalizedEmail, googleSub);
+            await _users.AddAsync(user);
         }
         else
         {
@@ -320,7 +357,17 @@ public class AuthService : IAuthService
                 return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
             }
 
-            // Link the Google account to the existing email
+            if (!IsClientLoginAllowed(user.RoleCode))
+            {
+                return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.RoleCode) &&
+                !string.Equals(user.RoleCode?.Trim(), request.RoleCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
+            }
+
             if (string.IsNullOrWhiteSpace(user.GoogleProviderId))
             {
                 user.GoogleProviderId = googleSub;
@@ -333,10 +380,45 @@ public class AuthService : IAuthService
             user.UpdatedAt = DateTime.UtcNow;
         }
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Could not sign you in. Please try again.");
+        }
 
-        var responseData = BuildAuthResponse(user);
-        return ApiResponseDto<AuthResponseDto>.Ok(responseData, "Google sign-in successful!");
+        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Google sign-in successful!");
+    }
+
+    /// <summary>
+    /// The client login page serves Trainee/Coach only.
+    /// Admin/Staff sign in on a separate back-office page (built later).
+    /// </summary>
+    private static bool IsClientLoginAllowed(string? roleCode)
+    {
+        return string.Equals(roleCode?.Trim(), RoleConstants.Trainee, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(roleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static User BuildGoogleUser(
+        GoogleJsonWebSignature.Payload payload, string normalizedEmail, string googleSub)
+    {
+        return new User
+        {
+            UserId = Guid.NewGuid(),
+            Email = normalizedEmail,
+            FullName = string.IsNullOrWhiteSpace(payload.Name) ? normalizedEmail : payload.Name.Trim(),
+            PasswordHash = null,
+            GoogleProviderId = googleSub,
+            AvatarUrl = string.IsNullOrWhiteSpace(payload.Picture) ? null : payload.Picture,
+            RoleCode = RoleConstants.Trainee,
+            IsInternal = false,
+            IsLocked = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
     }
 
     private AuthResponseDto BuildAuthResponse(User user)

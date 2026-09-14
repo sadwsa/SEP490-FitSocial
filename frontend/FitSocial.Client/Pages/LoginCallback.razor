@@ -1,0 +1,49 @@
+@page "/login-callback"
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+@code {
+    [SupplyParameterFromQuery(Name = "code")]
+    public string? Code { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "state")]
+    public string? State { get; set; }
+
+    // Invisible pass-through: success -> home, failure -> login with the error message.
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrEmpty(Error))
+        {
+            GoLogin("Google sign-in was cancelled or denied. Please try again.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Code))
+        {
+            GoLogin("Missing authorization code from Google. Please go back and try again.");
+            return;
+        }
+
+        var rolePart = State?.Split('.')[0];
+        var role = (rolePart == "COACH" || rolePart == "TRAINEE") ? rolePart : null;
+        var redirectUri = Navigation.BaseUri.TrimEnd('/') + "/login-callback";
+
+        var result = await AuthService.LoginWithGoogleCodeAsync(Code, role, redirectUri);
+        if (result.Success)
+        {
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            GoLogin(result.Message ?? "Google sign-in failed. Please try again.");
+        }
+    }
+
+    private void GoLogin(string message)
+    {
+        Navigation.NavigateTo($"/login?authError={Uri.EscapeDataString(message)}");
+    }
+}

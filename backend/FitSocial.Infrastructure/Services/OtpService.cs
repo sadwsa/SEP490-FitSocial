@@ -3,17 +3,20 @@ using System.Text;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
+using FitSocial.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace FitSocial.Infrastructure.Services;
 
 public class OtpService : IOtpService
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IOtpLogRepository _otpLogs;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public OtpService(IApplicationDbContext context)
+    public OtpService(IOtpLogRepository otpLogs, IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _otpLogs = otpLogs;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<string> GenerateOtpAsync(string email, string purpose)
@@ -25,13 +28,11 @@ public class OtpService : IOtpService
         var otpHash = ComputeSha256Hash(otpCode);
 
         // 2. Invalidate old unverified OTPs for this email and purpose
-        var oldOtps = await _context.Otplogs
-            .Where(o => o.Email == normalizedEmail && o.Purpose == purpose && o.VerifiedAt == null)
-            .ToListAsync();
+        var oldOtps = await _otpLogs.ListUnverifiedAsync(normalizedEmail, purpose);
 
         if (oldOtps.Any())
         {
-            _context.Otplogs.RemoveRange(oldOtps);
+            _otpLogs.RemoveRange(oldOtps);
         }
 
         // 3. Create a new record in OTPLogs
@@ -46,8 +47,8 @@ public class OtpService : IOtpService
             CreatedAt = DateTime.UtcNow
         };
 
-        _context.Otplogs.Add(newOtp);
-        await _context.SaveChangesAsync();
+        await _otpLogs.AddAsync(newOtp);
+        await _unitOfWork.SaveChangesAsync();
 
         return otpCode;
     }
@@ -56,10 +57,7 @@ public class OtpService : IOtpService
     {
         var normalizedEmail = email.Trim().ToLower();
 
-        var activeOtp = await _context.Otplogs
-            .Where(o => o.Email == normalizedEmail && o.Purpose == purpose && o.VerifiedAt == null)
-            .OrderByDescending(o => o.CreatedAt)
-            .FirstOrDefaultAsync();
+        var activeOtp = await _otpLogs.FindLatestUnverifiedAsync(normalizedEmail, purpose);
 
         if (activeOtp == null)
         {
@@ -80,7 +78,7 @@ public class OtpService : IOtpService
         if (inputHash != activeOtp.OtpHash)
         {
             activeOtp.AttemptCount = (activeOtp.AttemptCount ?? 0) + 1;
-            await _context.SaveChangesAsync();
+            await _unitOfWork.SaveChangesAsync();
 
             var remainingAttempts = OtpConstants.MaxAttempts - activeOtp.AttemptCount.Value;
             return (false, $"Incorrect OTP code. You have {remainingAttempts} attempts left.");
@@ -88,7 +86,7 @@ public class OtpService : IOtpService
 
         // Mark as verified
         activeOtp.VerifiedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync();
 
         return (true, "OTP verified successfully.");
     }

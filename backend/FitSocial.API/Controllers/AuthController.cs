@@ -66,13 +66,12 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Register a Coach account with OTP verification (creates a pending approval coach profile)
+    /// Sign in with email + password, shared by all roles (UC_02)
     /// </summary>
-    [HttpPost("register-coach")]
-    [EnableRateLimiting("OtpPolicy")]
+    [HttpPost("login")]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> RegisterCoach([FromBody] RegisterCoachRequestDto request)
+    public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
         if (!ModelState.IsValid)
         {
@@ -80,7 +79,7 @@ public class AuthController : ControllerBase
             return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(firstError ?? "Invalid data"));
         }
 
-        var result = await _authService.RegisterCoachAsync(request);
+        var result = await _authService.LoginAsync(request);
         if (!result.Success)
         {
             return BadRequest(result);
@@ -90,12 +89,12 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Sign in / Sign up with a Google account (validates the Google-issued ID Token)
+    /// Sign in / Sign up with a Google authorization code (redirect flow, works without FedCM)
     /// </summary>
-    [HttpPost("google")]
+    [HttpPost("google/code")]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequestDto request)
+    public async Task<IActionResult> GoogleCodeLogin([FromBody] GoogleCodeRequestDto request)
     {
         if (!ModelState.IsValid)
         {
@@ -103,7 +102,7 @@ public class AuthController : ControllerBase
             return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(firstError ?? "Invalid data"));
         }
 
-        var result = await _authService.GoogleLoginAsync(request);
+        var result = await _authService.GoogleCodeLoginAsync(request);
         if (!result.Success)
         {
             return BadRequest(result);

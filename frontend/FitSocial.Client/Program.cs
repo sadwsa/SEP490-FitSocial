@@ -17,6 +17,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // LocalStorage
 builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddScoped<ITokenStorage, BrowserTokenStorage>();
 
 // Authentication & Authorization
 builder.Services.AddAuthorizationCore();

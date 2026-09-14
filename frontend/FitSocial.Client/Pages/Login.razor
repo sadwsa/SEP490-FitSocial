@@ -1,137 +1,171 @@
 @page "/login"
-@implements IDisposable
+@layout AuthLayout
 @inject IAuthService AuthService
 @inject GoogleSignInService GoogleSignIn
+@inject ITokenStorage TokenStorage
 @inject NavigationManager Navigation
 
-<PageTitle>Đăng nhập - FitSocial</PageTitle>
+<PageTitle>Sign In - FitSocial</PageTitle>
 
-<div class="row justify-content-center py-5">
-    <div class="col-md-6 col-lg-4">
-        <div class="fit-card p-4">
-            <div class="text-center mb-4">
-                <span class="fs-1">🏋️</span>
-                <h4 class="fw-bold mt-2">Chào mừng trở lại!</h4>
-                <p class="text-muted small">Đăng nhập để tiếp tục hành trình tập luyện</p>
+<div class="login-hero">
+    <img src="Logo_FitSocial.jpg" alt="FitSocial" class="hero-logo" />
+    <div class="hero-text">
+        <h1 class="hero-title">Sign In to <span>FitSocial</span></h1>
+        <p class="hero-sub">Access your training log, connect with coaches and continue your breakthrough sports journey.</p>
+    </div>
+</div>
+
+<div class="reg-card">
+    <!-- Google (redirect flow, works in Guest/Incognito) -->
+    <button type="button" class="btn-google" @onclick="HandleGoogleButtonAsync">
+        <AppIcon Name="google" /><span>Sign in with Google</span>
+    </button>
+
+    <div class="divider"><span>OR SIGN IN WITH ACCOUNT</span></div>
+
+    @if (!string.IsNullOrEmpty(infoMessage))
+    {
+        <div class="auth-alert info" role="alert"><AppIcon Name="info" /><span>@infoMessage</span></div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+    }
+
+    <EditForm Model="@loginModel" OnValidSubmit="HandleLogin">
+        <DataAnnotationsValidator />
+
+        <div class="field">
+            <label>Email address <span class="req">*</span></label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="envelope" /></span>
+                <InputText @bind-Value="loginModel.Email" class="form-control has-icon" placeholder="E.g.: athlete@fitsocial.vn" />
             </div>
+            <ValidationMessage For="@(() => loginModel.Email)" class="field-error" />
+        </div>
 
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger py-2 small" role="alert">
-                    @errorMessage
-                </div>
-            }
-
-            <EditForm Model="@loginModel" OnValidSubmit="HandleLogin">
-                <DataAnnotationsValidator />
-
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Email</label>
-                    <InputText @bind-Value="loginModel.Email" class="form-control" placeholder="vidu@fitsocial.vn" />
-                    <ValidationMessage For="@(() => loginModel.Email)" class="text-danger small" />
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Mật khẩu</label>
-                    <InputText type="password" @bind-Value="loginModel.Password" class="form-control" placeholder="••••••••" />
-                    <ValidationMessage For="@(() => loginModel.Password)" class="text-danger small" />
-                </div>
-
-                <button type="submit" class="btn-fit-primary w-100 justify-content-center py-2 mt-2" disabled="@isLoading">
-                    @if (isLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                        <span>Đang xử lý...</span>
-                    }
-                    else
-                    {
-                        <span>Đăng nhập</span>
-                    }
+        <div class="field">
+            <label>Password <span class="req">*</span></label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="lock" /></span>
+                <InputText type="@(showPassword ? "text" : "password")" @bind-Value="loginModel.Password" class="form-control has-icon has-eye" placeholder="Enter your account password" />
+                <button type="button" class="eye-btn" @onclick="() => showPassword = !showPassword" title="Show/hide password">
+                    <AppIcon Name="@(showPassword ? "eye-slash" : "eye")" />
                 </button>
-            </EditForm>
-
-            <div class="d-flex align-items-center my-3">
-                <hr class="flex-grow-1" />
-                <span class="px-2 text-muted small">HOẶC</span>
-                <hr class="flex-grow-1" />
             </div>
+            <ValidationMessage For="@(() => loginModel.Password)" class="field-error" />
+        </div>
 
-            @if (GoogleSignIn.IsConfigured && googleButtonOk)
+        <div class="login-options">
+            <label class="remember">
+                <input type="checkbox" @bind="rememberMe" />
+                <span>Remember me on this device</span>
+            </label>
+            <button type="button" class="link-button" @onclick="HandleForgotPassword">Forgot password?</button>
+        </div>
+
+        <button type="submit" class="btn-auth-primary" disabled="@isLoading">
+            @if (isLoading)
             {
-                <div id="google-login-btn" class="d-flex justify-content-center"></div>
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <span>Signing in...</span>
             }
             else
             {
-                <div class="alert alert-secondary py-2 small text-center mb-0">
-                    @(GoogleSignIn.IsConfigured
-                        ? "Không tải được nút Google. Hãy bấm Ctrl+F5 tải lại trang."
-                        : "Đăng nhập Google chưa được cấu hình.")
-                </div>
+                <span>Sign In Now →</span>
             }
+        </button>
+    </EditForm>
 
-            <div class="text-center mt-4 pt-3 border-top small text-muted">
-                Chưa có tài khoản? <a href="register" class="fw-bold text-decoration-none">Đăng ký ngay</a>
-            </div>
-        </div>
+    <div class="reg-footer">
+        New to FitSocial? <a href="register">Create an account now →</a>
     </div>
 </div>
 
 @code {
     private LoginRequest loginModel = new();
+    private bool showPassword = false;
+    private bool rememberMe = true;
+    private string? infoMessage;
     private string? errorMessage;
     private bool isLoading = false;
-    private bool googleButtonOk = true;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery(Name = "authError")]
+    public string? AuthError { get; set; }
+
+    protected override async Task OnInitializedAsync()
     {
-        if (firstRender && GoogleSignIn.IsConfigured)
+        rememberMe = await TokenStorage.GetRememberMeAsync();
+
+        // Error forwarded from /login-callback (Google round-trip loses in-memory state)
+        if (!string.IsNullOrWhiteSpace(AuthError))
         {
-            GoogleSignIn.OnCredential += HandleGoogleCredentialAsync;
-            googleButtonOk = await GoogleSignIn.RenderButtonAsync("google-login-btn", "signin_with");
-            StateHasChanged();
+            errorMessage = AuthError;
+        }
+
+        // Already signed in -> skip the login page
+        if (await AuthService.IsAuthenticatedAsync())
+        {
+            NavigateAfterLogin();
         }
     }
 
-    private async Task HandleGoogleCredentialAsync(string idToken)
+    private void NavigateAfterLogin()
     {
-        isLoading = true;
-        errorMessage = null;
-        StateHasChanged();
-
-        var result = await AuthService.LoginWithGoogleAsync(idToken);
-        if (result.Success)
+        if (!string.IsNullOrWhiteSpace(ReturnUrl) &&
+            !ReturnUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
         {
-            Navigation.NavigateTo("");
+            Navigation.NavigateTo(ReturnUrl);
         }
         else
         {
-            errorMessage = result.Message ?? "Đăng nhập Google thất bại. Vui lòng thử lại.";
+            Navigation.NavigateTo("");
         }
-
-        isLoading = false;
-        StateHasChanged();
     }
 
     private async Task HandleLogin()
     {
         isLoading = true;
         errorMessage = null;
+        infoMessage = null;
 
+        await TokenStorage.SetRememberMeAsync(rememberMe);
+
+        // Shared login for all roles: no RoleCode sent, backend skips the role check
+        loginModel.RoleCode = null;
         var result = await AuthService.LoginAsync(loginModel);
         if (result.Success)
         {
-            Navigation.NavigateTo("");
+            NavigateAfterLogin();
         }
         else
         {
-            errorMessage = result.Message ?? "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.";
+            errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";
         }
 
         isLoading = false;
     }
 
-    public void Dispose()
+    private async Task HandleGoogleButtonAsync()
     {
-        GoogleSignIn.OnCredential -= HandleGoogleCredentialAsync;
+        errorMessage = null;
+        infoMessage = null;
+
+        if (!GoogleSignIn.IsConfigured)
+        {
+            infoMessage = "Google sign-in is not configured.";
+            return;
+        }
+
+        await TokenStorage.SetRememberMeAsync(rememberMe);
+        await GoogleSignIn.BeginRedirectSignInAsync(null);
+    }
+
+    private void HandleForgotPassword()
+    {
+        infoMessage = "Password reset is not available yet. Please contact FitSocial support for help.";
     }
 }

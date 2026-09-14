@@ -1,9 +1,8 @@
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Sports;
-using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FitSocial.API.Controllers;
 
@@ -11,11 +10,11 @@ namespace FitSocial.API.Controllers;
 [Route("api/[controller]")]
 public class SportsController : ControllerBase
 {
-    private readonly IApplicationDbContext _context;
+    private readonly ISportRepository _sports;
 
-    public SportsController(IApplicationDbContext context)
+    public SportsController(ISportRepository sports)
     {
-        _context = context;
+        _sports = sports;
     }
 
     /// <summary>
@@ -26,15 +25,14 @@ public class SportsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<List<SportDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSports()
     {
-        var sports = await _context.Sports
-            .OrderBy(s => s.SportName)
-            .Select(s => new SportDto
-            {
-                SportId = s.SportId,
-                SportName = s.SportName
-            })
-            .ToListAsync();
+        var sports = await _sports.ListAllAsync();
 
-        return Ok(ApiResponseDto<List<SportDto>>.Ok(sports, "Sports list retrieved successfully."));
+        var result = sports.Select(s => new SportDto
+        {
+            SportId = s.SportId,
+            SportName = s.SportName
+        }).ToList();
+
+        return Ok(ApiResponseDto<List<SportDto>>.Ok(result, "Sports list retrieved successfully."));
     }
 }

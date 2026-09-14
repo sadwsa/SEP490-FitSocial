@@ -11,6 +11,4 @@ public static class PaymentConstants
 
     public const string PaymentStatusSuccess = "SUCCESS";
     public const string PaymentStatusFailed = "FAILED";
-
-    public const string GatewayMock = "MOCK";
 }

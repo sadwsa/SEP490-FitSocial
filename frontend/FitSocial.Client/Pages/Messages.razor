@@ -1,0 +1,213 @@
+@page "/messages"
+@attribute [Authorize]
+@inject IConversationService ConversationService
+@inject NavigationManager Navigation
+
+<PageTitle>Messages | FitSocial</PageTitle>
+
+<div class="ig-messages-container">
+    <!-- Left Sidebar: Conversation List -->
+    <div class="ig-sidebar">
+        <!-- Header -->
+        <div class="ig-sidebar-header">
+            <h1 class="ig-sidebar-title">Messages</h1>
+            <button class="btn btn-sm btn-light rounded-circle p-2" title="Reload list" @onclick="LoadConversationsAsync">
+                <span>🔄</span>
+            </button>
+        </div>
+
+        <!-- Search Bar (local filter) -->
+        <div class="ig-search-box">
+            <input type="text" 
+                   class="ig-search-input" 
+                   placeholder="Search conversations..." 
+                   @bind="_searchTerm" 
+                   @bind:event="oninput" />
+        </div>
+
+        <!-- List Area handling 4 UI States -->
+        <div class="ig-conversation-list">
+            @if (_isLoading)
+            {
+                <!-- 1. Loading State (Skeletons) -->
+                @for (int i = 0; i < 5; i++)
+                {
+                    <div class="ig-loading-skeleton">
+                        <div class="skeleton-avatar"></div>
+                        <div class="skeleton-text-group">
+                            <div class="skeleton-line short"></div>
+                            <div class="skeleton-line long"></div>
+                        </div>
+                    </div>
+                }
+            }
+            else if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <!-- 4. Error State -->
+                <div class="ig-state-container">
+                    <div class="fs-1 mb-2">⚠️</div>
+                    <p class="text-danger fw-medium mb-3">@_errorMessage</p>
+                    <button class="btn btn-sm btn-fit-primary px-3" @onclick="LoadConversationsAsync">
+                        Retry
+                    </button>
+                </div>
+            }
+            else if (FilteredConversations == null || !FilteredConversations.Any())
+            {
+                <!-- 3. Empty State -->
+                <div class="ig-state-container">
+                    <div class="fs-1 text-muted mb-2">💬</div>
+                    <p class="fw-semibold text-secondary mb-1">
+                        @(string.IsNullOrWhiteSpace(_searchTerm) ? "No conversations yet" : "No matching conversations found")
+                    </p>
+                    <small class="text-muted d-block">
+                        @(string.IsNullOrWhiteSpace(_searchTerm) 
+                            ? "When you connect with coaches or friends, your messages will appear here." 
+                            : "Try searching with a different keyword.")
+                    </small>
+                </div>
+            }
+            else
+            {
+                <!-- 2. Has Data State -->
+                @foreach (var item in FilteredConversations)
+                {
+                    var isSelected = _selectedConversationId == item.ConversationId;
+                    var isUnread = item.UnreadCount > 0;
+
+                    <div class="ig-conv-item @(isSelected ? "active" : "") @(isUnread ? "unread" : "")" 
+                         @onclick="() => SelectConversation(item.ConversationId)">
+                        <!-- Avatar -->
+                        <div class="ig-avatar-wrapper">
+                            @if (!string.IsNullOrWhiteSpace(item.DisplayAvatar))
+                            {
+                                <img src="@item.DisplayAvatar" alt="@item.Title" class="ig-avatar" />
+                            }
+                            else
+                            {
+                                <div class="ig-avatar-placeholder">
+                                    @GetInitials(item.Title)
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Conversation Information -->
+                        <div class="ig-conv-info">
+                            <div class="ig-conv-header">
+                                <span class="ig-user-name">@item.Title</span>
+                                @if (item.LastMessageAt.HasValue)
+                                {
+                                    <span class="ig-msg-time">@FormatTime(item.LastMessageAt.Value)</span>
+                                }
+                            </div>
+                            <div class="ig-conv-preview">
+                                <p class="ig-msg-text">
+                                    @(string.IsNullOrWhiteSpace(item.LastMessage) ? "Started a conversation" : item.LastMessage)
+                                </p>
+                                @if (item.UnreadCount > 0)
+                                {
+                                    <span class="ig-unread-badge">@item.UnreadCount</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Right Main Area: Instagram Inspired Direct Messaging Placeholder (UC-16 Scope) -->
+    <div class="ig-main-placeholder">
+        <div class="ig-placeholder-icon-circle">
+            <span>✉️</span>
+        </div>
+        <h2 class="ig-placeholder-title">Your Messages</h2>
+        <p class="ig-placeholder-sub">
+            Send private messages, schedule workouts, or ask questions to your sports coach.
+        </p>
+    </div>
+</div>
+
+@code {
+    private List<ConversationDto>? _conversations;
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private string _searchTerm = "";
+    private Guid? _selectedConversationId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadConversationsAsync();
+    }
+
+    private async Task LoadConversationsAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var response = await ConversationService.GetConversationsAsync();
+            if (response.Success)
+            {
+                _conversations = response.Data ?? new List<ConversationDto>();
+            }
+            else
+            {
+                _errorMessage = response.Message ?? "Failed to load conversations.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Connection error: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private IEnumerable<ConversationDto>? FilteredConversations
+    {
+        get
+        {
+            if (_conversations == null) return null;
+            if (string.IsNullOrWhiteSpace(_searchTerm)) return _conversations;
+
+            var term = _searchTerm.Trim().ToLowerInvariant();
+            return _conversations.Where(c =>
+                (!string.IsNullOrEmpty(c.Title) && c.Title.ToLowerInvariant().Contains(term)) ||
+                (!string.IsNullOrEmpty(c.OtherUserName) && c.OtherUserName.ToLowerInvariant().Contains(term)) ||
+                (!string.IsNullOrEmpty(c.LastMessage) && c.LastMessage.ToLowerInvariant().Contains(term))
+            );
+        }
+    }
+
+    private void SelectConversation(Guid id)
+    {
+        _selectedConversationId = id;
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "💬";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpperInvariant();
+    }
+
+    private static string FormatTime(DateTime dt)
+    {
+        var localTime = dt.ToLocalTime();
+        var now = DateTime.Now;
+        var diff = now - localTime;
+
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m";
+        if (diff.TotalHours < 24 && localTime.Date == now.Date) return localTime.ToString("HH:mm");
+        if (localTime.Date == now.Date.AddDays(-1)) return "Yesterday";
+        if (diff.TotalDays < 7) return localTime.ToString("ddd");
+
+        return localTime.ToString("MM/dd");
+    }
+}

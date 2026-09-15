@@ -37,11 +37,33 @@ public class ApiClient
         {
             await AttachBearerTokenAsync();
             var response = await _http.GetAsync(endpoint);
+
             if (response.IsSuccessStatusCode)
             {
-                var data = await response.Content.ReadFromJsonAsync<T>();
-                return new ApiResponse<T> { Success = true, Data = data };
+                try
+                {
+                    var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<T>>();
+                    if (apiResponse != null)
+                    {
+                        return apiResponse;
+                    }
+                }
+                catch
+                {
+                    var data = await response.Content.ReadFromJsonAsync<T>();
+                    return new ApiResponse<T> { Success = true, Data = data };
+                }
             }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<T>>();
+                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
+                {
+                    return errorResponse;
+                }
+            }
+            catch { }
 
             return new ApiResponse<T>
             {
@@ -65,11 +87,33 @@ public class ApiClient
         {
             await AttachBearerTokenAsync();
             var response = await _http.PostAsJsonAsync(endpoint, payload);
+
             if (response.IsSuccessStatusCode)
             {
-                var data = await response.Content.ReadFromJsonAsync<TResult>();
-                return new ApiResponse<TResult> { Success = true, Data = data };
+                try
+                {
+                    var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                    if (apiResponse != null)
+                    {
+                        return apiResponse;
+                    }
+                }
+                catch
+                {
+                    var data = await response.Content.ReadFromJsonAsync<TResult>();
+                    return new ApiResponse<TResult> { Success = true, Data = data };
+                }
             }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
+                {
+                    return errorResponse;
+                }
+            }
+            catch { }
 
             return new ApiResponse<TResult>
             {

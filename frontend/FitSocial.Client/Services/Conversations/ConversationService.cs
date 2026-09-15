@@ -1,0 +1,20 @@
+using FitSocial.Client.Models.Common;
+using FitSocial.Client.Models.Conversations;
+using FitSocial.Client.Services.Http;
+
+namespace FitSocial.Client.Services.Conversations;
+
+public class ConversationService : IConversationService
+{
+    private readonly ApiClient _apiClient;
+
+    public ConversationService(ApiClient apiClient)
+    {
+        _apiClient = apiClient;
+    }
+
+    public async Task<ApiResponse<List<ConversationDto>>> GetConversationsAsync()
+    {
+        return await _apiClient.GetAsync<List<ConversationDto>>("conversations");
+    }
+}

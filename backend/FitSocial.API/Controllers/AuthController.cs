@@ -89,6 +89,29 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Back-office sign-in for Staff/Admin only (UC_28 Management Portal)
+    /// </summary>
+    [HttpPost("admin-login")]
+    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AdminLogin([FromBody] LoginRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.AdminLoginAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Sign in / Sign up with a Google authorization code (redirect flow, works without FedCM)
     /// </summary>
     [HttpPost("google/code")]

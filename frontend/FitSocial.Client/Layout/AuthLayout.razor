@@ -1,7 +1,15 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Navigation
 
 <div class="auth-layout">
-    <div class="auth-layout-inner">
+    <div class="auth-layout-inner @(isFullPage ? "full" : "")">
         @Body
     </div>
 </div>
+
+@code {
+    // Admin console pages go full-bleed (no outer box, full width + height)
+    private bool isFullPage =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin", StringComparison.OrdinalIgnoreCase)
+        && !Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/login", StringComparison.OrdinalIgnoreCase);
+}

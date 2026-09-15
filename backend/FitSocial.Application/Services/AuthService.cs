@@ -128,6 +128,41 @@ public class AuthService : IAuthService
         return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Signed in successfully!");
     }
 
+    /// <summary>
+    /// Back-office sign-in for Staff/Admin only (UC_28 Management Portal).
+    /// Same credentials flow as client login, but Trainee/Coach are rejected here.
+    /// </summary>
+    public async Task<ApiResponseDto<AuthResponseDto>> AdminLoginAsync(LoginRequestDto request)
+    {
+        var normalizedEmail = request.Email.Trim().ToLower();
+
+        var user = await _users.FindByEmailAsync(normalizedEmail);
+
+        // Generic message: do not reveal whether the email exists.
+        if (user == null || string.IsNullOrEmpty(user.PasswordHash) ||
+            !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
+        }
+
+        if (user.IsLocked == true)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
+        }
+
+        // Management portal serves Admin/Staff only (Trainee/Coach use the client login page)
+        if (!IsBackOfficeLoginAllowed(user.RoleCode))
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
+        }
+
+        user.LastActiveAt = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _unitOfWork.SaveChangesAsync();
+
+        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Welcome to the Management Portal!");
+    }
+
     public async Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request)    {
         return await RegisterAsync(
             request.FullName,
@@ -400,6 +435,15 @@ public class AuthService : IAuthService
     {
         return string.Equals(roleCode?.Trim(), RoleConstants.Trainee, StringComparison.OrdinalIgnoreCase)
             || string.Equals(roleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The Management Portal login serves Admin/Staff only (UC_28).
+    /// </summary>
+    private static bool IsBackOfficeLoginAllowed(string? roleCode)
+    {
+        return string.Equals(roleCode?.Trim(), RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(roleCode?.Trim(), RoleConstants.Staff, StringComparison.OrdinalIgnoreCase);
     }
 
     private static User BuildGoogleUser(

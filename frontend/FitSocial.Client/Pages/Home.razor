@@ -1,5 +1,5 @@
-@page "/"
-@attribute [Authorize]
+@page "/home"
+@attribute [Authorize(Roles = "TRAINEE,COACH")]
 @inject IPostService PostService
 
 <PageTitle>Bảng tin - FitSocial</PageTitle>

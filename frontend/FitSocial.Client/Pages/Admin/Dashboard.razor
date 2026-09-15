@@ -1,0 +1,442 @@
+@page "/admin"
+@layout AuthLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Sport Categories - FitSocial Admin Console</PageTitle>
+
+<div class="console">
+    <!-- Sidebar -->
+    <aside class="console-side">
+        <div class="side-brand">
+            <img src="Logo_FitSocial.jpg" alt="FitSocial" />
+            <div>
+                <strong>FitSocial</strong>
+                <small>Admin Console</small>
+            </div>
+        </div>
+
+        <nav class="side-nav">
+            <button type="button" class="side-item @(view == "overview" ? "active" : "")" @onclick='() => SwitchView("overview")'>
+                <AppIcon Name="chart" /><span>Dashboard</span>
+            </button>
+            <button type="button" class="side-item @(view == "users" ? "active" : "")" @onclick='() => SwitchView("users")'>
+                <AppIcon Name="person" /><span>User Accounts</span>
+                <small class="uc-tag">UC_34</small>
+            </button>
+            <button type="button" class="side-item @(view == "sports" ? "active" : "")" @onclick='() => SwitchView("sports")'>
+                <AppIcon Name="dumbbell" /><span>Sport Categories</span>
+                <small class="uc-tag">UC_35</small>
+            </button>
+            <button type="button" class="side-item" @onclick='() => DemoSoon("Content Moderation")'>
+                <AppIcon Name="shield" /><span>Content Moderation</span>
+            </button>
+            <button type="button" class="side-item" @onclick='() => DemoSoon("Activity Logs")'>
+                <AppIcon Name="doc" /><span>Activity Logs</span>
+            </button>
+            <button type="button" class="side-item" @onclick='() => DemoSoon("System Settings")'>
+                <AppIcon Name="gear" /><span>System Settings</span>
+            </button>
+        </nav>
+
+        <div class="side-foot">
+            <AuthorizeView Roles="ADMIN,STAFF">
+                <Authorized>
+                    <div class="side-user">
+                        <strong>@context.User.Identity?.Name</strong>
+                        <small>@string.Join(", ", AppRoles.All.Where(r => context.User.IsInRole(r)))</small>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+            <button type="button" class="side-logout" @onclick="HandleLogout">Sign out</button>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="console-main">
+        <AuthorizeView Roles="ADMIN,STAFF">
+            <Authorized>
+                @if (!string.IsNullOrEmpty(toastMessage))
+                {
+                    <div class="auth-alert info" role="alert"><AppIcon Name="info" /><span>@toastMessage</span></div>
+                }
+
+                @if (view == "overview")
+                {
+                    <h2 class="view-title">Overview</h2>
+                    <p class="view-sub">Platform at a glance (mock data).</p>
+                    <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.Logs)" />
+                    <div class="shortcuts">
+                        <button type="button" class="shortcut" @onclick='() => SwitchView("users")'>
+                            <AppIcon Name="person" />
+                            <div><strong>Manage user accounts</strong><small>View, lock, unlock (UC_34)</small></div>
+                            <span>→</span>
+                        </button>
+                        <button type="button" class="shortcut" @onclick='() => SwitchView("sports")'>
+                            <AppIcon Name="dumbbell" />
+                            <div><strong>Manage sport categories</strong><small>View, create, edit, delete (UC_35)</small></div>
+                            <span>→</span>
+                        </button>
+                    </div>
+                }
+                else if (view == "users")
+                {
+                    <h2 class="view-title">User Accounts <small class="uc-inline">UC_34 · View List (UC_34) · Lock (UC_34.1) · Unlock (UC_34.2)</small></h2>
+                    <div class="toolbar">
+                        <div class="search-wrap">
+                            <span class="search-icon"><AppIcon Name="search" /></span>
+                            <input @bind="userSearch" @bind:event="oninput" class="toolbar-input" placeholder="Search name or email..." />
+                        </div>
+                        <select @bind="roleFilter" class="toolbar-select">
+                            <option value="">All roles</option>
+                            <option value="TRAINEE">Trainee</option>
+                            <option value="COACH">Coach</option>
+                            <option value="STAFF">Staff</option>
+                            <option value="ADMIN">Admin</option>
+                        </select>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var u in FilteredUsers)
+                                {
+                                    <tr>
+                                        <td><strong>@u.FullName</strong><br /><small class="muted">@u.Phone</small></td>
+                                        <td>@u.Email</td>
+                                        <td><span class="role-badge @u.Role.ToLower()">@u.Role</span></td>
+                                        <td>
+                                            @if (u.IsLocked)
+                                            {
+                                                <span class="status-badge locked">Locked</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="status-badge active">Active</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (u.IsLocked)
+                                            {
+                                                <button type="button" class="row-btn unlock" @onclick="() => SetLocked(u, false)">Unlock</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="row-btn lock" @onclick="() => SetLocked(u, true)">Lock</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!FilteredUsers.Any())
+                                {
+                                    <tr><td colspan="5" class="text-center muted">No accounts match.</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else if (view == "sports")
+                {
+                    <h2 class="view-title">Sport Categories <small class="uc-inline">UC_35 · View (UC_35) · Create (UC_35.1) · Edit (UC_35.2) · Delete (UC_35.3)</small></h2>
+
+                    <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.Logs)" />
+
+                    <div class="toolbar wrap">
+                        <div class="search-wrap grow">
+                            <span class="search-icon"><AppIcon Name="search" /></span>
+                            <input @bind="sportSearch" @bind:event="oninput" class="toolbar-input" placeholder="Search by name or code (e.g. SPORT_01)..." />
+                        </div>
+                        <select @bind="sportStatus" class="toolbar-select">
+                            <option value="">All statuses</option>
+                            <option value="visible">Visible</option>
+                            <option value="hidden">Hidden</option>
+                        </select>
+                        <button type="button" class="row-btn" @onclick='() => ShowToast("[Demo] CSV report export is not part of this preview.")'>
+                            <span class="btn-ic"><AppIcon Name="download" /></span> Export CSV
+                        </button>
+                        <button type="button" class="row-btn" @onclick='() => ShowToast("[Demo] Cache sync is not part of this preview.")'>
+                            <span class="btn-ic"><AppIcon Name="refresh" /></span> Sync Cache
+                        </button>
+                        <button type="button" class="row-btn add" @onclick="ToggleSportForm">+ Add New Sport</button>
+                    </div>
+
+                    <div class="cat-tabs">
+                        @foreach (var c in categories)
+                        {
+                            <button type="button" class="cat-tab @(sportCategory == c ? "active" : "")" @onclick="() => sportCategory = c">@c</button>
+                        }
+                    </div>
+
+                    @if (showSportForm)
+                    {
+                        <div class="sport-form">
+                            <strong>@(editingSportId == null ? "Add new sport (UC_35.1)" : "Edit sport (UC_35.2)")</strong>
+                            <div class="form-grid">
+                                <input @bind="sportFormName" class="toolbar-input" placeholder="Sport name *" />
+                                <select @bind="sportFormCategory" class="toolbar-select">
+                                    @foreach (var c in categories.Where(x => x != "All"))
+                                    {
+                                        <option value="@c">@c</option>
+                                    }
+                                </select>
+                                <input @bind="sportFormMetrics" class="toolbar-input" placeholder="Telemetry metrics (e.g. Weight/Kg, Reps/Sets)" />
+                                <input @bind="sportFormDesc" class="toolbar-input" placeholder="Short description" />
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="row-btn" @onclick="CancelSportForm">Cancel</button>
+                                <button type="button" class="row-btn add" @onclick="SaveSportForm">Save</button>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Sport / Icon</th>
+                                    <th>Code</th>
+                                    <th>Telemetry Metrics</th>
+                                    <th>Coaches &amp; Posts</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in FilteredSports)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="sport-cell">
+                                                <span class="sport-ic"><AppIcon Name="@s.Icon" /></span>
+                                                <div><strong>@s.Name</strong><br /><small class="muted">@s.Description</small></div>
+                                            </div>
+                                        </td>
+                                        <td><code>@s.Code</code></td>
+                                        <td><small>@s.Metrics</small></td>
+                                        <td><small>@s.Coaches.ToString("N0") coaches<br />@s.Logs.ToString("N0") workout logs</small></td>
+                                        <td>
+                                            @if (s.Visible)
+                                            {
+                                                <span class="status-badge active">Visible</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="status-badge locked">Hidden</span>
+                                            }
+                                        </td>
+                                        <td class="text-end whitespace-nowrap">
+                                            @if (confirmDeleteId == s.Id)
+                                            {
+                                                <button type="button" class="row-btn lock" @onclick="() => DeleteSport(s)">Confirm?</button>
+                                                <button type="button" class="row-btn" @onclick="() => confirmDeleteId = null">No</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="icon-btn" title="Edit (UC_35.2)" @onclick="() => StartSportEdit(s)"><AppIcon Name="pencil" /></button>
+                                                <button type="button" class="icon-btn danger" title="Delete (UC_35.3)" @onclick="() => confirmDeleteId = s.Id"><AppIcon Name="trash" /></button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!FilteredSports.Any())
+                                {
+                                    <tr><td colspan="6" class="text-center muted">No sports match.</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="paging">Showing 1–@FilteredSports.Count() of @FilteredSports.Count() sports</p>
+                }
+            </Authorized>
+            <NotAuthorized>
+                <div class="auth-alert error" role="alert">
+                    <AppIcon Name="warning" /><span>You do not have access to this page.</span>
+                </div>
+                <button type="button" class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/login")'>
+                    Go to portal sign in
+                </button>
+            </NotAuthorized>
+        </AuthorizeView>
+    </main>
+</div>
+
+@code {
+    // ---------- Mock data only (real UC_34/UC_35 APIs belong to another member) ----------
+    private record MockUser(Guid Id, string FullName, string Email, string Phone, string Role, bool IsLocked);
+    private record MockSport(Guid Id, string Code, string Name, string Description, string Category, string Metrics, int Coaches, int Logs, bool Visible, string Icon);
+
+    private string view = "sports";
+    private string? toastMessage;
+
+    private string userSearch = "";
+    private string roleFilter = "";
+
+    private string sportSearch = "";
+    private string sportCategory = "All";
+    private string sportStatus = "";
+    private bool showSportForm = false;
+    private Guid? editingSportId;
+    private string sportFormName = "";
+    private string sportFormCategory = "Gym & Strength";
+    private string sportFormMetrics = "";
+    private string sportFormDesc = "";
+    private Guid? confirmDeleteId;
+
+    private readonly List<string> categories = new()
+    {
+        "All", "Gym & Strength", "Cardio & Athletics", "Combat Sports", "Team Sports"
+    };
+
+    private List<MockUser> users = new()
+    {
+        new(Guid.NewGuid(), "Lê Học Viên A", "trainee1@gmail.com", "0904000004", "TRAINEE", false),
+        new(Guid.NewGuid(), "Trần HLV Hai", "coach2@fitness.com", "0903000003", "COACH", false),
+        new(Guid.NewGuid(), "Nguyễn HLV Một", "coach1@fitness.com", "0902000002", "COACH", true),
+        new(Guid.NewGuid(), "Phạm Nhân Viên", "staff@fitsocial.vn", "0905000006", "STAFF", false),
+        new(Guid.NewGuid(), "System Admin", "admin@system.com", "0901000001", "ADMIN", false),
+        new(Guid.NewGuid(), "Phạm Học Viên B", "trainee2@gmail.com", "0905000005", "TRAINEE", true),
+    };
+
+    private List<MockSport> sports = new()
+    {
+        new(Guid.NewGuid(), "SPORT_01", "Powerlifting & Weightlifting", "Barbell strength training", "Gym & Strength", "Weight/Kg, Reps/Sets", 1420, 92400, true, "dumbbell"),
+        new(Guid.NewGuid(), "SPORT_02", "Running & Marathon", "Road and trail running", "Cardio & Athletics", "GPS Route, Pace", 980, 76800, true, "activity"),
+        new(Guid.NewGuid(), "SPORT_03", "Boxing & Kickfit", "Striking combat training", "Combat Sports", "Rounds, Heart rate", 640, 41200, true, "fire"),
+        new(Guid.NewGuid(), "SPORT_04", "Yoga & Mobility", "Flexibility and breathwork", "Gym & Strength", "Flexibility, Breath", 520, 38500, true, "activity"),
+        new(Guid.NewGuid(), "SPORT_05", "Swimming", "Pool and open water", "Cardio & Athletics", "Laps, Pace", 410, 29800, true, "waves"),
+        new(Guid.NewGuid(), "SPORT_06", "Football", "Team field sport", "Team Sports", "Goals, Assists", 870, 52300, true, "ball"),
+        new(Guid.NewGuid(), "SPORT_07", "Basketball", "Team court sport", "Team Sports", "Points, Assists", 690, 44700, true, "ball"),
+        new(Guid.NewGuid(), "SPORT_08", "MMA", "Mixed martial arts", "Combat Sports", "Rounds, Wins", 350, 18900, false, "trophy"),
+    };
+
+    private void SwitchView(string next)
+    {
+        view = next;
+        toastMessage = null;
+    }
+
+    private void DemoSoon(string module)
+    {
+        toastMessage = $"[Demo] {module} is not part of this preview.";
+    }
+
+    private void ShowToast(string message)
+    {
+        toastMessage = message;
+    }
+
+    private IEnumerable<MockUser> FilteredUsers =>
+        users.Where(u =>
+            (string.IsNullOrWhiteSpace(userSearch) ||
+             u.FullName.Contains(userSearch, StringComparison.OrdinalIgnoreCase) ||
+             u.Email.Contains(userSearch, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(roleFilter) || u.Role == roleFilter));
+
+    private IEnumerable<MockSport> FilteredSports =>
+        sports.Where(s =>
+            (string.IsNullOrWhiteSpace(sportSearch) ||
+             s.Name.Contains(sportSearch, StringComparison.OrdinalIgnoreCase) ||
+             s.Code.Contains(sportSearch, StringComparison.OrdinalIgnoreCase)) &&
+            (sportCategory == "All" || s.Category == sportCategory) &&
+            (string.IsNullOrWhiteSpace(sportStatus) ||
+             (sportStatus == "visible" && s.Visible) ||
+             (sportStatus == "hidden" && !s.Visible)));
+
+    private void SetLocked(MockUser user, bool locked)
+    {
+        var index = users.FindIndex(u => u.Id == user.Id);
+        if (index < 0)
+        {
+            return;
+        }
+        users[index] = users[index] with { IsLocked = locked };
+        toastMessage = locked
+            ? $"[Demo] {user.FullName} would be locked (UC_34.1)."
+            : $"[Demo] {user.FullName} would be unlocked (UC_34.2).";
+    }
+
+    private void ToggleSportForm()
+    {
+        showSportForm = !showSportForm;
+        editingSportId = null;
+        sportFormName = "";
+        sportFormCategory = "Gym & Strength";
+        sportFormMetrics = "";
+        sportFormDesc = "";
+    }
+
+    private void StartSportEdit(MockSport sport)
+    {
+        showSportForm = true;
+        editingSportId = sport.Id;
+        sportFormName = sport.Name;
+        sportFormCategory = sport.Category;
+        sportFormMetrics = sport.Metrics;
+        sportFormDesc = sport.Description;
+        confirmDeleteId = null;
+    }
+
+    private void CancelSportForm()
+    {
+        showSportForm = false;
+        editingSportId = null;
+    }
+
+    private void SaveSportForm()
+    {
+        if (string.IsNullOrWhiteSpace(sportFormName))
+        {
+            toastMessage = "[Demo] Enter a sport name first.";
+            return;
+        }
+
+        if (editingSportId == null)
+        {
+            var code = $"SPORT_{sports.Count + 1:00}";
+            sports.Add(new MockSport(Guid.NewGuid(), code, sportFormName.Trim(), sportFormDesc.Trim(),
+                sportFormCategory, sportFormMetrics.Trim(), 0, 0, true, "dumbbell"));
+            toastMessage = $"[Demo] Sport \"{sportFormName.Trim()}\" would be created (UC_35.1).";
+        }
+        else
+        {
+            var index = sports.FindIndex(s => s.Id == editingSportId);
+            if (index >= 0)
+            {
+                var current = sports[index];
+                sports[index] = current with
+                {
+                    Name = sportFormName.Trim(),
+                    Category = sportFormCategory,
+                    Metrics = sportFormMetrics.Trim(),
+                    Description = sportFormDesc.Trim()
+                };
+                toastMessage = "[Demo] Sport would be updated (UC_35.2).";
+            }
+        }
+
+        CancelSportForm();
+    }
+
+    private void DeleteSport(MockSport sport)
+    {
+        sports.RemoveAll(s => s.Id == sport.Id);
+        confirmDeleteId = null;
+        toastMessage = $"[Demo] Sport \"{sport.Name}\" would be deleted (UC_35.3).";
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/admin/login");
+    }
+}

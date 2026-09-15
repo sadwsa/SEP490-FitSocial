@@ -1,0 +1,265 @@
+/* Hero: logo trái, chữ phải (giống trang login client) */
+.login-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.hero-logo {
+    width: 35%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 22px;
+    mix-blend-mode: multiply;
+    flex-shrink: 0;
+}
+
+.hero-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.hero-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0 0 8px;
+    line-height: 1.25;
+}
+
+.hero-title span {
+    color: var(--primary-color);
+}
+
+.hero-sub {
+    font-size: 0.83rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.55;
+}
+
+.reg-card {
+    background: #fff;
+    border-radius: 16px;
+    border: 1px solid #e6ecf3;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    padding: 22px 22px 20px;
+}
+
+.auth-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.82rem;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.auth-alert ::deep svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.auth-alert.error {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.field {
+    margin-bottom: 12px;
+}
+
+.field label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 6px;
+}
+
+.req {
+    color: #ef4444;
+}
+
+.input-wrap {
+    position: relative;
+}
+
+.input-icon {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.input-icon ::deep svg {
+    width: 16px;
+    height: 16px;
+}
+
+.reg-card ::deep .form-control {
+    font-size: 0.85rem;
+    border: 1px solid #dbe3ec;
+    border-radius: 8px;
+    padding: 9px 12px;
+    color: #1e293b;
+    width: 100%;
+}
+
+.reg-card ::deep .form-control.has-icon {
+    padding-left: 34px;
+}
+
+.reg-card ::deep .form-control.has-eye {
+    padding-right: 36px;
+}
+
+.reg-card ::deep .form-control::placeholder {
+    color: #b6c2cf;
+}
+
+.reg-card ::deep .form-control:focus {
+    border-color: #0f172a;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12);
+    outline: none;
+}
+
+.eye-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 6px;
+    color: #94a3b8;
+}
+
+.eye-btn:hover {
+    color: #475569;
+}
+
+.eye-btn ::deep svg {
+    width: 17px;
+    height: 17px;
+}
+
+::deep .field-error {
+    color: #dc2626;
+    font-size: 0.76rem;
+    margin-top: 4px;
+}
+
+.login-options {
+    display: flex;
+    align-items: center;
+    margin: 4px 0 6px;
+    font-size: 0.78rem;
+}
+
+.remember {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #475569;
+    cursor: pointer;
+    margin: 0;
+}
+
+.remember input {
+    accent-color: var(--primary-color);
+    width: 15px;
+    height: 15px;
+}
+
+/* Nút portal gam tối phân biệt với client cam */
+.btn-auth-primary {
+    width: 100%;
+    background: var(--primary-color);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.9rem;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.btn-auth-primary.btn-admin {
+    background: #0f172a;
+}
+
+.btn-auth-primary.btn-admin:hover:not(:disabled) {
+    background: #1e293b;
+}
+
+.btn-auth-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.reg-footer {
+    text-align: center;
+    font-size: 0.83rem;
+    color: #64748b;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.reg-footer a {
+    color: var(--primary-color);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.reg-footer a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+    .login-hero {
+        flex-direction: column;
+        text-align: center;
+        gap: 12px;
+    }
+
+    .hero-text {
+        align-items: center;
+    }
+
+    .hero-logo {
+        width: 40%;
+        height: auto;
+    }
+
+    .hero-title {
+        font-size: 1.35rem;
+    }
+
+    .reg-card {
+        padding: 18px 14px 16px;
+    }
+}

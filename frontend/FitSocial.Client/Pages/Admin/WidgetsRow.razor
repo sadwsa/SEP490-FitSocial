@@ -1,0 +1,25 @@
+@* Overview widgets (mock data): active sports, workout logs, top sports. *@
+<div class="widgets">
+    <div class="widget">
+        <small class="widget-label">Active Sports</small>
+        <strong class="widget-value">@ActiveCount</strong>
+        <span class="widget-delta up">+2 new this month</span>
+    </div>
+    <div class="widget">
+        <small class="widget-label">Workout Logs</small>
+        <strong class="widget-value">@TotalLogs.ToString("N0")</strong>
+        <span class="widget-delta up">+14.8% vs last period</span>
+    </div>
+    <div class="widget">
+        <small class="widget-label">Top Sports by Volume</small>
+        <div class="top-list">
+            <div class="top-row"><span>Powerlifting</span><div class="bar"><i style="width:38%"></i></div><small>38%</small></div>
+            <div class="top-row"><span>Running &amp; Trail</span><div class="bar"><i style="width:31%"></i></div><small>31%</small></div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int ActiveCount { get; set; }
+    [Parameter] public int TotalLogs { get; set; }
+}

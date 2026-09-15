@@ -18,6 +18,7 @@ public interface IAuthService
     Task<string?> GetTokenAsync();
     Task<bool> IsAuthenticatedAsync();
     Task PersistLoginAsync(AuthResponse data);
+    Task<bool> RefreshTokenAsync();
 }
 
 public class AuthService : IAuthService
@@ -240,9 +241,64 @@ public class AuthService : IAuthService
 
     public async Task LogoutAsync()
     {
+        // Best effort: revoke the tokens server-side first so they die immediately.
+        // Local sign-out below always runs, even offline.
+        string? refreshToken = null;
+        try
+        {
+            var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+            refreshToken = await _localStorage.GetItemAsync<string>(RefreshTokenKey);
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, "auth/logout");
+                request.Headers.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                if (!string.IsNullOrWhiteSpace(refreshToken))
+                {
+                    request.Content = JsonContent.Create(new { refreshToken });
+                }
+                await _httpClient.SendAsync(request);
+            }
+        }
+        catch
+        {
+            // Ignored on purpose: local sign-out must never be blocked by network errors.
+        }
+
+        _httpClient.DefaultRequestHeaders.Authorization = null;
         await _localStorage.RemoveItemAsync(AuthTokenKey);
         await _localStorage.RemoveItemAsync(RefreshTokenKey);
         ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserLogout();
+    }
+
+    /// <summary>
+    /// Rotates the session using the stored refresh token.
+    /// Returns false when there is no refresh token or the server rejects it
+    /// (caller should send the user back to the login page).
+    /// </summary>
+    public async Task<bool> RefreshTokenAsync()
+    {
+        try
+        {
+            var refreshToken = await _localStorage.GetItemAsync<string>(RefreshTokenKey);
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                return false;
+            }
+
+            var response = await _httpClient.PostAsJsonAsync("auth/refresh", new { refreshToken });
+            var (result, _) = await ReadResponseAsync<AuthResponse>(response);
+            if (response.IsSuccessStatusCode && result != null && result.Success && result.Data != null)
+            {
+                await PersistAuthAsync(result.Data);
+                return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public async Task<string?> GetTokenAsync()

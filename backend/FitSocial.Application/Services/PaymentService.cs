@@ -20,7 +20,7 @@ public class PaymentService : IPaymentService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IOtpService _otpService;
     private readonly IPasswordHasher _passwordHasher;
-    private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly ITokenService _tokenService;
     private readonly IPaymentGateway _paymentGateway;
 
     public PaymentService(
@@ -33,7 +33,7 @@ public class PaymentService : IPaymentService
         IUnitOfWork unitOfWork,
         IOtpService otpService,
         IPasswordHasher passwordHasher,
-        IJwtTokenGenerator jwtTokenGenerator,
+        ITokenService tokenService,
         IPaymentGateway paymentGateway)
     {
         _users = users;
@@ -45,7 +45,7 @@ public class PaymentService : IPaymentService
         _unitOfWork = unitOfWork;
         _otpService = otpService;
         _passwordHasher = passwordHasher;
-        _jwtTokenGenerator = jwtTokenGenerator;
+        _tokenService = tokenService;
         _paymentGateway = paymentGateway;
     }
 
@@ -298,7 +298,16 @@ public class PaymentService : IPaymentService
             {
                 return ApiResponseDto<AuthResponseDto>.Fail("Account is not available.");
             }
-            return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(existingUser), "Payment already confirmed. Welcome back!");
+            var existingSession = await _tokenService.CreateSessionAsync(existingUser);
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return ApiResponseDto<AuthResponseDto>.Fail("Could not activate the account. Please try again.");
+            }
+            return ApiResponseDto<AuthResponseDto>.Ok(existingSession, "Payment already confirmed. Welcome back!");
         }
 
         GatewayPaymentStatus status;
@@ -331,8 +340,10 @@ public class PaymentService : IPaymentService
         user.LastActiveAt = now;
         user.UpdatedAt = now;
 
+        AuthResponseDto response;
         try
         {
+            response = await _tokenService.CreateSessionAsync(user);
             await _unitOfWork.SaveChangesAsync();
         }
         catch (DbUpdateException)
@@ -340,7 +351,7 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<AuthResponseDto>.Fail("Could not activate the account. Please try again.");
         }
 
-        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Payment successful! Coach account created.");
+        return ApiResponseDto<AuthResponseDto>.Ok(response, "Payment successful! Coach account created.");
     }
 
     public async Task<ApiResponseDto<bool>> CancelActivationAsync(long orderCode)
@@ -371,26 +382,5 @@ public class PaymentService : IPaymentService
         await _unitOfWork.SaveChangesAsync();
 
         return ApiResponseDto<bool>.Ok(true, "Payment order cancelled.");
-    }
-
-    private AuthResponseDto BuildAuthResponse(User user)
-    {
-        var (token, expiresAt) = _jwtTokenGenerator.GenerateToken(user);
-
-        return new AuthResponseDto
-        {
-            AccessToken = token,
-            RefreshToken = Guid.NewGuid().ToString("N"),
-            ExpiresAt = expiresAt,
-            User = new UserDto
-            {
-                Id = user.UserId,
-                FullName = user.FullName ?? string.Empty,
-                Email = user.Email,
-                PhoneNumber = user.PhoneNumber,
-                RoleCode = user.RoleCode,
-                AvatarUrl = user.AvatarUrl
-            }
-        };
     }
 }

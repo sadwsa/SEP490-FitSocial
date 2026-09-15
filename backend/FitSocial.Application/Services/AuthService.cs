@@ -19,9 +19,10 @@ public class AuthService : IAuthService
     private readonly IOtpService _otpService;
     private readonly IEmailService _emailService;
     private readonly IPasswordHasher _passwordHasher;
-    private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly ITokenService _tokenService;
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ITokenBlacklistService _tokenBlacklist;
 
     public AuthService(
         IUserRepository users,
@@ -30,9 +31,10 @@ public class AuthService : IAuthService
         IOtpService otpService,
         IEmailService emailService,
         IPasswordHasher passwordHasher,
-        IJwtTokenGenerator jwtTokenGenerator,
+        ITokenService tokenService,
         IConfiguration configuration,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        ITokenBlacklistService tokenBlacklist)
     {
         _users = users;
         _sports = sports;
@@ -40,9 +42,10 @@ public class AuthService : IAuthService
         _otpService = otpService;
         _emailService = emailService;
         _passwordHasher = passwordHasher;
-        _jwtTokenGenerator = jwtTokenGenerator;
+        _tokenService = tokenService;
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
+        _tokenBlacklist = tokenBlacklist;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
@@ -90,6 +93,30 @@ public class AuthService : IAuthService
     }
 
     /// <summary>
+    /// Server-side sign-out (UC_03): puts the access token ID on the Redis
+    /// blacklist until its natural expiry, and revokes the refresh token.
+    /// The JWT middleware rejects the access token afterwards.
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> LogoutAsync(string? jti, DateTime? expiresAtUtc, string? refreshToken = null)
+    {
+        if (!string.IsNullOrWhiteSpace(jti) && expiresAtUtc.HasValue)
+        {
+            var remaining = expiresAtUtc.Value - DateTime.UtcNow;
+            if (remaining > TimeSpan.Zero)
+            {
+                await _tokenBlacklist.RevokeTokenAsync(jti, remaining);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+        {
+            await _tokenService.RevokeRefreshTokenAsync(refreshToken);
+        }
+
+        return ApiResponseDto<bool>.Ok(true, "Signed out successfully.");
+    }
+
+    /// <summary>
     /// Email + password sign-in shared by all roles (Trainee, Coach, ...).
     /// The role travels in the JWT (ClaimTypes.Role) and AuthResponse.User.
     /// </summary>
@@ -123,9 +150,10 @@ public class AuthService : IAuthService
 
         user.LastActiveAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
+        var loginResponse = await _tokenService.CreateSessionAsync(user);
         await _unitOfWork.SaveChangesAsync();
 
-        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Signed in successfully!");
+        return ApiResponseDto<AuthResponseDto>.Ok(loginResponse, "Signed in successfully!");
     }
 
     /// <summary>
@@ -150,7 +178,6 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
         }
 
-        // Management portal serves Admin/Staff only (Trainee/Coach use the client login page)
         if (!IsBackOfficeLoginAllowed(user.RoleCode))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
@@ -158,9 +185,10 @@ public class AuthService : IAuthService
 
         user.LastActiveAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
+        var adminResponse = await _tokenService.CreateSessionAsync(user);
         await _unitOfWork.SaveChangesAsync();
 
-        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Welcome to the Management Portal!");
+        return ApiResponseDto<AuthResponseDto>.Ok(adminResponse, "Welcome to the Management Portal!");
     }
 
     public async Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request)    {
@@ -288,7 +316,7 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("Could not create the account. The email or phone number may already be in use.");
         }
 
-        var responseData = BuildAuthResponse(newUser);
+        var responseData = await _tokenService.CreateSessionAsync(newUser);
 
         var roleLabel = roleCode == RoleConstants.Coach ? "Coach" : "Trainee";
         return ApiResponseDto<AuthResponseDto>.Ok(responseData, $"{roleLabel} account registered successfully!");
@@ -417,14 +445,14 @@ public class AuthService : IAuthService
 
         try
         {
+            var googleResponse = await _tokenService.CreateSessionAsync(user);
             await _unitOfWork.SaveChangesAsync();
+            return ApiResponseDto<AuthResponseDto>.Ok(googleResponse, "Google sign-in successful!");
         }
         catch (DbUpdateException)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Could not sign you in. Please try again.");
         }
-
-        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Google sign-in successful!");
     }
 
     /// <summary>
@@ -465,24 +493,156 @@ public class AuthService : IAuthService
         };
     }
 
-    private AuthResponseDto BuildAuthResponse(User user)
+    /// <summary>
+    /// Exchanges a valid refresh token for a brand-new session (rotation).
+    /// </summary>
+    public async Task<ApiResponseDto<AuthResponseDto>> RefreshAsync(RefreshRequestDto request)
     {
-        var (token, expiresAt) = _jwtTokenGenerator.GenerateToken(user);
+        return await _tokenService.RefreshSessionAsync(request.RefreshToken);
+    }
 
-        return new AuthResponseDto
+    /// <summary>
+    /// Step 1 of UC_04: send a password-reset OTP to the email.
+    /// Always returns success to avoid revealing which emails are registered.
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> ForgotPasswordAsync(ForgotPasswordRequestDto request)
+    {
+        var normalizedEmail = request.Email.Trim().ToLower();
+        const string genericOk = "If this email is registered, a reset code has been sent to it.";
+
+        var user = await _users.FindByEmailAsync(normalizedEmail);
+        if (user == null)
         {
-            AccessToken = token,
-            RefreshToken = Guid.NewGuid().ToString("N"),
-            ExpiresAt = expiresAt,
-            User = new UserDto
-            {
-                Id = user.UserId,
-                FullName = user.FullName ?? string.Empty,
-                Email = user.Email,
-                PhoneNumber = user.PhoneNumber,
-                RoleCode = user.RoleCode,
-                AvatarUrl = user.AvatarUrl
-            }
-        };
+            return ApiResponseDto<bool>.Ok(true, genericOk);
+        }
+
+        var otpCode = await _otpService.GenerateOtpAsync(normalizedEmail, OtpConstants.PurposeResetPassword);
+
+        var subject = "[FitSocial] Password reset verification code";
+        var body = $@"
+            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;"">
+                <div style=""text-align: center; margin-bottom: 20px;"">
+                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitSocial"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
+                    <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitSocial</h2>
+                    <p style=""color: #666; margin: 5px 0 0;"">Sports & Fitness Community</p>
+                </div>
+                <div style=""background: #fff3e0; border-left: 4px solid #FF5722; padding: 15px; margin-bottom: 20px;"">
+                    <p style=""margin: 0; color: #333; font-size: 16px;"">Hello,</p>
+                    <p style=""margin: 10px 0 0; color: #555;"">You requested a password reset for your FitSocial account. Your OTP verification code is:</p>
+                </div>
+                <div style=""text-align: center; margin: 30px 0;"">
+                    <span style=""font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #FF5722; background: #fbe9e7; padding: 10px 24px; border-radius: 8px; border: 1px dashed #FF5722;"">
+                        {otpCode}
+                    </span>
+                </div>
+                <p style=""color: #777; font-size: 14px; text-align: center;"">This code is valid for <strong>5 minutes</strong>. Never share it with anyone.</p>
+                <hr style=""border: none; border-top: 1px solid #eee; margin: 25px 0;"" />
+                <p style=""color: #999; font-size: 12px; text-align: center; margin: 0;"">If you did not request this, please ignore this email and consider securing your account.</p>
+            </div>";
+
+        await _emailService.SendEmailAsync(normalizedEmail, subject, body);
+
+        return ApiResponseDto<bool>.Ok(true, genericOk);
+    }
+
+    /// <summary>
+    /// Step 2 of UC_04: verify the OTP and set the new password.
+    /// Bumps TokenVersion so every existing session/token dies immediately.
+    /// Also works for Google-created accounts (gives them a usable password).
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> ResetPasswordAsync(ResetPasswordRequestDto request)
+    {
+        var normalizedEmail = request.Email.Trim().ToLower();
+
+        if (request.NewPassword != request.ConfirmPassword)
+        {
+            return ApiResponseDto<bool>.Fail("Passwords do not match.");
+        }
+
+        var user = await _users.FindByEmailAsync(normalizedEmail);
+        if (user == null)
+        {
+            return ApiResponseDto<bool>.Fail("Invalid email or OTP code.");
+        }
+
+        // New password must differ from the current one (skipped for
+        // passwordless accounts, e.g. created via Google, which have no hash yet)
+        if (!string.IsNullOrEmpty(user.PasswordHash) &&
+            _passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+        {
+            return ApiResponseDto<bool>.Fail("New password must be different from the current password.");
+        }
+
+        var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(
+            normalizedEmail,
+            request.OtpCode.Trim(),
+            OtpConstants.PurposeResetPassword);
+
+        if (!otpValid)
+        {
+            return ApiResponseDto<bool>.Fail(otpMessage);
+        }
+
+        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.TokenVersion += 1; // Kill all existing sessions/tokens at once
+        user.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return ApiResponseDto<bool>.Fail("Could not reset the password. Please try again.");
+        }
+
+        return ApiResponseDto<bool>.Ok(true, "Password reset successfully. Please sign in with your new password.");
+    }
+
+    /// <summary>
+    /// UC_05.2: change password while signed in. Requires the current password
+    /// (except passwordless Google accounts, which may set one directly).
+    /// Bumps TokenVersion so every other session/token dies immediately;
+    /// the client signs out locally and asks for a fresh sign-in.
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request)
+    {
+        if (request.NewPassword != request.ConfirmPassword)
+        {
+            return ApiResponseDto<bool>.Fail("Passwords do not match.");
+        }
+
+        var user = await _users.GetByIdAsync(userId);
+        if (user == null)
+        {
+            return ApiResponseDto<bool>.Fail("Account is not available.");
+        }
+
+        if (!string.IsNullOrEmpty(user.PasswordHash) &&
+            !_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+        {
+            return ApiResponseDto<bool>.Fail("Current password is incorrect.");
+        }
+
+        if (!string.IsNullOrEmpty(user.PasswordHash) &&
+            _passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+        {
+            return ApiResponseDto<bool>.Fail("New password must be different from the current password.");
+        }
+
+        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.TokenVersion += 1; // Kill all existing sessions/tokens at once
+        user.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return ApiResponseDto<bool>.Fail("Could not change the password. Please try again.");
+        }
+
+        return ApiResponseDto<bool>.Ok(true, "Password changed successfully. Please sign in again.");
     }
 }

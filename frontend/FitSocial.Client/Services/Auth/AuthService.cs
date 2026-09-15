@@ -16,6 +16,7 @@ public interface IAuthService
     Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
     Task<ApiResponse<bool>> ForgotPasswordAsync(string email);
     Task<ApiResponse<bool>> ResetPasswordAsync(ResetPasswordRequest request);
+    Task<ApiResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request);
     Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
     Task LogoutAsync();
     Task<string?> GetTokenAsync();
@@ -147,6 +148,48 @@ public class AuthService : IAuthService
         try
         {
             var response = await _httpClient.PostAsJsonAsync("auth/reset-password", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (result != null)
+            {
+                return result;
+            }
+
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Request failed (Code: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request)
+    {
+        try
+        {
+            var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return new ApiResponse<bool>
+                {
+                    Success = false,
+                    Message = "Your session has expired. Please sign in again."
+                };
+            }
+
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "auth/change-password");
+            httpRequest.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            httpRequest.Content = JsonContent.Create(request);
+
+            var response = await _httpClient.SendAsync(httpRequest);
             var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
             if (result != null)
             {

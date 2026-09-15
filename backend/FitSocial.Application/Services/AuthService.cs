@@ -19,9 +19,10 @@ public class AuthService : IAuthService
     private readonly IOtpService _otpService;
     private readonly IEmailService _emailService;
     private readonly IPasswordHasher _passwordHasher;
-    private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly ITokenService _tokenService;
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ITokenBlacklistService _tokenBlacklist;
 
     public AuthService(
         IUserRepository users,
@@ -30,9 +31,10 @@ public class AuthService : IAuthService
         IOtpService otpService,
         IEmailService emailService,
         IPasswordHasher passwordHasher,
-        IJwtTokenGenerator jwtTokenGenerator,
+        ITokenService tokenService,
         IConfiguration configuration,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        ITokenBlacklistService tokenBlacklist)
     {
         _users = users;
         _sports = sports;
@@ -40,9 +42,10 @@ public class AuthService : IAuthService
         _otpService = otpService;
         _emailService = emailService;
         _passwordHasher = passwordHasher;
-        _jwtTokenGenerator = jwtTokenGenerator;
+        _tokenService = tokenService;
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
+        _tokenBlacklist = tokenBlacklist;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
@@ -90,6 +93,30 @@ public class AuthService : IAuthService
     }
 
     /// <summary>
+    /// Server-side sign-out (UC_03): puts the access token ID on the Redis
+    /// blacklist until its natural expiry, and revokes the refresh token.
+    /// The JWT middleware rejects the access token afterwards.
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> LogoutAsync(string? jti, DateTime? expiresAtUtc, string? refreshToken = null)
+    {
+        if (!string.IsNullOrWhiteSpace(jti) && expiresAtUtc.HasValue)
+        {
+            var remaining = expiresAtUtc.Value - DateTime.UtcNow;
+            if (remaining > TimeSpan.Zero)
+            {
+                await _tokenBlacklist.RevokeTokenAsync(jti, remaining);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+        {
+            await _tokenService.RevokeRefreshTokenAsync(refreshToken);
+        }
+
+        return ApiResponseDto<bool>.Ok(true, "Signed out successfully.");
+    }
+
+    /// <summary>
     /// Email + password sign-in shared by all roles (Trainee, Coach, ...).
     /// The role travels in the JWT (ClaimTypes.Role) and AuthResponse.User.
     /// </summary>
@@ -123,9 +150,10 @@ public class AuthService : IAuthService
 
         user.LastActiveAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
+        var loginResponse = await _tokenService.CreateSessionAsync(user);
         await _unitOfWork.SaveChangesAsync();
 
-        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Signed in successfully!");
+        return ApiResponseDto<AuthResponseDto>.Ok(loginResponse, "Signed in successfully!");
     }
 
     /// <summary>
@@ -150,7 +178,6 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
         }
 
-        // Management portal serves Admin/Staff only (Trainee/Coach use the client login page)
         if (!IsBackOfficeLoginAllowed(user.RoleCode))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
@@ -158,9 +185,10 @@ public class AuthService : IAuthService
 
         user.LastActiveAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
+        var adminResponse = await _tokenService.CreateSessionAsync(user);
         await _unitOfWork.SaveChangesAsync();
 
-        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Welcome to the Management Portal!");
+        return ApiResponseDto<AuthResponseDto>.Ok(adminResponse, "Welcome to the Management Portal!");
     }
 
     public async Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request)    {
@@ -288,7 +316,7 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("Could not create the account. The email or phone number may already be in use.");
         }
 
-        var responseData = BuildAuthResponse(newUser);
+        var responseData = await _tokenService.CreateSessionAsync(newUser);
 
         var roleLabel = roleCode == RoleConstants.Coach ? "Coach" : "Trainee";
         return ApiResponseDto<AuthResponseDto>.Ok(responseData, $"{roleLabel} account registered successfully!");
@@ -417,14 +445,14 @@ public class AuthService : IAuthService
 
         try
         {
+            var googleResponse = await _tokenService.CreateSessionAsync(user);
             await _unitOfWork.SaveChangesAsync();
+            return ApiResponseDto<AuthResponseDto>.Ok(googleResponse, "Google sign-in successful!");
         }
         catch (DbUpdateException)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Could not sign you in. Please try again.");
         }
-
-        return ApiResponseDto<AuthResponseDto>.Ok(BuildAuthResponse(user), "Google sign-in successful!");
     }
 
     /// <summary>
@@ -465,24 +493,11 @@ public class AuthService : IAuthService
         };
     }
 
-    private AuthResponseDto BuildAuthResponse(User user)
+    /// <summary>
+    /// Exchanges a valid refresh token for a brand-new session (rotation).
+    /// </summary>
+    public async Task<ApiResponseDto<AuthResponseDto>> RefreshAsync(RefreshRequestDto request)
     {
-        var (token, expiresAt) = _jwtTokenGenerator.GenerateToken(user);
-
-        return new AuthResponseDto
-        {
-            AccessToken = token,
-            RefreshToken = Guid.NewGuid().ToString("N"),
-            ExpiresAt = expiresAt,
-            User = new UserDto
-            {
-                Id = user.UserId,
-                FullName = user.FullName ?? string.Empty,
-                Email = user.Email,
-                PhoneNumber = user.PhoneNumber,
-                RoleCode = user.RoleCode,
-                AvatarUrl = user.AvatarUrl
-            }
-        };
+        return await _tokenService.RefreshSessionAsync(request.RefreshToken);
     }
 }

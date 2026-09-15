@@ -207,6 +207,36 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// UC_05.2: change password while signed in (kills all sessions, client signs in again).
+    /// </summary>
+    [HttpPost("change-password")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var userIdValue = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized(ApiResponseDto<bool>.Fail("Invalid session. Please sign in again."));
+        }
+
+        var result = await _authService.ChangePasswordAsync(userId, request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Sign in / Sign up with a Google authorization code (redirect flow, works without FedCM)
     /// </summary>
     [HttpPost("google/code")]

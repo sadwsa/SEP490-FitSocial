@@ -13,5 +13,6 @@ public interface IAuthService
     Task<ApiResponseDto<AuthResponseDto>> RefreshAsync(RefreshRequestDto request);
     Task<ApiResponseDto<bool>> ForgotPasswordAsync(ForgotPasswordRequestDto request);
     Task<ApiResponseDto<bool>> ResetPasswordAsync(ResetPasswordRequestDto request);
+    Task<ApiResponseDto<bool>> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request);
     Task<ApiResponseDto<AuthResponseDto>> GoogleCodeLoginAsync(GoogleCodeRequestDto request);
 }

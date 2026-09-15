@@ -598,4 +598,51 @@ public class AuthService : IAuthService
 
         return ApiResponseDto<bool>.Ok(true, "Password reset successfully. Please sign in with your new password.");
     }
+
+    /// <summary>
+    /// UC_05.2: change password while signed in. Requires the current password
+    /// (except passwordless Google accounts, which may set one directly).
+    /// Bumps TokenVersion so every other session/token dies immediately;
+    /// the client signs out locally and asks for a fresh sign-in.
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request)
+    {
+        if (request.NewPassword != request.ConfirmPassword)
+        {
+            return ApiResponseDto<bool>.Fail("Passwords do not match.");
+        }
+
+        var user = await _users.GetByIdAsync(userId);
+        if (user == null)
+        {
+            return ApiResponseDto<bool>.Fail("Account is not available.");
+        }
+
+        if (!string.IsNullOrEmpty(user.PasswordHash) &&
+            !_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+        {
+            return ApiResponseDto<bool>.Fail("Current password is incorrect.");
+        }
+
+        if (!string.IsNullOrEmpty(user.PasswordHash) &&
+            _passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+        {
+            return ApiResponseDto<bool>.Fail("New password must be different from the current password.");
+        }
+
+        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.TokenVersion += 1; // Kill all existing sessions/tokens at once
+        user.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return ApiResponseDto<bool>.Fail("Could not change the password. Please try again.");
+        }
+
+        return ApiResponseDto<bool>.Ok(true, "Password changed successfully. Please sign in again.");
+    }
 }

@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Blazored.LocalStorage;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Common;
@@ -9,23 +10,27 @@ namespace FitSocial.Client.Services.Auth;
 public interface IAuthService
 {
     Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request);
+    Task<ApiResponse<AuthResponse>> AdminLoginAsync(LoginRequest request);
+    Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null);
+    Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
     Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
     Task LogoutAsync();
     Task<string?> GetTokenAsync();
     Task<bool> IsAuthenticatedAsync();
+    Task PersistLoginAsync(AuthResponse data);
 }
 
 public class AuthService : IAuthService
 {
     private readonly HttpClient _httpClient;
-    private readonly ILocalStorageService _localStorage;
+    private readonly ITokenStorage _localStorage;
     private readonly AuthenticationStateProvider _authStateProvider;
     private const string AuthTokenKey = "authToken";
     private const string RefreshTokenKey = "refreshToken";
 
     public AuthService(
         HttpClient httpClient,
-        ILocalStorageService localStorage,
+        ITokenStorage localStorage,
         AuthenticationStateProvider authStateProvider)
     {
         _httpClient = httpClient;
@@ -35,25 +40,35 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request)
     {
+        return await LoginInternalAsync("auth/login", request);
+    }
+
+    public async Task<ApiResponse<AuthResponse>> AdminLoginAsync(LoginRequest request)
+    {
+        return await LoginInternalAsync("auth/admin-login", request);
+    }
+
+    private async Task<ApiResponse<AuthResponse>> LoginInternalAsync(string endpoint, LoginRequest request)
+    {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/login", request);
-            if (response.IsSuccessStatusCode)
+            var response = await _httpClient.PostAsJsonAsync(endpoint, request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
             {
-                var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
-                if (result?.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
+                if (result.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
                 {
                     await _localStorage.SetItemAsync(AuthTokenKey, result.Data.AccessToken);
                     await _localStorage.SetItemAsync(RefreshTokenKey, result.Data.RefreshToken);
                     ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(result.Data.AccessToken);
                 }
-                return result ?? new ApiResponse<AuthResponse> { Success = false, Message = "Phản hồi không hợp lệ" };
+                return result;
             }
 
-            return new ApiResponse<AuthResponse>
+            return result ?? new ApiResponse<AuthResponse>
             {
                 Success = false,
-                Message = $"Đăng nhập thất bại (Mã: {response.StatusCode})"
+                Message = $"Sign-in failed (Code: {response.StatusCode})"
             };
         }
         catch (Exception ex)
@@ -61,7 +76,34 @@ public class AuthService : IAuthService
             return new ApiResponse<AuthResponse>
             {
                 Success = false,
-                Message = $"Lỗi kết nối: {ex.Message}"
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/send-otp", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (result != null)
+            {
+                return result;
+            }
+
+            return new ApiResponse<bool>
+            {
+                Success = response.IsSuccessStatusCode,
+                Message = response.IsSuccessStatusCode ? "OTP code sent successfully" : $"Failed to send OTP code (Code: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
             };
         }
     }
@@ -70,27 +112,130 @@ public class AuthService : IAuthService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/register", request);
-            if (response.IsSuccessStatusCode)
+            var response = await _httpClient.PostAsJsonAsync("auth/register-trainee", request);
+            var (result, rawPreview) = await ReadResponseAsync<AuthResponse>(response);
+            if (response.IsSuccessStatusCode && result != null && result.Success)
             {
-                var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
-                return result ?? new ApiResponse<AuthResponse> { Success = false, Message = "Phản hồi không hợp lệ" };
+                if (result.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
+                {
+                    await _localStorage.SetItemAsync(AuthTokenKey, result.Data.AccessToken);
+                    await _localStorage.SetItemAsync(RefreshTokenKey, result.Data.RefreshToken);
+                    ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(result.Data.AccessToken);
+                }
+                return result;
             }
 
-            return new ApiResponse<AuthResponse>
+            if (result != null)
             {
-                Success = false,
-                Message = $"Đăng ký thất bại (Mã: {response.StatusCode})"
-            };
+                return result;
+            }
+
+            return UnexpectedResponse<AuthResponse>(
+                response, rawPreview, $"Registration failed (Code: {response.StatusCode})");
         }
         catch (Exception ex)
         {
             return new ApiResponse<AuthResponse>
             {
                 Success = false,
-                Message = $"Lỗi kết nối: {ex.Message}"
+                Message = $"Connection error: {ex.Message}"
             };
         }
+    }
+    public async Task PersistLoginAsync(AuthResponse data)
+    {
+        await PersistAuthAsync(data);
+    }
+
+    public async Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/google/code", new { code, roleCode, redirectUri });
+            var (result, rawPreview) = await ReadResponseAsync<AuthResponse>(response);
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                if (result.Data != null)
+                {
+                    await PersistAuthAsync(result.Data);
+                }
+                return result;
+            }
+
+            if (result != null)
+            {
+                return result;
+            }
+
+            return UnexpectedResponse<AuthResponse>(
+                response, rawPreview, $"Google sign-in failed (Code: {response.StatusCode})");
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<AuthResponse>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task PersistAuthAsync(AuthResponse data)
+    {
+        if (!string.IsNullOrEmpty(data.AccessToken))
+        {
+            await _localStorage.SetItemAsync(AuthTokenKey, data.AccessToken);
+            await _localStorage.SetItemAsync(RefreshTokenKey, data.RefreshToken);
+            ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(data.AccessToken);
+        }
+    }
+
+    /// <summary>
+    /// Reads the raw body first so a non-JSON server reply (proxy page, crash page, ...)
+    /// surfaces its real content instead of a cryptic "'X' is an invalid start" error.
+    /// </summary>
+    private static async Task<(ApiResponse<T>? Result, string? RawPreview)> ReadResponseAsync<T>(HttpResponseMessage response)
+    {
+        string raw;
+        try
+        {
+            raw = await response.Content.ReadAsStringAsync();
+        }
+        catch
+        {
+            return (null, null);
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return (null, null);
+        }
+
+        var preview = raw.Length > 300 ? raw[..300] : raw;
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<ApiResponse<T>>(
+                raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return (parsed, preview);
+        }
+        catch
+        {
+            return (null, preview);
+        }
+    }
+
+    private static ApiResponse<T> UnexpectedResponse<T>(HttpResponseMessage response, string? rawPreview, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(rawPreview))
+        {
+            return new ApiResponse<T>
+            {
+                Success = false,
+                Message = $"Unexpected server response (HTTP {(int)response.StatusCode}): {rawPreview}"
+            };
+        }
+
+        return new ApiResponse<T> { Success = false, Message = fallback };
     }
 
     public async Task LogoutAsync()

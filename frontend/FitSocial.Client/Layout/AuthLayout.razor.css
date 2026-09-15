@@ -1,0 +1,18 @@
+.auth-layout {
+    min-height: 100vh;
+    background-color: #edf1f6;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+}
+
+.auth-layout-inner {
+    width: 100%;
+    max-width: 600px;
+    padding: 28px 16px;
+}
+
+.auth-layout-inner.full {
+    max-width: none;
+    padding: 0;
+}

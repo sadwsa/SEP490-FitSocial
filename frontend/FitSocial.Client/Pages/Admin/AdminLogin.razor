@@ -1,0 +1,108 @@
+@page "/admin/login"
+@layout AuthLayout
+@inject IAuthService AuthService
+@inject ITokenStorage TokenStorage
+@inject NavigationManager Navigation
+
+<PageTitle>Management Portal - FitSocial</PageTitle>
+
+<div class="login-hero">
+    <img src="Logo_FitSocial.jpg" alt="FitSocial" class="hero-logo" />
+    <div class="hero-text">
+        <h1 class="hero-title">Management <span>Portal</span></h1>
+        <p class="hero-sub">Back-office sign-in for FitSocial administrators and staff. Trainee and Coach accounts use the client login page.</p>
+    </div>
+</div>
+
+<div class="reg-card">
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+    }
+
+    <EditForm Model="@loginModel" OnValidSubmit="HandleLogin">
+        <DataAnnotationsValidator />
+
+        <div class="field">
+            <label>Work email <span class="req">*</span></label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="envelope" /></span>
+                <InputText @bind-Value="loginModel.Email" class="form-control has-icon" placeholder="E.g.: admin@fitsocial.vn" />
+            </div>
+            <ValidationMessage For="@(() => loginModel.Email)" class="field-error" />
+        </div>
+
+        <div class="field">
+            <label>Password <span class="req">*</span></label>
+            <div class="input-wrap">
+                <span class="input-icon"><AppIcon Name="lock" /></span>
+                <InputText type="@(showPassword ? "text" : "password")" @bind-Value="loginModel.Password" class="form-control has-icon has-eye" placeholder="Enter your password" />
+                <button type="button" class="eye-btn" @onclick="() => showPassword = !showPassword" title="Show/hide password">
+                    <AppIcon Name="@(showPassword ? "eye-slash" : "eye")" />
+                </button>
+            </div>
+            <ValidationMessage For="@(() => loginModel.Password)" class="field-error" />
+        </div>
+
+        <div class="login-options">
+            <label class="remember">
+                <input type="checkbox" @bind="rememberMe" />
+                <span>Remember me on this device</span>
+            </label>
+        </div>
+
+        <button type="submit" class="btn-auth-primary" disabled="@isLoading">
+            @if (isLoading)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <span>Signing in...</span>
+            }
+            else
+            {
+                <span>Sign In to Portal →</span>
+            }
+        </button>
+    </EditForm>
+
+    <div class="reg-footer">
+        Not staff? <a href="login">Go to client sign in →</a>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginModel = new();
+    private bool showPassword = false;
+    private bool rememberMe = true;
+    private string? errorMessage;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        rememberMe = await TokenStorage.GetRememberMeAsync();
+
+        if (await AuthService.IsAuthenticatedAsync())
+        {
+            Navigation.NavigateTo("/admin");
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        await TokenStorage.SetRememberMeAsync(rememberMe);
+
+        var result = await AuthService.AdminLoginAsync(loginModel);
+        if (result.Success)
+        {
+            Navigation.NavigateTo("/admin");
+        }
+        else
+        {
+            errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";
+        }
+
+        isLoading = false;
+    }
+}

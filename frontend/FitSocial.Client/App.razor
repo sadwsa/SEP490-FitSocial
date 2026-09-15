@@ -3,24 +3,14 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                 <NotAuthorized>
-                    <div class="not-authorized-container text-center p-5">
-                        <h3>🔒 Yêu cầu đăng nhập</h3>
-                        <p class="text-muted">Bạn cần đăng nhập để truy cập trang này.</p>
-                        <a href="login" class="btn btn-primary mt-3">Đăng nhập ngay</a>
-                    </div>
+                    <RedirectToLogin />
                 </NotAuthorized>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>
             <PageTitle>Không tìm thấy trang - FitSocial</PageTitle>
-            <LayoutView Layout="@typeof(MainLayout)">
-                <div class="not-found-container text-center p-5">
-                    <h1 class="display-4">404</h1>
-                    <p class="lead">Trang bạn tìm kiếm không tồn tại.</p>
-                    <a href="" class="btn btn-outline-primary">Quay về Bảng tin</a>
-                </div>
-            </LayoutView>
+            <RedirectToHome />
         </NotFound>
     </Router>
 </CascadingAuthenticationState>

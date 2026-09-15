@@ -1,0 +1,109 @@
+@page "/payment-result"
+@layout AuthLayout
+@inject IPaymentService PaymentService
+@inject IAuthService AuthService
+@inject PendingCoachRegistration PendingCoach
+@inject NavigationManager Navigation
+
+<PageTitle>Payment Result - FitSocial</PageTitle>
+
+<div class="pay-hero">
+    <img src="Logo_FitSocial.jpg" alt="FitSocial" class="hero-logo" />
+    <div class="hero-text">
+        <h1 class="hero-title">Payment <span>Result</span></h1>
+        <p class="hero-sub">Verifying your coach activation payment with the gateway.</p>
+    </div>
+</div>
+
+<div class="reg-card text-center">
+    @if (isVerifying)
+    {
+        <div class="sports-loading">
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            <span>Verifying payment, please wait...</span>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="auth-alert success" role="alert"><AppIcon Name="check" /><span>@successMessage</span></div>
+        <p class="result-hint">Redirecting to home...</p>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+        }
+        <div class="pay-actions">
+            <button type="button" class="btn-back" @onclick='() => Navigation.NavigateTo("/register")'>
+                ← Back to register
+            </button>
+            <button type="button" class="btn-auth-primary btn-coach flex-grow-1" @onclick="RetryVerifyAsync" disabled="@isVerifying">
+                <span>Check again</span>
+            </button>
+        </div>
+        <p class="result-hint">No account was created. You can pay again from the register page (your information is kept).</p>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "orderCode")]
+    public long? OrderCode { get; set; }
+
+    [SupplyParameterFromQuery(Name = "cancel")]
+    public bool? Cancelled { get; set; }
+
+    private bool isVerifying = true;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await VerifyAsync();
+    }
+
+    private async Task RetryVerifyAsync()
+    {
+        await VerifyAsync();
+    }
+
+    private async Task VerifyAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+        isVerifying = true;
+
+        if (Cancelled == true)
+        {
+            if (OrderCode.HasValue)
+            {
+                await PaymentService.CancelActivationAsync(OrderCode.Value);
+            }
+            errorMessage = "Payment was cancelled. No account was created.";
+            isVerifying = false;
+            return;
+        }
+
+        if (!OrderCode.HasValue || OrderCode.Value <= 0)
+        {
+            errorMessage = "Missing payment reference. Please go back and try again.";
+            isVerifying = false;
+            return;
+        }
+
+        var result = await PaymentService.CompleteActivationAsync(OrderCode.Value);
+        if (result.Success && result.Data != null)
+        {
+            await AuthService.PersistLoginAsync(result.Data);
+            PendingCoach.Clear();
+            successMessage = "Payment successful! Coach account created. Redirecting to home...";
+            StateHasChanged();
+            await Task.Delay(1500);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        errorMessage = result.Message ?? "Payment has not been completed yet.";
+        isVerifying = false;
+    }
+}

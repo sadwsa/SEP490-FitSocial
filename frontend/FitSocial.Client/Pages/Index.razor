@@ -1,0 +1,33 @@
+@page "/"
+@inject NavigationManager Navigation
+
+@code {
+    // Role-based entry point: every role gets its own landing page.
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState == null)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        var user = (await AuthState).User;
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        if (user.IsInRole(AppRoles.Admin) || user.IsInRole(AppRoles.Staff))
+        {
+            Navigation.NavigateTo("/admin");
+        }
+        else
+        {
+            Navigation.NavigateTo("/home");
+        }
+    }
+}

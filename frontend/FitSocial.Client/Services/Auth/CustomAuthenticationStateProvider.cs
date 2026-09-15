@@ -7,11 +7,11 @@ namespace FitSocial.Client.Services.Auth;
 
 public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 {
-    private readonly ILocalStorageService _localStorage;
+    private readonly ITokenStorage _localStorage;
     private static readonly ClaimsPrincipal Anonymous = new(new ClaimsIdentity());
     private const string AuthTokenKey = "authToken";
 
-    public CustomAuthenticationStateProvider(ILocalStorageService localStorage)
+    public CustomAuthenticationStateProvider(ITokenStorage localStorage)
     {
         _localStorage = localStorage;
     }
@@ -68,7 +68,7 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         {
             var key = kvp.Key;
 
-            // Chuẩn hóa role claim type để Blazor IsInRole và [Authorize(Roles="...")] hiểu đúng
+            // Normalize the role claim type so Blazor IsInRole and [Authorize(Roles="...")] work correctly
             if (key.Equals("role", StringComparison.OrdinalIgnoreCase) || 
                 key.Equals("roles", StringComparison.OrdinalIgnoreCase) ||
                 key.Equals(ClaimTypes.Role, StringComparison.OrdinalIgnoreCase))

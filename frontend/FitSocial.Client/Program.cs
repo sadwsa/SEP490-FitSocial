@@ -7,6 +7,9 @@ using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Http;
 using FitSocial.Client.Services.Posts;
 using FitSocial.Client.Services.Realtime;
+using FitSocial.Client.Services.Sports;
+using FitSocial.Client.Services.Files;
+using FitSocial.Client.Services.Payment;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -14,6 +17,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // LocalStorage
 builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddScoped<ITokenStorage, BrowserTokenStorage>();
 
 // Authentication & Authorization
 builder.Services.AddAuthorizationCore();
@@ -26,6 +30,11 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseU
 // Core Services
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<GoogleSignInService>();
+builder.Services.AddScoped<ISportService, SportService>();
+builder.Services.AddScoped<IFileUploadService, FileUploadService>();
+builder.Services.AddScoped<PendingCoachRegistration>();
+builder.Services.AddScoped<IPaymentService, PaymentApiService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<INotificationHubClient, NotificationHubClient>();
 

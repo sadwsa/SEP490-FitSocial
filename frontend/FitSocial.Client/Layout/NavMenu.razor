@@ -12,7 +12,7 @@
     <nav class="flex-column px-2 py-3">
         <!-- Menu chung cho mọi người dùng -->
         <div class="nav-item">
-            <NavLink class="nav-link px-3 py-2" href="" Match="NavLinkMatch.All">
+            <NavLink class="nav-link px-3 py-2" href="home" Match="NavLinkMatch.All">
                 <span class="nav-icon">🏠</span>
                 <span>Bảng tin</span>
             </NavLink>
@@ -53,8 +53,8 @@
             </div>
         </AuthorizeView>
 
-        <!-- Menu dành riêng cho Huấn luyện viên (PT) -->
-        <AuthorizeView Roles="@AppRoles.PersonalTrainer">
+        <!-- Menu dành riêng cho Huấn luyện viên (Coach) -->
+        <AuthorizeView Roles="@AppRoles.Coach">
             <div class="text-uppercase text-muted px-3 mt-3 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">HLV (PT)</div>
             <div class="nav-item">
                 <NavLink class="nav-link px-3 py-2" href="pt/clients">
@@ -70,9 +70,9 @@
             </div>
         </AuthorizeView>
 
-        <!-- Menu dành riêng cho Chủ phòng Gym (GymOwner) -->
-        <AuthorizeView Roles="@AppRoles.GymOwner">
-            <div class="text-uppercase text-muted px-3 mt-3 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">Chủ phòng Gym</div>
+        <!-- Menu dành riêng cho Nhân viên (Staff) -->
+        <AuthorizeView Roles="@AppRoles.Staff">
+            <div class="text-uppercase text-muted px-3 mt-3 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">Nhân viên</div>
             <div class="nav-item">
                 <NavLink class="nav-link px-3 py-2" href="gym/facilities">
                     <span class="nav-icon">🏢</span>
@@ -87,13 +87,6 @@
             </div>
         </AuthorizeView>
 
-        <hr class="my-3 border-secondary opacity-25" />
-        <div class="nav-item">
-            <NavLink class="nav-link px-3 py-2" href="api-status">
-                <span class="nav-icon">⚡</span>
-                <span>Kiểm tra API & Roles</span>
-            </NavLink>
-        </div>
     </nav>
 </div>
 

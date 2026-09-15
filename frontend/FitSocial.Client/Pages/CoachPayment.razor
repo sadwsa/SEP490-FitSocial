@@ -1,0 +1,276 @@
+@page "/coach-payment"
+@layout AuthLayout
+@inject PendingCoachRegistration PendingCoach
+@inject IAuthService AuthService
+@inject IPaymentService PaymentService
+@inject NavigationManager Navigation
+
+<PageTitle>Coach Pro Activation - FitSocial</PageTitle>
+
+<div class="pay-hero">
+    <img src="Logo_FitSocial.jpg" alt="FitSocial" class="hero-logo" />
+    <div class="hero-text">
+        <h1 class="hero-title">Coach Pro <span>Activation</span></h1>
+        <p class="hero-sub">Complete the one-time activation fee to create your professional coach account.</p>
+    </div>
+</div>
+
+<div class="reg-card">
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+    }
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="auth-alert success" role="alert"><AppIcon Name="check" /><span>@successMessage</span></div>
+    }
+
+    @if (isLoadingPreview)
+    {
+        <div class="sports-loading">
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            <span>Preparing your order...</span>
+        </div>
+    }
+    else if (preview != null && activation == null)
+    {
+        <!-- Order summary -->
+        <div class="order-box">
+            <div class="order-row header">
+                <span>Coach Pro Activation (one-time)</span>
+                <strong>@FormatAmount(preview.AmountVnd, preview.Currency)</strong>
+            </div>
+            <div class="order-row">
+                <span>Coach</span>
+                <span>@PendingCoach.Draft?.FullName</span>
+            </div>
+            <div class="order-row">
+                <span>Email</span>
+                <span>@PendingCoach.Draft?.Email</span>
+            </div>
+            <div class="order-row">
+                <span>Phone</span>
+                <span>@PendingCoach.Draft?.PhoneNumber</span>
+            </div>
+            @if (PendingCoach.SpecialtyNames.Count > 0)
+            {
+                <div class="order-row">
+                    <span>Specialties</span>
+                    <span>@string.Join(", ", PendingCoach.SpecialtyNames)</span>
+                </div>
+            }
+            <div class="order-row total">
+                <span>Total</span>
+                <strong>@FormatAmount(preview.AmountVnd, preview.Currency)</strong>
+            </div>
+        </div>
+
+        <!-- Payment methods (VietQR via PayOS) -->
+        <div class="field">
+            <label>Payment method</label>
+            <div class="pay-methods">
+                <button type="button" class="pay-method active">
+                    <span class="pay-dot"></span>
+                    <span>VietQR (PayOS)</span>
+                </button>
+            </div>
+        </div>
+
+        <p class="pay-note">Scan the VietQR code on the next step with any banking app. Your coach account is created only after successful payment.</p>
+
+        <div class="pay-actions">
+            <button type="button" class="btn-back" @onclick="GoBack" disabled="@isProcessing">
+                ← Back
+            </button>
+            <button type="button" class="btn-auth-primary btn-coach flex-grow-1" @onclick="HandlePayAsync" disabled="@isProcessing">
+                @if (isProcessing)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    <span>@processingText</span>
+                }
+                else
+                {
+                    <span>Pay @FormatAmount(preview.AmountVnd, preview.Currency) →</span>
+                }
+            </button>
+        </div>
+    }
+    else if (preview != null && activation != null)
+    {
+        <!-- VietQR code -->
+        <div class="qr-panel">
+            <p class="qr-title">Scan with your banking app to pay</p>
+            <img src="@QrImageUrl" alt="VietQR payment code" class="qr-image" />
+            <div class="qr-amount">@FormatAmount(activation.Amount, preview.Currency)</div>
+
+            <div class="order-box">
+                <div class="order-row">
+                    <span>Content</span>
+                    <strong>@activation.Description</strong>
+                </div>
+                <div class="order-row">
+                    <span>Account</span>
+                    <span>@activation.AccountNumber (@activation.AccountName)</span>
+                </div>
+                <div class="order-row">
+                    <span>Order code</span>
+                    <span>@activation.OrderCode</span>
+                </div>
+            </div>
+
+            <p class="pay-note">Keep the exact amount and content so the payment is recognized. The code expires in about 15 minutes.</p>
+
+            <div class="pay-actions">
+                <button type="button" class="btn-back" @onclick="HandleCancelOrderAsync" disabled="@isProcessing">
+                    Cancel order
+                </button>
+                <button type="button" class="btn-auth-primary btn-coach flex-grow-1" @onclick="HandleVerifyPaidAsync" disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        <span>@processingText</span>
+                    }
+                    else
+                    {
+                        <span>I've Paid — Verify Now →</span>
+                    }
+                </button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(activation.CheckoutUrl))
+            {
+                <p class="pay-note text-center">QR not loading? <a href="@activation.CheckoutUrl" target="_blank" rel="noopener">Open the full PayOS checkout</a></p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="pay-actions">
+            <button type="button" class="btn-back" @onclick="GoBack">
+                ← Back to register
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private CoachActivationPreview? preview;
+    private ActivationLink? activation;
+    private bool isLoadingPreview = true;
+    private bool isProcessing = false;
+    private string processingText = "Creating secure checkout...";
+    private string? errorMessage;
+    private string? successMessage;
+
+    private static string FormatAmount(decimal amount, string currency) =>
+        currency == "VND" ? $"{amount:N0} VND" : $"{amount:N2} {currency}";
+
+    private string QrImageUrl
+    {
+        get
+        {
+            var qr = activation?.QrCode ?? "";
+            if (qr.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                qr.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                return qr;
+            }
+            return $"https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={Uri.EscapeDataString(qr)}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Guard: no draft means the user opened this URL directly
+        if (!PendingCoach.HasDraft || PendingCoach.Draft == null)
+        {
+            Navigation.NavigateTo("/register");
+            return;
+        }
+
+        // Validate the draft server-side BEFORE paying (model + email availability)
+        var result = await PaymentService.PrepareCoachActivationAsync(PendingCoach.Draft);
+        if (result.Success && result.Data != null)
+        {
+            preview = result.Data;
+        }
+        else
+        {
+            errorMessage = result.Message ?? "Could not prepare the order. Please go back and check your information.";
+        }
+
+        isLoadingPreview = false;
+    }
+
+    private void GoBack()
+    {
+        // Draft stays in PendingCoachRegistration, Register restores it
+        Navigation.NavigateTo("/register");
+    }
+
+    private async Task HandlePayAsync()
+    {
+        if (PendingCoach.Draft == null || preview == null)
+        {
+            Navigation.NavigateTo("/register");
+            return;
+        }
+
+        errorMessage = null;
+        successMessage = null;
+        isProcessing = true;
+        processingText = "Creating VietQR code...";
+        StateHasChanged();
+
+        // Backend verifies OTP, locks in the draft and returns the VietQR payload
+        var link = await PaymentService.CreateActivationLinkAsync(PendingCoach.Draft);
+        if (!link.Success || link.Data == null || string.IsNullOrWhiteSpace(link.Data.QrCode))
+        {
+            errorMessage = link.Message ?? "Could not create the VietQR code. No account was created.";
+            isProcessing = false;
+            return;
+        }
+
+        activation = link.Data;
+        isProcessing = false;
+    }
+
+    private async Task HandleVerifyPaidAsync()
+    {
+        if (activation == null)
+        {
+            return;
+        }
+
+        errorMessage = null;
+        successMessage = null;
+        isProcessing = true;
+        processingText = "Verifying payment with the bank...";
+        StateHasChanged();
+
+        var result = await PaymentService.CompleteActivationAsync(activation.OrderCode);
+        if (result.Success && result.Data != null)
+        {
+            await AuthService.PersistLoginAsync(result.Data);
+            PendingCoach.Clear();
+            successMessage = "Payment successful! Coach account created. Redirecting to home...";
+            StateHasChanged();
+            await Task.Delay(1500);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        errorMessage = result.Message ?? "Payment has not been completed yet.";
+        isProcessing = false;
+    }
+
+    private async Task HandleCancelOrderAsync()
+    {
+        if (activation != null)
+        {
+            await PaymentService.CancelActivationAsync(activation.OrderCode);
+            activation = null;
+        }
+        Navigation.NavigateTo("/register");
+    }
+}

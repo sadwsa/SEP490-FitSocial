@@ -1,4 +1,5 @@
 using Blazored.LocalStorage;
+using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
 namespace FitSocial.Client.Services.Auth;
@@ -21,13 +22,18 @@ public class BrowserTokenStorage : ITokenStorage
     private const string RememberKey = "rememberMe";
     private readonly ILocalStorageService _localStorage;
     private readonly IJSRuntime _jsRuntime;
+    private readonly ILogger<BrowserTokenStorage> _logger;
     private bool _rememberMe = true;
     private bool _initialized = false;
 
-    public BrowserTokenStorage(ILocalStorageService localStorage, IJSRuntime jsRuntime)
+    public BrowserTokenStorage(
+        ILocalStorageService localStorage,
+        IJSRuntime jsRuntime,
+        ILogger<BrowserTokenStorage> logger)
     {
         _localStorage = localStorage;
         _jsRuntime = jsRuntime;
+        _logger = logger;
     }
 
     private async Task EnsureInitializedAsync()
@@ -42,8 +48,9 @@ public class BrowserTokenStorage : ITokenStorage
             var saved = await _localStorage.GetItemAsync<string>(RememberKey);
             _rememberMe = saved != "0";
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Could not read the remember-me preference. Defaulting to local storage.");
             _rememberMe = true;
         }
     }
@@ -61,9 +68,10 @@ public class BrowserTokenStorage : ITokenStorage
         {
             await _localStorage.SetItemAsync(RememberKey, remember ? "1" : "0");
         }
-        catch
+        catch (Exception ex)
         {
             // Non-fatal: preference simply won't persist across restarts.
+            _logger.LogWarning(ex, "Could not persist the remember-me preference.");
         }
     }
 
@@ -78,8 +86,9 @@ public class BrowserTokenStorage : ITokenStorage
         {
             return await _jsRuntime.InvokeAsync<T?>("fitSocialStorage.sessionGet", key);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Could not read '{Key}' from session storage.", key);
             return default;
         }
     }
@@ -96,9 +105,10 @@ public class BrowserTokenStorage : ITokenStorage
         {
             await _jsRuntime.InvokeVoidAsync("fitSocialStorage.sessionSet", key, value);
         }
-        catch
+        catch (Exception ex)
         {
             // If session storage is unavailable, fall back to local storage.
+            _logger.LogWarning(ex, "Session storage write failed for '{Key}'. Falling back to local storage.", key);
             await _localStorage.SetItemAsync(key, value);
         }
     }
@@ -109,15 +119,17 @@ public class BrowserTokenStorage : ITokenStorage
         {
             await _localStorage.RemoveItemAsync(key);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Could not remove '{Key}' from local storage.", key);
         }
         try
         {
             await _jsRuntime.InvokeVoidAsync("fitSocialStorage.sessionRemove", key);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Could not remove '{Key}' from session storage.", key);
         }
     }
 }

@@ -1,6 +1,7 @@
 using FitSocial.Application.DTOs.Auth;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -103,6 +104,130 @@ public class AuthController : ControllerBase
         }
 
         var result = await _authService.AdminLoginAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Server-side sign-out (UC_03): revokes the calling access token
+    /// and, when provided, the refresh token.
+    /// The client still clears its own storage afterwards.
+    /// </summary>
+    [HttpPost("logout")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Logout([FromBody] LogoutRequestDto? request = null)
+    {
+        var jti = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+
+        DateTime? expiresAtUtc = null;
+        var expValue = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Exp)?.Value;
+        if (long.TryParse(expValue, out var expSeconds))
+        {
+            expiresAtUtc = DateTimeOffset.FromUnixTimeSeconds(expSeconds).UtcDateTime;
+        }
+
+        var result = await _authService.LogoutAsync(jti, expiresAtUtc, request?.RefreshToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Rotates a valid refresh token into a brand-new session (new access + refresh tokens).
+    /// </summary>
+    [HttpPost("refresh")]
+    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Refresh([FromBody] RefreshRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<AuthResponseDto>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.RefreshAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Step 1 of UC_04: request a password-reset OTP (always returns success).
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [EnableRateLimiting("OtpPolicy")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.ForgotPasswordAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Step 2 of UC_04: verify the OTP and set the new password (kills all sessions).
+    /// </summary>
+    [HttpPost("reset-password")]
+    [EnableRateLimiting("OtpPolicy")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.ResetPasswordAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC_05.2: change password while signed in (kills all sessions, client signs in again).
+    /// </summary>
+    [HttpPost("change-password")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var userIdValue = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized(ApiResponseDto<bool>.Fail("Invalid session. Please sign in again."));
+        }
+
+        var result = await _authService.ChangePasswordAsync(userId, request);
         if (!result.Success)
         {
             return BadRequest(result);

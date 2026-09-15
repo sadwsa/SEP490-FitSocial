@@ -61,7 +61,7 @@
                 <input type="checkbox" @bind="rememberMe" />
                 <span>Remember me on this device</span>
             </label>
-            <button type="button" class="link-button" @onclick="HandleForgotPassword">Forgot password?</button>
+            <button type="button" class="link-button" @onclick='() => Navigation.NavigateTo("/forgot-password")'>Forgot password?</button>
         </div>
 
         <button type="submit" class="btn-auth-primary" disabled="@isLoading">
@@ -200,9 +200,5 @@
         await TokenStorage.SetRememberMeAsync(rememberMe);
         await GoogleSignIn.BeginRedirectSignInAsync(null);
     }
-
-    private void HandleForgotPassword()
-    {
-        infoMessage = "Password reset is not available yet. Please contact FitSocial support for help.";
-    }
 }
+

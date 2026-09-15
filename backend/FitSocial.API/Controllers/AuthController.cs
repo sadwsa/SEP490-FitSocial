@@ -159,6 +159,54 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Step 1 of UC_04: request a password-reset OTP (always returns success).
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [EnableRateLimiting("OtpPolicy")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.ForgotPasswordAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Step 2 of UC_04: verify the OTP and set the new password (kills all sessions).
+    /// </summary>
+    [HttpPost("reset-password")]
+    [EnableRateLimiting("OtpPolicy")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.ResetPasswordAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Sign in / Sign up with a Google authorization code (redirect flow, works without FedCM)
     /// </summary>
     [HttpPost("google/code")]

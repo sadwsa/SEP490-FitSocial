@@ -11,5 +11,7 @@ public interface IAuthService
     Task<ApiResponseDto<AuthResponseDto>> AdminLoginAsync(LoginRequestDto request);
     Task<ApiResponseDto<bool>> LogoutAsync(string? jti, DateTime? expiresAtUtc, string? refreshToken = null);
     Task<ApiResponseDto<AuthResponseDto>> RefreshAsync(RefreshRequestDto request);
+    Task<ApiResponseDto<bool>> ForgotPasswordAsync(ForgotPasswordRequestDto request);
+    Task<ApiResponseDto<bool>> ResetPasswordAsync(ResetPasswordRequestDto request);
     Task<ApiResponseDto<AuthResponseDto>> GoogleCodeLoginAsync(GoogleCodeRequestDto request);
 }

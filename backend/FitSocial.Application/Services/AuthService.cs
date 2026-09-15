@@ -500,4 +500,102 @@ public class AuthService : IAuthService
     {
         return await _tokenService.RefreshSessionAsync(request.RefreshToken);
     }
+
+    /// <summary>
+    /// Step 1 of UC_04: send a password-reset OTP to the email.
+    /// Always returns success to avoid revealing which emails are registered.
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> ForgotPasswordAsync(ForgotPasswordRequestDto request)
+    {
+        var normalizedEmail = request.Email.Trim().ToLower();
+        const string genericOk = "If this email is registered, a reset code has been sent to it.";
+
+        var user = await _users.FindByEmailAsync(normalizedEmail);
+        if (user == null)
+        {
+            return ApiResponseDto<bool>.Ok(true, genericOk);
+        }
+
+        var otpCode = await _otpService.GenerateOtpAsync(normalizedEmail, OtpConstants.PurposeResetPassword);
+
+        var subject = "[FitSocial] Password reset verification code";
+        var body = $@"
+            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;"">
+                <div style=""text-align: center; margin-bottom: 20px;"">
+                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitSocial"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
+                    <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitSocial</h2>
+                    <p style=""color: #666; margin: 5px 0 0;"">Sports & Fitness Community</p>
+                </div>
+                <div style=""background: #fff3e0; border-left: 4px solid #FF5722; padding: 15px; margin-bottom: 20px;"">
+                    <p style=""margin: 0; color: #333; font-size: 16px;"">Hello,</p>
+                    <p style=""margin: 10px 0 0; color: #555;"">You requested a password reset for your FitSocial account. Your OTP verification code is:</p>
+                </div>
+                <div style=""text-align: center; margin: 30px 0;"">
+                    <span style=""font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #FF5722; background: #fbe9e7; padding: 10px 24px; border-radius: 8px; border: 1px dashed #FF5722;"">
+                        {otpCode}
+                    </span>
+                </div>
+                <p style=""color: #777; font-size: 14px; text-align: center;"">This code is valid for <strong>5 minutes</strong>. Never share it with anyone.</p>
+                <hr style=""border: none; border-top: 1px solid #eee; margin: 25px 0;"" />
+                <p style=""color: #999; font-size: 12px; text-align: center; margin: 0;"">If you did not request this, please ignore this email and consider securing your account.</p>
+            </div>";
+
+        await _emailService.SendEmailAsync(normalizedEmail, subject, body);
+
+        return ApiResponseDto<bool>.Ok(true, genericOk);
+    }
+
+    /// <summary>
+    /// Step 2 of UC_04: verify the OTP and set the new password.
+    /// Bumps TokenVersion so every existing session/token dies immediately.
+    /// Also works for Google-created accounts (gives them a usable password).
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> ResetPasswordAsync(ResetPasswordRequestDto request)
+    {
+        var normalizedEmail = request.Email.Trim().ToLower();
+
+        if (request.NewPassword != request.ConfirmPassword)
+        {
+            return ApiResponseDto<bool>.Fail("Passwords do not match.");
+        }
+
+        var user = await _users.FindByEmailAsync(normalizedEmail);
+        if (user == null)
+        {
+            return ApiResponseDto<bool>.Fail("Invalid email or OTP code.");
+        }
+
+        // New password must differ from the current one (skipped for
+        // passwordless accounts, e.g. created via Google, which have no hash yet)
+        if (!string.IsNullOrEmpty(user.PasswordHash) &&
+            _passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+        {
+            return ApiResponseDto<bool>.Fail("New password must be different from the current password.");
+        }
+
+        var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(
+            normalizedEmail,
+            request.OtpCode.Trim(),
+            OtpConstants.PurposeResetPassword);
+
+        if (!otpValid)
+        {
+            return ApiResponseDto<bool>.Fail(otpMessage);
+        }
+
+        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.TokenVersion += 1; // Kill all existing sessions/tokens at once
+        user.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return ApiResponseDto<bool>.Fail("Could not reset the password. Please try again.");
+        }
+
+        return ApiResponseDto<bool>.Ok(true, "Password reset successfully. Please sign in with your new password.");
+    }
 }

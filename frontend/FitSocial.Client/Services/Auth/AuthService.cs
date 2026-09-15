@@ -4,6 +4,7 @@ using Blazored.LocalStorage;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Common;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Logging;
 
 namespace FitSocial.Client.Services.Auth;
 
@@ -13,6 +14,8 @@ public interface IAuthService
     Task<ApiResponse<AuthResponse>> AdminLoginAsync(LoginRequest request);
     Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null);
     Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
+    Task<ApiResponse<bool>> ForgotPasswordAsync(string email);
+    Task<ApiResponse<bool>> ResetPasswordAsync(ResetPasswordRequest request);
     Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
     Task LogoutAsync();
     Task<string?> GetTokenAsync();
@@ -26,17 +29,20 @@ public class AuthService : IAuthService
     private readonly HttpClient _httpClient;
     private readonly ITokenStorage _localStorage;
     private readonly AuthenticationStateProvider _authStateProvider;
+    private readonly ILogger<AuthService> _logger;
     private const string AuthTokenKey = "authToken";
     private const string RefreshTokenKey = "refreshToken";
 
     public AuthService(
         HttpClient httpClient,
         ITokenStorage localStorage,
-        AuthenticationStateProvider authStateProvider)
+        AuthenticationStateProvider authStateProvider,
+        ILogger<AuthService> logger)
     {
         _httpClient = httpClient;
         _localStorage = localStorage;
         _authStateProvider = authStateProvider;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request)
@@ -97,6 +103,60 @@ public class AuthService : IAuthService
             {
                 Success = response.IsSuccessStatusCode,
                 Message = response.IsSuccessStatusCode ? "OTP code sent successfully" : $"Failed to send OTP code (Code: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> ForgotPasswordAsync(string email)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/forgot-password", new { email });
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (result != null)
+            {
+                return result;
+            }
+
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Request failed (Code: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/reset-password", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (result != null)
+            {
+                return result;
+            }
+
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Request failed (Code: {response.StatusCode})"
             };
         }
         catch (Exception ex)
@@ -195,15 +255,16 @@ public class AuthService : IAuthService
     /// Reads the raw body first so a non-JSON server reply (proxy page, crash page, ...)
     /// surfaces its real content instead of a cryptic "'X' is an invalid start" error.
     /// </summary>
-    private static async Task<(ApiResponse<T>? Result, string? RawPreview)> ReadResponseAsync<T>(HttpResponseMessage response)
+    private async Task<(ApiResponse<T>? Result, string? RawPreview)> ReadResponseAsync<T>(HttpResponseMessage response)
     {
         string raw;
         try
         {
             raw = await response.Content.ReadAsStringAsync();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Could not read the response body.");
             return (null, null);
         }
 
@@ -219,8 +280,9 @@ public class AuthService : IAuthService
                 raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             return (parsed, preview);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Response body is not the expected JSON shape. Preview: {Preview}", preview);
             return (null, preview);
         }
     }
@@ -260,9 +322,10 @@ public class AuthService : IAuthService
                 await _httpClient.SendAsync(request);
             }
         }
-        catch
+        catch (Exception ex)
         {
             // Ignored on purpose: local sign-out must never be blocked by network errors.
+            _logger.LogWarning(ex, "Server-side logout failed. Continuing with local sign-out.");
         }
 
         _httpClient.DefaultRequestHeaders.Authorization = null;
@@ -295,8 +358,9 @@ public class AuthService : IAuthService
             }
             return false;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Silent token refresh failed.");
             return false;
         }
     }

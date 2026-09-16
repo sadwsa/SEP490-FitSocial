@@ -13,6 +13,12 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure maximum request body size (100MB for video/media uploads)
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024;
+});
+
 // Add services to the container.
 builder.Services.AddCors(options =>
 {
@@ -80,6 +86,21 @@ builder.Services.AddAuthentication(options =>
     // Multi-layer check filter (Blacklist Jti & TokenVersion) for every request
     options.Events = new JwtBearerEvents
     {
+        OnChallenge = async context =>
+        {
+            context.HandleResponse();
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(FitSocial.Application.DTOs.Common.ApiResponseDto<object>.Fail(
+                "Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."));
+        },
+        OnForbidden = async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(FitSocial.Application.DTOs.Common.ApiResponseDto<object>.Fail(
+                "Bạn không có quyền thực hiện thao tác này."));
+        },
         OnTokenValidated = async context =>
         {
             var userRepository = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();

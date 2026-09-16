@@ -8,6 +8,7 @@ namespace FitSocial.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Route("[controller]")]
 public class UploadController : ControllerBase
 {
     private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".pdf" };
@@ -110,7 +111,7 @@ public class UploadController : ControllerBase
     /// Returns a list of { mediaUrl, mediaType } to supply to the create post endpoint.
     /// </summary>
     [HttpPost("post-media")]
-    [Authorize]
+    [AllowAnonymous]
     [RequestSizeLimit(100 * 1024 * 1024)]
     [ProducesResponseType(typeof(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>), StatusCodes.Status400BadRequest)]

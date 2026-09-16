@@ -9,4 +9,5 @@ namespace FitSocial.Application.Interfaces;
 public interface IConversationService
 {
     Task<ApiResponseDto<List<ConversationDto>>> GetUserConversationsAsync(Guid userId);
+    Task<ApiResponseDto<ConversationDetailDto>> GetConversationDetailAsync(Guid conversationId, Guid currentUserId);
 }

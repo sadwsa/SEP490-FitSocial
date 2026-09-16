@@ -6,4 +6,5 @@ namespace FitSocial.Client.Services.Conversations;
 public interface IConversationService
 {
     Task<ApiResponse<List<ConversationDto>>> GetConversationsAsync();
+    Task<ApiResponse<ConversationDetailDto>> GetConversationDetailAsync(Guid conversationId);
 }

@@ -132,4 +132,89 @@ public class ConversationService : IConversationService
             return ApiResponseDto<List<ConversationDto>>.Fail($"System error retrieving conversations: {ex.Message}");
         }
     }
+
+    public async Task<ApiResponseDto<ConversationDetailDto>> GetConversationDetailAsync(Guid conversationId, Guid currentUserId)
+    {
+        try
+        {
+            // 1. Fetch conversation with participants (and user profiles) and messages (and sender profiles)
+            var conv = await _context.Conversations
+                .AsNoTracking()
+                .Include(c => c.Participants)
+                    .ThenInclude(p => p.User)
+                .Include(c => c.Messages)
+                    .ThenInclude(m => m.Sender)
+                .FirstOrDefaultAsync(c => c.Id == conversationId && c.IsDeleted != true);
+
+            if (conv == null)
+            {
+                return ApiResponseDto<ConversationDetailDto>.Fail("Conversation not found.");
+            }
+
+            // 2. Security / Authorization check: verify current authenticated user is a participant
+            var currentParticipant = conv.Participants.FirstOrDefault(p => p.UserId == currentUserId);
+            if (currentParticipant == null)
+            {
+                return ApiResponseDto<ConversationDetailDto>.Fail("Forbidden: You are not a participant in this conversation.");
+            }
+
+            var dto = new ConversationDetailDto
+            {
+                ConversationId = conv.Id,
+                Type = conv.Type ?? "DIRECT",
+                CreatedAt = conv.CreatedAt
+            };
+
+            // 3. Determine title, avatar, and other user info
+            if (string.Equals(conv.Type, "GROUP", StringComparison.OrdinalIgnoreCase))
+            {
+                var memberNames = conv.Participants
+                    .Where(mp => mp.User != null)
+                    .Select(mp => mp.User.FullName ?? mp.User.Email)
+                    .Take(3)
+                    .ToList();
+
+                dto.Title = memberNames.Any() ? string.Join(", ", memberNames) : "Group Chat";
+                dto.DisplayAvatar = null;
+            }
+            else
+            {
+                var otherParticipant = conv.Participants.FirstOrDefault(mp => mp.UserId != currentUserId);
+                var otherUser = otherParticipant?.User;
+
+                dto.OtherUserId = otherUser?.UserId;
+                dto.OtherUserName = otherUser?.FullName ?? otherUser?.Email ?? "FitSocial User";
+                dto.OtherUserAvatar = otherUser?.AvatarUrl;
+
+                dto.Title = dto.OtherUserName;
+                dto.DisplayAvatar = dto.OtherUserAvatar;
+            }
+
+            // 4. Filter messages based on history deletion date
+            var validMessages = conv.Messages
+                .Where(m => currentParticipant.HistoryDeletedAt == null || (m.CreatedAt.HasValue && m.CreatedAt > currentParticipant.HistoryDeletedAt))
+                .OrderBy(m => m.CreatedAt ?? DateTime.MinValue)
+                .ToList();
+
+            // 5. Map to MessageDto with IsMine flag and chronological order
+            dto.Messages = validMessages.Select(m => new MessageDto
+            {
+                Id = m.Id,
+                ConversationId = m.ConversationId,
+                SenderId = m.SenderId,
+                SenderName = m.Sender?.FullName ?? m.Sender?.Email ?? "FitSocial User",
+                SenderAvatar = m.Sender?.AvatarUrl,
+                Content = m.Content,
+                MessageType = m.MessageType,
+                CreatedAt = m.CreatedAt,
+                IsMine = (m.SenderId == currentUserId)
+            }).ToList();
+
+            return ApiResponseDto<ConversationDetailDto>.Ok(dto, "Conversation detail retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<ConversationDetailDto>.Fail($"System error retrieving conversation detail: {ex.Message}");
+        }
+    }
 }

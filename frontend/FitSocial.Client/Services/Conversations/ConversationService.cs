@@ -17,4 +17,9 @@ public class ConversationService : IConversationService
     {
         return await _apiClient.GetAsync<List<ConversationDto>>("conversations");
     }
+
+    public async Task<ApiResponse<ConversationDetailDto>> GetConversationDetailAsync(Guid conversationId)
+    {
+        return await _apiClient.GetAsync<ConversationDetailDto>($"conversations/{conversationId}");
+    }
 }

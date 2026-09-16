@@ -86,6 +86,12 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
             {
                 key = ClaimTypes.Email;
             }
+            else if (key.Equals("sub", StringComparison.OrdinalIgnoreCase) ||
+                     key.Equals("nameid", StringComparison.OrdinalIgnoreCase) ||
+                     key.Equals(ClaimTypes.NameIdentifier, StringComparison.OrdinalIgnoreCase))
+            {
+                key = ClaimTypes.NameIdentifier;
+            }
 
             if (kvp.Value is JsonElement element && element.ValueKind == JsonValueKind.Array)
             {

@@ -22,4 +22,9 @@ public class ConversationService : IConversationService
     {
         return await _apiClient.GetAsync<ConversationDetailDto>($"conversations/{conversationId}");
     }
+
+    public async Task<ApiResponse<MessageDto>> SendMessageAsync(Guid conversationId, SendMessageRequestDto request)
+    {
+        return await _apiClient.PostAsync<SendMessageRequestDto, MessageDto>($"conversations/{conversationId}/messages", request);
+    }
 }

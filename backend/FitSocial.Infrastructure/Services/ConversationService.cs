@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Conversations;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Entities;
 using FitSocial.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,10 +14,12 @@ namespace FitSocial.Infrastructure.Services;
 public class ConversationService : IConversationService
 {
     private readonly FitSocialDbContext _context;
+    private readonly IChatRealtimeNotifier _realtimeNotifier;
 
-    public ConversationService(FitSocialDbContext context)
+    public ConversationService(FitSocialDbContext context, IChatRealtimeNotifier realtimeNotifier)
     {
         _context = context;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task<ApiResponseDto<List<ConversationDto>>> GetUserConversationsAsync(Guid userId)
@@ -210,11 +213,123 @@ public class ConversationService : IConversationService
                 IsMine = (m.SenderId == currentUserId)
             }).ToList();
 
+            // 6. Mark messages as read by updating LastReadMessageId
+            var latestMessage = validMessages.LastOrDefault();
+            if (latestMessage != null && currentParticipant.LastReadMessageId != latestMessage.Id)
+            {
+                var participantEntity = await _context.Participants
+                    .FirstOrDefaultAsync(p => p.ConversationId == conversationId && p.UserId == currentUserId);
+                if (participantEntity != null)
+                {
+                    participantEntity.LastReadMessageId = latestMessage.Id;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             return ApiResponseDto<ConversationDetailDto>.Ok(dto, "Conversation detail retrieved successfully.");
         }
         catch (Exception ex)
         {
             return ApiResponseDto<ConversationDetailDto>.Fail($"System error retrieving conversation detail: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<MessageDto>> SendMessageAsync(Guid conversationId, Guid currentUserId, SendMessageRequestDto request)
+    {
+        try
+        {
+            // 1. Input Validation
+            if (request == null || string.IsNullOrWhiteSpace(request.Content))
+            {
+                return ApiResponseDto<MessageDto>.Fail("Message content cannot be empty.");
+            }
+
+            var trimmedContent = request.Content.Trim();
+            if (trimmedContent.Length > 300)
+            {
+                return ApiResponseDto<MessageDto>.Fail("Message content cannot exceed 300 characters.");
+            }
+
+            // 2. Validate Conversation Existence
+            var conv = await _context.Conversations
+                .Include(c => c.Participants)
+                .FirstOrDefaultAsync(c => c.Id == conversationId && c.IsDeleted != true);
+
+            if (conv == null)
+            {
+                return ApiResponseDto<MessageDto>.Fail("Conversation not found.");
+            }
+
+            // 3. Authorization Check: Current user must be an active participant
+            var isParticipant = conv.Participants.Any(p => p.UserId == currentUserId);
+            if (!isParticipant)
+            {
+                return ApiResponseDto<MessageDto>.Fail("Forbidden: You are not a participant in this conversation.");
+            }
+
+            // 4. Persistence: Create and save Message to database
+            var message = new Message
+            {
+                Id = Guid.NewGuid(),
+                ConversationId = conversationId,
+                SenderId = currentUserId,
+                Content = trimmedContent,
+                MessageType = "TEXT",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Messages.Add(message);
+            conv.UpdatedAt = DateTime.UtcNow;
+
+            var senderParticipant = conv.Participants.FirstOrDefault(p => p.UserId == currentUserId);
+            if (senderParticipant != null)
+            {
+                senderParticipant.LastReadMessageId = message.Id;
+            }
+
+            await _context.SaveChangesAsync();
+
+            // 5. Fetch sender details for accurate DTO mapping
+            var sender = await _context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UserId == currentUserId);
+
+            var broadcastDto = new MessageDto
+            {
+                Id = message.Id,
+                ConversationId = message.ConversationId,
+                SenderId = message.SenderId,
+                SenderName = sender?.FullName ?? sender?.Email ?? "FitSocial User",
+                SenderAvatar = sender?.AvatarUrl,
+                Content = message.Content,
+                MessageType = message.MessageType,
+                CreatedAt = message.CreatedAt,
+                IsMine = false // Will be determined by each client based on their authenticated userId
+            };
+
+            // 6. Broadcast message realtime through SignalR to all participants
+            var participantUserIds = conv.Participants.Select(p => p.UserId).ToList();
+            await _realtimeNotifier.BroadcastMessageAsync(participantUserIds, broadcastDto);
+
+            // 7. Return success response to sender
+            var responseDto = new MessageDto
+            {
+                Id = broadcastDto.Id,
+                ConversationId = broadcastDto.ConversationId,
+                SenderId = broadcastDto.SenderId,
+                SenderName = broadcastDto.SenderName,
+                SenderAvatar = broadcastDto.SenderAvatar,
+                Content = broadcastDto.Content,
+                MessageType = broadcastDto.MessageType,
+                CreatedAt = broadcastDto.CreatedAt,
+                IsMine = true
+            };
+
+            return ApiResponseDto<MessageDto>.Ok(responseDto, "Message sent successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<MessageDto>.Fail($"System error sending message: {ex.Message}");
         }
     }
 }

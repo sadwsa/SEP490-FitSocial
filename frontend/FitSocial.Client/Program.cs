@@ -38,6 +38,7 @@ builder.Services.AddScoped<PendingCoachRegistration>();
 builder.Services.AddScoped<IPaymentService, PaymentApiService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<INotificationHubClient, NotificationHubClient>();
+builder.Services.AddScoped<IChatHubClient, ChatHubClient>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
 
 await builder.Build().RunAsync();

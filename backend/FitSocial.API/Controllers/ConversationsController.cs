@@ -48,4 +48,44 @@ public class ConversationsController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// View Conversation Detail and message history (UC-16.1)
+    /// </summary>
+    [HttpGet("{conversationId:guid}")]
+    [ProducesResponseType(typeof(ApiResponseDto<ConversationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<ConversationDetailDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<ConversationDetailDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<ConversationDetailDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<ConversationDetailDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetConversationDetail(Guid conversationId)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<ConversationDetailDto>.Fail("Invalid authentication session. Please log in again."));
+        }
+
+        var result = await _conversationService.GetConversationDetailAsync(conversationId, currentUserId);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(result);
+            }
+
+            if (result.Message.Contains("Forbidden", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("authorized", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("participant", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, result);
+            }
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
 }

@@ -8,6 +8,8 @@ using System.Security.Claims;
 using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using FitSocial.Domain.Interfaces;
+using FitSocial.API.Hubs;
+using FitSocial.API.Services;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -56,6 +58,8 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddHttpClient();
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
 
 // JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? "FitSocial_Super_Secret_Key_For_Jwt_2026_SecureAuthenticationKey_1234567890";
@@ -80,6 +84,16 @@ builder.Services.AddAuthentication(options =>
     // Multi-layer check filter (Blacklist Jti & TokenVersion) for every request
     options.Events = new JwtBearerEvents
     {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        },
         OnTokenValidated = async context =>
         {
             var userRepository = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
@@ -169,5 +183,6 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

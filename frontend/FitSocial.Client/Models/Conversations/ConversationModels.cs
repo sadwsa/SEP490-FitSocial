@@ -43,3 +43,8 @@ public class ConversationDetailDto
     public DateTime? CreatedAt { get; set; }
     public List<MessageDto> Messages { get; set; } = new();
 }
+
+public class SendMessageRequestDto
+{
+    public string Content { get; set; } = string.Empty;
+}

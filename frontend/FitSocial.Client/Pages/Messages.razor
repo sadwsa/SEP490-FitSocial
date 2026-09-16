@@ -2,8 +2,12 @@
 @page "/messages/{conversationId:guid}"
 @attribute [Authorize]
 @inject IConversationService ConversationService
+@inject IChatHubClient ChatHubClient
+@inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@using System.Security.Claims
+@implements IAsyncDisposable
 
 <PageTitle>Messages | FitSocial</PageTitle>
 
@@ -237,6 +241,37 @@
                         }
                     }
                 </div>
+
+                <!-- Message Composer Area (UC-16.1.1 Scope) -->
+                <div class="ig-composer-wrapper">
+                    <div class="ig-composer-box">
+                        <textarea class="ig-composer-input"
+                                  placeholder="Type a message..."
+                                  rows="1"
+                                  maxlength="300"
+                                  @bind="_messageText"
+                                  @bind:event="oninput"
+                                  @onkeydown="HandleKeyDown"
+                                  disabled="@_isSending"></textarea>
+                        <button class="ig-send-btn"
+                                disabled="@(_isSending || string.IsNullOrWhiteSpace(_messageText))"
+                                title="Send message"
+                                @onclick="SendMessageAsync">
+                            @if (_isSending)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                            }
+                            else
+                            {
+                                <span>Send</span>
+                            }
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_sendErrorMessage))
+                    {
+                        <div class="ig-composer-error">@_sendErrorMessage</div>
+                    }
+                </div>
             }
         </div>
     }
@@ -259,8 +294,30 @@
     private Guid? _loadedConversationId;
     private bool _shouldScrollToBottom = false;
 
+    // UC-16.1.1 Send Message states
+    private string _messageText = "";
+    private bool _isSending = false;
+    private string? _sendErrorMessage;
+    private Guid _currentUserId = Guid.Empty;
+
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var userIdStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                         ?? user.FindFirst("sub")?.Value;
+            if (Guid.TryParse(userIdStr, out var parsedId))
+            {
+                _currentUserId = parsedId;
+            }
+
+            ChatHubClient.OnMessageReceived += HandleReceiveMessage;
+            await ChatHubClient.StartAsync();
+        }
+        catch { }
+
         await LoadConversationsAsync();
     }
 
@@ -304,6 +361,14 @@
             if (response.Success)
             {
                 _conversations = response.Data ?? new List<ConversationDto>();
+                if (_selectedConversationId.HasValue)
+                {
+                    var activeConv = _conversations.FirstOrDefault(c => c.ConversationId == _selectedConversationId.Value);
+                    if (activeConv != null)
+                    {
+                        activeConv.UnreadCount = 0;
+                    }
+                }
             }
             else
             {
@@ -334,6 +399,12 @@
                 _conversationDetail = response.Data;
                 _loadedConversationId = convId;
                 _shouldScrollToBottom = true;
+
+                var convItem = _conversations?.FirstOrDefault(c => c.ConversationId == convId);
+                if (convItem != null)
+                {
+                    convItem.UnreadCount = 0;
+                }
             }
             else
             {
@@ -369,6 +440,11 @@
     private void SelectConversation(Guid id)
     {
         _selectedConversationId = id;
+        var conv = _conversations?.FirstOrDefault(c => c.ConversationId == id);
+        if (conv != null)
+        {
+            conv.UnreadCount = 0;
+        }
         Navigation.NavigateTo($"messages/{id}");
     }
 
@@ -417,5 +493,127 @@
             return localTime.ToString("dd/MM HH:mm");
         }
         return localTime.ToString("dd/MM/yyyy HH:mm");
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessageAsync();
+        }
+    }
+
+    private async Task SendMessageAsync()
+    {
+        if (!ConversationId.HasValue || _isSending) return;
+        if (string.IsNullOrWhiteSpace(_messageText)) return;
+
+        var content = _messageText.Trim();
+        if (content.Length > 300)
+        {
+            _sendErrorMessage = "Message cannot exceed 300 characters.";
+            return;
+        }
+
+        _isSending = true;
+        _sendErrorMessage = null;
+
+        try
+        {
+            var response = await ConversationService.SendMessageAsync(
+                ConversationId.Value,
+                new SendMessageRequestDto { Content = content });
+
+            if (response.Success && response.Data != null)
+            {
+                _messageText = "";
+
+                var sentMsg = response.Data;
+                sentMsg.IsMine = true;
+
+                // Deduplicate check
+                if (_conversationDetail != null && !_conversationDetail.Messages.Any(m => m.Id == sentMsg.Id))
+                {
+                    _conversationDetail.Messages.Add(sentMsg);
+                    _shouldScrollToBottom = true;
+                }
+
+                // Update Conversation List (UC-16 realtime)
+                UpdateConversationListItem(sentMsg, isFromMe: true);
+            }
+            else
+            {
+                _sendErrorMessage = response.Message ?? "Failed to send message. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _sendErrorMessage = $"Connection error: {ex.Message}";
+        }
+        finally
+        {
+            _isSending = false;
+        }
+    }
+
+    private async void HandleReceiveMessage(MessageDto msg)
+    {
+        await InvokeAsync(() =>
+        {
+            // 1. If currently viewing the conversation of this message
+            if (_selectedConversationId.HasValue && _selectedConversationId.Value == msg.ConversationId)
+            {
+                if (_conversationDetail != null)
+                {
+                    // Deduplicate check: do not add if already rendered
+                    if (!_conversationDetail.Messages.Any(m => m.Id == msg.Id))
+                    {
+                        msg.IsMine = (msg.SenderId == _currentUserId);
+                        _conversationDetail.Messages.Add(msg);
+                        _shouldScrollToBottom = true;
+                    }
+                }
+            }
+
+            // 2. Update Conversation List (UC-16 realtime)
+            UpdateConversationListItem(msg, isFromMe: (msg.SenderId == _currentUserId));
+
+            StateHasChanged();
+        });
+    }
+
+    private void UpdateConversationListItem(MessageDto msg, bool isFromMe)
+    {
+        if (_conversations == null) return;
+
+        var conv = _conversations.FirstOrDefault(c => c.ConversationId == msg.ConversationId);
+        if (conv != null)
+        {
+            conv.LastMessage = msg.Content;
+            conv.LastMessageAt = msg.CreatedAt ?? DateTime.UtcNow;
+            conv.LastMessageSenderId = msg.SenderId;
+
+            // Increment unread count if message is from someone else and not viewing this conversation
+            if (!isFromMe && (!_selectedConversationId.HasValue || _selectedConversationId.Value != msg.ConversationId))
+            {
+                conv.UnreadCount++;
+            }
+
+            // Sort conversations: newest message at top
+            _conversations = _conversations
+                .OrderByDescending(c => c.LastMessageAt ?? c.UpdatedAt ?? DateTime.MinValue)
+                .ToList();
+        }
+        else
+        {
+            // New conversation not yet in list: reload list
+            _ = LoadConversationsAsync();
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        ChatHubClient.OnMessageReceived -= HandleReceiveMessage;
+        return ValueTask.CompletedTask;
     }
 }

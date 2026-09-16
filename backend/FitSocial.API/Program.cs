@@ -170,4 +170,22 @@ app.UseRateLimiter();
 
 app.MapControllers();
 
+// Ensure PostType column exists in PostgreSQL database
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<FitSocial.Infrastructure.Data.FitSocialDbContext>();
+        Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(
+            dbContext.Database,
+            @"ALTER TABLE ""Posts"" ADD COLUMN IF NOT EXISTS ""PostType"" VARCHAR(50) DEFAULT 'FEED';
+              UPDATE ""Posts"" SET ""PostType"" = 'FEED' WHERE ""PostType"" IS NULL;"
+        );
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"DB Migration check: {ex.Message}");
+    }
+}
+
 app.Run();

@@ -1,0 +1,18 @@
+using FitSocial.Domain.Entities;
+
+namespace FitSocial.Domain.Interfaces;
+
+public interface IPostRepository : IRepository<Post>
+{
+    Task<Post?> GetByIdWithDetailsAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<(List<Post> Items, int TotalCount)> GetPagedPostsAsync(
+        string? postType,
+        Guid? sportId,
+        Guid? locationId,
+        Guid? authorId,
+        string? searchTerm,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+}

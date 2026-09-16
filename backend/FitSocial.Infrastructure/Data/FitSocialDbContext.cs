@@ -704,6 +704,9 @@ public partial class FitSocialDbContext : DbContext
                 .HasColumnType("timestamp without time zone");
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             entity.Property(e => e.LocationId).HasColumnName("LocationID");
+            entity.Property(e => e.PostType)
+                .HasMaxLength(50)
+                .HasColumnName("PostType");
             entity.Property(e => e.SportId).HasColumnName("SportID");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")

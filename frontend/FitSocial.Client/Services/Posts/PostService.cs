@@ -140,6 +140,18 @@ public class PostService : IPostService
                         Id = Guid.NewGuid(),
                         MediaUrl = "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&auto=format&fit=crop",
                         MediaType = "IMAGE"
+                    },
+                    new()
+                    {
+                        Id = Guid.NewGuid(),
+                        MediaUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                        MediaType = "VIDEO"
+                    },
+                    new()
+                    {
+                        Id = Guid.NewGuid(),
+                        MediaUrl = "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&auto=format&fit=crop",
+                        MediaType = "IMAGE"
                     }
                 }
             },
@@ -176,7 +188,16 @@ public class PostService : IPostService
                 LikeCount = 67,
                 CommentCount = 8,
                 IsLikedByCurrentUser = false,
-                CreatedAt = DateTime.UtcNow.AddHours(-8)
+                CreatedAt = DateTime.UtcNow.AddHours(-8),
+                Media = new List<PostMediaDto>
+                {
+                    new()
+                    {
+                        Id = Guid.NewGuid(),
+                        MediaUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                        MediaType = "VIDEO"
+                    }
+                }
             }
         };
     }

@@ -27,4 +27,9 @@ public class ConversationService : IConversationService
     {
         return await _apiClient.PostAsync<SendMessageRequestDto, MessageDto>($"conversations/{conversationId}/messages", request);
     }
+
+    public async Task<ApiResponse> DeleteConversationAsync(Guid conversationId)
+    {
+        return await _apiClient.DeleteAsync($"conversations/{conversationId}");
+    }
 }

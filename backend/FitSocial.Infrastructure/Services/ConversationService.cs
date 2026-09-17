@@ -71,6 +71,12 @@ public class ConversationService : IConversationService
                     .OrderByDescending(m => m.CreatedAt)
                     .ToList();
 
+                // If user deleted history and there are no new messages after HistoryDeletedAt, do not show conversation
+                if (p.HistoryDeletedAt != null && !validMessages.Any())
+                {
+                    continue;
+                }
+
                 var lastMessage = validMessages.FirstOrDefault();
                 dto.LastMessage = lastMessage?.Content;
                 dto.LastMessageAt = lastMessage?.CreatedAt ?? conv.UpdatedAt ?? conv.CreatedAt;
@@ -330,6 +336,41 @@ public class ConversationService : IConversationService
         catch (Exception ex)
         {
             return ApiResponseDto<MessageDto>.Fail($"System error sending message: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<bool>> DeleteConversationAsync(Guid conversationId, Guid currentUserId)
+    {
+        try
+        {
+            // 1. Validate Conversation Existence
+            var conv = await _context.Conversations
+                .FirstOrDefaultAsync(c => c.Id == conversationId && c.IsDeleted != true);
+
+            if (conv == null)
+            {
+                return ApiResponseDto<bool>.Fail("Conversation not found.");
+            }
+
+            // 2. Authorization Check: Current user must be a participant
+            var participant = await _context.Participants
+                .FirstOrDefaultAsync(p => p.ConversationId == conversationId && p.UserId == currentUserId);
+
+            if (participant == null)
+            {
+                return ApiResponseDto<bool>.Fail("Forbidden: You are not a participant in this conversation.");
+            }
+
+            // 3. Mark History Deleted At for the current user only
+            participant.HistoryDeletedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return ApiResponseDto<bool>.Ok(true, "Conversation deleted successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<bool>.Fail($"System error deleting conversation: {ex.Message}");
         }
     }
 }

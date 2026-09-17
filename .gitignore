@@ -37,23 +37,39 @@
 # ------------------------------------------
 # 3. Environment, Secrets & Local Configs
 # ------------------------------------------
+# AppSettings chứa thông tin nhạy cảm (Connection strings, API keys, Passwords)
+# Giữ lại appsettings.json gốc (template mẫu), bỏ qua các file môi trường & local
+**/*appsettings.Development.json
+**/*appsettings.*.Development.json
+**/*appsettings.Production.json
+**/*appsettings.Staging.json
 **/*appsettings.local.json
 **/*appsettings.*.local.json
+**/secrets.json
+
+# Environment variables
 .env
+.env.*
 .env*.local
+
+# Certificates & Private Keys
 *.pfx
 *.pem
 *.key
 *.cer
+*.crt
+*.p12
 
 # ------------------------------------------
-# 4. Local Database Files
+# 4. Local Database Files & Backups
 # ------------------------------------------
 *.db
 *.db-shm
 *.db-wal
 *.mdf
 *.ldf
+*.bak
+*.sql.bak
 
 # ------------------------------------------
 # 5. OS & System Files
@@ -64,7 +80,7 @@ desktop.ini
 $RECYCLE.BIN/
 
 # ------------------------------------------
-# 6. Node / Web Legacy (nếu có công cụ frontend ngoài)
+# 6. Node / Web Legacy
 # ------------------------------------------
 **/node_modules/
 npm-debug.log*

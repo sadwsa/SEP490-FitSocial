@@ -133,4 +133,44 @@ public class ConversationsController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Delete Conversation for the currently logged-in user (UC-16.5)
+    /// </summary>
+    [HttpDelete("{conversationId:guid}")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DeleteConversation(Guid conversationId)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<bool>.Fail("Invalid authentication session. Please log in again."));
+        }
+
+        var result = await _conversationService.DeleteConversationAsync(conversationId, currentUserId);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(result);
+            }
+
+            if (result.Message.Contains("Forbidden", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("authorized", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("participant", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, result);
+            }
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
 }

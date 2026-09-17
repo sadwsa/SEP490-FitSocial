@@ -17,7 +17,7 @@
         <!-- Header -->
         <div class="ig-sidebar-header">
             <h1 class="ig-sidebar-title">Messages</h1>
-            <button class="btn btn-sm btn-light rounded-circle p-2" title="Reload list" @onclick="LoadConversationsAsync">
+            <button class="btn btn-sm btn-light rounded-circle p-2" title="Reload list" @onclick="() => LoadConversationsAsync(true)">
                 <span>🔄</span>
             </button>
         </div>
@@ -53,7 +53,7 @@
                 <div class="ig-state-container">
                     <div class="fs-1 mb-2">⚠️</div>
                     <p class="text-danger fw-medium mb-3">@_errorMessage</p>
-                    <button class="btn btn-sm btn-fit-primary px-3" @onclick="LoadConversationsAsync">
+                    <button class="btn btn-sm btn-fit-primary px-3" @onclick="() => LoadConversationsAsync(true)">
                         Retry
                     </button>
                 </div>
@@ -116,6 +116,18 @@
                                 }
                             </div>
                         </div>
+
+                        <!-- Delete conversation action (UC-16.5) -->
+                        <button type="button" 
+                                class="ig-conv-delete-btn" 
+                                title="Delete conversation" 
+                                @onclick="() => PromptDeleteConversation(item.ConversationId, item.Title)" 
+                                @onclick:stopPropagation="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+                            </svg>
+                        </button>
                     </div>
                 }
             }
@@ -277,6 +289,45 @@
     }
 </div>
 
+@if (_showDeleteModal)
+{
+    <div class="ig-modal-backdrop" @onclick="CancelDelete">
+        <div class="ig-modal-dialog" @onclick:stopPropagation="true">
+            <div class="ig-modal-content">
+                <div class="ig-modal-icon-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </div>
+                <h3 class="ig-modal-title">Delete conversation?</h3>
+                <p class="ig-modal-text">
+                    Delete this conversation? You can no longer see the previous messages in this chat.
+                </p>
+                @if (!string.IsNullOrEmpty(_deleteErrorMessage))
+                {
+                    <div class="ig-modal-error">@_deleteErrorMessage</div>
+                }
+                <div class="ig-modal-actions">
+                    <button type="button" class="ig-modal-btn ig-modal-btn-cancel" disabled="@_isDeleting" @onclick="CancelDelete">
+                        Cancel
+                    </button>
+                    <button type="button" class="ig-modal-btn ig-modal-btn-delete" disabled="@_isDeleting" @onclick="ConfirmDeleteConversationAsync">
+                        @if (_isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Deleting...</span>
+                        }
+                        else
+                        {
+                            <span>Delete</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter]
     public Guid? ConversationId { get; set; }
@@ -350,10 +401,14 @@
         }
     }
 
-    private async Task LoadConversationsAsync()
+    private async Task LoadConversationsAsync(bool showLoading = true)
     {
-        _isLoading = true;
-        _errorMessage = null;
+        if (showLoading)
+        {
+            _isLoading = true;
+            _errorMessage = null;
+            StateHasChanged();
+        }
 
         try
         {
@@ -372,16 +427,26 @@
             }
             else
             {
-                _errorMessage = response.Message ?? "Failed to load conversations.";
+                if (showLoading)
+                {
+                    _errorMessage = response.Message ?? "Failed to load conversations.";
+                }
             }
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Connection error: {ex.Message}";
+            if (showLoading)
+            {
+                _errorMessage = $"Connection error: {ex.Message}";
+            }
         }
         finally
         {
-            _isLoading = false;
+            if (showLoading)
+            {
+                _isLoading = false;
+            }
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -539,7 +604,7 @@
                 }
 
                 // Update Conversation List (UC-16 realtime)
-                UpdateConversationListItem(sentMsg, isFromMe: true);
+                await UpdateConversationListItemAsync(sentMsg, isFromMe: true);
             }
             else
             {
@@ -558,7 +623,7 @@
 
     private async void HandleReceiveMessage(MessageDto msg)
     {
-        await InvokeAsync(() =>
+        await InvokeAsync(async () =>
         {
             // 1. If currently viewing the conversation of this message
             if (_selectedConversationId.HasValue && _selectedConversationId.Value == msg.ConversationId)
@@ -576,15 +641,19 @@
             }
 
             // 2. Update Conversation List (UC-16 realtime)
-            UpdateConversationListItem(msg, isFromMe: (msg.SenderId == _currentUserId));
+            await UpdateConversationListItemAsync(msg, isFromMe: (msg.SenderId == _currentUserId));
 
             StateHasChanged();
         });
     }
 
-    private void UpdateConversationListItem(MessageDto msg, bool isFromMe)
+    private async Task UpdateConversationListItemAsync(MessageDto msg, bool isFromMe)
     {
-        if (_conversations == null) return;
+        if (_conversations == null)
+        {
+            await LoadConversationsAsync(showLoading: false);
+            return;
+        }
 
         var conv = _conversations.FirstOrDefault(c => c.ConversationId == msg.ConversationId);
         if (conv != null)
@@ -606,8 +675,8 @@
         }
         else
         {
-            // New conversation not yet in list: reload list
-            _ = LoadConversationsAsync();
+            // New conversation not yet in list (e.g. was previously deleted and reappears): reload list in background
+            await LoadConversationsAsync(showLoading: false);
         }
     }
 
@@ -615,5 +684,74 @@
     {
         ChatHubClient.OnMessageReceived -= HandleReceiveMessage;
         return ValueTask.CompletedTask;
+    }
+
+    // UC-16.5 Delete Conversation states & methods
+    private bool _showDeleteModal = false;
+    private Guid? _conversationIdToDelete;
+    private string? _conversationTitleToDelete;
+    private bool _isDeleting = false;
+    private string? _deleteErrorMessage;
+
+    private void PromptDeleteConversation(Guid convId, string? title)
+    {
+        _conversationIdToDelete = convId;
+        _conversationTitleToDelete = title;
+        _deleteErrorMessage = null;
+        _showDeleteModal = true;
+    }
+
+    private void CancelDelete()
+    {
+        if (_isDeleting) return;
+        _showDeleteModal = false;
+        _conversationIdToDelete = null;
+        _conversationTitleToDelete = null;
+        _deleteErrorMessage = null;
+    }
+
+    private async Task ConfirmDeleteConversationAsync()
+    {
+        if (!_conversationIdToDelete.HasValue || _isDeleting) return;
+
+        _isDeleting = true;
+        _deleteErrorMessage = null;
+
+        try
+        {
+            var targetId = _conversationIdToDelete.Value;
+            var response = await ConversationService.DeleteConversationAsync(targetId);
+
+            if (response.Success)
+            {
+                // Remove conversation from local list immediately
+                if (_conversations != null)
+                {
+                    _conversations.RemoveAll(c => c.ConversationId == targetId);
+                }
+
+                // If currently open conversation was deleted, navigate back to empty selection
+                if (_selectedConversationId.HasValue && _selectedConversationId.Value == targetId)
+                {
+                    BackToConversationList();
+                }
+
+                _showDeleteModal = false;
+                _conversationIdToDelete = null;
+                _conversationTitleToDelete = null;
+            }
+            else
+            {
+                _deleteErrorMessage = response.Message ?? "Failed to delete conversation. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _deleteErrorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
     }
 }

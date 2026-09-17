@@ -8,4 +8,5 @@ public interface IConversationService
     Task<ApiResponse<List<ConversationDto>>> GetConversationsAsync();
     Task<ApiResponse<ConversationDetailDto>> GetConversationDetailAsync(Guid conversationId);
     Task<ApiResponse<MessageDto>> SendMessageAsync(Guid conversationId, SendMessageRequestDto request);
+    Task<ApiResponse> DeleteConversationAsync(Guid conversationId);
 }

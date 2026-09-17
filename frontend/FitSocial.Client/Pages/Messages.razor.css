@@ -630,3 +630,163 @@
         max-width: 82%;
     }
 }
+
+/* UC-16.5 Delete Conversation Button */
+.ig-conv-delete-btn {
+    background: transparent;
+    border: none;
+    color: #8e8e8e;
+    padding: 6px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+
+.ig-conv-item:hover .ig-conv-delete-btn,
+.ig-conv-delete-btn:focus {
+    opacity: 1;
+}
+
+.ig-conv-delete-btn:hover {
+    color: #ed4956;
+    background-color: rgba(237, 73, 86, 0.1);
+}
+
+@media (max-width: 768px) {
+    .ig-conv-delete-btn {
+        opacity: 0.7;
+    }
+}
+
+/* UC-16.5 Confirmation Modal */
+.ig-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.ig-modal-dialog {
+    background-color: #ffffff;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 380px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ig-modal-content {
+    padding: 28px 24px 20px;
+    text-align: center;
+}
+
+.ig-modal-icon-wrap {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: #fef2f2;
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+}
+
+.ig-modal-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #262626;
+    margin-bottom: 8px;
+}
+
+.ig-modal-text {
+    font-size: 0.875rem;
+    color: #737373;
+    line-height: 1.45;
+    margin-bottom: 20px;
+}
+
+.ig-modal-error {
+    background-color: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    margin-bottom: 16px;
+}
+
+.ig-modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.ig-modal-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+}
+
+.ig-modal-btn-cancel {
+    background-color: #f1f2f4;
+    color: #262626;
+    border-color: #e5e7eb;
+}
+
+.ig-modal-btn-cancel:hover:not(:disabled) {
+    background-color: #e5e7eb;
+}
+
+.ig-modal-btn-delete {
+    background-color: #ed4956;
+    color: #ffffff;
+}
+
+.ig-modal-btn-delete:hover:not(:disabled) {
+    background-color: #dc2626;
+}
+
+.ig-modal-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalPop {
+    from {
+        opacity: 0;
+        transform: scale(0.92);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

@@ -54,6 +54,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<ICoachProfileRepository, CoachProfileRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
+        services.AddScoped<ITrainingPackageService, TrainingPackageService>();
+
 
         return services;
     }

@@ -1,0 +1,72 @@
+@page "/training-packages/{Id:guid}"
+@inject ITrainingPackageService PackageService
+
+<div class="container py-5">
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (package == null)
+    {
+        <div class="alert alert-warning rounded-3 shadow-sm">@errorMessage</div>
+    }
+    else
+    {
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="bg-primary bg-gradient p-5 text-white text-center">
+                        <h1 class="display-5 fw-bold mb-0">@package.Title</h1>
+                        <p class="lead mt-2 mb-0 opacity-75">Curated by @package.CoachName</p>
+                    </div>
+                    <div class="card-body p-5">
+                        <div class="row text-center mb-5">
+                            <div class="col-6 border-end">
+                                <h6 class="text-uppercase text-muted fw-bold mb-2">Duration</h6>
+                                <h3 class="fw-bolder text-dark">@package.DurationDays <small class="text-muted fs-6">Days</small></h3>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-uppercase text-muted fw-bold mb-2">Investment</h6>
+                                <h3 class="fw-bolder text-primary">@package.Price.ToString("N0") VNĐ</h3>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button class="btn btn-primary btn-lg rounded-pill fw-bold shadow-sm">
+                                Subscribe Now
+                            </button>
+                            <a href="/training-packages" class="btn btn-light btn-lg rounded-pill fw-semibold mt-2">
+                                Back to List
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+    
+    private TrainingPackageResponseDto? package;
+    private bool isLoading = true;
+    private string errorMessage = "Package not found.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await PackageService.GetPackageByIdAsync(Id);
+        if (response.Success)
+        {
+            package = response.Data;
+        }
+        else
+        {
+            errorMessage = response.Message ?? errorMessage;
+        }
+        isLoading = false;
+    }
+}

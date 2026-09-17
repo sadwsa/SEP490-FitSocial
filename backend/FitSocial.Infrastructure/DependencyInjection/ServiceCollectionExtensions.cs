@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenBlacklistService, TokenBlacklistService>();
         services.AddScoped<IPaymentGateway, PayOSGateway>();
         services.AddScoped<IConversationService, ConversationService>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         // Unit of Work + Repositories (data access layer for application services)
         services.AddScoped<IUnitOfWork, UnitOfWork>();

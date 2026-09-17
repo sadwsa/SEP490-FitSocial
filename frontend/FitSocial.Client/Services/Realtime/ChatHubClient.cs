@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using FitSocial.Client.Models.Conversations;
+using FitSocial.Client.Models.Notifications;
 using FitSocial.Client.Services.Auth;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
@@ -14,6 +15,7 @@ public class ChatHubClient : IChatHubClient
     private readonly ITokenStorage _tokenStorage;
 
     public event Action<MessageDto>? OnMessageReceived;
+    public event Action<NotificationDto>? OnNotificationReceived;
 
     public bool IsConnected => _hubConnection?.State == HubConnectionState.Connected;
 
@@ -25,7 +27,8 @@ public class ChatHubClient : IChatHubClient
 
     public async Task StartAsync(string? token = null)
     {
-        if (_hubConnection != null && _hubConnection.State == HubConnectionState.Connected)
+        if (_hubConnection != null && 
+            (_hubConnection.State == HubConnectionState.Connected || _hubConnection.State == HubConnectionState.Connecting))
         {
             return;
         }
@@ -51,6 +54,11 @@ public class ChatHubClient : IChatHubClient
         _hubConnection.On<MessageDto>("ReceiveMessage", (message) =>
         {
             OnMessageReceived?.Invoke(message);
+        });
+
+        _hubConnection.On<NotificationDto>("ReceiveNotification", (notification) =>
+        {
+            OnNotificationReceived?.Invoke(notification);
         });
 
         try

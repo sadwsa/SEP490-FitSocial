@@ -1,0 +1,285 @@
+@inject INotificationService NotificationService
+@inject IChatHubClient ChatHubClient
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@implements IAsyncDisposable
+
+<div class="notification-bell-wrapper">
+    <!-- Bell Trigger Button -->
+    <button class="btn btn-light rounded-circle p-2 position-relative notification-trigger-btn @(_isOpen ? "active" : "")" 
+            title="Notifications" 
+            @onclick="ToggleDropdown">
+        <span class="bell-icon">🔔</span>
+        @if (_unreadCount > 0)
+        {
+            <span class="notification-badge">
+                @(_unreadCount > 99 ? "99+" : _unreadCount)
+            </span>
+        }
+    </button>
+
+    <!-- Dropdown Menu -->
+    @if (_isOpen)
+    {
+        <div class="notification-backdrop" @onclick="CloseDropdown"></div>
+        <div class="notification-dropdown shadow-lg">
+            <div class="notification-header">
+                <div class="d-flex align-items-center justify-content-between w-100">
+                    <span class="fw-bold fs-6">Notifications</span>
+                    @if (_unreadCount > 0)
+                    {
+                        <button class="btn btn-sm btn-link text-decoration-none p-0 mark-all-btn" @onclick="HandleMarkAllAsRead">
+                            Mark all as read
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="notification-list">
+                @if (_isLoading)
+                {
+                    <div class="text-center py-4 text-muted">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <span class="ms-2">Loading notifications...</span>
+                    </div>
+                }
+                else if (_notifications == null || !_notifications.Any())
+                {
+                    <div class="text-center py-4 text-muted">
+                        <span class="fs-4">📭</span>
+                        <p class="mb-0 mt-2 small">No notifications yet</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var item in _notifications)
+                    {
+                        <div class="notification-item @(!item.IsRead ? "unread" : "")" 
+                             @onclick="() => HandleNotificationClick(item)">
+                            <div class="notification-avatar-col">
+                                @if (!string.IsNullOrEmpty(item.SenderAvatar))
+                                {
+                                    <img src="@item.SenderAvatar" alt="@item.SenderName" class="notification-avatar" />
+                                }
+                                else
+                                {
+                                    <div class="notification-avatar avatar-placeholder">
+                                        @(GetInitials(item.SenderName))
+                                    </div>
+                                }
+                            </div>
+                            <div class="notification-content-col">
+                                <div class="notification-title-line">
+                                    <span class="fw-semibold text-dark">@(item.SenderName ?? "FitSocial User")</span>
+                                    <span class="text-muted small ms-1">sent you a message</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(item.MessagePreview))
+                                {
+                                    <div class="notification-preview text-muted small text-truncate">
+                                        @item.MessagePreview
+                                    </div>
+                                }
+                                <div class="notification-time text-muted">
+                                    @FormatTime(item.CreatedAt)
+                                </div>
+                            </div>
+                            @if (!item.IsRead)
+                            {
+                                <div class="notification-unread-dot"></div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Toast Notification Banner for Realtime Popups -->
+    @if (_activeToast != null)
+    {
+        <div class="notification-toast shadow-lg animate-toast" @onclick="() => HandleToastClick(_activeToast)">
+            <div class="d-flex align-items-center gap-3">
+                <div class="toast-avatar-box">
+                    @if (!string.IsNullOrEmpty(_activeToast.SenderAvatar))
+                    {
+                        <img src="@_activeToast.SenderAvatar" alt="@_activeToast.SenderName" class="toast-avatar" />
+                    }
+                    else
+                    {
+                        <div class="toast-avatar avatar-placeholder">
+                            @(GetInitials(_activeToast.SenderName))
+                        </div>
+                    }
+                </div>
+                <div class="toast-content-box flex-grow-1">
+                    <div class="fw-bold text-dark small">@(_activeToast.SenderName ?? "FitSocial User")</div>
+                    <div class="text-secondary small text-truncate toast-preview">
+                        @(_activeToast.MessagePreview ?? "New message...")
+                    </div>
+                    <div class="text-muted toast-time">Just now</div>
+                </div>
+                <button type="button" class="btn-close btn-close-sm" aria-label="Close" @onclick:stopPropagation="true" @onclick="DismissToast"></button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _isOpen = false;
+    private bool _isLoading = false;
+    private List<NotificationDto> _notifications = new();
+    private int _unreadCount = 0;
+    private NotificationDto? _activeToast = null;
+    private System.Threading.Timer? _toastTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            await LoadNotificationsAsync();
+
+            // Hook realtime notification event from ChatHub
+            ChatHubClient.OnNotificationReceived += HandleNotificationReceived;
+            await ChatHubClient.StartAsync();
+        }
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var response = await NotificationService.GetNotificationsAsync();
+            if (response.Success && response.Data != null)
+            {
+                _notifications = response.Data;
+                _unreadCount = _notifications.Count(n => !n.IsRead);
+            }
+        }
+        catch { }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleDropdown()
+    {
+        _isOpen = !_isOpen;
+    }
+
+    private void CloseDropdown()
+    {
+        _isOpen = false;
+    }
+
+    private void HandleNotificationClick(NotificationDto item)
+    {
+        _isOpen = false;
+
+        if (!item.IsRead)
+        {
+            item.IsRead = true;
+            _unreadCount = Math.Max(0, _unreadCount - 1);
+            StateHasChanged();
+            _ = NotificationService.MarkAsReadAsync(item.NotificationId);
+        }
+
+        Navigation.NavigateTo($"/messages/{item.ConversationId}");
+    }
+
+    private async Task HandleMarkAllAsRead()
+    {
+        foreach (var n in _notifications)
+        {
+            n.IsRead = true;
+        }
+        _unreadCount = 0;
+        StateHasChanged();
+
+        await NotificationService.MarkAllAsReadAsync();
+    }
+
+    private async void HandleNotificationReceived(NotificationDto notification)
+    {
+        await InvokeAsync(() =>
+        {
+            // If user is currently looking directly at this conversation, do not show popup toast
+            var currentUri = Navigation.Uri;
+            bool isCurrentlyInConversation = currentUri.Contains($"/messages/{notification.ConversationId}", StringComparison.OrdinalIgnoreCase);
+
+            if (isCurrentlyInConversation)
+            {
+                // Auto mark as read on backend since user is in the conversation
+                _ = NotificationService.MarkAsReadAsync(notification.NotificationId);
+                return;
+            }
+
+            // Otherwise, update notification list and badge
+            if (!_notifications.Any(n => n.NotificationId == notification.NotificationId))
+            {
+                _notifications.Insert(0, notification);
+                _unreadCount++;
+            }
+
+            // Show Toast Popup
+            _activeToast = notification;
+            ResetToastTimer();
+
+            StateHasChanged();
+        });
+    }
+
+    private void ResetToastTimer()
+    {
+        _toastTimer?.Dispose();
+        _toastTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                _activeToast = null;
+                StateHasChanged();
+            });
+        }, null, 5000, Timeout.Infinite);
+    }
+
+    private void DismissToast()
+    {
+        _activeToast = null;
+        _toastTimer?.Dispose();
+    }
+
+    private void HandleToastClick(NotificationDto toast)
+    {
+        DismissToast();
+        HandleNotificationClick(toast);
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+        return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
+    }
+
+    private string FormatTime(DateTime? dt)
+    {
+        if (!dt.HasValue) return "";
+        var span = DateTime.UtcNow - dt.Value.ToUniversalTime();
+        if (span.TotalMinutes < 1) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
+        return dt.Value.ToString("MMM dd, yyyy");
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        ChatHubClient.OnNotificationReceived -= HandleNotificationReceived;
+        _toastTimer?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

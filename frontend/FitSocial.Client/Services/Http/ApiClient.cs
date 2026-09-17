@@ -168,6 +168,61 @@ public class ApiClient
         }
     }
 
+    public async Task<ApiResponse<TResult>> PutAsync<TResult>(string endpoint)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _http.PutAsync(endpoint, null);
+            if (response.StatusCode == HttpStatusCode.Unauthorized &&
+                await TryRefreshOnceAsync(endpoint, response.StatusCode))
+            {
+                await AttachBearerTokenAsync();
+                response = await _http.PutAsync(endpoint, null);
+            }
+            if (response.IsSuccessStatusCode)
+            {
+                try
+                {
+                    var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                    if (apiResponse != null)
+                    {
+                        return apiResponse;
+                    }
+                }
+                catch
+                {
+                    var data = await response.Content.ReadFromJsonAsync<TResult>();
+                    return new ApiResponse<TResult> { Success = true, Data = data };
+                }
+            }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
+                {
+                    return errorResponse;
+                }
+            }
+            catch { }
+
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"API Error: {response.StatusCode}"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"Network Error: {ex.Message}"
+            };
+        }
+    }
+
     public async Task<ApiResponse> DeleteAsync(string endpoint)
     {
         try

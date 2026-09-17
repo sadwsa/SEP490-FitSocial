@@ -72,8 +72,20 @@ public class ApiClient
             }
             if (response.IsSuccessStatusCode)
             {
-                var data = await response.Content.ReadFromJsonAsync<T>();
-                return new ApiResponse<T> { Success = true, Data = data };
+                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<T>>();
+                return apiResponse ?? new ApiResponse<T> { Success = true };
+            }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<T>>();
+                if (errorResponse != null)
+                {
+                    return errorResponse;
+                }
+            }
+            catch
+            {
             }
 
             return new ApiResponse<T>
@@ -106,8 +118,20 @@ public class ApiClient
             }
             if (response.IsSuccessStatusCode)
             {
-                var data = await response.Content.ReadFromJsonAsync<TResult>();
-                return new ApiResponse<TResult> { Success = true, Data = data };
+                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                return apiResponse ?? new ApiResponse<TResult> { Success = true };
+            }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                if (errorResponse != null)
+                {
+                    return errorResponse;
+                }
+            }
+            catch
+            {
             }
 
             return new ApiResponse<TResult>

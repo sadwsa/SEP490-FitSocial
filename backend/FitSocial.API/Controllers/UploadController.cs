@@ -8,6 +8,7 @@ namespace FitSocial.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Route("[controller]")]
 public class UploadController : ControllerBase
 {
     private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".pdf" };
@@ -99,4 +100,114 @@ public class UploadController : ControllerBase
             return BadRequest(ApiResponseDto<string>.Fail($"Upload failed: {ex.Message}"));
         }
     }
+
+    private static readonly string[] AllowedImageExtensions = { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+    private static readonly string[] AllowedVideoExtensions = { ".mp4", ".mov", ".avi", ".mkv", ".webm" };
+    private const long MaxImageBytes = 10 * 1024 * 1024; // 10MB
+    private const long MaxVideoBytes = 100 * 1024 * 1024; // 100MB
+
+    /// <summary>
+    /// Upload media for a post (max 10 files, accepts both images and videos).
+    /// Returns a list of { mediaUrl, mediaType } to supply to the create post endpoint.
+    /// </summary>
+    [HttpPost("post-media")]
+    [AllowAnonymous]
+    [RequestSizeLimit(100 * 1024 * 1024)]
+    [ProducesResponseType(typeof(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadPostMedia([FromForm] List<IFormFile>? files)
+    {
+        if (files == null || files.Count == 0)
+        {
+            return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail("Please select at least one file to upload."));
+        }
+
+        if (files.Count > 10)
+        {
+            return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail("A post can have at most 10 media files (photos or videos)."));
+        }
+
+        var cloudName = _configuration["Cloudinary:CloudName"];
+        var apiKey = _configuration["Cloudinary:ApiKey"];
+        var apiSecret = _configuration["Cloudinary:ApiSecret"];
+        if (string.IsNullOrWhiteSpace(cloudName) || string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(apiSecret))
+        {
+            return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail("File storage service is not configured on the server."));
+        }
+
+        var cloudinary = new Cloudinary(new Account(cloudName, apiKey, apiSecret));
+        var uploadedMedia = new List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>();
+
+        try
+        {
+            foreach (var file in files)
+            {
+                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                var isImage = AllowedImageExtensions.Contains(extension);
+                var isVideo = AllowedVideoExtensions.Contains(extension);
+
+                if (!isImage && !isVideo)
+                {
+                    return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail(
+                        $"Unsupported file format for '{file.FileName}'. Only images (JPG, PNG, WEBP, GIF) and videos (MP4, MOV, AVI, MKV, WEBM) are supported."));
+                }
+
+                if (isImage && file.Length > MaxImageBytes)
+                {
+                    return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail(
+                        $"Image '{file.FileName}' exceeds the maximum allowed size (10MB)."));
+                }
+
+                if (isVideo && file.Length > MaxVideoBytes)
+                {
+                    return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail(
+                        $"Video '{file.FileName}' exceeds the maximum allowed size (100MB)."));
+                }
+
+                await using var stream = file.OpenReadStream();
+                UploadResult uploadResult;
+
+                if (isVideo)
+                {
+                    uploadResult = await cloudinary.UploadAsync(new VideoUploadParams
+                    {
+                        File = new FileDescription(file.FileName, stream),
+                        Folder = "fitsocial/posts/videos",
+                        UseFilename = false,
+                        UniqueFilename = true
+                    });
+                }
+                else
+                {
+                    uploadResult = await cloudinary.UploadAsync(new ImageUploadParams
+                    {
+                        File = new FileDescription(file.FileName, stream),
+                        Folder = "fitsocial/posts/images",
+                        UseFilename = false,
+                        UniqueFilename = true
+                    });
+                }
+
+                if (uploadResult.Error != null || string.IsNullOrWhiteSpace(uploadResult.SecureUrl?.ToString()))
+                {
+                    return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail(
+                        $"Failed to upload '{file.FileName}': {uploadResult.Error?.Message ?? "Unknown Cloudinary error"}"));
+                }
+
+                uploadedMedia.Add(new FitSocial.Application.DTOs.Posts.CreatePostMediaDto
+                {
+                    MediaUrl = uploadResult.SecureUrl.ToString(),
+                    MediaType = isVideo ? "VIDEO" : "IMAGE"
+                });
+            }
+
+            return Ok(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Ok(
+                uploadedMedia, "Post media uploaded successfully."));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail($"Media upload failed: {ex.Message}"));
+        }
+    }
 }
+

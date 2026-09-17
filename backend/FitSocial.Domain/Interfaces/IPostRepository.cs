@@ -5,6 +5,8 @@ namespace FitSocial.Domain.Interfaces;
 public interface IPostRepository : IRepository<Post>
 {
     Task<Post?> GetByIdWithDetailsAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Post?> GetByIdWithMediaAsync(Guid id, CancellationToken cancellationToken = default);
+    void RemoveMediaRange(IEnumerable<PostMedium> mediaItems);
 
     Task<(List<Post> Items, int TotalCount)> GetPagedPostsAsync(
         string? postType,

@@ -17,7 +17,7 @@ public class CoachService : ICoachService
         _apiClient = apiClient;
     }
 
-    public async Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null)
+    public async Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null)
     {
         var queryParts = new List<string>();
         if (!string.IsNullOrWhiteSpace(searchKeyword))
@@ -25,6 +25,9 @@ public class CoachService : ICoachService
 
         if (minExperience.HasValue && minExperience.Value > 0)
             queryParts.Add($"minExperience={minExperience.Value}");
+
+        if (!string.IsNullOrWhiteSpace(sortBy))
+            queryParts.Add($"sortBy={Uri.EscapeDataString(sortBy)}");
 
         var queryString = queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "";
         return await _apiClient.GetAsync<IEnumerable<CoachListDto>>($"{BaseEndpoint}{queryString}");

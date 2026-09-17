@@ -16,9 +16,9 @@ public class CoachService : ICoachService
         _repository = repository;
     }
 
-    public async Task<IEnumerable<CoachListDto>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null)
+    public async Task<IEnumerable<CoachListDto>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null)
     {
-        var coaches = await _repository.GetAllCoachesWithDetailsAsync(searchKeyword, minExperience);
+        var coaches = await _repository.GetAllCoachesWithDetailsAsync(searchKeyword, minExperience, sortBy);
 
         return coaches.Select(c => new CoachListDto
         {

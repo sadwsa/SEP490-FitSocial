@@ -7,5 +7,5 @@ namespace FitSocial.Client.Services.Coaches;
 
 public interface ICoachService
 {
-    Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null);
+    Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null);
 }

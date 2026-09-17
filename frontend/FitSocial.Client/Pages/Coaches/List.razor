@@ -11,23 +11,33 @@
         </p>
     </div>
 
-    <!-- Thanh Search & Filter -->
+    <!-- Thanh Search, Filter & Sort -->
     <div class="card border-0 shadow-sm rounded-4 mb-5 p-4">
         <form @onsubmit="SearchCoaches" class="row g-3 align-items-end">
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <label class="form-label fw-semibold text-muted small">Search by Name or Bio</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
-                    <input type="text" class="form-control bg-light border-0" placeholder="e.g. John Doe, Yoga..." @bind="searchKeyword">
+                    <input type="text" class="form-control bg-light border-0" placeholder="John Doe..." @bind="searchKeyword">
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label fw-semibold text-muted small">Min Experience (Years)</label>
                 <input type="number" class="form-control bg-light border-0" placeholder="0" min="0" @bind="minExperience">
             </div>
             <div class="col-md-3">
+                <label class="form-label fw-semibold text-muted small">Sort By</label>
+                <select class="form-select bg-light border-0" @bind="sortBy">
+                    <option value="">Default (Exp: High - Low)</option>
+                    <option value="exp_desc">Experience: High - Low</option>
+                    <option value="exp_asc">Experience: Low - High</option>
+                    <option value="name_asc">Name: A - Z</option>
+                    <option value="name_desc">Name: Z - A</option>
+                </select>
+            </div>
+            <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100 rounded-3 fw-semibold">
-                    <i class="bi bi-funnel-fill me-2"></i> Filter
+                    <i class="bi bi-funnel-fill me-2"></i> Apply
                 </button>
             </div>
         </form>
@@ -102,9 +112,10 @@
     private bool isLoading = true;
     private string? errorMessage;
 
-    // Biến cho form filter
+    // Biến cho form filter & sort
     private string? searchKeyword = "";
     private int? minExperience;
+    private string? sortBy = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -121,7 +132,7 @@
         isLoading = true;
         errorMessage = null;
 
-        var response = await CoachService.GetAllCoachesAsync(searchKeyword, minExperience);
+        var response = await CoachService.GetAllCoachesAsync(searchKeyword, minExperience, sortBy);
         if (response.Success && response.Data != null)
         {
             coaches = response.Data;

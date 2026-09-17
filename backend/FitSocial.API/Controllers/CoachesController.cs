@@ -20,9 +20,9 @@ public class CoachesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAllCoaches([FromQuery] string? searchKeyword, [FromQuery] int? minExperience)
+    public async Task<IActionResult> GetAllCoaches([FromQuery] string? searchKeyword, [FromQuery] int? minExperience, [FromQuery] string? sortBy)
     {
-        var result = await _coachService.GetAllCoachesAsync(searchKeyword, minExperience);
+        var result = await _coachService.GetAllCoachesAsync(searchKeyword, minExperience, sortBy);
         return Ok(result);
     }
 }

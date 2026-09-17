@@ -7,6 +7,8 @@ using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Domain.Policies;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace FitSocial.Application.Services;
 
@@ -19,6 +21,7 @@ public class PostService : IPostService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IEditPostCommandHandler _editPostCommandHandler;
     private readonly IDeletePostCommandHandler _deletePostCommandHandler;
+    private readonly ILogger<PostService>? _logger;
 
     public PostService(
         IPostRepository posts,
@@ -27,7 +30,8 @@ public class PostService : IPostService
         ILocationRepository locations,
         IUnitOfWork unitOfWork,
         IEditPostCommandHandler editPostCommandHandler,
-        IDeletePostCommandHandler deletePostCommandHandler)
+        IDeletePostCommandHandler deletePostCommandHandler,
+        ILogger<PostService>? logger = null)
     {
         _posts = posts;
         _users = users;
@@ -36,6 +40,7 @@ public class PostService : IPostService
         _unitOfWork = unitOfWork;
         _editPostCommandHandler = editPostCommandHandler;
         _deletePostCommandHandler = deletePostCommandHandler;
+        _logger = logger;
     }
 
     public Task<ApiResponseDto<PostDto>> EditPostAsync(EditPostCommand command, CancellationToken cancellationToken = default)
@@ -60,6 +65,9 @@ public class PostService : IPostService
         CreatePostRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        var totalSw = Stopwatch.StartNew();
+        _logger?.LogInformation("[Post] CreatePostAsync started for Author: {AuthorId}, MediaCount: {MediaCount}", authorId, request.Media?.Count ?? 0);
+
         // 1. Check author account and lock state
         var author = await _users.GetByIdAsync(authorId, cancellationToken);
         if (author == null)
@@ -194,11 +202,14 @@ public class PostService : IPostService
         }
 
         // 10. Persist to database within transaction
+        var dbSw = Stopwatch.StartNew();
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
             await _posts.AddAsync(post, cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            dbSw.Stop();
+            _logger?.LogInformation("[Post][DB] SaveChangesAsync/Transaction committed in {DbMs} ms", dbSw.ElapsedMilliseconds);
         }
         catch
         {
@@ -230,6 +241,9 @@ public class PostService : IPostService
                 CreatedAt = pm.CreatedAt
             }).ToList()
         };
+
+        totalSw.Stop();
+        _logger?.LogInformation("[Post] CreatePostAsync completed in {TotalMs} ms", totalSw.ElapsedMilliseconds);
 
         return ApiResponseDto<PostDto>.Ok(resultDto, "Post created successfully.");
     }

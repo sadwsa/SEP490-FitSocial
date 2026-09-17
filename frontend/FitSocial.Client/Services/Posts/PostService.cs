@@ -10,6 +10,8 @@ public interface IPostService
     Task<ApiResponse<List<PostDto>>> GetFeedPostsAsync(int page = 1, int pageSize = 10);
     Task<ApiResponse<PostDto>> GetPostByIdAsync(Guid id);
     Task<ApiResponse<PostDto>> CreatePostAsync(CreatePostRequest request);
+    Task<ApiResponse<PostDto>> EditPostAsync(Guid postId, EditPostRequest request);
+    Task<ApiResponse<bool>> DeletePostAsync(Guid postId);
     Task<ApiResponse<bool>> ToggleLikeAsync(Guid postId);
 }
 
@@ -110,6 +112,16 @@ public class PostService : IPostService
     public async Task<ApiResponse<PostDto>> CreatePostAsync(CreatePostRequest request)
     {
         return await _apiClient.PostAsync<CreatePostRequest, PostDto>("posts", request);
+    }
+
+    public async Task<ApiResponse<PostDto>> EditPostAsync(Guid postId, EditPostRequest request)
+    {
+        return await _apiClient.PutAsync<EditPostRequest, PostDto>($"posts/{postId}", request);
+    }
+
+    public async Task<ApiResponse<bool>> DeletePostAsync(Guid postId)
+    {
+        return await _apiClient.DeleteAsync<bool>($"posts/{postId}");
     }
 
     public async Task<ApiResponse<bool>> ToggleLikeAsync(Guid postId)

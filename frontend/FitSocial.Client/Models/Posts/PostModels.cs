@@ -60,6 +60,16 @@ public class CreatePostRequest
     public List<string> MediaUrls { get; set; } = new();
 }
 
+public class EditPostRequest
+{
+    public string PostType { get; set; } = "Normal";
+    public string Content { get; set; } = string.Empty;
+    public Guid SportId { get; set; }
+    public Guid LocationId { get; set; }
+    public List<Guid> RemoveMediaIds { get; set; } = new();
+    public List<CreatePostMediaItemDto> NewMedia { get; set; } = new();
+}
+
 public class CreatePostMediaItemDto
 {
     public string MediaUrl { get; set; } = string.Empty;
@@ -85,4 +95,23 @@ public class CommentDto
     public string? AuthorAvatar { get; set; }
     public string Content { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class UploadMediaPayload
+{
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public byte[] Data { get; set; } = Array.Empty<byte>();
+    public long Size => Data.Length;
+}
+
+public class SelectedMediaItem
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public byte[] Data { get; set; } = Array.Empty<byte>();
+    public string PreviewUrl { get; set; } = string.Empty;
+    public long Size => Data.Length;
+    public bool IsVideo { get; set; }
 }

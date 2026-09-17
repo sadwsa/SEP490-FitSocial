@@ -9,6 +9,7 @@
 @inject IAuthService AuthService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @using System.Security.Claims
 
 <PageTitle>Home Feed - FitSocial</PageTitle>
@@ -398,7 +399,7 @@
                                                 @if (!string.IsNullOrWhiteSpace(post.PostType))
                                                 {
                                                     <span>•</span>
-                                                    @if (post.PostType.Equals("Find Coach", StringComparison.OrdinalIgnoreCase))
+                                                    @if (post.PostType.Equals("Find Coach", StringComparison.OrdinalIgnoreCase) || post.PostType.Equals("FindCoach", StringComparison.OrdinalIgnoreCase))
                                                     {
                                                         <span
                                                             class="inline-flex items-center gap-1 bg-amber-50 text-amber-700 font-semibold px-2 py-0.5 rounded-full border border-amber-200 text-[11px]">
@@ -410,7 +411,7 @@
                                                             Find Coach
                                                         </span>
                                                     }
-                                                    else if (post.PostType.Equals("Find Trainee", StringComparison.OrdinalIgnoreCase))
+                                                    else if (post.PostType.Equals("Find Trainee", StringComparison.OrdinalIgnoreCase) || post.PostType.Equals("FindTrainee", StringComparison.OrdinalIgnoreCase))
                                                     {
                                                         <span
                                                             class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-200 text-[11px]">
@@ -463,13 +464,52 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <button class="text-gray-400 hover:text-gray-600 p-1 rounded-full" title="Options">
-                                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path
-                                                d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM18 10a2 2 0 11-4 0 2 2 0 014 0z">
-                                            </path>
-                                        </svg>
-                                    </button>
+                                    <div class="relative">
+                                        <button type="button" @onclick:stopPropagation="true" @onclick="() => TogglePostMenu(post.Id)"
+                                                class="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition cursor-pointer" title="Options">
+                                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                <path
+                                                    d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM18 10a2 2 0 11-4 0 2 2 0 014 0z">
+                                                </path>
+                                            </svg>
+                                        </button>
+                                        @if (activeMenuPostId == post.Id)
+                                        {
+                                            <div class="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20 animate-in fade-in zoom-in-95 duration-100"
+                                                 @onclick:stopPropagation="true">
+                                                @if (IsOwnPost(post))
+                                                {
+                                                    <button type="button" @onclick="() => OpenEditPostModal(post)"
+                                                            class="w-full px-4 py-2 text-left text-xs font-medium text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] flex items-center gap-2.5 transition cursor-pointer">
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                        </svg>
+                                                        <span>Edit Post</span>
+                                                    </button>
+                                                    <button type="button" @onclick="() => OpenDeletePostModal(post)"
+                                                            class="w-full px-4 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition cursor-pointer">
+                                                        <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                        </svg>
+                                                        <span>Delete Post</span>
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" @onclick="() => HandleReportPost(post.Id)"
+                                                            class="w-full px-4 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition cursor-pointer">
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                                        </svg>
+                                                        <span>Report Post</span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
                                 </div>
 
                                 @if (!string.IsNullOrWhiteSpace(post.Content))
@@ -757,13 +797,30 @@
                                                                 Please select a Post Type before publishing.
                                                             </p>
                                                         }
+                                                        else if (hasAttemptedSubmit && createPostType == "Find Trainee" && !isCoach)
+                                                        {
+                                                            <p class="text-xs text-red-600 font-semibold mt-1.5 flex items-center gap-1 animate-in fade-in">
+                                                                <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fill-rule="evenodd"
+                                                                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                                                          clip-rule="evenodd"></path>
+                                                                </svg>
+                                                                Trainees are not permitted to create 'Find Trainee' posts.
+                                                            </p>
+                                                        }
                                                     </div>
 
-                                                    <!-- Post Text Area -->
+                                                    <!-- Post Text Area (Required) -->
                                                     <div class="space-y-1">
+                                                        <div class="flex items-center justify-between">
+                                                            <label class="block text-xs font-bold uppercase tracking-wider @(hasAttemptedSubmit && string.IsNullOrWhiteSpace(createPostContent?.Trim()) ? "text-red-700" : "text-gray-600")">
+                                                                Content / Description <span class="text-red-500">*</span>
+                                                            </label>
+                                                            <span class="text-[11px] text-gray-400">@(createPostContent?.Trim().Length ?? 0)/5000</span>
+                                                        </div>
                                                         <textarea @bind="createPostContent" placeholder="@GetPostPlaceholder()" rows="4"
-                                                                  class="w-full text-sm text-gray-800 placeholder-gray-400 border @(hasAttemptedSubmit && string.IsNullOrWhiteSpace(createPostContent) && !selectedFiles.Any() ? "border-red-500 ring-2 ring-red-200 bg-red-50/20" : "border-gray-200 bg-gray-50/40") rounded-xl p-3.5 focus:bg-white focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] resize-none outline-none transition duration-150 leading-relaxed min-h-[110px]"></textarea>
-                                                        @if (hasAttemptedSubmit && string.IsNullOrWhiteSpace(createPostContent) && !selectedFiles.Any())
+                                                                  class="w-full text-sm text-gray-800 placeholder-gray-400 border @(hasAttemptedSubmit && string.IsNullOrWhiteSpace(createPostContent?.Trim()) ? "border-red-500 ring-2 ring-red-200 bg-red-50/20" : "border-gray-200 bg-gray-50/40") rounded-xl p-3.5 focus:bg-white focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] resize-none outline-none transition duration-150 leading-relaxed min-h-[110px]"></textarea>
+                                                        @if (hasAttemptedSubmit && string.IsNullOrWhiteSpace(createPostContent?.Trim()))
                                                         {
                                                             <p class="text-xs text-red-600 font-semibold flex items-center gap-1 animate-in fade-in">
                                                                 <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
@@ -771,7 +828,7 @@
                                                                           d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
                                                                           clip-rule="evenodd"></path>
                                                                 </svg>
-                                                                Please write something or attach at least one photo/video.
+                                                                Content is required. Please write something for your post.
                                                             </p>
                                                         }
                                                     </div>
@@ -844,54 +901,80 @@
                                                         </div>
                                                     </div>
 
-                                                    <!-- Media Upload Section -->
+                                                    <!-- Media Upload Section (Optional, Max 10) -->
                                                     <div
                                                         class="border border-dashed border-gray-300 hover:border-orange-300 rounded-2xl p-4 bg-gray-50/50 transition">
                                                         <div class="flex items-center justify-between mb-2">
-                                                            <span
-                                                                class="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
-                                                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
-                                                                    </path>
-                                                                </svg>
-                                                                Attach Media (Photos / Videos, max 10)
-                                                            </span>
-                                                            <label for="createPostFileInput"
-                                                                   class="text-xs text-[#FF5500] font-bold hover:underline cursor-pointer flex items-center gap-1">
-                                                                <span>+ Choose Files</span>
-                                                            </label>
+                                                            <div class="flex items-center gap-2">
+                                                                <span
+                                                                    class="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                                                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                                                        </path>
+                                                                    </svg>
+                                                                    Attach Media <span class="text-gray-400 font-normal normal-case">(Optional)</span>
+                                                                </span>
+                                                                <span class="text-xs font-semibold px-2 py-0.5 rounded-full @(selectedMedia.Count >= 10 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600")">
+                                                                    Selected Media: @selectedMedia.Count/10
+                                                                </span>
+                                                            </div>
+                                                            @if (selectedMedia.Count < 10)
+                                                            {
+                                                                <label for="createPostFileInput"
+                                                                       class="text-xs text-[#FF5500] font-bold hover:underline cursor-pointer flex items-center gap-1">
+                                                                    <span>+ Choose Files</span>
+                                                                </label>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-xs text-gray-400 font-semibold cursor-not-allowed">
+                                                                    Max reached (10/10)
+                                                                </span>
+                                                            }
                                                         </div>
 
                                                         <InputFile id="createPostFileInput" OnChange="HandleFileSelected" multiple accept="image/*,video/*"
+                                                                   disabled="@(selectedMedia.Count >= 10 || isSubmittingPost || isUploadingMedia)"
                                                                    class="hidden" />
 
-                                                        @if (selectedFiles.Any())
+                                                        @if (selectedMedia.Any())
                                                         {
                                                             <div class="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mt-2">
-                                                                @for (int i = 0; i < selectedFiles.Count; i++)
+                                                                @for (int i = 0; i < selectedMedia.Count; i++)
                                                                 {
                                                                     var index = i;
-                                                                    var file = selectedFiles[index];
-                                                                    var preview = index < previewUrls.Count ? previewUrls[index] : string.Empty;
+                                                                    var media = selectedMedia[index];
                                                                     <div
                                                                         class="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-100 aspect-square flex items-center justify-center shadow-xs">
-                                                                        @if (!string.IsNullOrWhiteSpace(preview))
+                                                                        @if (!string.IsNullOrWhiteSpace(media.PreviewUrl))
                                                                         {
-                                                                            <img src="@preview" alt="Preview" class="w-full h-full object-cover" />
+                                                                            <img src="@media.PreviewUrl" alt="Preview" class="w-full h-full object-cover" />
                                                                         }
                                                                         else
                                                                         {
                                                                             <div class="p-2 text-center text-xs text-gray-600 truncate">
                                                                                 <span class="text-2xl">🎬</span>
-                                                                                <p class="truncate text-[10px] mt-1 font-medium">@file.Name</p>
+                                                                                <p class="truncate text-[10px] mt-1 font-medium">@media.FileName</p>
                                                                             </div>
                                                                         }
                                                                         <button type="button" @onclick="() => RemoveSelectedFile(index)"
-                                                                                class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/75 hover:bg-red-600 text-white flex items-center justify-center text-xs font-bold transition shadow-sm">
+                                                                                disabled="@(isSubmittingPost || isUploadingMedia)"
+                                                                                title="Remove media"
+                                                                                class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/75 hover:bg-red-600 text-white flex items-center justify-center text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50">
                                                                             &times;
                                                                         </button>
                                                                     </div>
+                                                                }
+                                                                @if (selectedMedia.Count < 10)
+                                                                {
+                                                                    <label for="createPostFileInput"
+                                                                           class="rounded-xl border-2 border-dashed border-gray-300 hover:border-[#FF5500] bg-gray-50 hover:bg-orange-50/30 aspect-square flex flex-col items-center justify-center cursor-pointer transition text-gray-400 hover:text-[#FF5500]">
+                                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                                                        </svg>
+                                                                        <span class="text-[10px] font-bold mt-1">Add more</span>
+                                                                    </label>
                                                                 }
                                                             </div>
                                                         }
@@ -907,9 +990,21 @@
                                                                         </path>
                                                                     </svg>
                                                                 </div>
-                                                                <span class="text-xs font-semibold text-gray-700">Click to upload photos or videos</span>
-                                                                <span class="text-[11px] text-gray-400 mt-0.5">PNG, JPG, MP4 up to 10MB each</span>
+                                                                <span class="text-xs font-semibold text-gray-700">Click to upload photos or videos (optional)</span>
+                                                                <span class="text-[11px] text-gray-400 mt-0.5">PNG, JPG, MP4 (max 10 files)</span>
                                                             </label>
+                                                        }
+
+                                                        @if (!string.IsNullOrWhiteSpace(mediaErrorMessage))
+                                                        {
+                                                            <p class="text-xs text-red-600 font-semibold mt-2 flex items-center gap-1 animate-in fade-in">
+                                                                <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fill-rule="evenodd"
+                                                                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                                                          clip-rule="evenodd"></path>
+                                                                </svg>
+                                                                <span>@mediaErrorMessage</span>
+                                                            </p>
                                                         }
                                                     </div>
 
@@ -960,6 +1055,413 @@
                                             </div>
                                         </div>
                                     }
+
+                                    <!-- Edit Post Modal Dialog -->
+                                    @if (showEditPostModal && editingPost != null)
+                                    {
+                                        <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/65 backdrop-blur-sm transition-all duration-200"
+                                             @onclick="CloseEditPostModal">
+                                            <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[92vh] overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150"
+                                                 @onclick:stopPropagation="true">
+
+                                                <!-- Modal Header -->
+                                                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-[#FF5500] text-white flex items-center justify-center shadow-sm">
+                                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                            </svg>
+                                                        </div>
+                                                        <div>
+                                                            <h3 class="font-bold text-gray-900 text-lg leading-tight">Edit Post</h3>
+                                                            <p class="text-xs text-gray-400 mt-0.5">Modify content, sport discipline, gym location, or attached media</p>
+                                                        </div>
+                                                    </div>
+                                                    <button type="button" @onclick="CloseEditPostModal" disabled="@(isSubmittingEditPost || isUploadingEditMedia)"
+                                                            class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center text-xl font-bold transition disabled:opacity-50 cursor-pointer">
+                                                        &times;
+                                                    </button>
+                                                </div>
+
+                                                <!-- Modal Body -->
+                                                <div class="px-6 py-5 overflow-y-auto space-y-5 flex-1 bg-white">
+
+                                                    <!-- Post Type Selector (Role-based: Trainee: Normal | Find Coach, Coach: Normal | Find Coach | Find Trainee) -->
+                                                    <div class="space-y-2 p-3 rounded-2xl @(hasAttemptedEditSubmit && string.IsNullOrWhiteSpace(editPostType) ? "border-2 border-red-400 bg-red-50/20" : "")">
+                                                        <div class="flex items-center justify-between">
+                                                            <label class="block text-xs font-bold uppercase tracking-wider @(hasAttemptedEditSubmit && string.IsNullOrWhiteSpace(editPostType) ? "text-red-700" : "text-gray-600")">
+                                                                Post Type <span class="text-red-500">*</span>
+                                                            </label>
+                                                            <span class="text-[11px] text-gray-400">
+                                                                @(isCoach ? "Coach: 3 types available" : "Trainee: 2 types available")
+                                                            </span>
+                                                        </div>
+
+                                                        <div class="grid grid-cols-2 @(isCoach ? "sm:grid-cols-3" : "sm:grid-cols-2") gap-2.5">
+                                                            <!-- Normal -->
+                                                            <button type="button" @onclick='() => SelectEditPostType("Normal")'
+                                                                    class="flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer @(editPostType == "Normal" ? "border-[#FF5500] bg-orange-50/70 text-[#FF5500] ring-2 ring-[#FF5500]/25 font-semibold shadow-xs" : "border-gray-200 hover:border-gray-300 bg-white text-gray-700")">
+                                                                <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 @(editPostType == "Normal" ? "bg-[#FF5500] text-white" : "bg-gray-100 text-gray-600")">
+                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                              d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path>
+                                                                    </svg>
+                                                                </div>
+                                                                <div class="min-w-0 flex-1">
+                                                                    <p class="text-xs font-bold truncate">Normal</p>
+                                                                    <p class="text-[11px] text-gray-500 truncate">Workout & tips</p>
+                                                                </div>
+                                                            </button>
+
+                                                            <!-- Find Coach -->
+                                                            <button type="button" @onclick='() => SelectEditPostType("FindCoach")'
+                                                                    class="flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer @(editPostType == "FindCoach" ? "border-amber-500 bg-amber-50/70 text-amber-800 ring-2 ring-amber-500/25 font-semibold shadow-xs" : "border-gray-200 hover:border-gray-300 bg-white text-gray-700")">
+                                                                <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 @(editPostType == "FindCoach" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-600")">
+                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                                                    </svg>
+                                                                </div>
+                                                                <div class="min-w-0 flex-1">
+                                                                    <p class="text-xs font-bold truncate">Find Coach</p>
+                                                                    <p class="text-[11px] text-gray-500 truncate">Look for trainer</p>
+                                                                </div>
+                                                            </button>
+
+                                                            <!-- Find Trainee (Visible if Coach) -->
+                                                            @if (isCoach)
+                                                            {
+                                                                <button type="button" @onclick='() => SelectEditPostType("FindTrainee")'
+                                                                        class="flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer @(editPostType == "FindTrainee" ? "border-emerald-500 bg-emerald-50/70 text-emerald-800 ring-2 ring-emerald-500/25 font-semibold shadow-xs" : "border-gray-200 hover:border-gray-300 bg-white text-gray-700")">
+                                                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 @(editPostType == "FindTrainee" ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-600")">
+                                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                                                        </svg>
+                                                                    </div>
+                                                                    <div class="min-w-0 flex-1">
+                                                                        <p class="text-xs font-bold truncate">Find Trainee</p>
+                                                                        <p class="text-[11px] text-gray-500 truncate">Recruit students</p>
+                                                                    </div>
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                        @if (hasAttemptedEditSubmit && string.IsNullOrWhiteSpace(editPostType))
+                                                        {
+                                                            <p class="text-xs text-red-600 font-semibold mt-1.5 flex items-center gap-1 animate-in fade-in">
+                                                                <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                                                </svg>
+                                                                Please select a Post Type before saving.
+                                                            </p>
+                                                        }
+                                                    </div>
+
+                                                    <!-- Post Text Area (Required) -->
+                                                    <div class="space-y-1">
+                                                        <div class="flex items-center justify-between">
+                                                            <label class="block text-xs font-bold uppercase tracking-wider @(hasAttemptedEditSubmit && string.IsNullOrWhiteSpace(editPostContent?.Trim()) ? "text-red-700" : "text-gray-600")">
+                                                                Content / Description <span class="text-red-500">*</span>
+                                                            </label>
+                                                            <span class="text-[11px] text-gray-400">@(editPostContent?.Trim().Length ?? 0)/5000</span>
+                                                        </div>
+                                                        <textarea @bind="editPostContent" rows="4"
+                                                                  class="w-full text-sm text-gray-800 placeholder-gray-400 border @(hasAttemptedEditSubmit && string.IsNullOrWhiteSpace(editPostContent?.Trim()) ? "border-red-500 ring-2 ring-red-200 bg-red-50/20" : "border-gray-200 bg-gray-50/40") rounded-xl p-3.5 focus:bg-white focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] resize-none outline-none transition duration-150 leading-relaxed min-h-[110px]"></textarea>
+                                                        @if (hasAttemptedEditSubmit && string.IsNullOrWhiteSpace(editPostContent?.Trim()))
+                                                        {
+                                                            <p class="text-xs text-red-600 font-semibold flex items-center gap-1 animate-in fade-in">
+                                                                <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                                                </svg>
+                                                                Content is required. Please write something for your post.
+                                                            </p>
+                                                        }
+                                                    </div>
+
+                                                    <!-- Sport & Location Dropdowns (2 Columns) -->
+                                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="block text-xs font-bold uppercase tracking-wider @(hasAttemptedEditSubmit && editSportId == Guid.Empty ? "text-red-700" : "text-gray-600") mb-1.5 flex items-center gap-1.5">
+                                                                <svg class="w-4 h-4 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                                                </svg>
+                                                                Sport / Discipline <span class="text-red-500">*</span>
+                                                            </label>
+                                                            <select @bind="editSportId"
+                                                                    class="w-full text-sm bg-gray-50 border @(hasAttemptedEditSubmit && editSportId == Guid.Empty ? "border-red-500 ring-2 ring-red-200 bg-red-50/20 text-red-900" : "border-gray-200 text-gray-800") rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition">
+                                                                <option value="@Guid.Empty">-- Select Sport --</option>
+                                                                @foreach (var s in availableSports)
+                                                                {
+                                                                    <option value="@s.SportId">@s.SportName</option>
+                                                                }
+                                                            </select>
+                                                            @if (hasAttemptedEditSubmit && editSportId == Guid.Empty)
+                                                            {
+                                                                <p class="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1 animate-in fade-in">
+                                                                    <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                                                    </svg>
+                                                                    Sport is required. Please select one.
+                                                                </p>
+                                                            }
+                                                        </div>
+
+                                                        <div>
+                                                            <label class="block text-xs font-bold uppercase tracking-wider @(hasAttemptedEditSubmit && editLocationId == Guid.Empty ? "text-red-700" : "text-gray-600") mb-1.5 flex items-center gap-1.5">
+                                                                <svg class="w-4 h-4 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                                                </svg>
+                                                                Gym / Location <span class="text-red-500">*</span>
+                                                            </label>
+                                                            <select @bind="editLocationId"
+                                                                    class="w-full text-sm bg-gray-50 border @(hasAttemptedEditSubmit && editLocationId == Guid.Empty ? "border-red-500 ring-2 ring-red-200 bg-red-50/20 text-red-900" : "border-gray-200 text-gray-800") rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition">
+                                                                <option value="@Guid.Empty">-- Select Location --</option>
+                                                                @foreach (var l in availableLocations)
+                                                                {
+                                                                    <option value="@l.LocationId">@l.LocationName</option>
+                                                                }
+                                                            </select>
+                                                            @if (hasAttemptedEditSubmit && editLocationId == Guid.Empty)
+                                                            {
+                                                                <p class="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1 animate-in fade-in">
+                                                                    <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                                                    </svg>
+                                                                    Location is required. Please select one.
+                                                                </p>
+                                                            }
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Media Section (Existing + New Additions, Max 10) -->
+                                                    <div class="border border-dashed border-gray-300 hover:border-orange-300 rounded-2xl p-4 bg-gray-50/50 transition">
+                                                        <div class="flex items-center justify-between mb-2">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                                                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                                    </svg>
+                                                                    Attached Media
+                                                                </span>
+                                                                <span class="text-xs font-semibold px-2 py-0.5 rounded-full @(TotalEditMediaCount >= 10 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600")">
+                                                                    Total Media: @TotalEditMediaCount/10
+                                                                </span>
+                                                            </div>
+                                                            @if (TotalEditMediaCount < 10)
+                                                            {
+                                                                <label for="editPostFileInput"
+                                                                       class="text-xs text-[#FF5500] font-bold hover:underline cursor-pointer flex items-center gap-1">
+                                                                    <span>+ Add More Files</span>
+                                                                </label>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-xs text-gray-400 font-semibold cursor-not-allowed">
+                                                                    Max reached (10/10)
+                                                                </span>
+                                                            }
+                                                        </div>
+
+                                                        <InputFile @key="editFileInputKey" id="editPostFileInput" OnChange="HandleEditFileSelected" multiple accept="image/*,video/*"
+                                                                   disabled="@(TotalEditMediaCount >= 10 || isSubmittingEditPost || isUploadingEditMedia)"
+                                                                   class="hidden" />
+
+                                                        @if (TotalEditMediaCount > 0)
+                                                        {
+                                                            <div class="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mt-2">
+                                                                <!-- 1. Existing media not removed -->
+                                                                @foreach (var media in editExistingMedia.Where(m => !editRemovedMediaIds.Contains(m.Id)))
+                                                                {
+                                                                    var currentId = media.Id;
+                                                                    <div class="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-100 aspect-square flex items-center justify-center shadow-xs">
+                                                                        @if (string.Equals(media.MediaType, "VIDEO", StringComparison.OrdinalIgnoreCase))
+                                                                        {
+                                                                            <div class="p-2 text-center text-xs text-gray-600 truncate">
+                                                                                <span class="text-2xl">🎬</span>
+                                                                                <p class="truncate text-[10px] mt-1 font-medium text-gray-500">Video</p>
+                                                                            </div>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <img src="@media.MediaUrl" alt="Media" class="w-full h-full object-cover" />
+                                                                        }
+                                                                        <span class="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-md backdrop-blur-xs">
+                                                                            Saved
+                                                                        </span>
+                                                                        <button type="button" @onclick="() => RemoveExistingMedia(currentId)"
+                                                                                disabled="@(isSubmittingEditPost || isUploadingEditMedia)"
+                                                                                title="Remove media"
+                                                                                class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/75 hover:bg-red-600 text-white flex items-center justify-center text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50">
+                                                                            &times;
+                                                                        </button>
+                                                                    </div>
+                                                                }
+
+                                                                <!-- 2. Newly selected media -->
+                                                                @for (int i = 0; i < editNewSelectedMedia.Count; i++)
+                                                                {
+                                                                    var index = i;
+                                                                    var media = editNewSelectedMedia[index];
+                                                                    <div class="relative group rounded-xl overflow-hidden border-2 border-orange-400 bg-orange-50/30 aspect-square flex items-center justify-center shadow-xs">
+                                                                        @if (!string.IsNullOrWhiteSpace(media.PreviewUrl))
+                                                                        {
+                                                                            <img src="@media.PreviewUrl" alt="Preview" class="w-full h-full object-cover" />
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <div class="p-2 text-center text-xs text-gray-600 truncate">
+                                                                                <span class="text-2xl">🎬</span>
+                                                                                <p class="truncate text-[10px] mt-1 font-medium">@media.FileName</p>
+                                                                            </div>
+                                                                        }
+                                                                        <span class="absolute bottom-1.5 left-1.5 bg-[#FF5500] text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-md shadow-xs">
+                                                                            New
+                                                                        </span>
+                                                                        <button type="button" @onclick="() => RemoveNewSelectedMedia(media.Id)"
+                                                                                disabled="@(isSubmittingEditPost || isUploadingEditMedia)"
+                                                                                title="Remove new media"
+                                                                                class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/75 hover:bg-red-600 text-white flex items-center justify-center text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50">
+                                                                            &times;
+                                                                        </button>
+                                                                    </div>
+                                                                }
+
+                                                                <!-- 3. Add more button if slots remaining -->
+                                                                @if (TotalEditMediaCount < 10)
+                                                                {
+                                                                    <label for="editPostFileInput"
+                                                                           class="rounded-xl border-2 border-dashed border-gray-300 hover:border-[#FF5500] bg-gray-50 hover:bg-orange-50/30 aspect-square flex flex-col items-center justify-center cursor-pointer transition text-gray-400 hover:text-[#FF5500]">
+                                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                                                        </svg>
+                                                                        <span class="text-[10px] font-bold mt-1">Add more</span>
+                                                                    </label>
+                                                                }
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <label for="editPostFileInput"
+                                                                   class="cursor-pointer py-5 flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 transition rounded-xl hover:bg-orange-50/30">
+                                                                <div class="w-10 h-10 rounded-full bg-orange-50 text-[#FF5500] flex items-center justify-center mb-1.5">
+                                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                                    </svg>
+                                                                </div>
+                                                                <span class="text-xs font-semibold text-gray-700">Click to upload photos or videos (optional)</span>
+                                                                <span class="text-[11px] text-gray-400 mt-0.5">PNG, JPG, MP4 (max 10 files)</span>
+                                                            </label>
+                                                        }
+
+                                                        @if (!string.IsNullOrWhiteSpace(editMediaErrorMessage))
+                                                        {
+                                                            <p class="text-xs text-red-600 font-semibold mt-2 flex items-center gap-1 animate-in fade-in">
+                                                                <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                                                </svg>
+                                                                <span>@editMediaErrorMessage</span>
+                                                            </p>
+                                                        }
+                                                    </div>
+
+                                                    <!-- Backend API Error Message (if API returns error) -->
+                                                    @if (!string.IsNullOrWhiteSpace(editPostErrorMessage))
+                                                    {
+                                                        <div class="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2.5 animate-in fade-in shadow-xs" role="alert">
+                                                            <svg class="w-4 h-4 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                                            </svg>
+                                                            <span>@editPostErrorMessage</span>
+                                                        </div>
+                                                    }
+
+                                                </div>
+
+                                                <!-- Modal Footer -->
+                                                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
+                                                    <button type="button" @onclick="CloseEditPostModal" disabled="@(isSubmittingEditPost || isUploadingEditMedia)"
+                                                            class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition disabled:opacity-50 cursor-pointer">
+                                                        Cancel
+                                                    </button>
+                                                    <button type="button" @onclick="HandleSubmitEditPost"
+                                                            disabled="@(isSubmittingEditPost || isUploadingEditMedia)"
+                                                            class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-amber-500 via-[#FF5500] to-[#FF3B00] rounded-xl shadow-md hover:shadow-lg hover:opacity-95 disabled:opacity-50 transition flex items-center gap-2 cursor-pointer">
+                                                        @if (isUploadingEditMedia)
+                                                        {
+                                                            <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                            <span>Uploading media...</span>
+                                                        }
+                                                        else if (isSubmittingEditPost)
+                                                        {
+                                                            <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                            <span>Saving...</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>Save Changes</span>
+                                                        }
+                                                    </button>
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <!-- Delete Confirmation Modal Dialog -->
+                                    @if (showDeleteModal && postToDelete != null)
+                                    {
+                                        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-all animate-in fade-in"
+                                             @onclick="CloseDeleteModal">
+                                            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 animate-in zoom-in-95 duration-150"
+                                                 @onclick:stopPropagation="true">
+                                                <div class="flex items-center gap-3.5 mb-4">
+                                                    <div class="w-11 h-11 rounded-full bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <h3 class="font-bold text-gray-900 text-base">Delete Post?</h3>
+                                                        <p class="text-xs text-gray-500 mt-0.5">Are you sure you want to delete this post? This action cannot be undone.</p>
+                                                    </div>
+                                                </div>
+
+                                                @if (!string.IsNullOrWhiteSpace(deleteErrorMessage))
+                                                {
+                                                    <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                                                        <svg class="w-4 h-4 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                                        </svg>
+                                                        <span>@deleteErrorMessage</span>
+                                                    </div>
+                                                }
+
+                                                <div class="flex items-center justify-end gap-3 pt-2">
+                                                    <button type="button" @onclick="CloseDeleteModal" disabled="@isDeletingPost"
+                                                            class="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-100 rounded-xl transition disabled:opacity-50 cursor-pointer">
+                                                        Cancel
+                                                    </button>
+                                                    <button type="button" @onclick="ConfirmDeletePostAsync" disabled="@isDeletingPost"
+                                                            class="px-5 py-2 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-xs hover:shadow transition disabled:opacity-50 flex items-center gap-2 cursor-pointer">
+                                                        @if (isDeletingPost)
+                                                        {
+                                                            <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                            <span>Deleting...</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>Delete</span>
+                                                        }
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
 
 @code {
@@ -977,11 +1479,39 @@
     private Guid selectedSportId = Guid.Empty;
     private Guid selectedLocationId = Guid.Empty;
     private bool hasAttemptedSubmit = false;
-    private List<IBrowserFile> selectedFiles = new();
-    private List<string> previewUrls = new();
+    private List<SelectedMediaItem> selectedMedia = new();
     private string? createPostErrorMessage;
+    private string? mediaErrorMessage;
     private string? toastSuccessMessage;
     private CancellationTokenSource? toastCts;
+
+    // User & Menu state
+    private Guid? currentUserId;
+    private Guid? activeMenuPostId;
+
+    // Edit post form state
+    private bool showEditPostModal = false;
+    private PostDto? editingPost;
+    private string editPostContent = string.Empty;
+    private string editPostType = "Normal";
+    private Guid editSportId = Guid.Empty;
+    private Guid editLocationId = Guid.Empty;
+    private List<PostMediaDto> editExistingMedia = new();
+    private HashSet<Guid> editRemovedMediaIds = new();
+    private List<SelectedMediaItem> editNewSelectedMedia = new();
+    private bool isSubmittingEditPost = false;
+    private bool isUploadingEditMedia = false;
+    private bool hasAttemptedEditSubmit = false;
+    private string? editPostErrorMessage;
+    private string? editMediaErrorMessage;
+    private Guid editFileInputKey = Guid.NewGuid();
+    private int TotalEditMediaCount => editExistingMedia.Count(m => !editRemovedMediaIds.Contains(m.Id)) + editNewSelectedMedia.Count;
+
+    // Delete post state
+    private bool showDeleteModal = false;
+    private PostDto? postToDelete;
+    private bool isDeletingPost = false;
+    private string? deleteErrorMessage;
 
     // Dropdowns data
     private List<SportDto> availableSports = new();
@@ -1016,6 +1546,14 @@
             var user = authState.User;
             if (user.Identity?.IsAuthenticated == true)
             {
+                var idClaim = user.FindFirst("sub")?.Value 
+                              ?? user.FindFirst("nameid")?.Value 
+                              ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (Guid.TryParse(idClaim, out var parsedId))
+                {
+                    currentUserId = parsedId;
+                }
+
                 userName = user.Identity.Name ?? "Athlete";
                 isCoach = user.IsInRole(AppRoles.Coach) ||
                           user.IsInRole("COACH") ||
@@ -1086,6 +1624,7 @@
     {
         hasAttemptedSubmit = false;
         createPostErrorMessage = null;
+        mediaErrorMessage = null;
 
         if (!string.IsNullOrWhiteSpace(postType))
         {
@@ -1121,6 +1660,15 @@
         _ => "What's on your mind about today's workout? Share your achievements, tips, or routine..."
     };
 
+    private async Task ResetFileInputAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "var el = document.getElementById('createPostFileInput'); if (el) el.value = '';");
+        }
+        catch { }
+    }
+
     private void CloseCreatePostModal()
     {
         showCreatePostModal = false;
@@ -1128,85 +1676,229 @@
         createPostType = string.Empty;
         selectedSportId = Guid.Empty;
         selectedLocationId = Guid.Empty;
-        selectedFiles.Clear();
-        previewUrls.Clear();
+        selectedMedia.Clear();
         createPostErrorMessage = null;
+        mediaErrorMessage = null;
         hasAttemptedSubmit = false;
         isSubmittingPost = false;
         isUploadingMedia = false;
+        _ = ResetFileInputAsync();
     }
 
     private async Task HandleFileSelected(InputFileChangeEventArgs e)
     {
-        var files = e.GetMultipleFiles(10);
-        foreach (var file in files)
-        {
-            if (selectedFiles.Count >= 10) break;
-            selectedFiles.Add(file);
+        if (isSubmittingPost || isUploadingMedia) return;
 
-            if (file.ContentType.StartsWith("image/"))
+        mediaErrorMessage = null;
+
+        IReadOnlyList<IBrowserFile> incomingFiles;
+        try
+        {
+            // Allow querying up to 25 files to safely catch and handle excess selections
+            incomingFiles = e.GetMultipleFiles(25);
+        }
+        catch (InvalidOperationException)
+        {
+            mediaErrorMessage = "You can select a maximum of 10 media files.";
+            await ResetFileInputAsync();
+            return;
+        }
+        catch (Exception ex)
+        {
+            mediaErrorMessage = $"Error reading selected files: {ex.Message}";
+            await ResetFileInputAsync();
+            return;
+        }
+
+        if (incomingFiles == null || incomingFiles.Count == 0)
+        {
+            return;
+        }
+
+        int duplicateCount = 0;
+        bool limitExceeded = false;
+
+        foreach (var file in incomingFiles)
+        {
+            // Requirement 7: Check duplicate media (filename and byte size)
+            bool isDuplicate = selectedMedia.Any(f =>
+                string.Equals(f.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
+                f.Size == file.Size);
+
+            if (isDuplicate)
             {
-                try
+                duplicateCount++;
+                continue;
+            }
+
+            // Requirement 3 & 5: Maximum 10 media items
+            if (selectedMedia.Count >= 10)
+            {
+                limitExceeded = true;
+                break;
+            }
+
+            try
+            {
+                if (file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                 {
-                    var resized = await file.RequestImageFileAsync(file.ContentType, 600, 600);
-                    using var stream = resized.OpenReadStream(10 * 1024 * 1024);
-                    using var ms = new MemoryStream();
-                    await stream.CopyToAsync(ms);
-                    previewUrls.Add($"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}");
+                    var isGif = file.ContentType.Equals("image/gif", StringComparison.OrdinalIgnoreCase);
+
+                    if (isGif)
+                    {
+                        using var ms = new MemoryStream();
+                        await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+                        await stream.CopyToAsync(ms);
+                        var data = ms.ToArray();
+
+                        selectedMedia.Add(new SelectedMediaItem
+                        {
+                            FileName = file.Name,
+                            ContentType = file.ContentType,
+                            Data = data,
+                            PreviewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(data)}",
+                            IsVideo = false
+                        });
+                    }
+                    else
+                    {
+                        // Convert to standard JPEG 1280x1280 for fast upload
+                        var optimizedFile = await file.RequestImageFileAsync("image/jpeg", 1280, 1280);
+                        using var ms = new MemoryStream();
+                        await using var stream = optimizedFile.OpenReadStream(20 * 1024 * 1024);
+                        await stream.CopyToAsync(ms);
+                        var data = ms.ToArray();
+
+                        selectedMedia.Add(new SelectedMediaItem
+                        {
+                            FileName = Path.ChangeExtension(file.Name, ".jpg"),
+                            ContentType = "image/jpeg",
+                            Data = data,
+                            PreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(data)}",
+                            IsVideo = false
+                        });
+                    }
                 }
-                catch
+                else
                 {
-                    previewUrls.Add(string.Empty);
+                    // Video
+                    using var ms = new MemoryStream();
+                    await using var stream = file.OpenReadStream(100 * 1024 * 1024);
+                    await stream.CopyToAsync(ms);
+                    var data = ms.ToArray();
+
+                    selectedMedia.Add(new SelectedMediaItem
+                    {
+                        FileName = file.Name,
+                        ContentType = file.ContentType,
+                        Data = data,
+                        PreviewUrl = string.Empty,
+                        IsVideo = true
+                    });
                 }
             }
-            else
+            catch (Exception ex)
             {
-                previewUrls.Add(string.Empty);
+                Console.WriteLine($"[FE][Processing] Error reading '{file.Name}': {ex.Message}");
+                mediaErrorMessage = $"Failed to process '{file.Name}'.";
             }
         }
+
+        if (limitExceeded)
+        {
+            mediaErrorMessage = "You can select a maximum of 10 media files.";
+        }
+        else if (duplicateCount > 0)
+        {
+            mediaErrorMessage = duplicateCount == 1
+                ? "1 duplicate file was skipped."
+                : $"{duplicateCount} duplicate files were skipped.";
+        }
+
+        await ResetFileInputAsync();
     }
 
-    private void RemoveSelectedFile(int index)
+    private async Task RemoveSelectedFile(int index)
     {
-        if (index >= 0 && index < selectedFiles.Count)
+        if (isSubmittingPost || isUploadingMedia) return;
+
+        if (index >= 0 && index < selectedMedia.Count)
         {
-            selectedFiles.RemoveAt(index);
-            if (index < previewUrls.Count)
-            {
-                previewUrls.RemoveAt(index);
-            }
+            selectedMedia.RemoveAt(index);
+            mediaErrorMessage = null;
+            await ResetFileInputAsync();
         }
     }
 
     private async Task HandleSubmitCreatePost()
     {
-        hasAttemptedSubmit = true;
-        createPostErrorMessage = null;
-
-        var contentTrimmed = createPostContent?.Trim() ?? string.Empty;
-        bool isContentMissing = string.IsNullOrWhiteSpace(contentTrimmed) && !selectedFiles.Any();
-        bool isPostTypeMissing = string.IsNullOrWhiteSpace(createPostType);
-        bool isSportMissing = selectedSportId == Guid.Empty;
-        bool isLocationMissing = selectedLocationId == Guid.Empty;
-
-        // Chỉ hiển thị cảnh báo lỗi trực tiếp ngay tại các trường bị thiếu, không dùng alert trên cùng
-        if (isContentMissing || isPostTypeMissing || isSportMissing || isLocationMissing)
+        // Prevent duplicate submissions / double-clicks
+        if (isSubmittingPost || isUploadingMedia)
         {
             return;
         }
 
+        hasAttemptedSubmit = true;
+        createPostErrorMessage = null;
+
+        var contentTrimmed = createPostContent?.Trim() ?? string.Empty;
+
+        // 1. Validate Post Type
+        bool isPostTypeMissing = string.IsNullOrWhiteSpace(createPostType);
+        bool isPostTypeUnauthorized = createPostType == "Find Trainee" && !isCoach;
+
+        // 2. Validate Required Fields (All non-media fields are strictly required)
+        bool isContentMissing = string.IsNullOrWhiteSpace(contentTrimmed);
+        bool isSportMissing = selectedSportId == Guid.Empty;
+        bool isLocationMissing = selectedLocationId == Guid.Empty;
+
+        // 3. Validate Media Count (<= 10)
+        bool isMediaExceeded = selectedMedia.Count > 10;
+
+        // 4. Validate Content Length (<= 5000 characters)
+        bool isContentTooLong = contentTrimmed.Length > 5000;
+
+        // Block submission and do NOT call API if any validation fails
+        if (isPostTypeMissing || isPostTypeUnauthorized || isContentMissing || isSportMissing || isLocationMissing || isMediaExceeded || isContentTooLong)
+        {
+            if (isPostTypeUnauthorized)
+            {
+                createPostErrorMessage = "Trainees are not permitted to create 'Find Trainee' posts.";
+            }
+            else if (isMediaExceeded)
+            {
+                mediaErrorMessage = "You can select a maximum of 10 media files.";
+            }
+            else if (isContentTooLong)
+            {
+                createPostErrorMessage = "Content must not exceed 5000 characters.";
+            }
+            return;
+        }
+
+        var totalSubmitSw = System.Diagnostics.Stopwatch.StartNew();
         isSubmittingPost = true;
         try
         {
             var uploadedMedia = new List<CreatePostMediaItemDto>();
 
-            // 1. Upload files if attached
-            if (selectedFiles.Any())
+            // Upload files if attached (media is optional)
+            if (selectedMedia.Any())
             {
                 isUploadingMedia = true;
                 StateHasChanged();
 
-                var uploadRes = await FileUploadService.UploadPostMediaAsync(selectedFiles);
+                var uploadSw = System.Diagnostics.Stopwatch.StartNew();
+                var payloads = selectedMedia.Select(m => new UploadMediaPayload
+                {
+                    FileName = m.FileName,
+                    ContentType = m.ContentType,
+                    Data = m.Data
+                });
+
+                var uploadRes = await FileUploadService.UploadPostMediaAsync(payloads);
+                uploadSw.Stop();
+
                 isUploadingMedia = false;
 
                 if (!uploadRes.Success || uploadRes.Data == null)
@@ -1216,10 +1908,11 @@
                     return;
                 }
 
+                Console.WriteLine($"[FE][CreatePost] Media upload completed in {uploadSw.ElapsedMilliseconds} ms for {selectedMedia.Count} files.");
                 uploadedMedia = uploadRes.Data;
             }
 
-            // 2. Submit create post to backend
+            // Submit create post to backend
             var request = new CreatePostRequest
             {
                 Content = contentTrimmed,
@@ -1229,9 +1922,15 @@
                 Media = uploadedMedia
             };
 
+            var postSw = System.Diagnostics.Stopwatch.StartNew();
             var postRes = await PostService.CreatePostAsync(request);
+            postSw.Stop();
+
             if (postRes.Success && postRes.Data != null)
             {
+                totalSubmitSw.Stop();
+                Console.WriteLine($"[FE][CreatePost] Post created in {postSw.ElapsedMilliseconds} ms. Total end-to-end: {totalSubmitSw.ElapsedMilliseconds} ms.");
+
                 posts?.Insert(0, postRes.Data);
                 CloseCreatePostModal();
                 ShowSuccessToast("Post published successfully!");
@@ -1314,6 +2013,459 @@
         showProfileMenu = false;
         await AuthService.LogoutAsync();
         Navigation.NavigateTo("login");
+    }
+
+    private bool IsOwnPost(PostDto post)
+    {
+        return currentUserId.HasValue && post.AuthorId == currentUserId.Value;
+    }
+
+    private void TogglePostMenu(Guid postId)
+    {
+        activeMenuPostId = activeMenuPostId == postId ? null : postId;
+    }
+
+    private void ClosePostMenu()
+    {
+        activeMenuPostId = null;
+    }
+
+    private void HandleReportPost(Guid postId)
+    {
+        activeMenuPostId = null;
+        ShowSuccessToast("Thank you. Post reported to moderators for review.");
+    }
+
+    // Delete post methods
+    private void OpenDeletePostModal(PostDto post)
+    {
+        activeMenuPostId = null;
+        postToDelete = post;
+        deleteErrorMessage = null;
+        isDeletingPost = false;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        if (isDeletingPost) return;
+        showDeleteModal = false;
+        postToDelete = null;
+        deleteErrorMessage = null;
+    }
+
+    private async Task ConfirmDeletePostAsync()
+    {
+        if (postToDelete == null || isDeletingPost) return;
+
+        isDeletingPost = true;
+        deleteErrorMessage = null;
+
+        try
+        {
+            var targetPostId = postToDelete.Id;
+            var res = await PostService.DeletePostAsync(targetPostId);
+            if (res.Success)
+            {
+                posts?.RemoveAll(p => p.Id == targetPostId);
+                isDeletingPost = false;
+                showDeleteModal = false;
+                postToDelete = null;
+                deleteErrorMessage = null;
+                ShowSuccessToast("Post deleted successfully.");
+                StateHasChanged();
+            }
+            else
+            {
+                deleteErrorMessage = res.Message ?? "Unable to delete this post. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            deleteErrorMessage = "Unable to delete this post. Please try again.";
+            Console.WriteLine($"[DeletePost] Error: {ex.Message}");
+        }
+        finally
+        {
+            isDeletingPost = false;
+        }
+    }
+
+    // Edit post methods
+    private void OpenEditPostModal(PostDto post)
+    {
+        activeMenuPostId = null;
+        editingPost = post;
+        editPostContent = post.Content ?? string.Empty;
+
+        var rawType = (post.PostType ?? "Normal").Trim().Replace(" ", "");
+        if (rawType.Equals("FindCoach", StringComparison.OrdinalIgnoreCase))
+            editPostType = "FindCoach";
+        else if (rawType.Equals("FindTrainee", StringComparison.OrdinalIgnoreCase))
+            editPostType = "FindTrainee";
+        else
+            editPostType = "Normal";
+
+        if (editPostType == "FindTrainee" && !isCoach)
+        {
+            editPostType = "Normal";
+        }
+
+        editSportId = post.SportId;
+        editLocationId = post.LocationId;
+
+        editExistingMedia = post.Media?.Select(m => new PostMediaDto
+        {
+            Id = m.Id,
+            MediaUrl = m.MediaUrl,
+            MediaType = m.MediaType,
+            CreatedAt = m.CreatedAt
+        }).ToList() ?? new List<PostMediaDto>();
+
+        editRemovedMediaIds.Clear();
+        editNewSelectedMedia.Clear();
+
+        hasAttemptedEditSubmit = false;
+        editPostErrorMessage = null;
+        editMediaErrorMessage = null;
+        isSubmittingEditPost = false;
+        isUploadingEditMedia = false;
+
+        _ = ResetEditFileInputAsync();
+
+        showEditPostModal = true;
+    }
+
+    private void CloseEditPostModal()
+    {
+        if (isSubmittingEditPost || isUploadingEditMedia) return;
+        showEditPostModal = false;
+        editingPost = null;
+        editPostContent = string.Empty;
+        editPostType = "Normal";
+        editSportId = Guid.Empty;
+        editLocationId = Guid.Empty;
+        editExistingMedia.Clear();
+        editRemovedMediaIds.Clear();
+        editNewSelectedMedia.Clear();
+        editPostErrorMessage = null;
+        editMediaErrorMessage = null;
+        hasAttemptedEditSubmit = false;
+        _ = ResetEditFileInputAsync();
+    }
+
+    private void SelectEditPostType(string type)
+    {
+        if (type == "FindTrainee" && !isCoach) return;
+        editPostType = type;
+    }
+
+    private void RemoveExistingMedia(Guid mediaId)
+    {
+        if (isSubmittingEditPost || isUploadingEditMedia) return;
+        editRemovedMediaIds.Add(mediaId);
+    }
+
+    private void RemoveNewSelectedMedia(string mediaId)
+    {
+        if (isSubmittingEditPost || isUploadingEditMedia) return;
+        editNewSelectedMedia.RemoveAll(m => m.Id == mediaId);
+        _ = ResetEditFileInputAsync();
+    }
+
+    private async Task HandleEditFileSelected(InputFileChangeEventArgs e)
+    {
+        if (isSubmittingEditPost || isUploadingEditMedia) return;
+
+        editMediaErrorMessage = null;
+        try
+        {
+            int currentKeptCount = editExistingMedia.Count(m => !editRemovedMediaIds.Contains(m.Id));
+            int availableSlots = 10 - (currentKeptCount + editNewSelectedMedia.Count);
+            if (availableSlots <= 0)
+            {
+                editMediaErrorMessage = "Maximum 10 media items reached.";
+                await ResetEditFileInputAsync();
+                return;
+            }
+
+            IReadOnlyList<IBrowserFile> incomingFiles;
+            try
+            {
+                incomingFiles = e.GetMultipleFiles(25);
+            }
+            catch (InvalidOperationException)
+            {
+                editMediaErrorMessage = "You can select a maximum of 10 media files.";
+                await ResetEditFileInputAsync();
+                return;
+            }
+            catch (Exception ex)
+            {
+                editMediaErrorMessage = $"Error reading selected files: {ex.Message}";
+                await ResetEditFileInputAsync();
+                return;
+            }
+
+            if (incomingFiles == null || incomingFiles.Count == 0)
+            {
+                return;
+            }
+
+            if (incomingFiles.Count > availableSlots)
+            {
+                editMediaErrorMessage = $"You can only add {availableSlots} more media item(s). Total cannot exceed 10.";
+                await ResetEditFileInputAsync();
+                return;
+            }
+
+            foreach (var file in incomingFiles)
+            {
+                var ext = System.IO.Path.GetExtension(file.Name).ToLowerInvariant();
+                bool isImage = ext is ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif";
+                bool isVideo = ext is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm";
+
+                if (!isImage && !isVideo)
+                {
+                    editMediaErrorMessage = $"File '{file.Name}' has an unsupported format.";
+                    continue;
+                }
+
+                if (isImage && file.Size > 10 * 1024 * 1024)
+                {
+                    editMediaErrorMessage = $"Image '{file.Name}' exceeds 10MB limit.";
+                    continue;
+                }
+
+                if (isVideo && file.Size > 50 * 1024 * 1024)
+                {
+                    editMediaErrorMessage = $"Video '{file.Name}' exceeds 50MB limit.";
+                    continue;
+                }
+
+                bool isDuplicate = editNewSelectedMedia.Any(m =>
+                    string.Equals(m.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
+                    m.Size == file.Size);
+
+                if (isDuplicate)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (isImage)
+                    {
+                        var isGif = string.Equals(ext, ".gif", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(file.ContentType, "image/gif", StringComparison.OrdinalIgnoreCase);
+
+                        if (isGif)
+                        {
+                            using var ms = new MemoryStream();
+                            await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+                            await stream.CopyToAsync(ms);
+                            var data = ms.ToArray();
+
+                            editNewSelectedMedia.Add(new SelectedMediaItem
+                            {
+                                FileName = file.Name,
+                                ContentType = file.ContentType,
+                                Data = data,
+                                PreviewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(data)}",
+                                IsVideo = false
+                            });
+                        }
+                        else
+                        {
+                            var resizedImage = await file.RequestImageFileAsync("image/jpeg", 1280, 1280);
+                            using var ms = new MemoryStream();
+                            await using var stream = resizedImage.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+                            await stream.CopyToAsync(ms);
+                            var data = ms.ToArray();
+
+                            editNewSelectedMedia.Add(new SelectedMediaItem
+                            {
+                                FileName = Path.ChangeExtension(file.Name, ".jpg"),
+                                ContentType = "image/jpeg",
+                                Data = data,
+                                PreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(data)}",
+                                IsVideo = false
+                            });
+                        }
+                    }
+                    else
+                    {
+                        using var ms = new MemoryStream();
+                        await using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+                        await stream.CopyToAsync(ms);
+                        var data = ms.ToArray();
+
+                        editNewSelectedMedia.Add(new SelectedMediaItem
+                        {
+                            FileName = file.Name,
+                            ContentType = file.ContentType,
+                            Data = data,
+                            PreviewUrl = string.Empty,
+                            IsVideo = true
+                        });
+                    }
+                }
+                catch (Exception fileEx)
+                {
+                    Console.WriteLine($"[EditPost] Error reading file {file.Name}: {fileEx.Message}");
+                    editMediaErrorMessage = $"Could not load {file.Name}: {fileEx.Message}";
+                }
+            }
+
+            await ResetEditFileInputAsync();
+        }
+        catch (Exception ex)
+        {
+            editMediaErrorMessage = $"Upload error: {ex.Message}";
+            await ResetEditFileInputAsync();
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResetEditFileInputAsync()
+    {
+        editFileInputKey = Guid.NewGuid();
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "var el = document.getElementById('editPostFileInput'); if(el) el.value = '';");
+        }
+        catch
+        {
+            // Ignored
+        }
+    }
+
+    private async Task HandleSubmitEditPost()
+    {
+        if (editingPost == null || isSubmittingEditPost || isUploadingEditMedia) return;
+
+        hasAttemptedEditSubmit = true;
+        editPostErrorMessage = null;
+        editMediaErrorMessage = null;
+
+        var contentTrimmed = editPostContent?.Trim() ?? string.Empty;
+        bool isPostTypeMissing = string.IsNullOrWhiteSpace(editPostType);
+        bool isPostTypeUnauthorized = editPostType == "FindTrainee" && !isCoach;
+        bool isContentMissing = string.IsNullOrWhiteSpace(contentTrimmed);
+        bool isSportMissing = editSportId == Guid.Empty;
+        bool isLocationMissing = editLocationId == Guid.Empty;
+        bool isMediaExceeded = TotalEditMediaCount > 10;
+        bool isContentTooLong = contentTrimmed.Length > 5000;
+
+        if (isPostTypeMissing || isPostTypeUnauthorized || isContentMissing || isSportMissing || isLocationMissing || isMediaExceeded || isContentTooLong)
+        {
+            if (isPostTypeUnauthorized)
+            {
+                editPostErrorMessage = "Trainees are not permitted to create 'Find Trainee' posts.";
+            }
+            else if (isPostTypeMissing || isContentMissing || isSportMissing || isLocationMissing)
+            {
+                editPostErrorMessage = "Please complete all required fields (*).";
+            }
+            else if (isMediaExceeded)
+            {
+                editPostErrorMessage = "A post can have at most 10 media items in total.";
+            }
+            else if (isContentTooLong)
+            {
+                editPostErrorMessage = "Content must not exceed 5000 characters.";
+            }
+            return;
+        }
+
+        isSubmittingEditPost = true;
+        try
+        {
+            var newUploadedMedia = new List<CreatePostMediaItemDto>();
+
+            if (editNewSelectedMedia.Any())
+            {
+                isUploadingEditMedia = true;
+                StateHasChanged();
+
+                var payloads = editNewSelectedMedia.Select(m => new UploadMediaPayload
+                {
+                    FileName = m.FileName,
+                    ContentType = m.ContentType,
+                    Data = m.Data
+                });
+
+                var uploadRes = await FileUploadService.UploadPostMediaAsync(payloads);
+                isUploadingEditMedia = false;
+
+                if (!uploadRes.Success || uploadRes.Data == null)
+                {
+                    editPostErrorMessage = uploadRes.Message ?? "Failed to upload new media attachments.";
+                    isSubmittingEditPost = false;
+                    return;
+                }
+
+                newUploadedMedia = uploadRes.Data;
+            }
+
+            var request = new EditPostRequest
+            {
+                PostType = editPostType,
+                Content = contentTrimmed,
+                SportId = editSportId,
+                LocationId = editLocationId,
+                RemoveMediaIds = editRemovedMediaIds.ToList(),
+                NewMedia = newUploadedMedia
+            };
+
+            var targetEditId = editingPost.Id;
+            var editRes = await PostService.EditPostAsync(targetEditId, request);
+            if (editRes.Success && editRes.Data != null)
+            {
+                var updatedPost = editRes.Data;
+                var index = posts?.FindIndex(p => p.Id == targetEditId) ?? -1;
+                if (index >= 0 && posts != null)
+                {
+                    updatedPost.IsLikedByCurrentUser = posts[index].IsLikedByCurrentUser;
+                    posts[index] = updatedPost;
+                }
+
+                isSubmittingEditPost = false;
+                isUploadingEditMedia = false;
+                showEditPostModal = false;
+                editingPost = null;
+                editPostContent = string.Empty;
+                editPostType = "Normal";
+                editSportId = Guid.Empty;
+                editLocationId = Guid.Empty;
+                editExistingMedia.Clear();
+                editRemovedMediaIds.Clear();
+                editNewSelectedMedia.Clear();
+                editPostErrorMessage = null;
+                editMediaErrorMessage = null;
+                hasAttemptedEditSubmit = false;
+                _ = ResetEditFileInputAsync();
+
+                ShowSuccessToast("Post updated successfully!");
+                StateHasChanged();
+            }
+            else
+            {
+                editPostErrorMessage = editRes.Message ?? "Unable to update this post. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            editPostErrorMessage = $"Unable to update this post: {ex.Message}";
+        }
+        finally
+        {
+            isSubmittingEditPost = false;
+            isUploadingEditMedia = false;
+        }
     }
 
     private static string GetTimeAgo(DateTime? date)

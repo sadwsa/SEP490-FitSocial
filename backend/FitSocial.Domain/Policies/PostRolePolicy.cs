@@ -39,7 +39,8 @@ public static class PostRolePolicy
             return false;
         }
 
-        return Enum.TryParse(postTypeStr.Trim(), ignoreCase: true, out postType) 
+        var normalized = postTypeStr.Trim().Replace(" ", "");
+        return Enum.TryParse(normalized, ignoreCase: true, out postType) 
                && Enum.IsDefined(typeof(PostType), postType);
     }
 }

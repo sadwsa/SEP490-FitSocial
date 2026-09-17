@@ -32,7 +32,8 @@ builder.Services.AddCors(options =>
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowCredentials()
+            .SetPreflightMaxAge(TimeSpan.FromHours(24));
     });
 });
 
@@ -62,6 +63,16 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddHttpClient();
+
+// Cloudinary Singleton service registration (reuse HttpClient / SocketsHttpHandler connection pool)
+var cloudName = builder.Configuration["Cloudinary:CloudName"];
+var apiKey = builder.Configuration["Cloudinary:ApiKey"];
+var apiSecret = builder.Configuration["Cloudinary:ApiSecret"];
+if (!string.IsNullOrWhiteSpace(cloudName) && !string.IsNullOrWhiteSpace(apiKey) && !string.IsNullOrWhiteSpace(apiSecret))
+{
+    var account = new CloudinaryDotNet.Account(cloudName, apiKey, apiSecret);
+    builder.Services.AddSingleton(new CloudinaryDotNet.Cloudinary(account));
+}
 
 // JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? "FitSocial_Super_Secret_Key_For_Jwt_2026_SecureAuthenticationKey_1234567890";

@@ -15,10 +15,17 @@ public class UploadController : ControllerBase
     private const long MaxFileBytes = 10 * 1024 * 1024; // 10MB (coach credentials)
 
     private readonly IConfiguration _configuration;
+    private readonly ILogger<UploadController> _logger;
+    private readonly Cloudinary? _cloudinary;
 
-    public UploadController(IConfiguration configuration)
+    public UploadController(
+        IConfiguration configuration,
+        ILogger<UploadController> logger,
+        Cloudinary? cloudinary = null)
     {
         _configuration = configuration;
+        _logger = logger;
+        _cloudinary = cloudinary;
     }
 
     /// <summary>
@@ -60,7 +67,7 @@ public class UploadController : ControllerBase
 
         try
         {
-            var cloudinary = new Cloudinary(new Account(cloudName, apiKey, apiSecret));
+            var cloudinary = _cloudinary ?? new Cloudinary(new Account(cloudName, apiKey, apiSecret));
 
             await using var stream = file.OpenReadStream();
             UploadResult uploadResult;
@@ -117,6 +124,8 @@ public class UploadController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UploadPostMedia([FromForm] List<IFormFile>? files, CancellationToken cancellationToken)
     {
+        var totalSw = System.Diagnostics.Stopwatch.StartNew();
+
         if (files == null || files.Count == 0)
         {
             return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail("Please select at least one file to upload."));
@@ -126,6 +135,10 @@ public class UploadController : ControllerBase
         {
             return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail("A post can have at most 10 media files (photos or videos)."));
         }
+
+        long totalIncomingBytes = files.Sum(f => f.Length);
+        _logger.LogInformation("[API][UploadPostMedia] Received {Count} files, total size: {SizeMb:F2} MB",
+            files.Count, totalIncomingBytes / (1024.0 * 1024.0));
 
         var cloudName = _configuration["Cloudinary:CloudName"];
         var apiKey = _configuration["Cloudinary:ApiKey"];
@@ -162,17 +175,24 @@ public class UploadController : ControllerBase
             }
         }
 
-        var cloudinary = new Cloudinary(new Account(cloudName, apiKey, apiSecret));
+        var cloudinary = _cloudinary ?? new Cloudinary(new Account(cloudName, apiKey, apiSecret));
         var uploadedMedia = new FitSocial.Application.DTOs.Posts.CreatePostMediaDto[files.Count];
 
-        // Controlled concurrency (max 3 concurrent uploads to balance network speed, memory, and Cloudinary rate limits)
-        using var throttler = new SemaphoreSlim(3, 3);
+        // Configurable concurrency with safe default and clamping (default: 10, range: 1..10)
+        var configuredConcurrency = _configuration.GetValue<int?>("Cloudinary:UploadConcurrency") ?? 10;
+        var uploadConcurrency = Math.Clamp(configuredConcurrency, 1, 10);
+
+        _logger.LogInformation("[API][UploadPostMedia] Starting Cloudinary upload with concurrency: {Concurrency}", uploadConcurrency);
+        using var throttler = new SemaphoreSlim(uploadConcurrency, uploadConcurrency);
+
+        var cloudinarySw = System.Diagnostics.Stopwatch.StartNew();
 
         try
         {
             var uploadTasks = files.Select(async (file, index) =>
             {
                 await throttler.WaitAsync(cancellationToken);
+                var fileSw = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
                     var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -216,11 +236,15 @@ public class UploadController : ControllerBase
                         throw new InvalidOperationException($"Failed to upload '{file.FileName}': {uploadResult.Error?.Message ?? "Unknown Cloudinary error"}");
                     }
 
+                    // Preserve original media ordering
                     uploadedMedia[index] = new FitSocial.Application.DTOs.Posts.CreatePostMediaDto
                     {
                         MediaUrl = uploadResult.SecureUrl.ToString(),
                         MediaType = isVideo ? "VIDEO" : "IMAGE"
                     };
+
+                    _logger.LogInformation("[Cloudinary] File #{Index} '{FileName}' ({SizeKb:F0} KB) uploaded in {Duration} ms",
+                        index + 1, file.FileName, file.Length / 1024.0, fileSw.ElapsedMilliseconds);
                 }
                 finally
                 {
@@ -229,16 +253,26 @@ public class UploadController : ControllerBase
             });
 
             await Task.WhenAll(uploadTasks);
+            cloudinarySw.Stop();
+
+            totalSw.Stop();
+            var nonCloudinaryMs = totalSw.ElapsedMilliseconds - cloudinarySw.ElapsedMilliseconds;
+
+            _logger.LogInformation(
+                "[API][UploadPostMedia] Completed. Total duration: {TotalMs} ms | Cloudinary duration: {CloudinaryMs} ms | Other/Buffering: {OtherMs} ms",
+                totalSw.ElapsedMilliseconds, cloudinarySw.ElapsedMilliseconds, nonCloudinaryMs);
 
             return Ok(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Ok(
                 uploadedMedia.ToList(), "Post media uploaded successfully."));
         }
         catch (OperationCanceledException)
         {
+            _logger.LogWarning("[API][UploadPostMedia] Upload cancelled by client after {TotalMs} ms", totalSw.ElapsedMilliseconds);
             return StatusCode(StatusCodes.Status499ClientClosedRequest, ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail("Upload cancelled by client."));
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "[API][UploadPostMedia] Upload failed after {TotalMs} ms: {Message}", totalSw.ElapsedMilliseconds, ex.Message);
             return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail($"Media upload failed: {ex.Message}"));
         }
     }

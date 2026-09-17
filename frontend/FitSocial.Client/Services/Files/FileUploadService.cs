@@ -11,6 +11,7 @@ public interface IFileUploadService
 {
     Task<ApiResponse<string>> UploadAsync(IBrowserFile file);
     Task<ApiResponse<List<CreatePostMediaItemDto>>> UploadPostMediaAsync(IEnumerable<IBrowserFile> files);
+    Task<ApiResponse<List<CreatePostMediaItemDto>>> UploadPostMediaAsync(IEnumerable<UploadMediaPayload> files);
 }
 
 public class FileUploadService : IFileUploadService
@@ -59,6 +60,16 @@ public class FileUploadService : IFileUploadService
 
     public async Task<ApiResponse<List<CreatePostMediaItemDto>>> UploadPostMediaAsync(IEnumerable<IBrowserFile> files)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var fileList = files.ToList();
+        long totalBytes = fileList.Sum(f => f.Size);
+
+        Console.WriteLine($"[FE][Upload] Starting upload for {fileList.Count} files. Total payload: {totalBytes / (1024.0 * 1024.0):F2} MB");
+        for (int i = 0; i < fileList.Count; i++)
+        {
+            Console.WriteLine($"[FE][Upload] File #{i + 1}: '{fileList[i].Name}' ({fileList[i].Size / 1024.0:F0} KB, ContentType: {fileList[i].ContentType})");
+        }
+
         try
         {
             using var content = new MultipartFormDataContent();
@@ -68,7 +79,7 @@ public class FileUploadService : IFileUploadService
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
 
-            foreach (var file in files)
+            foreach (var file in fileList)
             {
                 var stream = file.OpenReadStream(MaxMediaBytes);
                 content.Add(new StreamContent(stream), "files", file.Name);
@@ -76,6 +87,10 @@ public class FileUploadService : IFileUploadService
 
             var response = await _httpClient.PostAsync("upload/post-media", content);
             var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<CreatePostMediaItemDto>>>();
+
+            sw.Stop();
+            Console.WriteLine($"[FE][Upload] Completed in {sw.ElapsedMilliseconds} ms (Status: {response.StatusCode})");
+
             if (response.IsSuccessStatusCode && result != null && result.Success)
             {
                 return result;
@@ -89,6 +104,68 @@ public class FileUploadService : IFileUploadService
         }
         catch (Exception ex)
         {
+            sw.Stop();
+            Console.WriteLine($"[FE][Upload] Failed after {sw.ElapsedMilliseconds} ms: {ex.Message}");
+            return new ApiResponse<List<CreatePostMediaItemDto>>
+            {
+                Success = false,
+                Message = $"Media upload error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<List<CreatePostMediaItemDto>>> UploadPostMediaAsync(IEnumerable<UploadMediaPayload> files)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var fileList = files.ToList();
+        long totalBytes = fileList.Sum(f => (long)f.Data.Length);
+
+        Console.WriteLine($"[FE][Upload] Starting in-memory upload for {fileList.Count} files. Total payload: {totalBytes / (1024.0 * 1024.0):F2} MB");
+        for (int i = 0; i < fileList.Count; i++)
+        {
+            Console.WriteLine($"[FE][Upload] File #{i + 1}: '{fileList[i].FileName}' ({fileList[i].Data.Length / 1024.0:F0} KB, ContentType: {fileList[i].ContentType})");
+        }
+
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var token = await _tokenStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            foreach (var file in fileList)
+            {
+                var byteContent = new ByteArrayContent(file.Data);
+                if (!string.IsNullOrWhiteSpace(file.ContentType))
+                {
+                    byteContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+                }
+                content.Add(byteContent, "files", file.FileName);
+            }
+
+            var response = await _httpClient.PostAsync("upload/post-media", content);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<CreatePostMediaItemDto>>>();
+
+            sw.Stop();
+            Console.WriteLine($"[FE][Upload] Completed in {sw.ElapsedMilliseconds} ms (Status: {response.StatusCode})");
+
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<List<CreatePostMediaItemDto>>
+            {
+                Success = false,
+                Message = $"Media upload failed (Code: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            Console.WriteLine($"[FE][Upload] Failed after {sw.ElapsedMilliseconds} ms: {ex.Message}");
             return new ApiResponse<List<CreatePostMediaItemDto>>
             {
                 Success = false,

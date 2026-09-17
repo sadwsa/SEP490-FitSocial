@@ -15,11 +15,16 @@ public class ConversationService : IConversationService
 {
     private readonly FitSocialDbContext _context;
     private readonly IChatRealtimeNotifier _realtimeNotifier;
+    private readonly INotificationService _notificationService;
 
-    public ConversationService(FitSocialDbContext context, IChatRealtimeNotifier realtimeNotifier)
+    public ConversationService(
+        FitSocialDbContext context,
+        IChatRealtimeNotifier realtimeNotifier,
+        INotificationService notificationService)
     {
         _context = context;
         _realtimeNotifier = realtimeNotifier;
+        _notificationService = notificationService;
     }
 
     public async Task<ApiResponseDto<List<ConversationDto>>> GetUserConversationsAsync(Guid userId)
@@ -316,6 +321,24 @@ public class ConversationService : IConversationService
             // 6. Broadcast message realtime through SignalR to all participants
             var participantUserIds = conv.Participants.Select(p => p.UserId).ToList();
             await _realtimeNotifier.BroadcastMessageAsync(participantUserIds, broadcastDto);
+
+            // 6.1 UC-15: Send realtime notification to all participants except the sender
+            var recipientUserIds = conv.Participants
+                .Where(p => p.UserId != currentUserId)
+                .Select(p => p.UserId)
+                .ToList();
+
+            if (recipientUserIds.Any())
+            {
+                try
+                {
+                    await _notificationService.CreateAndSendNewMessageNotificationAsync(message, sender, recipientUserIds);
+                }
+                catch
+                {
+                    // Failures in notification must not fail message delivery
+                }
+            }
 
             // 7. Return success response to sender
             var responseDto = new MessageDto

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using FitSocial.API.Hubs;
 using FitSocial.Application.DTOs.Conversations;
+using FitSocial.Application.DTOs.Notifications;
 using FitSocial.Application.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 
@@ -27,5 +28,15 @@ public class ChatRealtimeNotifier : IChatRealtimeNotifier
 
         var groupNames = participantUserIds.Select(id => $"User_{id}").ToList();
         await _hubContext.Clients.Groups(groupNames).SendAsync("ReceiveMessage", message);
+    }
+
+    public async Task SendNotificationAsync(Guid recipientUserId, NotificationDto notification)
+    {
+        if (recipientUserId == Guid.Empty || notification == null)
+        {
+            return;
+        }
+
+        await _hubContext.Clients.Group($"User_{recipientUserId}").SendAsync("ReceiveNotification", notification);
     }
 }

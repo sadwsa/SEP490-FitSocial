@@ -1,9 +1,12 @@
+using FitSocial.Application.Commands.Posts;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Posts;
+using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using FitSocial.Domain.Policies;
 
 namespace FitSocial.Application.Services;
 
@@ -14,72 +17,107 @@ public class PostService : IPostService
     private readonly ISportRepository _sports;
     private readonly ILocationRepository _locations;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IEditPostCommandHandler _editPostCommandHandler;
+    private readonly IDeletePostCommandHandler _deletePostCommandHandler;
 
     public PostService(
         IPostRepository posts,
         IUserRepository users,
         ISportRepository sports,
         ILocationRepository locations,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IEditPostCommandHandler editPostCommandHandler,
+        IDeletePostCommandHandler deletePostCommandHandler)
     {
         _posts = posts;
         _users = users;
         _sports = sports;
         _locations = locations;
         _unitOfWork = unitOfWork;
+        _editPostCommandHandler = editPostCommandHandler;
+        _deletePostCommandHandler = deletePostCommandHandler;
+    }
+
+    public Task<ApiResponseDto<PostDto>> EditPostAsync(EditPostCommand command, CancellationToken cancellationToken = default)
+    {
+        return _editPostCommandHandler.HandleAsync(command, cancellationToken);
+    }
+
+    public Task<ApiResponseDto<bool>> DeletePostAsync(Guid postId, Guid currentUserId, string currentUserRole, CancellationToken cancellationToken = default)
+    {
+        var command = new DeletePostCommand
+        {
+            PostId = postId,
+            CurrentUserId = currentUserId,
+            CurrentUserRole = currentUserRole
+        };
+        return _deletePostCommandHandler.HandleAsync(command, cancellationToken);
     }
 
     public async Task<ApiResponseDto<PostDto>> CreatePostAsync(
         Guid authorId,
+        string currentUserRole,
         CreatePostRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        // 1. Check author account
+        // 1. Check author account and lock state
         var author = await _users.GetByIdAsync(authorId, cancellationToken);
         if (author == null)
         {
-            return ApiResponseDto<PostDto>.Fail("Author account not found.");
+            throw new NotFoundException("Author account not found.");
         }
 
         if (author.IsLocked == true)
         {
-            return ApiResponseDto<PostDto>.Fail("Your account is locked and cannot create posts.");
+            throw new ForbiddenException("Your account is locked and cannot create posts.");
         }
 
-        // 2. Validate PostType is not null or whitespace
+        // 2. Validate PostType and Role permission
         if (string.IsNullOrWhiteSpace(request.PostType))
         {
-            return ApiResponseDto<PostDto>.Fail("PostType cannot be empty.");
+            throw new ValidationException("PostType is required and cannot be empty or whitespace.");
         }
 
-        // 3. Validate Sport is not null and exists
+        if (!PostRolePolicy.TryParsePostType(request.PostType, out var parsedPostType))
+        {
+            throw new ValidationException($"Invalid PostType '{request.PostType}'. Allowed types: Normal, FindCoach, FindTrainee.");
+        }
+
+        if (!PostRolePolicy.IsPostTypeAllowedForRole(currentUserRole, parsedPostType))
+        {
+            throw new ForbiddenException(
+                $"Role '{currentUserRole}' is not permitted to select PostType '{parsedPostType}'. " +
+                $"Trainee can only select Normal or FindCoach; Coach can select Normal, FindCoach, or FindTrainee.");
+        }
+
+        // 3. Validate Sport exists
         if (request.SportId == Guid.Empty)
         {
-            return ApiResponseDto<PostDto>.Fail("Sport cannot be empty.");
+            throw new ValidationException("Sport is required and cannot be empty.");
         }
 
         var sport = await _sports.GetByIdAsync(request.SportId, cancellationToken);
         if (sport == null)
         {
-            return ApiResponseDto<PostDto>.Fail("Selected sport does not exist.");
+            throw new NotFoundException($"Selected sport with ID '{request.SportId}' does not exist.");
         }
 
-        // 4. Validate Location is not null and exists
+        // 4. Validate Location exists
         if (request.LocationId == Guid.Empty)
         {
-            return ApiResponseDto<PostDto>.Fail("Location cannot be empty.");
+            throw new ValidationException("Location is required and cannot be empty.");
         }
 
         var location = await _locations.GetByIdAsync(request.LocationId, cancellationToken);
         if (location == null)
         {
-            return ApiResponseDto<PostDto>.Fail("Selected location does not exist.");
+            throw new NotFoundException($"Selected location with ID '{request.LocationId}' does not exist.");
         }
 
-        // 5. Validate media count (max 10, images or videos)
+        // 5. Validate media count (max 10 total)
         if (request.Media != null && request.Media.Count > PostConstants.MaxMediaCount)
         {
-            return ApiResponseDto<PostDto>.Fail($"A post can contain at most {PostConstants.MaxMediaCount} media items (photos or videos). Found {request.Media.Count}.");
+            throw new BusinessException($"A post can contain at most {PostConstants.MaxMediaCount} media items in total (photos or videos combined). Found {request.Media.Count}.");
         }
 
         // 6. Validate each media item
@@ -88,25 +126,40 @@ public class PostService : IPostService
             for (int i = 0; i < request.Media.Count; i++)
             {
                 var item = request.Media[i];
-                if (string.IsNullOrWhiteSpace(item.MediaUrl))
+                if (item == null)
                 {
-                    return ApiResponseDto<PostDto>.Fail($"Media #{i + 1} is missing MediaUrl.");
+                    throw new ValidationException($"Media item at index {i} cannot be null.");
                 }
 
-                var mediaType = item.MediaType?.Trim().ToUpperInvariant();
+                if (string.IsNullOrWhiteSpace(item.MediaUrl))
+                {
+                    throw new ValidationException($"Media #{i + 1} is missing MediaUrl.");
+                }
+
+                if (string.IsNullOrWhiteSpace(item.MediaType))
+                {
+                    throw new ValidationException($"Media #{i + 1} is missing MediaType.");
+                }
+
+                var mediaType = item.MediaType.Trim().ToUpperInvariant();
                 if (mediaType != PostConstants.MediaTypes.Image && mediaType != PostConstants.MediaTypes.Video)
                 {
-                    return ApiResponseDto<PostDto>.Fail($"Media #{i + 1} has an invalid MediaType '{item.MediaType}'. Only IMAGE or VIDEO is allowed.");
+                    throw new ValidationException($"Media #{i + 1} has an invalid MediaType '{item.MediaType}'. Only IMAGE or VIDEO is allowed.");
                 }
             }
         }
 
-        // 7. Post must have text content or at least one media item
+        // 7. Validate content requirement
+        if (!string.IsNullOrWhiteSpace(request.Content) && request.Content.Length > PostConstants.MaxContentLength)
+        {
+            throw new ValidationException($"Content must not exceed {PostConstants.MaxContentLength} characters.");
+        }
+
         var hasContent = !string.IsNullOrWhiteSpace(request.Content);
         var hasMedia = request.Media != null && request.Media.Count > 0;
         if (!hasContent && !hasMedia)
         {
-            return ApiResponseDto<PostDto>.Fail("Post must contain text content or at least one image/video.");
+            throw new ValidationException("Post must contain text content or at least one image/video.");
         }
 
         // 8. Initialize Post entity
@@ -116,7 +169,7 @@ public class PostService : IPostService
             Id = Guid.NewGuid(),
             AuthorId = authorId,
             Content = request.Content?.Trim(),
-            PostType = request.PostType.Trim(),
+            PostType = parsedPostType.ToString(),
             SportId = request.SportId,
             LocationId = request.LocationId,
             CreatedAt = now,
@@ -140,9 +193,18 @@ public class PostService : IPostService
             }
         }
 
-        // 10. Persist to database
-        await _posts.AddAsync(post, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        // 10. Persist to database within transaction
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await _posts.AddAsync(post, cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
 
         // 11. Return response DTO
         var resultDto = new PostDto
@@ -192,12 +254,70 @@ public class PostService : IPostService
         Guid? currentUserId = null,
         CancellationToken cancellationToken = default)
     {
+        // 1. Validate PageNumber & PageSize
+        if (query.PageNumber < 1)
+        {
+            throw new ValidationException("PageNumber must be greater than or equal to 1.");
+        }
+
+        if (query.PageSize < 1)
+        {
+            throw new ValidationException("PageSize must be greater than or equal to 1.");
+        }
+
+        if (query.PageSize > 50)
+        {
+            throw new ValidationException("PageSize must not exceed 50 items per page.");
+        }
+
+        // 2. Validate PostType if specified
+        string? normalizedPostType = null;
+        if (!string.IsNullOrWhiteSpace(query.PostType))
+        {
+            if (!PostRolePolicy.TryParsePostType(query.PostType, out var parsedType))
+            {
+                throw new ValidationException($"Invalid PostType '{query.PostType}'. Allowed values: Normal, FindCoach, FindTrainee.");
+            }
+            normalizedPostType = parsedType.ToString();
+        }
+
+        // 3. Validate SportId if specified
+        if (query.SportId.HasValue)
+        {
+            if (query.SportId.Value == Guid.Empty)
+            {
+                throw new ValidationException("SportId cannot be empty GUID.");
+            }
+
+            var sport = await _sports.GetByIdAsync(query.SportId.Value, cancellationToken);
+            if (sport == null)
+            {
+                throw new NotFoundException($"Selected sport with ID '{query.SportId.Value}' does not exist.");
+            }
+        }
+
+        // 4. Validate LocationId if specified
+        if (query.LocationId.HasValue)
+        {
+            if (query.LocationId.Value == Guid.Empty)
+            {
+                throw new ValidationException("LocationId cannot be empty GUID.");
+            }
+
+            var location = await _locations.GetByIdAsync(query.LocationId.Value, cancellationToken);
+            if (location == null)
+            {
+                throw new NotFoundException($"Selected location with ID '{query.LocationId.Value}' does not exist.");
+            }
+        }
+
+        // 5. Query database with filtering and pagination
         var (items, totalCount) = await _posts.GetPagedPostsAsync(
-            query.PostType,
+            normalizedPostType,
             query.SportId,
             query.LocationId,
             query.AuthorId,
-            query.SearchTerm,
+            query.EffectiveKeyword,
             query.PageNumber,
             query.PageSize,
             cancellationToken);

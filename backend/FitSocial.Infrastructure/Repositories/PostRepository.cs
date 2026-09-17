@@ -24,6 +24,24 @@ public class PostRepository : Repository<Post>, IPostRepository
             .FirstOrDefaultAsync(p => p.Id == id && (p.IsDeleted == null || p.IsDeleted == false), cancellationToken);
     }
 
+    public async Task<Post?> GetByIdWithMediaAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .Include(p => p.PostMedia)
+            .Include(p => p.Author)
+            .Include(p => p.Sport)
+            .Include(p => p.Location)
+            .Include(p => p.PostInteractions)
+            .Include(p => p.Comments)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(p => p.Id == id && (p.IsDeleted == null || p.IsDeleted == false), cancellationToken);
+    }
+
+    public void RemoveMediaRange(IEnumerable<PostMedium> mediaItems)
+    {
+        DbContext.PostMedia.RemoveRange(mediaItems);
+    }
+
     public async Task<(List<Post> Items, int TotalCount)> GetPagedPostsAsync(
         string? postType,
         Guid? sportId,
@@ -34,7 +52,7 @@ public class PostRepository : Repository<Post>, IPostRepository
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        var query = DbSet.AsQueryable();
+        var query = DbSet.AsNoTracking();
 
         query = query.Where(p => p.IsDeleted == null || p.IsDeleted == false);
 
@@ -62,8 +80,7 @@ public class PostRepository : Repository<Post>, IPostRepository
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
             var term = $"%{searchTerm.Trim()}%";
-            query = query.Where(p => (p.Content != null && EF.Functions.ILike(p.Content, term))
-                                  || (p.Author.FullName != null && EF.Functions.ILike(p.Author.FullName, term)));
+            query = query.Where(p => p.Content != null && EF.Functions.ILike(p.Content, term));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

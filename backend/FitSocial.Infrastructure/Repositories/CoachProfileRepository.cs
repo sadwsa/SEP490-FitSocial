@@ -17,4 +17,12 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
             .Include(p => p.Sports)
             .FirstOrDefaultAsync(p => p.CoachId == coachId, cancellationToken);
     }
+
+    public async Task<IEnumerable<CoachProfile>> GetAllCoachesWithDetailsAsync(CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .Include(c => c.Coach)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
 }

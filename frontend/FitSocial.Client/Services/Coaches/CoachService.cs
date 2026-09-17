@@ -2,6 +2,7 @@
 using FitSocial.Client.Models.Coaches;
 using FitSocial.Client.Services.Http;
 using System.Collections.Generic;
+using System;
 using System.Threading.Tasks;
 
 namespace FitSocial.Client.Services.Coaches;
@@ -16,8 +17,16 @@ public class CoachService : ICoachService
         _apiClient = apiClient;
     }
 
-    public async Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync()
+    public async Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null)
     {
-        return await _apiClient.GetAsync<IEnumerable<CoachListDto>>(BaseEndpoint);
+        var queryParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+            queryParts.Add($"searchKeyword={Uri.EscapeDataString(searchKeyword)}");
+
+        if (minExperience.HasValue && minExperience.Value > 0)
+            queryParts.Add($"minExperience={minExperience.Value}");
+
+        var queryString = queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "";
+        return await _apiClient.GetAsync<IEnumerable<CoachListDto>>($"{BaseEndpoint}{queryString}");
     }
 }

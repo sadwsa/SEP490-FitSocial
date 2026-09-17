@@ -9,7 +9,7 @@ namespace FitSocial.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize] // Yêu cầu đăng nhập để xem danh sách Coach
+[Authorize]
 public class CoachesController : ControllerBase
 {
     private readonly ICoachService _coachService;
@@ -20,9 +20,9 @@ public class CoachesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAllCoaches()
+    public async Task<IActionResult> GetAllCoaches([FromQuery] string? searchKeyword, [FromQuery] int? minExperience)
     {
-        var result = await _coachService.GetAllCoachesAsync();
+        var result = await _coachService.GetAllCoachesAsync(searchKeyword, minExperience);
         return Ok(result);
     }
 }

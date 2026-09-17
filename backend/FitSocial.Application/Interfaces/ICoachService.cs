@@ -6,5 +6,5 @@ namespace FitSocial.Application.Interfaces;
 
 public interface ICoachService
 {
-    Task<IEnumerable<CoachListDto>> GetAllCoachesAsync();
+    Task<IEnumerable<CoachListDto>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null);
 }

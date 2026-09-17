@@ -142,7 +142,6 @@ public class EditPostCommandHandler : IEditPostCommandHandler
                 {
                     var newMedium = new PostMedium
                     {
-                        Id = Guid.NewGuid(),
                         PostId = post.Id,
                         MediaUrl = item.MediaUrl.Trim(),
                         MediaType = item.MediaType.Trim().ToUpperInvariant(),
@@ -180,13 +179,14 @@ public class EditPostCommandHandler : IEditPostCommandHandler
             LikeCount = post.PostInteractions.Count,
             CommentCount = post.Comments.Count,
             IsLikedByCurrentUser = false,
-            Media = post.PostMedia.Select(pm => new PostMediaDto
-            {
-                Id = pm.Id,
-                MediaUrl = pm.MediaUrl ?? string.Empty,
-                MediaType = pm.MediaType ?? string.Empty,
-                CreatedAt = pm.CreatedAt
-            }).ToList()
+            Media = post.PostMedia
+                .Select(pm => new PostMediaDto
+                {
+                    Id = pm.Id,
+                    MediaUrl = pm.MediaUrl ?? string.Empty,
+                    MediaType = pm.MediaType ?? string.Empty,
+                    CreatedAt = pm.CreatedAt
+                }).ToList()
         };
 
         return ApiResponseDto<PostDto>.Ok(responseDto, "Post updated successfully.");

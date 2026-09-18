@@ -70,19 +70,17 @@ public class ApiClient
                 await AttachBearerTokenAsync();
                 response = await _http.GetAsync(endpoint);
             }
-
-            var (result, preview) = await ApiResponseReader.ReadAsync<T>(response);
-            if (result != null)
-            {
-                return result;
-            }
-
             if (response.IsSuccessStatusCode)
             {
-                return new ApiResponse<T> { Success = true };
+                var data = await response.Content.ReadFromJsonAsync<T>();
+                return new ApiResponse<T> { Success = true, Data = data };
             }
 
-            return ApiResponseReader.Unexpected<T>(response, preview, $"API Error: {response.StatusCode}");
+            return new ApiResponse<T>
+            {
+                Success = false,
+                Message = $"API Error: {response.StatusCode}"
+            };
         }
         catch (Exception ex)
         {
@@ -106,94 +104,21 @@ public class ApiClient
                 await AttachBearerTokenAsync();
                 response = await _http.PostAsJsonAsync(endpoint, payload);
             }
-
-            var (result, preview) = await ApiResponseReader.ReadAsync<TResult>(response);
-            if (result != null)
-            {
-                return result;
-            }
-
             if (response.IsSuccessStatusCode)
             {
-                return new ApiResponse<TResult> { Success = true };
+                var data = await response.Content.ReadFromJsonAsync<TResult>();
+                return new ApiResponse<TResult> { Success = true, Data = data };
             }
 
-            return ApiResponseReader.Unexpected<TResult>(response, preview, $"API Error: {response.StatusCode}");
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"API Error: {response.StatusCode}"
+            };
         }
         catch (Exception ex)
         {
             return new ApiResponse<TResult>
-            {
-                Success = false,
-                Message = $"Network Error: {ex.Message}"
-            };
-        }
-    }
-
-    public async Task<ApiResponse<TResult>> PutAsync<TRequest, TResult>(string endpoint, TRequest payload)
-    {
-        try
-        {
-            await AttachBearerTokenAsync();
-            var response = await _http.PutAsJsonAsync(endpoint, payload);
-            if (response.StatusCode == HttpStatusCode.Unauthorized &&
-                await TryRefreshOnceAsync(endpoint, response.StatusCode))
-            {
-                await AttachBearerTokenAsync();
-                response = await _http.PutAsJsonAsync(endpoint, payload);
-            }
-
-            var (result, preview) = await ApiResponseReader.ReadAsync<TResult>(response);
-            if (result != null)
-            {
-                return result;
-            }
-
-            if (response.IsSuccessStatusCode)
-            {
-                return new ApiResponse<TResult> { Success = true };
-            }
-
-            return ApiResponseReader.Unexpected<TResult>(response, preview, $"API Error: {response.StatusCode}");
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<TResult>
-            {
-                Success = false,
-                Message = $"Network Error: {ex.Message}"
-            };
-        }
-    }
-
-    public async Task<ApiResponse<T>> DeleteAsync<T>(string endpoint)
-    {
-        try
-        {
-            await AttachBearerTokenAsync();
-            var response = await _http.DeleteAsync(endpoint);
-            if (response.StatusCode == HttpStatusCode.Unauthorized &&
-                await TryRefreshOnceAsync(endpoint, response.StatusCode))
-            {
-                await AttachBearerTokenAsync();
-                response = await _http.DeleteAsync(endpoint);
-            }
-
-            var (result, preview) = await ApiResponseReader.ReadAsync<T>(response);
-            if (result != null)
-            {
-                return result;
-            }
-
-            return new ApiResponse<T>
-            {
-                Success = response.IsSuccessStatusCode,
-                Message = response.IsSuccessStatusCode ? null : $"API Error: {response.StatusCode}"
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<T>
             {
                 Success = false,
                 Message = $"Network Error: {ex.Message}"
@@ -213,17 +138,6 @@ public class ApiClient
                 await AttachBearerTokenAsync();
                 response = await _http.DeleteAsync(endpoint);
             }
-
-            var (result, _) = await ApiResponseReader.ReadAsync<object>(response);
-            if (result != null)
-            {
-                return new ApiResponse
-                {
-                    Success = result.Success,
-                    Message = result.Message
-                };
-            }
-
             return new ApiResponse
             {
                 Success = response.IsSuccessStatusCode,

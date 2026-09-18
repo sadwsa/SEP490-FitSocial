@@ -37,26 +37,12 @@
 # ------------------------------------------
 # 3. Environment, Secrets & Local Configs
 # ------------------------------------------
-<<<<<<< HEAD
-# AppSettings chứa thông tin nhạy cảm (Connection strings, API keys, Passwords)
-# Giữ lại appsettings.json gốc (template mẫu), bỏ qua các file môi trường & local
-=======
-# Bỏ qua các file cấu hình chứa Secret cá nhân / Môi trường
->>>>>>> origin/dev
-**/*appsettings.Development.json
-**/*appsettings.*.Development.json
-**/*appsettings.Production.json
-**/*appsettings.Staging.json
-**/*appsettings.local.json
-**/*appsettings.*.local.json
+# Chặn toàn bộ file appsettings (cả gốc và môi trường) trên Backend & Frontend
+**/appsettings.json
+**/appsettings.*.json
+**/*appsettings*.json
 **/secrets.json
 
-<<<<<<< HEAD
-=======
-# Nếu team quyết định KHÔNG PUSH file appsettings.json chính chủ:
-**/appsettings.json
-
->>>>>>> origin/dev
 # Environment variables
 .env
 .env.*
@@ -90,11 +76,7 @@ desktop.ini
 $RECYCLE.BIN/
 
 # ------------------------------------------
-<<<<<<< HEAD
-# 6. Node / Web Legacy
-=======
 # 6. Node / Web & Temporary Files
->>>>>>> origin/dev
 # ------------------------------------------
 **/node_modules/
 npm-debug.log*

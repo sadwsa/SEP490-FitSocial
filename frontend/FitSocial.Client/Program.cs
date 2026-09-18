@@ -11,6 +11,7 @@ using FitSocial.Client.Services.Sports;
 using FitSocial.Client.Services.Files;
 using FitSocial.Client.Services.Payment;
 using FitSocial.Client.Services.TrainingPackages;
+using FitSocial.Client.Services.Coaches;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -40,5 +41,6 @@ builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<INotificationHubClient, NotificationHubClient>();
 builder.Services.AddScoped<ITrainingPackageService, TrainingPackageService>();
 
+builder.Services.AddScoped<ICoachService, CoachService>();
 
 await builder.Build().RunAsync();

@@ -57,6 +57,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
 
+        services.AddScoped<ICoachService, CoachService>();
 
         return services;
     }

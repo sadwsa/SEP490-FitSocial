@@ -1,4 +1,3 @@
-using FitSocial.Application.Commands.Posts;
 using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Interfaces;
@@ -22,8 +21,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IPostService, PostService>();
-        services.AddScoped<IEditPostCommandHandler, EditPostCommandHandler>();
-        services.AddScoped<IDeletePostCommandHandler, DeletePostCommandHandler>();
         services.AddScoped<ICoachService, CoachService>();
         return services;
     }

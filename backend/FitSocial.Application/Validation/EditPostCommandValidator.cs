@@ -1,73 +1,73 @@
-using FitSocial.Application.Commands.Posts;
+using FitSocial.Application.DTOs.Posts;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Policies;
 
 namespace FitSocial.Application.Validation;
 
-public static class EditPostCommandValidator
+public static class EditPostRequestValidator
 {
-    public static (bool IsValid, string? ErrorMessage) Validate(EditPostCommand command)
+    public static (bool IsValid, string? ErrorMessage) Validate(Guid postId, Guid currentUserId, EditPostRequestDto request)
     {
         // 1. PostId
-        if (command.PostId == Guid.Empty)
+        if (postId == Guid.Empty)
         {
             return (false, "PostId is required and cannot be empty.");
         }
 
         // 2. CurrentUserId
-        if (command.CurrentUserId == Guid.Empty)
+        if (currentUserId == Guid.Empty)
         {
             return (false, "User is not authenticated or UserId is invalid.");
         }
 
         // 3. PostType: không null, không empty, không whitespace
-        if (string.IsNullOrWhiteSpace(command.PostType))
+        if (string.IsNullOrWhiteSpace(request.PostType))
         {
             return (false, "PostType is required and cannot be empty or whitespace.");
         }
 
-        if (!PostRolePolicy.TryParsePostType(command.PostType, out _))
+        if (!PostRolePolicy.TryParsePostType(request.PostType, out _))
         {
-            return (false, $"Invalid PostType '{command.PostType}'. Allowed types: Normal, FindCoach, FindTrainee.");
+            return (false, $"Invalid PostType '{request.PostType}'. Allowed types: Normal, FindCoach, FindTrainee.");
         }
 
         // 4. Content: không null, không empty, không whitespace
-        if (string.IsNullOrWhiteSpace(command.Content))
+        if (string.IsNullOrWhiteSpace(request.Content))
         {
             return (false, "Content is required and cannot be empty or whitespace.");
         }
 
-        if (command.Content.Length > PostConstants.MaxContentLength)
+        if (request.Content.Length > PostConstants.MaxContentLength)
         {
             return (false, $"Content must not exceed {PostConstants.MaxContentLength} characters.");
         }
 
         // 5. SportId & LocationId: không empty
-        if (command.SportId == Guid.Empty)
+        if (request.SportId == Guid.Empty)
         {
             return (false, "SportId is required and cannot be empty.");
         }
 
-        if (command.LocationId == Guid.Empty)
+        if (request.LocationId == Guid.Empty)
         {
             return (false, "LocationId is required and cannot be empty.");
         }
 
         // 6. RemoveMediaIds: không chứa Guid.Empty
-        if (command.RemoveMediaIds != null && command.RemoveMediaIds.Count > 0)
+        if (request.RemoveMediaIds != null && request.RemoveMediaIds.Count > 0)
         {
-            if (command.RemoveMediaIds.Any(id => id == Guid.Empty))
+            if (request.RemoveMediaIds.Any(id => id == Guid.Empty))
             {
                 return (false, "RemoveMediaIds cannot contain empty GUID values.");
             }
         }
 
         // 7. NewMedia Items validation
-        if (command.NewMedia != null && command.NewMedia.Count > 0)
+        if (request.NewMedia != null && request.NewMedia.Count > 0)
         {
-            for (int i = 0; i < command.NewMedia.Count; i++)
+            for (int i = 0; i < request.NewMedia.Count; i++)
             {
-                var item = command.NewMedia[i];
+                var item = request.NewMedia[i];
                 if (item == null)
                 {
                     return (false, $"NewMedia item at index {i} cannot be null.");
@@ -94,3 +94,13 @@ public static class EditPostCommandValidator
         return (true, null);
     }
 }
+
+/// <summary>
+/// Alias kept for backward compatibility with existing references.
+/// </summary>
+public static class EditPostCommandValidator
+{
+    public static (bool IsValid, string? ErrorMessage) Validate(Guid postId, Guid currentUserId, EditPostRequestDto request)
+        => EditPostRequestValidator.Validate(postId, currentUserId, request);
+}
+

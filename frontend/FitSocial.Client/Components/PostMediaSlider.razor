@@ -7,10 +7,12 @@
     @if (Media.Count == 1)
     {
         var single = Media[0];
-        <div id="@containerId" class="relative w-full rounded-xl overflow-hidden mb-3 border border-gray-100 bg-black/5 flex items-center justify-center select-none group">
+        var singleKey = single.Id != Guid.Empty ? single.Id.ToString() : (single.MediaUrl ?? "single");
+        <div id="@containerId" class="relative w-full rounded-xl overflow-hidden mb-3 border border-gray-100 bg-black/5 flex items-center justify-center select-none group" @key="@($"single-box-{singleKey}")">
             @if (single.MediaType?.Equals("VIDEO", StringComparison.OrdinalIgnoreCase) == true)
             {
-                <video id="@GetVideoId(0)"
+                <video @key="@($"single-vid-{singleKey}")"
+                       id="@GetVideoId(0)"
                        src="@single.MediaUrl"
                        controls
                        playsinline
@@ -43,8 +45,9 @@
             }
             else
             {
-                <img src="@single.MediaUrl" alt="Post photo"
-                     class="w-full max-h-[440px] object-cover rounded-xl block" loading="lazy" />
+                <img @key="@($"single-img-{singleKey}")"
+                     src="@single.MediaUrl" alt="Post photo"
+                     class="w-full max-h-[440px] object-cover rounded-xl block" />
             }
         </div>
     }
@@ -58,12 +61,15 @@
                     var index = i;
                     var item = Media[index];
                     var isCurrent = (index == currentIndex);
+                    var itemKey = item.Id != Guid.Empty ? item.Id.ToString() : (item.MediaUrl ?? index.ToString());
 
-                    <div class="slider-slide w-full h-full @(isCurrent ? "is-active flex items-center justify-center" : "hidden")"
+                    <div @key="@($"slide-{itemKey}")"
+                         class="slider-slide w-full h-full @(isCurrent ? "is-active flex items-center justify-center" : "hidden")"
                          style="@(isCurrent ? "" : "display: none !important;")">
                         @if (item.MediaType?.Equals("VIDEO", StringComparison.OrdinalIgnoreCase) == true)
                         {
-                            <video id="@GetVideoId(index)"
+                            <video @key="@($"vid-{itemKey}")"
+                                   id="@GetVideoId(index)"
                                    src="@item.MediaUrl"
                                    controls
                                    playsinline
@@ -73,10 +79,10 @@
                         }
                         else
                         {
-                            <img src="@item.MediaUrl"
+                            <img @key="@($"img-{itemKey}")"
+                                 src="@item.MediaUrl"
                                  alt="Post photo @(index + 1)"
-                                 class="w-full max-h-[460px] object-cover rounded-xl"
-                                 loading="lazy" />
+                                 class="w-full max-h-[460px] object-cover rounded-xl" />
                         }
                     </div>
                 }
@@ -88,7 +94,7 @@
             </div>
 
             <!-- Sound Toggle Button if current item is a video -->
-            @if (Media[currentIndex].MediaType?.Equals("VIDEO", StringComparison.OrdinalIgnoreCase) == true)
+            @if (currentIndex >= 0 && currentIndex < Media.Count && Media[currentIndex].MediaType?.Equals("VIDEO", StringComparison.OrdinalIgnoreCase) == true)
             {
                 <button type="button"
                         @onclick="ToggleMute"
@@ -161,6 +167,27 @@
     private string containerId => $"slider-container-{sliderId}";
     private bool shouldPlayCurrentVideo = false;
     private bool isMuted = true;
+    private string lastMediaSignature = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        if (Media == null || Media.Count == 0)
+        {
+            currentIndex = 0;
+            lastMediaSignature = string.Empty;
+            return;
+        }
+
+        var currentSignature = string.Join("|", Media.Select(m => $"{m.Id}:{m.MediaUrl}"));
+        if (lastMediaSignature != currentSignature)
+        {
+            lastMediaSignature = currentSignature;
+            if (currentIndex >= Media.Count || currentIndex < 0)
+            {
+                currentIndex = 0;
+            }
+        }
+    }
 
     private string GetVideoId(int index) => $"media-vid-{sliderId}-{index}";
 

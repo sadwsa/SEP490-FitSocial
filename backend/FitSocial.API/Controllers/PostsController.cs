@@ -18,10 +18,7 @@ public class PostsController : ControllerBase
         _postService = postService;
     }
 
-    /// <summary>
-    /// Creates a new post.
-    /// Requirements: posttype, sport, and location cannot be null, and media must not exceed 10 items (photos or videos).
-    /// </summary>
+  
     [HttpPost]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<PostDto>), StatusCodes.Status200OK)]
@@ -48,10 +45,7 @@ public class PostsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Edits an existing post. Only the post author (owner) can edit.
-    /// Supports keeping existing media, removing specific media IDs, and adding new media up to 10 total.
-    /// </summary>
+
     [HttpPut("{postId:guid}")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<PostDto>), StatusCodes.Status200OK)]

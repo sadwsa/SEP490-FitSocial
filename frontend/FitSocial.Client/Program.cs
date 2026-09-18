@@ -13,6 +13,8 @@ using FitSocial.Client.Services.Payment;
 using FitSocial.Client.Services.Conversations;
 using FitSocial.Client.Services.Notifications;
 using FitSocial.Client.Services.Locations;
+using FitSocial.Client.Services.TrainingPackages;
+using FitSocial.Client.Services.Coaches;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -44,5 +46,7 @@ builder.Services.AddScoped<INotificationHubClient, NotificationHubClient>();
 builder.Services.AddScoped<IChatHubClient, ChatHubClient>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<ITrainingPackageService, TrainingPackageService>();
+builder.Services.AddScoped<ICoachService, CoachService>();
 
 await builder.Build().RunAsync();

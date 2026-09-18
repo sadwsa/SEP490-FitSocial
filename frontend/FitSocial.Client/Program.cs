@@ -10,6 +10,8 @@ using FitSocial.Client.Services.Realtime;
 using FitSocial.Client.Services.Sports;
 using FitSocial.Client.Services.Files;
 using FitSocial.Client.Services.Payment;
+using FitSocial.Client.Services.Conversations;
+using FitSocial.Client.Services.Notifications;
 using FitSocial.Client.Services.Locations;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -39,5 +41,8 @@ builder.Services.AddScoped<PendingCoachRegistration>();
 builder.Services.AddScoped<IPaymentService, PaymentApiService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<INotificationHubClient, NotificationHubClient>();
+builder.Services.AddScoped<IChatHubClient, ChatHubClient>();
+builder.Services.AddScoped<IConversationService, ConversationService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 await builder.Build().RunAsync();

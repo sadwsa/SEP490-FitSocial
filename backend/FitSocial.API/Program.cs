@@ -8,6 +8,8 @@ using System.Security.Claims;
 using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using FitSocial.Domain.Interfaces;
+using FitSocial.API.Hubs;
+using FitSocial.API.Services;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -63,6 +65,8 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddHttpClient();
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
 
 // Cloudinary Singleton service registration (reuse HttpClient / SocketsHttpHandler connection pool)
 var cloudName = builder.Configuration["Cloudinary:CloudName"];
@@ -97,6 +101,16 @@ builder.Services.AddAuthentication(options =>
     // Multi-layer check filter (Blacklist Jti & TokenVersion) for every request
     options.Events = new JwtBearerEvents
     {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        },
         OnChallenge = async context =>
         {
             context.HandleResponse();
@@ -203,6 +217,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
 
 // Ensure PostType column exists in PostgreSQL database
 using (var scope = app.Services.CreateScope())

@@ -1,0 +1,757 @@
+@page "/messages"
+@page "/messages/{conversationId:guid}"
+@attribute [Authorize]
+@inject IConversationService ConversationService
+@inject IChatHubClient ChatHubClient
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@using System.Security.Claims
+@implements IAsyncDisposable
+
+<PageTitle>Messages | FitSocial</PageTitle>
+
+<div class="ig-messages-container @(ConversationId.HasValue ? "has-selected-conversation" : "")">
+    <!-- Left Sidebar: Conversation List (UC-16 Scope) -->
+    <div class="ig-sidebar">
+        <!-- Header -->
+        <div class="ig-sidebar-header">
+            <h1 class="ig-sidebar-title">Messages</h1>
+            <button class="btn btn-sm btn-light rounded-circle p-2" title="Reload list" @onclick="() => LoadConversationsAsync(true)">
+                <span>🔄</span>
+            </button>
+        </div>
+
+        <!-- Search Bar (local filter) -->
+        <div class="ig-search-box">
+            <input type="text" 
+                   class="ig-search-input" 
+                   placeholder="Search conversations..." 
+                   @bind="_searchTerm" 
+                   @bind:event="oninput" />
+        </div>
+
+        <!-- List Area handling 4 UI States -->
+        <div class="ig-conversation-list">
+            @if (_isLoading)
+            {
+                <!-- 1. Loading State (Skeletons) -->
+                @for (int i = 0; i < 5; i++)
+                {
+                    <div class="ig-loading-skeleton">
+                        <div class="skeleton-avatar"></div>
+                        <div class="skeleton-text-group">
+                            <div class="skeleton-line short"></div>
+                            <div class="skeleton-line long"></div>
+                        </div>
+                    </div>
+                }
+            }
+            else if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <!-- 4. Error State -->
+                <div class="ig-state-container">
+                    <div class="fs-1 mb-2">⚠️</div>
+                    <p class="text-danger fw-medium mb-3">@_errorMessage</p>
+                    <button class="btn btn-sm btn-fit-primary px-3" @onclick="() => LoadConversationsAsync(true)">
+                        Retry
+                    </button>
+                </div>
+            }
+            else if (FilteredConversations == null || !FilteredConversations.Any())
+            {
+                <!-- 3. Empty State -->
+                <div class="ig-state-container">
+                    <div class="fs-1 text-muted mb-2">💬</div>
+                    <p class="fw-semibold text-secondary mb-1">
+                        @(string.IsNullOrWhiteSpace(_searchTerm) ? "No conversations yet" : "No matching conversations found")
+                    </p>
+                    <small class="text-muted d-block">
+                        @(string.IsNullOrWhiteSpace(_searchTerm) 
+                            ? "When you connect with coaches or friends, your messages will appear here." 
+                            : "Try searching with a different keyword.")
+                    </small>
+                </div>
+            }
+            else
+            {
+                <!-- 2. Has Data State -->
+                @foreach (var item in FilteredConversations)
+                {
+                    var isSelected = _selectedConversationId == item.ConversationId;
+                    var isUnread = item.UnreadCount > 0;
+
+                    <div class="ig-conv-item @(isSelected ? "active" : "") @(isUnread ? "unread" : "")" 
+                         @onclick="() => SelectConversation(item.ConversationId)">
+                        <!-- Avatar -->
+                        <div class="ig-avatar-wrapper">
+                            @if (!string.IsNullOrWhiteSpace(item.DisplayAvatar))
+                            {
+                                <img src="@item.DisplayAvatar" alt="@item.Title" class="ig-avatar" />
+                            }
+                            else
+                            {
+                                <div class="ig-avatar-placeholder">
+                                    @GetInitials(item.Title)
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Conversation Information -->
+                        <div class="ig-conv-info">
+                            <div class="ig-conv-header">
+                                <span class="ig-user-name">@item.Title</span>
+                                @if (item.LastMessageAt.HasValue)
+                                {
+                                    <span class="ig-msg-time">@FormatTime(item.LastMessageAt.Value)</span>
+                                }
+                            </div>
+                            <div class="ig-conv-preview">
+                                <p class="ig-msg-text">
+                                    @(string.IsNullOrWhiteSpace(item.LastMessage) ? "Started a conversation" : item.LastMessage)
+                                </p>
+                                @if (item.UnreadCount > 0)
+                                {
+                                    <span class="ig-unread-badge">@item.UnreadCount</span>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Delete conversation action (UC-16.5) -->
+                        <button type="button" 
+                                class="ig-conv-delete-btn" 
+                                title="Delete conversation" 
+                                @onclick="() => PromptDeleteConversation(item.ConversationId, item.Title)" 
+                                @onclick:stopPropagation="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+                            </svg>
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Right Main Area: Placeholder when unselected OR Conversation Detail (UC-16.1 Scope) -->
+    @if (!ConversationId.HasValue)
+    {
+        <!-- Right Main Area: Instagram Inspired Direct Messaging Placeholder (UC-16 Scope) -->
+        <div class="ig-main-placeholder">
+            <div class="ig-placeholder-icon-circle">
+                <span>✉️</span>
+            </div>
+            <h2 class="ig-placeholder-title">Your Messages</h2>
+            <p class="ig-placeholder-sub">
+                Send private messages, schedule workouts, or ask questions to your sports coach.
+            </p>
+        </div>
+    }
+    else
+    {
+        <!-- Right Main Area: Conversation Detail (UC-16.1 Scope) -->
+        <div class="ig-detail-container">
+            @if (_isDetailLoading)
+            {
+                <!-- Loading State -->
+                <div class="ig-detail-header-skeleton">
+                    <div class="skeleton-avatar small"></div>
+                    <div class="skeleton-text-group">
+                        <div class="skeleton-line short"></div>
+                    </div>
+                </div>
+                <div class="ig-detail-loading-body">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading messages...</span>
+                    </div>
+                    <p class="text-muted mt-3 mb-0">Đang tải cuộc trò chuyện...</p>
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(_detailErrorMessage))
+            {
+                <!-- Error State -->
+                <div class="ig-detail-state-container">
+                    <div class="fs-1 mb-2">⚠️</div>
+                    <h5 class="fw-semibold text-danger mb-2">Không thể tải cuộc trò chuyện</h5>
+                    <p class="text-muted mb-3">@_detailErrorMessage</p>
+                    <button class="btn btn-sm btn-outline-primary px-3" @onclick="() => LoadConversationDetailAsync(ConversationId.Value)">
+                        Thử lại
+                    </button>
+                </div>
+            }
+            else if (_conversationDetail != null)
+            {
+                <!-- Conversation Header -->
+                <div class="ig-detail-header">
+                    <button class="ig-back-btn d-md-none" title="Quay lại danh sách" @onclick="BackToConversationList">
+                        <span>←</span>
+                    </button>
+                    <div class="ig-avatar-wrapper">
+                        @if (!string.IsNullOrWhiteSpace(_conversationDetail.DisplayAvatar))
+                        {
+                            <img src="@_conversationDetail.DisplayAvatar" alt="@_conversationDetail.Title" class="ig-avatar detail-avatar" />
+                        }
+                        else
+                        {
+                            <div class="ig-avatar-placeholder detail-avatar">
+                                @GetInitials(_conversationDetail.Title)
+                            </div>
+                        }
+                    </div>
+                    <div class="ig-detail-header-info">
+                        <h2 class="ig-detail-title">@_conversationDetail.Title</h2>
+                        <span class="ig-detail-subtitle">
+                            @(string.Equals(_conversationDetail.Type, "GROUP", StringComparison.OrdinalIgnoreCase) ? "Group conversation" : "Active conversation")
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Message History Area -->
+                <div class="ig-messages-history">
+                    @if (_conversationDetail.Messages == null || !_conversationDetail.Messages.Any())
+                    {
+                        <div class="ig-empty-messages">
+                            <div class="ig-empty-messages-icon">💬</div>
+                            <p class="fw-medium text-secondary mb-0">Chưa có tin nhắn nào.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var msg in _conversationDetail.Messages)
+                        {
+                            <div class="ig-msg-row @(msg.IsMine ? "mine" : "theirs")">
+                                @if (!msg.IsMine)
+                                {
+                                    <div class="ig-msg-sender-avatar-wrap">
+                                        @if (!string.IsNullOrWhiteSpace(msg.SenderAvatar))
+                                        {
+                                            <img src="@msg.SenderAvatar" alt="@msg.SenderName" class="ig-msg-sender-avatar" />
+                                        }
+                                        else
+                                        {
+                                            <div class="ig-msg-sender-avatar-placeholder">
+                                                @GetInitials(msg.SenderName)
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                <div class="ig-msg-bubble-wrap">
+                                    @if (!msg.IsMine && string.Equals(_conversationDetail.Type, "GROUP", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="ig-msg-sender-name">@msg.SenderName</span>
+                                    }
+                                    <div class="ig-msg-bubble">
+                                        <p class="ig-msg-content">@msg.Content</p>
+                                        @if (msg.CreatedAt.HasValue)
+                                        {
+                                            <span class="ig-msg-time-badge">@FormatMessageTime(msg.CreatedAt.Value)</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- Message Composer Area (UC-16.1.1 Scope) -->
+                <div class="ig-composer-wrapper">
+                    <div class="ig-composer-box">
+                        <textarea class="ig-composer-input"
+                                  placeholder="Type a message..."
+                                  rows="1"
+                                  maxlength="300"
+                                  @bind="_messageText"
+                                  @bind:event="oninput"
+                                  @onkeydown="HandleKeyDown"
+                                  disabled="@_isSending"></textarea>
+                        <button class="ig-send-btn"
+                                disabled="@(_isSending || string.IsNullOrWhiteSpace(_messageText))"
+                                title="Send message"
+                                @onclick="SendMessageAsync">
+                            @if (_isSending)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                            }
+                            else
+                            {
+                                <span>Send</span>
+                            }
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_sendErrorMessage))
+                    {
+                        <div class="ig-composer-error">@_sendErrorMessage</div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_showDeleteModal)
+{
+    <div class="ig-modal-backdrop" @onclick="CancelDelete">
+        <div class="ig-modal-dialog" @onclick:stopPropagation="true">
+            <div class="ig-modal-content">
+                <div class="ig-modal-icon-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </div>
+                <h3 class="ig-modal-title">Delete conversation?</h3>
+                <p class="ig-modal-text">
+                    Delete this conversation? You can no longer see the previous messages in this chat.
+                </p>
+                @if (!string.IsNullOrEmpty(_deleteErrorMessage))
+                {
+                    <div class="ig-modal-error">@_deleteErrorMessage</div>
+                }
+                <div class="ig-modal-actions">
+                    <button type="button" class="ig-modal-btn ig-modal-btn-cancel" disabled="@_isDeleting" @onclick="CancelDelete">
+                        Cancel
+                    </button>
+                    <button type="button" class="ig-modal-btn ig-modal-btn-delete" disabled="@_isDeleting" @onclick="ConfirmDeleteConversationAsync">
+                        @if (_isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Deleting...</span>
+                        }
+                        else
+                        {
+                            <span>Delete</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid? ConversationId { get; set; }
+
+    private List<ConversationDto>? _conversations;
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private string _searchTerm = "";
+    private Guid? _selectedConversationId;
+
+    // UC-16.1 Conversation Detail states
+    private ConversationDetailDto? _conversationDetail;
+    private bool _isDetailLoading = false;
+    private string? _detailErrorMessage;
+    private Guid? _loadedConversationId;
+    private bool _shouldScrollToBottom = false;
+
+    // UC-16.1.1 Send Message states
+    private string _messageText = "";
+    private bool _isSending = false;
+    private string? _sendErrorMessage;
+    private Guid _currentUserId = Guid.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var userIdStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                         ?? user.FindFirst("sub")?.Value;
+            if (Guid.TryParse(userIdStr, out var parsedId))
+            {
+                _currentUserId = parsedId;
+            }
+
+            ChatHubClient.OnMessageReceived += HandleReceiveMessage;
+            await ChatHubClient.StartAsync();
+        }
+        catch { }
+
+        await LoadConversationsAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ConversationId.HasValue && ConversationId.Value != _loadedConversationId)
+        {
+            _selectedConversationId = ConversationId.Value;
+            await LoadConversationDetailAsync(ConversationId.Value);
+        }
+        else if (!ConversationId.HasValue)
+        {
+            _selectedConversationId = null;
+            _loadedConversationId = null;
+            _conversationDetail = null;
+            _detailErrorMessage = null;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_shouldScrollToBottom)
+        {
+            _shouldScrollToBottom = false;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("eval", "var el = document.querySelector('.ig-messages-history'); if (el) el.scrollTop = el.scrollHeight;");
+            }
+            catch { }
+        }
+    }
+
+    private async Task LoadConversationsAsync(bool showLoading = true)
+    {
+        if (showLoading)
+        {
+            _isLoading = true;
+            _errorMessage = null;
+            StateHasChanged();
+        }
+
+        try
+        {
+            var response = await ConversationService.GetConversationsAsync();
+            if (response.Success)
+            {
+                _conversations = response.Data ?? new List<ConversationDto>();
+                if (_selectedConversationId.HasValue)
+                {
+                    var activeConv = _conversations.FirstOrDefault(c => c.ConversationId == _selectedConversationId.Value);
+                    if (activeConv != null)
+                    {
+                        activeConv.UnreadCount = 0;
+                    }
+                }
+            }
+            else
+            {
+                if (showLoading)
+                {
+                    _errorMessage = response.Message ?? "Failed to load conversations.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            if (showLoading)
+            {
+                _errorMessage = $"Connection error: {ex.Message}";
+            }
+        }
+        finally
+        {
+            if (showLoading)
+            {
+                _isLoading = false;
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadConversationDetailAsync(Guid convId)
+    {
+        _isDetailLoading = true;
+        _detailErrorMessage = null;
+        _conversationDetail = null;
+
+        try
+        {
+            var response = await ConversationService.GetConversationDetailAsync(convId);
+            if (response.Success && response.Data != null)
+            {
+                _conversationDetail = response.Data;
+                _loadedConversationId = convId;
+                _shouldScrollToBottom = true;
+
+                var convItem = _conversations?.FirstOrDefault(c => c.ConversationId == convId);
+                if (convItem != null)
+                {
+                    convItem.UnreadCount = 0;
+                }
+            }
+            else
+            {
+                _detailErrorMessage = response.Message ?? "Không thể tải chi tiết cuộc trò chuyện.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _detailErrorMessage = $"Lỗi kết nối: {ex.Message}";
+        }
+        finally
+        {
+            _isDetailLoading = false;
+        }
+    }
+
+    private IEnumerable<ConversationDto>? FilteredConversations
+    {
+        get
+        {
+            if (_conversations == null) return null;
+            if (string.IsNullOrWhiteSpace(_searchTerm)) return _conversations;
+
+            var term = _searchTerm.Trim().ToLowerInvariant();
+            return _conversations.Where(c =>
+                (!string.IsNullOrEmpty(c.Title) && c.Title.ToLowerInvariant().Contains(term)) ||
+                (!string.IsNullOrEmpty(c.OtherUserName) && c.OtherUserName.ToLowerInvariant().Contains(term)) ||
+                (!string.IsNullOrEmpty(c.LastMessage) && c.LastMessage.ToLowerInvariant().Contains(term))
+            );
+        }
+    }
+
+    private void SelectConversation(Guid id)
+    {
+        _selectedConversationId = id;
+        var conv = _conversations?.FirstOrDefault(c => c.ConversationId == id);
+        if (conv != null)
+        {
+            conv.UnreadCount = 0;
+        }
+        Navigation.NavigateTo($"messages/{id}");
+    }
+
+    private void BackToConversationList()
+    {
+        _selectedConversationId = null;
+        _loadedConversationId = null;
+        _conversationDetail = null;
+        _detailErrorMessage = null;
+        Navigation.NavigateTo("messages");
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "💬";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpperInvariant();
+    }
+
+    private static string FormatTime(DateTime dt)
+    {
+        var localTime = dt.ToLocalTime();
+        var now = DateTime.Now;
+        var diff = now - localTime;
+
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m";
+        if (diff.TotalHours < 24 && localTime.Date == now.Date) return localTime.ToString("HH:mm");
+        if (localTime.Date == now.Date.AddDays(-1)) return "Yesterday";
+        if (diff.TotalDays < 7) return localTime.ToString("ddd");
+
+        return localTime.ToString("MM/dd");
+    }
+
+    private static string FormatMessageTime(DateTime dt)
+    {
+        var localTime = dt.ToLocalTime();
+        var now = DateTime.Now;
+        if (localTime.Date == now.Date)
+        {
+            return localTime.ToString("HH:mm");
+        }
+        if (localTime.Year == now.Year)
+        {
+            return localTime.ToString("dd/MM HH:mm");
+        }
+        return localTime.ToString("dd/MM/yyyy HH:mm");
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessageAsync();
+        }
+    }
+
+    private async Task SendMessageAsync()
+    {
+        if (!ConversationId.HasValue || _isSending) return;
+        if (string.IsNullOrWhiteSpace(_messageText)) return;
+
+        var content = _messageText.Trim();
+        if (content.Length > 300)
+        {
+            _sendErrorMessage = "Message cannot exceed 300 characters.";
+            return;
+        }
+
+        _isSending = true;
+        _sendErrorMessage = null;
+
+        try
+        {
+            var response = await ConversationService.SendMessageAsync(
+                ConversationId.Value,
+                new SendMessageRequestDto { Content = content });
+
+            if (response.Success && response.Data != null)
+            {
+                _messageText = "";
+
+                var sentMsg = response.Data;
+                sentMsg.IsMine = true;
+
+                // Deduplicate check
+                if (_conversationDetail != null && !_conversationDetail.Messages.Any(m => m.Id == sentMsg.Id))
+                {
+                    _conversationDetail.Messages.Add(sentMsg);
+                    _shouldScrollToBottom = true;
+                }
+
+                // Update Conversation List (UC-16 realtime)
+                await UpdateConversationListItemAsync(sentMsg, isFromMe: true);
+            }
+            else
+            {
+                _sendErrorMessage = response.Message ?? "Failed to send message. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _sendErrorMessage = $"Connection error: {ex.Message}";
+        }
+        finally
+        {
+            _isSending = false;
+        }
+    }
+
+    private async void HandleReceiveMessage(MessageDto msg)
+    {
+        await InvokeAsync(async () =>
+        {
+            // 1. If currently viewing the conversation of this message
+            if (_selectedConversationId.HasValue && _selectedConversationId.Value == msg.ConversationId)
+            {
+                if (_conversationDetail != null)
+                {
+                    // Deduplicate check: do not add if already rendered
+                    if (!_conversationDetail.Messages.Any(m => m.Id == msg.Id))
+                    {
+                        msg.IsMine = (msg.SenderId == _currentUserId);
+                        _conversationDetail.Messages.Add(msg);
+                        _shouldScrollToBottom = true;
+                    }
+                }
+            }
+
+            // 2. Update Conversation List (UC-16 realtime)
+            await UpdateConversationListItemAsync(msg, isFromMe: (msg.SenderId == _currentUserId));
+
+            StateHasChanged();
+        });
+    }
+
+    private async Task UpdateConversationListItemAsync(MessageDto msg, bool isFromMe)
+    {
+        if (_conversations == null)
+        {
+            await LoadConversationsAsync(showLoading: false);
+            return;
+        }
+
+        var conv = _conversations.FirstOrDefault(c => c.ConversationId == msg.ConversationId);
+        if (conv != null)
+        {
+            conv.LastMessage = msg.Content;
+            conv.LastMessageAt = msg.CreatedAt ?? DateTime.UtcNow;
+            conv.LastMessageSenderId = msg.SenderId;
+
+            // Increment unread count if message is from someone else and not viewing this conversation
+            if (!isFromMe && (!_selectedConversationId.HasValue || _selectedConversationId.Value != msg.ConversationId))
+            {
+                conv.UnreadCount++;
+            }
+
+            // Sort conversations: newest message at top
+            _conversations = _conversations
+                .OrderByDescending(c => c.LastMessageAt ?? c.UpdatedAt ?? DateTime.MinValue)
+                .ToList();
+        }
+        else
+        {
+            // New conversation not yet in list (e.g. was previously deleted and reappears): reload list in background
+            await LoadConversationsAsync(showLoading: false);
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        ChatHubClient.OnMessageReceived -= HandleReceiveMessage;
+        return ValueTask.CompletedTask;
+    }
+
+    // UC-16.5 Delete Conversation states & methods
+    private bool _showDeleteModal = false;
+    private Guid? _conversationIdToDelete;
+    private string? _conversationTitleToDelete;
+    private bool _isDeleting = false;
+    private string? _deleteErrorMessage;
+
+    private void PromptDeleteConversation(Guid convId, string? title)
+    {
+        _conversationIdToDelete = convId;
+        _conversationTitleToDelete = title;
+        _deleteErrorMessage = null;
+        _showDeleteModal = true;
+    }
+
+    private void CancelDelete()
+    {
+        if (_isDeleting) return;
+        _showDeleteModal = false;
+        _conversationIdToDelete = null;
+        _conversationTitleToDelete = null;
+        _deleteErrorMessage = null;
+    }
+
+    private async Task ConfirmDeleteConversationAsync()
+    {
+        if (!_conversationIdToDelete.HasValue || _isDeleting) return;
+
+        _isDeleting = true;
+        _deleteErrorMessage = null;
+
+        try
+        {
+            var targetId = _conversationIdToDelete.Value;
+            var response = await ConversationService.DeleteConversationAsync(targetId);
+
+            if (response.Success)
+            {
+                // Remove conversation from local list immediately
+                if (_conversations != null)
+                {
+                    _conversations.RemoveAll(c => c.ConversationId == targetId);
+                }
+
+                // If currently open conversation was deleted, navigate back to empty selection
+                if (_selectedConversationId.HasValue && _selectedConversationId.Value == targetId)
+                {
+                    BackToConversationList();
+                }
+
+                _showDeleteModal = false;
+                _conversationIdToDelete = null;
+                _conversationTitleToDelete = null;
+            }
+            else
+            {
+                _deleteErrorMessage = response.Message ?? "Failed to delete conversation. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _deleteErrorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+}

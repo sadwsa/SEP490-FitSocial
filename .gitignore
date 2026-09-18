@@ -37,17 +37,11 @@
 # ------------------------------------------
 # 3. Environment, Secrets & Local Configs
 # ------------------------------------------
-# Bỏ qua các file cấu hình chứa Secret cá nhân / Môi trường
-**/*appsettings.Development.json
-**/*appsettings.*.Development.json
-**/*appsettings.Production.json
-**/*appsettings.Staging.json
-**/*appsettings.local.json
-**/*appsettings.*.local.json
-**/secrets.json
-
-# Nếu team quyết định KHÔNG PUSH file appsettings.json chính chủ:
+# Chặn toàn bộ file appsettings (cả gốc và môi trường) trên Backend & Frontend
 **/appsettings.json
+**/appsettings.*.json
+**/*appsettings*.json
+**/secrets.json
 
 # Environment variables
 .env

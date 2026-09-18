@@ -1,0 +1,86 @@
+@page "/training-packages/create"
+@inject ITrainingPackageService PackageService
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "COACH")]
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-5">
+                    <h2 class="fw-bold text-dark text-center mb-4">Create New Package</h2>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger rounded-3">@errorMessage</div>
+                    }
+
+                    <EditForm Model="@dto" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold text-muted">Package Title</label>
+                            <InputText @bind-Value="dto.Title" class="form-control form-control-lg rounded-3 bg-light border-0" placeholder="e.g. 30 Days Weight Loss" />
+                            <ValidationMessage For="@(() => dto.Title)" class="text-danger small mt-1" />
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6 mb-3 mb-md-0">
+                                <label class="form-label fw-semibold text-muted">Price (VNĐ)</label>
+                                <InputNumber @bind-Value="dto.Price" class="form-control form-control-lg rounded-3 bg-light border-0" placeholder="100000" />
+                                <ValidationMessage For="@(() => dto.Price)" class="text-danger small mt-1" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-muted">Duration (Days)</label>
+                                <InputNumber @bind-Value="dto.DurationDays" class="form-control form-control-lg rounded-3 bg-light border-0" placeholder="30" />
+                                <ValidationMessage For="@(() => dto.DurationDays)" class="text-danger small mt-1" />
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch mb-5">
+                            <InputCheckbox @bind-Value="dto.IsActive" class="form-check-input" id="isActiveSwitch" />
+                            <label class="form-check-label fw-semibold" for="isActiveSwitch">Set as Active immediately</label>
+                        </div>
+
+                        <button type="submit" disabled="@isSubmitting" class="btn btn-primary btn-lg w-100 rounded-pill fw-bold shadow-sm">
+                            @if (isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <span>Creating...</span>
+                            }
+                            else
+                            {
+                                <span>Create Package</span>
+                            }
+                        </button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private CreateTrainingPackageDto dto = new();
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+
+        var response = await PackageService.CreatePackageAsync(dto);
+
+        if (response.Success)
+        {
+            Navigation.NavigateTo("/training-packages");
+        }
+        else
+        {
+            errorMessage = response.Message ?? "An error occurred while creating the package.";
+        }
+
+        isSubmitting = false;
+    }
+}

@@ -8,4 +8,5 @@ public interface IUserRepository : IRepository<User>
     Task<bool> ExistsByPhoneAsync(string phoneNumber, Guid? excludingUserId = null, CancellationToken cancellationToken = default);
     Task<User?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default);
     Task<User?> FindByGoogleSubAsync(string googleSub, CancellationToken cancellationToken = default);
+    Task<List<User>> ListUsersForAdminAsync(string? search = null, string? role = null, CancellationToken cancellationToken = default);
 }

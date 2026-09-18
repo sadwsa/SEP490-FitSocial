@@ -32,4 +32,27 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return DbSet.FirstOrDefaultAsync(u => u.GoogleProviderId == googleSub, cancellationToken);
     }
+
+    public Task<List<User>> ListUsersForAdminAsync(string? search = null, string? role = null, CancellationToken cancellationToken = default)
+    {
+        var query = DbSet.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(u =>
+                (u.FullName != null && u.FullName.ToLower().Contains(s)) ||
+                u.Email.ToLower().Contains(s));
+        }
+
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            var r = role.Trim().ToUpper();
+            query = query.Where(u => u.RoleCode == r);
+        }
+
+        return query
+            .OrderByDescending(u => u.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
 }

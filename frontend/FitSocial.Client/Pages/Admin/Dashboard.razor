@@ -1,10 +1,18 @@
 @page "/admin"
+@page "/admin/users"
+@page "/admin/sports"
 @layout AuthLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.Sports
+@using FitSocial.Client.Models.Users
+@using FitSocial.Client.Services.Sports
+@using FitSocial.Client.Services.Users
 @inject IAuthService AuthService
+@inject ISportService SportService
+@inject IUserService UserService
 @inject NavigationManager Navigation
 
-<PageTitle>Sport Categories - FitSocial Admin Console</PageTitle>
+<PageTitle>@(view == "users" ? "User Accounts" : view == "sports" ? "Sport Categories" : "Dashboard") - FitSocial Admin Console</PageTitle>
 
 <div class="console">
     <!-- Sidebar -->
@@ -23,11 +31,9 @@
             </button>
             <button type="button" class="side-item @(view == "users" ? "active" : "")" @onclick='() => SwitchView("users")'>
                 <AppIcon Name="person" /><span>User Accounts</span>
-                <small class="uc-tag">UC_34</small>
             </button>
             <button type="button" class="side-item @(view == "sports" ? "active" : "")" @onclick='() => SwitchView("sports")'>
                 <AppIcon Name="dumbbell" /><span>Sport Categories</span>
-                <small class="uc-tag">UC_35</small>
             </button>
             <button type="button" class="side-item" @onclick='() => DemoSoon("Content Moderation")'>
                 <AppIcon Name="shield" /><span>Content Moderation</span>
@@ -65,24 +71,24 @@
                 @if (view == "overview")
                 {
                     <h2 class="view-title">Overview</h2>
-                    <p class="view-sub">Platform at a glance (mock data).</p>
-                    <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.Logs)" />
+                    <p class="view-sub">Platform metrics loaded directly from database.</p>
+                    <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.PostCount)" />
                     <div class="shortcuts">
                         <button type="button" class="shortcut" @onclick='() => SwitchView("users")'>
                             <AppIcon Name="person" />
-                            <div><strong>Manage user accounts</strong><small>View, lock, unlock (UC_34)</small></div>
+                            <div><strong>Manage user accounts</strong><small>View, lock, unlock</small></div>
                             <span>→</span>
                         </button>
                         <button type="button" class="shortcut" @onclick='() => SwitchView("sports")'>
                             <AppIcon Name="dumbbell" />
-                            <div><strong>Manage sport categories</strong><small>View, create, edit, delete (UC_35)</small></div>
+                            <div><strong>Manage sport categories</strong><small>View, create, edit, delete</small></div>
                             <span>→</span>
                         </button>
                     </div>
                 }
                 else if (view == "users")
                 {
-                    <h2 class="view-title">User Accounts <small class="uc-inline">UC_34 · View List (UC_34) · Lock (UC_34.1) · Unlock (UC_34.2)</small></h2>
+                    <h2 class="view-title">User Accounts</h2>
                     <div class="toolbar">
                         <div class="search-wrap">
                             <span class="search-icon"><AppIcon Name="search" /></span>
@@ -95,7 +101,18 @@
                             <option value="STAFF">Staff</option>
                             <option value="ADMIN">Admin</option>
                         </select>
+                        <button type="button" class="row-btn" @onclick="LoadUsersAsync" disabled="@isLoadingUsers">
+                            <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
+                        </button>
                     </div>
+
+                    @if (isLoadingUsers)
+                    {
+                        <div class="py-3 text-center muted">
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Loading user accounts from database...</span>
+                        </div>
+                    }
 
                     <div class="table-wrap">
                         <table class="data-table">
@@ -112,9 +129,9 @@
                                 @foreach (var u in FilteredUsers)
                                 {
                                     <tr>
-                                        <td><strong>@u.FullName</strong><br /><small class="muted">@u.Phone</small></td>
+                                        <td><strong>@u.FullName</strong><br /><small class="muted">@(u.PhoneNumber ?? "No phone")</small></td>
                                         <td>@u.Email</td>
-                                        <td><span class="role-badge @u.Role.ToLower()">@u.Role</span></td>
+                                        <td><span class="role-badge @u.RoleCode.ToLower()">@u.RoleCode</span></td>
                                         <td>
                                             @if (u.IsLocked)
                                             {
@@ -128,28 +145,29 @@
                                         <td class="text-end">
                                             @if (u.IsLocked)
                                             {
-                                                <button type="button" class="row-btn unlock" @onclick="() => SetLocked(u, false)">Unlock</button>
+                                                <button type="button" class="row-btn unlock" disabled="@isLockingUser" @onclick="() => SetLockedAsync(u, false)">Unlock</button>
                                             }
                                             else
                                             {
-                                                <button type="button" class="row-btn lock" @onclick="() => SetLocked(u, true)">Lock</button>
+                                                <button type="button" class="row-btn lock" disabled="@isLockingUser" @onclick="() => SetLockedAsync(u, true)">Lock</button>
                                             }
                                         </td>
                                     </tr>
                                 }
-                                @if (!FilteredUsers.Any())
+                                @if (!isLoadingUsers && !FilteredUsers.Any())
                                 {
                                     <tr><td colspan="5" class="text-center muted">No accounts match.</td></tr>
                                 }
                             </tbody>
                         </table>
                     </div>
+                    <p class="paging">Showing @FilteredUsers.Count() user accounts</p>
                 }
                 else if (view == "sports")
                 {
-                    <h2 class="view-title">Sport Categories <small class="uc-inline">UC_35 · View (UC_35) · Create (UC_35.1) · Edit (UC_35.2) · Delete (UC_35.3)</small></h2>
+                    <h2 class="view-title">Sport Categories</h2>
 
-                    <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.Logs)" />
+                    <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.PostCount)" />
 
                     <div class="toolbar wrap">
                         <div class="search-wrap grow">
@@ -161,11 +179,8 @@
                             <option value="visible">Visible</option>
                             <option value="hidden">Hidden</option>
                         </select>
-                        <button type="button" class="row-btn" @onclick='() => ShowToast("[Demo] CSV report export is not part of this preview.")'>
-                            <span class="btn-ic"><AppIcon Name="download" /></span> Export CSV
-                        </button>
-                        <button type="button" class="row-btn" @onclick='() => ShowToast("[Demo] Cache sync is not part of this preview.")'>
-                            <span class="btn-ic"><AppIcon Name="refresh" /></span> Sync Cache
+                        <button type="button" class="row-btn" @onclick="LoadSportsAsync" disabled="@isLoadingSports">
+                            <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
                         </button>
                         <button type="button" class="row-btn add" @onclick="ToggleSportForm">+ Add New Sport</button>
                     </div>
@@ -180,7 +195,7 @@
                     @if (showSportForm)
                     {
                         <div class="sport-form">
-                            <strong>@(editingSportId == null ? "Add new sport (UC_35.1)" : "Edit sport (UC_35.2)")</strong>
+                            <strong>@(editingSportId == null ? "Add new sport" : "Edit sport")</strong>
                             <div class="form-grid">
                                 <input @bind="sportFormName" class="toolbar-input" placeholder="Sport name *" />
                                 <select @bind="sportFormCategory" class="toolbar-select">
@@ -193,9 +208,19 @@
                                 <input @bind="sportFormDesc" class="toolbar-input" placeholder="Short description" />
                             </div>
                             <div class="form-actions">
-                                <button type="button" class="row-btn" @onclick="CancelSportForm">Cancel</button>
-                                <button type="button" class="row-btn add" @onclick="SaveSportForm">Save</button>
+                                <button type="button" class="row-btn" @onclick="CancelSportForm" disabled="@isSavingSport">Cancel</button>
+                                <button type="button" class="row-btn add" @onclick="SaveSportFormAsync" disabled="@isSavingSport">
+                                    @(isSavingSport ? "Saving..." : "Save")
+                                </button>
                             </div>
+                        </div>
+                    }
+
+                    @if (isLoadingSports)
+                    {
+                        <div class="py-3 text-center muted">
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Loading sport categories from database...</span>
                         </div>
                     }
 
@@ -218,12 +243,12 @@
                                         <td>
                                             <div class="sport-cell">
                                                 <span class="sport-ic"><AppIcon Name="@s.Icon" /></span>
-                                                <div><strong>@s.Name</strong><br /><small class="muted">@s.Description</small></div>
+                                                <div><strong>@s.SportName</strong><br /><small class="muted">@s.Description</small></div>
                                             </div>
                                         </td>
                                         <td><code>@s.Code</code></td>
                                         <td><small>@s.Metrics</small></td>
-                                        <td><small>@s.Coaches.ToString("N0") coaches<br />@s.Logs.ToString("N0") workout logs</small></td>
+                                        <td><small>@s.CoachCount.ToString("N0") coaches<br />@s.PostCount.ToString("N0") posts</small></td>
                                         <td>
                                             @if (s.Visible)
                                             {
@@ -235,20 +260,20 @@
                                             }
                                         </td>
                                         <td class="text-end whitespace-nowrap">
-                                            @if (confirmDeleteId == s.Id)
+                                            @if (confirmDeleteId == s.SportId)
                                             {
-                                                <button type="button" class="row-btn lock" @onclick="() => DeleteSport(s)">Confirm?</button>
+                                                <button type="button" class="row-btn lock" @onclick="() => DeleteSportAsync(s)">Confirm?</button>
                                                 <button type="button" class="row-btn" @onclick="() => confirmDeleteId = null">No</button>
                                             }
                                             else
                                             {
-                                                <button type="button" class="icon-btn" title="Edit (UC_35.2)" @onclick="() => StartSportEdit(s)"><AppIcon Name="pencil" /></button>
-                                                <button type="button" class="icon-btn danger" title="Delete (UC_35.3)" @onclick="() => confirmDeleteId = s.Id"><AppIcon Name="trash" /></button>
+                                                <button type="button" class="icon-btn" title="Edit" @onclick="() => StartSportEdit(s)"><AppIcon Name="pencil" /></button>
+                                                <button type="button" class="icon-btn danger" title="Delete" @onclick="() => confirmDeleteId = s.SportId"><AppIcon Name="trash" /></button>
                                             }
                                         </td>
                                     </tr>
                                 }
-                                @if (!FilteredSports.Any())
+                                @if (!isLoadingSports && !FilteredSports.Any())
                                 {
                                     <tr><td colspan="6" class="text-center muted">No sports match.</td></tr>
                                 }
@@ -271,10 +296,6 @@
 </div>
 
 @code {
-    // ---------- Mock data only (real UC_34/UC_35 APIs belong to another member) ----------
-    private record MockUser(Guid Id, string FullName, string Email, string Phone, string Role, bool IsLocked);
-    private record MockSport(Guid Id, string Code, string Name, string Description, string Category, string Metrics, int Coaches, int Logs, bool Visible, string Icon);
-
     private string view = "sports";
     private string? toastMessage;
 
@@ -292,32 +313,33 @@
     private string sportFormDesc = "";
     private Guid? confirmDeleteId;
 
+    private bool isLoadingSports = false;
+    private bool isLoadingUsers = false;
+    private bool isSavingSport = false;
+    private bool isLockingUser = false;
+
     private readonly List<string> categories = new()
     {
         "All", "Gym & Strength", "Cardio & Athletics", "Combat Sports", "Team Sports"
     };
 
-    private List<MockUser> users = new()
-    {
-        new(Guid.NewGuid(), "Lê Học Viên A", "trainee1@gmail.com", "0904000004", "TRAINEE", false),
-        new(Guid.NewGuid(), "Trần HLV Hai", "coach2@fitness.com", "0903000003", "COACH", false),
-        new(Guid.NewGuid(), "Nguyễn HLV Một", "coach1@fitness.com", "0902000002", "COACH", true),
-        new(Guid.NewGuid(), "Phạm Nhân Viên", "staff@fitsocial.vn", "0905000006", "STAFF", false),
-        new(Guid.NewGuid(), "System Admin", "admin@system.com", "0901000001", "ADMIN", false),
-        new(Guid.NewGuid(), "Phạm Học Viên B", "trainee2@gmail.com", "0905000005", "TRAINEE", true),
-    };
+    private List<AdminUserDto> users = new();
+    private List<SportDto> sports = new();
 
-    private List<MockSport> sports = new()
+    protected override async Task OnInitializedAsync()
     {
-        new(Guid.NewGuid(), "SPORT_01", "Powerlifting & Weightlifting", "Barbell strength training", "Gym & Strength", "Weight/Kg, Reps/Sets", 1420, 92400, true, "dumbbell"),
-        new(Guid.NewGuid(), "SPORT_02", "Running & Marathon", "Road and trail running", "Cardio & Athletics", "GPS Route, Pace", 980, 76800, true, "activity"),
-        new(Guid.NewGuid(), "SPORT_03", "Boxing & Kickfit", "Striking combat training", "Combat Sports", "Rounds, Heart rate", 640, 41200, true, "fire"),
-        new(Guid.NewGuid(), "SPORT_04", "Yoga & Mobility", "Flexibility and breathwork", "Gym & Strength", "Flexibility, Breath", 520, 38500, true, "activity"),
-        new(Guid.NewGuid(), "SPORT_05", "Swimming", "Pool and open water", "Cardio & Athletics", "Laps, Pace", 410, 29800, true, "waves"),
-        new(Guid.NewGuid(), "SPORT_06", "Football", "Team field sport", "Team Sports", "Goals, Assists", 870, 52300, true, "ball"),
-        new(Guid.NewGuid(), "SPORT_07", "Basketball", "Team court sport", "Team Sports", "Points, Assists", 690, 44700, true, "ball"),
-        new(Guid.NewGuid(), "SPORT_08", "MMA", "Mixed martial arts", "Combat Sports", "Rounds, Wins", 350, 18900, false, "trophy"),
-    };
+        var relative = Navigation.ToBaseRelativePath(Navigation.Uri).ToLowerInvariant();
+        if (relative.StartsWith("admin/users"))
+        {
+            view = "users";
+        }
+        else if (relative.StartsWith("admin/sports"))
+        {
+            view = "sports";
+        }
+
+        await Task.WhenAll(LoadSportsAsync(), LoadUsersAsync());
+    }
 
     private async Task LoadSportsAsync()
     {
@@ -332,17 +354,40 @@
             else if (!string.IsNullOrEmpty(res.Message))
             {
                 toastMessage = res.Message;
-                isToastError = true;
             }
         }
         catch (Exception ex)
         {
-            toastMessage = $"Lỗi khi tải danh sách môn thể thao: {ex.Message}";
-            isToastError = true;
+            toastMessage = $"Failed to load sports: {ex.Message}";
         }
         finally
         {
             isLoadingSports = false;
+        }
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        isLoadingUsers = true;
+        try
+        {
+            var res = await UserService.GetUsersAsync();
+            if (res.Success && res.Data != null)
+            {
+                users = res.Data;
+            }
+            else if (!string.IsNullOrEmpty(res.Message))
+            {
+                toastMessage = res.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Failed to load users: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingUsers = false;
         }
     }
 
@@ -357,39 +402,49 @@
         toastMessage = $"[Demo] {module} is not part of this preview.";
     }
 
-    private void ShowToast(string message)
-    {
-        toastMessage = message;
-    }
-
-    private IEnumerable<MockUser> FilteredUsers =>
+    private IEnumerable<AdminUserDto> FilteredUsers =>
         users.Where(u =>
             (string.IsNullOrWhiteSpace(userSearch) ||
-             u.FullName.Contains(userSearch, StringComparison.OrdinalIgnoreCase) ||
+             (u.FullName != null && u.FullName.Contains(userSearch, StringComparison.OrdinalIgnoreCase)) ||
              u.Email.Contains(userSearch, StringComparison.OrdinalIgnoreCase)) &&
-            (string.IsNullOrWhiteSpace(roleFilter) || u.Role == roleFilter));
+            (string.IsNullOrWhiteSpace(roleFilter) || u.RoleCode == roleFilter));
 
-    private IEnumerable<MockSport> FilteredSports =>
+    private IEnumerable<SportDto> FilteredSports =>
         sports.Where(s =>
             (string.IsNullOrWhiteSpace(sportSearch) ||
-             s.Name.Contains(sportSearch, StringComparison.OrdinalIgnoreCase) ||
+             s.SportName.Contains(sportSearch, StringComparison.OrdinalIgnoreCase) ||
              s.Code.Contains(sportSearch, StringComparison.OrdinalIgnoreCase)) &&
             (sportCategory == "All" || s.Category == sportCategory) &&
             (string.IsNullOrWhiteSpace(sportStatus) ||
              (sportStatus == "visible" && s.Visible) ||
              (sportStatus == "hidden" && !s.Visible)));
 
-    private void SetLocked(MockUser user, bool locked)
+    private async Task SetLockedAsync(AdminUserDto user, bool locked)
     {
-        var index = users.FindIndex(u => u.Id == user.Id);
-        if (index < 0)
+        isLockingUser = true;
+        try
         {
-            return;
+            var res = await UserService.SetUserLockStatusAsync(user.UserId, locked);
+            if (res.Success)
+            {
+                user.IsLocked = locked;
+                toastMessage = res.Message ?? (locked
+                    ? $"{user.FullName} has been locked."
+                    : $"{user.FullName} has been unlocked.");
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to update user lock status.";
+            }
         }
-        users[index] = users[index] with { IsLocked = locked };
-        toastMessage = locked
-            ? $"[Demo] {user.FullName} would be locked (UC_34.1)."
-            : $"[Demo] {user.FullName} would be unlocked (UC_34.2).";
+        catch (Exception ex)
+        {
+            toastMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isLockingUser = false;
+        }
     }
 
     private void ToggleSportForm()
@@ -402,11 +457,11 @@
         sportFormDesc = "";
     }
 
-    private void StartSportEdit(MockSport sport)
+    private void StartSportEdit(SportDto sport)
     {
         showSportForm = true;
-        editingSportId = sport.Id;
-        sportFormName = sport.Name;
+        editingSportId = sport.SportId;
+        sportFormName = sport.SportName;
         sportFormCategory = sport.Category;
         sportFormMetrics = sport.Metrics;
         sportFormDesc = sport.Description;
@@ -419,46 +474,76 @@
         editingSportId = null;
     }
 
-    private void SaveSportForm()
+    private async Task SaveSportFormAsync()
     {
         if (string.IsNullOrWhiteSpace(sportFormName))
         {
-            toastMessage = "[Demo] Enter a sport name first.";
+            toastMessage = "Enter a sport name first.";
             return;
         }
 
-        if (editingSportId == null)
+        isSavingSport = true;
+        try
         {
-            var code = $"SPORT_{sports.Count + 1:00}";
-            sports.Add(new MockSport(Guid.NewGuid(), code, sportFormName.Trim(), sportFormDesc.Trim(),
-                sportFormCategory, sportFormMetrics.Trim(), 0, 0, true, "dumbbell"));
-            toastMessage = $"[Demo] Sport \"{sportFormName.Trim()}\" would be created (UC_35.1).";
-        }
-        else
-        {
-            var index = sports.FindIndex(s => s.Id == editingSportId);
-            if (index >= 0)
+            if (editingSportId == null)
             {
-                var current = sports[index];
-                sports[index] = current with
+                var res = await SportService.CreateSportAsync(new CreateSportDto { SportName = sportFormName.Trim() });
+                if (res.Success)
                 {
-                    Name = sportFormName.Trim(),
-                    Category = sportFormCategory,
-                    Metrics = sportFormMetrics.Trim(),
-                    Description = sportFormDesc.Trim()
-                };
-                toastMessage = "[Demo] Sport would be updated (UC_35.2).";
+                    toastMessage = res.Message ?? $"Sport '{sportFormName.Trim()}' created successfully.";
+                    CancelSportForm();
+                    await LoadSportsAsync();
+                }
+                else
+                {
+                    toastMessage = res.Message ?? "Failed to create sport.";
+                }
+            }
+            else
+            {
+                var res = await SportService.UpdateSportAsync(editingSportId.Value, new UpdateSportDto { SportName = sportFormName.Trim() });
+                if (res.Success)
+                {
+                    toastMessage = res.Message ?? "Sport updated successfully.";
+                    CancelSportForm();
+                    await LoadSportsAsync();
+                }
+                else
+                {
+                    toastMessage = res.Message ?? "Failed to update sport.";
+                }
             }
         }
-
-        CancelSportForm();
+        catch (Exception ex)
+        {
+            toastMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSavingSport = false;
+        }
     }
 
-    private void DeleteSport(MockSport sport)
+    private async Task DeleteSportAsync(SportDto sport)
     {
-        sports.RemoveAll(s => s.Id == sport.Id);
         confirmDeleteId = null;
-        toastMessage = $"[Demo] Sport \"{sport.Name}\" would be deleted (UC_35.3).";
+        try
+        {
+            var res = await SportService.DeleteSportAsync(sport.SportId);
+            if (res.Success)
+            {
+                toastMessage = res.Message ?? $"Sport '{sport.SportName}' deleted successfully.";
+                await LoadSportsAsync();
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to delete sport.";
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error: {ex.Message}";
+        }
     }
 
     private async Task HandleLogout()

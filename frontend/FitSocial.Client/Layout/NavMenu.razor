@@ -44,17 +44,23 @@
 
         <!-- Menu dành riêng cho Admin -->
         <AuthorizeView Roles="@AppRoles.Admin">
-            <div class="text-uppercase text-muted px-3 mt-3 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">Quản trị</div>
+            <div class="text-uppercase text-muted px-3 mt-3 mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">Administration</div>
             <div class="nav-item">
-                <NavLink class="nav-link px-3 py-2" href="admin/users">
+                <NavLink class="nav-link px-3 py-2" href="admin" Match="NavLinkMatch.All">
                     <span class="nav-icon">🛡️</span>
-                    <span>Quản lý người dùng</span>
+                    <span>Admin Console</span>
                 </NavLink>
             </div>
             <div class="nav-item">
-                <NavLink class="nav-link px-3 py-2" href="admin/reports">
-                    <span class="nav-icon">📊</span>
-                    <span>Báo cáo hệ thống</span>
+                <NavLink class="nav-link px-3 py-2" href="admin/users">
+                    <span class="nav-icon">👤</span>
+                    <span>User Accounts</span>
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link px-3 py-2" href="admin/sports">
+                    <span class="nav-icon">🏋️</span>
+                    <span>Sport Categories</span>
                 </NavLink>
             </div>
         </AuthorizeView>

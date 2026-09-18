@@ -72,8 +72,20 @@ public class ApiClient
             }
             if (response.IsSuccessStatusCode)
             {
-                var data = await response.Content.ReadFromJsonAsync<T>();
-                return new ApiResponse<T> { Success = true, Data = data };
+                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<T>>();
+                return apiResponse ?? new ApiResponse<T> { Success = true };
+            }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<T>>();
+                if (errorResponse != null)
+                {
+                    return errorResponse;
+                }
+            }
+            catch
+            {
             }
 
             return new ApiResponse<T>
@@ -106,8 +118,112 @@ public class ApiClient
             }
             if (response.IsSuccessStatusCode)
             {
-                var data = await response.Content.ReadFromJsonAsync<TResult>();
-                return new ApiResponse<TResult> { Success = true, Data = data };
+                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                return apiResponse ?? new ApiResponse<TResult> { Success = true };
+            }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                if (errorResponse != null)
+                {
+                    return errorResponse;
+                }
+            }
+            catch
+            {
+            }
+
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"API Error: {response.StatusCode}"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"Network Error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<TResult>> PutAsync<TRequest, TResult>(string endpoint, TRequest payload)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _http.PutAsJsonAsync(endpoint, payload);
+            if (response.StatusCode == HttpStatusCode.Unauthorized &&
+                await TryRefreshOnceAsync(endpoint, response.StatusCode))
+            {
+                await AttachBearerTokenAsync();
+                response = await _http.PutAsJsonAsync(endpoint, payload);
+            }
+            if (response.IsSuccessStatusCode)
+            {
+                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                return apiResponse ?? new ApiResponse<TResult> { Success = true };
+            }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                if (errorResponse != null)
+                {
+                    return errorResponse;
+                }
+            }
+            catch
+            {
+            }
+
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"API Error: {response.StatusCode}"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"Network Error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<TResult>> DeleteAsync<TResult>(string endpoint)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _http.DeleteAsync(endpoint);
+            if (response.StatusCode == HttpStatusCode.Unauthorized &&
+                await TryRefreshOnceAsync(endpoint, response.StatusCode))
+            {
+                await AttachBearerTokenAsync();
+                response = await _http.DeleteAsync(endpoint);
+            }
+            if (response.IsSuccessStatusCode)
+            {
+                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                return apiResponse ?? new ApiResponse<TResult> { Success = true };
+            }
+
+            try
+            {
+                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                if (errorResponse != null)
+                {
+                    return errorResponse;
+                }
+            }
+            catch
+            {
             }
 
             return new ApiResponse<TResult>

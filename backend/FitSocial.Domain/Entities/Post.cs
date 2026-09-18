@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace FitSocial.Domain.Entities;
@@ -10,6 +10,8 @@ public partial class Post
     public Guid AuthorId { get; set; }
 
     public string? Content { get; set; }
+
+    public string PostType { get; set; } = null!;
 
     public Guid? SportId { get; set; }
 

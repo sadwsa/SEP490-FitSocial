@@ -1,5 +1,5 @@
 # ==========================================
-# 🏋️ FitSocial - .gitignore
+#  FitSocial - .gitignore
 # .NET 8 (Clean Architecture Web API & Blazor WASM Frontend)
 # ==========================================
 
@@ -37,23 +37,41 @@
 # ------------------------------------------
 # 3. Environment, Secrets & Local Configs
 # ------------------------------------------
+# Bỏ qua các file cấu hình chứa Secret cá nhân / Môi trường
+**/*appsettings.Development.json
+**/*appsettings.*.Development.json
+**/*appsettings.Production.json
+**/*appsettings.Staging.json
 **/*appsettings.local.json
 **/*appsettings.*.local.json
+**/secrets.json
+
+# Nếu team quyết định KHÔNG PUSH file appsettings.json chính chủ:
+**/appsettings.json
+
+# Environment variables
 .env
+.env.*
 .env*.local
+
+# Certificates & Private Keys
 *.pfx
 *.pem
 *.key
 *.cer
+*.crt
+*.p12
 
 # ------------------------------------------
-# 4. Local Database Files
+# 4. Local Database Files & Backups
 # ------------------------------------------
 *.db
 *.db-shm
 *.db-wal
 *.mdf
 *.ldf
+*.bak
+*.sql.bak
 
 # ------------------------------------------
 # 5. OS & System Files
@@ -64,9 +82,12 @@ desktop.ini
 $RECYCLE.BIN/
 
 # ------------------------------------------
-# 6. Node / Web Legacy (nếu có công cụ frontend ngoài)
+# 6. Node / Web & Temporary Files
 # ------------------------------------------
 **/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.zip
+*.rar
+*.7z

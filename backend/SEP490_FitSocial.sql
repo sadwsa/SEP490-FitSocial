@@ -147,6 +147,7 @@ CREATE TABLE "Posts" (
     "ID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "AuthorID" UUID NOT NULL,
     "Content" TEXT,
+    "PostType" VARCHAR(50) NOT NULL,
     "SportID" UUID,
     "LocationID" UUID,
     "CreatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

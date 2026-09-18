@@ -1,48 +1,49 @@
-using System.Net.Http.Json;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Sports;
+using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.Sports;
 
 public interface ISportService
 {
     Task<ApiResponse<List<SportDto>>> GetSportsAsync();
+    Task<ApiResponse<SportDto>> CreateSportAsync(CreateSportDto dto);
+    Task<ApiResponse<SportDto>> UpdateSportAsync(Guid sportId, UpdateSportDto dto);
+    Task<ApiResponse<bool>> DeleteSportAsync(Guid sportId);
+    Task<ApiResponse<List<SportDto>>> GetPublicSportsAsync();
 }
 
 public class SportService : ISportService
 {
-    private readonly HttpClient _httpClient;
+    private readonly ApiClient _apiClient;
 
-    public SportService(HttpClient httpClient)
+    public SportService(ApiClient apiClient)
     {
-        _httpClient = httpClient;
+        _apiClient = apiClient;
     }
 
     public async Task<ApiResponse<List<SportDto>>> GetSportsAsync()
     {
-        try
-        {
-            var response = await _httpClient.GetAsync("sports");
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<SportDto>>>();
-            if (response.IsSuccessStatusCode && result != null && result.Success)
-            {
-                result.Data ??= new List<SportDto>();
-                return result;
-            }
+        return await _apiClient.GetAsync<List<SportDto>>("sports");
+    }
 
-            return result ?? new ApiResponse<List<SportDto>>
-            {
-                Success = false,
-                Message = $"Không tải được danh sách môn thể thao (Mã: {response.StatusCode})"
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<List<SportDto>>
-            {
-                Success = false,
-                Message = $"Lỗi kết nối: {ex.Message}"
-            };
-        }
+    public async Task<ApiResponse<SportDto>> CreateSportAsync(CreateSportDto dto)
+    {
+        return await _apiClient.PostAsync<CreateSportDto, SportDto>("sports", dto);
+    }
+
+    public async Task<ApiResponse<SportDto>> UpdateSportAsync(Guid sportId, UpdateSportDto dto)
+    {
+        return await _apiClient.PutAsync<UpdateSportDto, SportDto>($"sports/{sportId}", dto);
+    }
+
+    public async Task<ApiResponse<bool>> DeleteSportAsync(Guid sportId)
+    {
+        return await _apiClient.DeleteAsync<bool>($"sports/{sportId}");
+    }
+
+    public async Task<ApiResponse<List<SportDto>>> GetPublicSportsAsync()
+    {
+        return await _apiClient.GetAsync<List<SportDto>>("sports/public");
     }
 }

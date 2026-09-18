@@ -1,10 +1,14 @@
 @page "/admin"
+@page "/admin/sports"
 @layout AuthLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.Sports
+@using FitSocial.Client.Services.Sports
 @inject IAuthService AuthService
+@inject ISportService SportService
 @inject NavigationManager Navigation
 
-<PageTitle>Sport Categories - FitSocial Admin Console</PageTitle>
+<PageTitle>Quản lý Môn Thể Thao - FitSocial Admin Console</PageTitle>
 
 <div class="console">
     <!-- Sidebar -->
@@ -22,21 +26,21 @@
                 <AppIcon Name="chart" /><span>Dashboard</span>
             </button>
             <button type="button" class="side-item @(view == "users" ? "active" : "")" @onclick='() => SwitchView("users")'>
-                <AppIcon Name="person" /><span>User Accounts</span>
+                <AppIcon Name="person" /><span>Tài khoản người dùng</span>
                 <small class="uc-tag">UC_34</small>
             </button>
             <button type="button" class="side-item @(view == "sports" ? "active" : "")" @onclick='() => SwitchView("sports")'>
-                <AppIcon Name="dumbbell" /><span>Sport Categories</span>
+                <AppIcon Name="dumbbell" /><span>Quản lý Môn Thể Thao</span>
                 <small class="uc-tag">UC_35</small>
             </button>
             <button type="button" class="side-item" @onclick='() => DemoSoon("Content Moderation")'>
-                <AppIcon Name="shield" /><span>Content Moderation</span>
+                <AppIcon Name="shield" /><span>Kiểm duyệt nội dung</span>
             </button>
             <button type="button" class="side-item" @onclick='() => DemoSoon("Activity Logs")'>
-                <AppIcon Name="doc" /><span>Activity Logs</span>
+                <AppIcon Name="doc" /><span>Nhật ký hoạt động</span>
             </button>
             <button type="button" class="side-item" @onclick='() => DemoSoon("System Settings")'>
-                <AppIcon Name="gear" /><span>System Settings</span>
+                <AppIcon Name="gear" /><span>Cấu hình hệ thống</span>
             </button>
         </nav>
 
@@ -49,7 +53,7 @@
                     </div>
                 </Authorized>
             </AuthorizeView>
-            <button type="button" class="side-logout" @onclick="HandleLogout">Sign out</button>
+            <button type="button" class="side-logout" @onclick="HandleLogout">Đăng xuất</button>
         </div>
     </aside>
 
@@ -59,40 +63,43 @@
             <Authorized>
                 @if (!string.IsNullOrEmpty(toastMessage))
                 {
-                    <div class="auth-alert info" role="alert"><AppIcon Name="info" /><span>@toastMessage</span></div>
+                    <div class="auth-alert @(isToastError ? "error" : "info")" role="alert">
+                        <AppIcon Name="@(isToastError ? "warning" : "info")" />
+                        <span>@toastMessage</span>
+                    </div>
                 }
 
                 @if (view == "overview")
                 {
-                    <h2 class="view-title">Overview</h2>
-                    <p class="view-sub">Platform at a glance (mock data).</p>
-                    <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.Logs)" />
+                    <h2 class="view-title">Tổng quan hệ thống</h2>
+                    <p class="view-sub">Số liệu tổng quan môn thể thao và nhật ký hoạt động.</p>
+                    <WidgetsRow ActiveCount="@sports.Count" TotalLogs="@sports.Sum(s => s.CoachCount + s.UserCount + s.OpenClassCount)" />
                     <div class="shortcuts">
                         <button type="button" class="shortcut" @onclick='() => SwitchView("users")'>
                             <AppIcon Name="person" />
-                            <div><strong>Manage user accounts</strong><small>View, lock, unlock (UC_34)</small></div>
+                            <div><strong>Quản lý tài khoản</strong><small>Xem, khóa, mở khóa (UC_34)</small></div>
                             <span>→</span>
                         </button>
                         <button type="button" class="shortcut" @onclick='() => SwitchView("sports")'>
                             <AppIcon Name="dumbbell" />
-                            <div><strong>Manage sport categories</strong><small>View, create, edit, delete (UC_35)</small></div>
+                            <div><strong>Quản lý môn thể thao</strong><small>Xem (UC_35) · Thêm (UC_35.1) · Sửa (UC_35.2) · Xóa (UC_35.3)</small></div>
                             <span>→</span>
                         </button>
                     </div>
                 }
                 else if (view == "users")
                 {
-                    <h2 class="view-title">User Accounts <small class="uc-inline">UC_34 · View List (UC_34) · Lock (UC_34.1) · Unlock (UC_34.2)</small></h2>
+                    <h2 class="view-title">Tài khoản người dùng <small class="uc-inline">UC_34 · Danh sách (UC_34) · Khóa (UC_34.1) · Mở (UC_34.2)</small></h2>
                     <div class="toolbar">
                         <div class="search-wrap">
                             <span class="search-icon"><AppIcon Name="search" /></span>
-                            <input @bind="userSearch" @bind:event="oninput" class="toolbar-input" placeholder="Search name or email..." />
+                            <input @bind="userSearch" @bind:event="oninput" class="toolbar-input" placeholder="Tìm theo tên hoặc email..." />
                         </div>
                         <select @bind="roleFilter" class="toolbar-select">
-                            <option value="">All roles</option>
-                            <option value="TRAINEE">Trainee</option>
-                            <option value="COACH">Coach</option>
-                            <option value="STAFF">Staff</option>
+                            <option value="">Tất cả vai trò</option>
+                            <option value="TRAINEE">Học viên</option>
+                            <option value="COACH">HLV</option>
+                            <option value="STAFF">Nhân viên</option>
                             <option value="ADMIN">Admin</option>
                         </select>
                     </div>
@@ -101,11 +108,11 @@
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
+                                    <th>Họ tên</th>
                                     <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                    <th class="text-end">Actions</th>
+                                    <th>Vai trò</th>
+                                    <th>Trạng thái</th>
+                                    <th class="text-end">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -118,28 +125,28 @@
                                         <td>
                                             @if (u.IsLocked)
                                             {
-                                                <span class="status-badge locked">Locked</span>
+                                                <span class="status-badge locked">Đã khóa</span>
                                             }
                                             else
                                             {
-                                                <span class="status-badge active">Active</span>
+                                                <span class="status-badge active">Hoạt động</span>
                                             }
                                         </td>
                                         <td class="text-end">
                                             @if (u.IsLocked)
                                             {
-                                                <button type="button" class="row-btn unlock" @onclick="() => SetLocked(u, false)">Unlock</button>
+                                                <button type="button" class="row-btn unlock" @onclick="() => SetLocked(u, false)">Mở khóa</button>
                                             }
                                             else
                                             {
-                                                <button type="button" class="row-btn lock" @onclick="() => SetLocked(u, true)">Lock</button>
+                                                <button type="button" class="row-btn lock" @onclick="() => SetLocked(u, true)">Khóa</button>
                                             }
                                         </td>
                                     </tr>
                                 }
                                 @if (!FilteredUsers.Any())
                                 {
-                                    <tr><td colspan="5" class="text-center muted">No accounts match.</td></tr>
+                                    <tr><td colspan="5" class="text-center muted">Không tìm thấy tài khoản phù hợp.</td></tr>
                                 }
                             </tbody>
                         </table>
@@ -147,27 +154,19 @@
                 }
                 else if (view == "sports")
                 {
-                    <h2 class="view-title">Sport Categories <small class="uc-inline">UC_35 · View (UC_35) · Create (UC_35.1) · Edit (UC_35.2) · Delete (UC_35.3)</small></h2>
+                    <h2 class="view-title">Quản lý Môn Thể Thao <small class="uc-inline">UC_35 · Xem danh sách (UC_35) · Thêm (UC_35.1) · Sửa (UC_35.2) · Xóa (UC_35.3)</small></h2>
 
-                    <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.Logs)" />
+                    <WidgetsRow ActiveCount="@sports.Count" TotalLogs="@sports.Sum(s => s.CoachCount + s.UserCount + s.OpenClassCount)" />
 
                     <div class="toolbar wrap">
                         <div class="search-wrap grow">
                             <span class="search-icon"><AppIcon Name="search" /></span>
-                            <input @bind="sportSearch" @bind:event="oninput" class="toolbar-input" placeholder="Search by name or code (e.g. SPORT_01)..." />
+                            <input @bind="sportSearch" @bind:event="oninput" class="toolbar-input" placeholder="Tìm theo tên môn thể thao..." />
                         </div>
-                        <select @bind="sportStatus" class="toolbar-select">
-                            <option value="">All statuses</option>
-                            <option value="visible">Visible</option>
-                            <option value="hidden">Hidden</option>
-                        </select>
-                        <button type="button" class="row-btn" @onclick='() => ShowToast("[Demo] CSV report export is not part of this preview.")'>
-                            <span class="btn-ic"><AppIcon Name="download" /></span> Export CSV
+                        <button type="button" class="row-btn" @onclick="LoadSportsAsync">
+                            <span class="btn-ic"><AppIcon Name="refresh" /></span> Tải lại
                         </button>
-                        <button type="button" class="row-btn" @onclick='() => ShowToast("[Demo] Cache sync is not part of this preview.")'>
-                            <span class="btn-ic"><AppIcon Name="refresh" /></span> Sync Cache
-                        </button>
-                        <button type="button" class="row-btn add" @onclick="ToggleSportForm">+ Add New Sport</button>
+                        <button type="button" class="row-btn add" @onclick="ToggleSportForm">+ Thêm môn thể thao</button>
                     </div>
 
                     <div class="cat-tabs">
@@ -180,90 +179,88 @@
                     @if (showSportForm)
                     {
                         <div class="sport-form">
-                            <strong>@(editingSportId == null ? "Add new sport (UC_35.1)" : "Edit sport (UC_35.2)")</strong>
+                            <strong>@(editingSportId == null ? "Thêm mới môn thể thao (UC_35.1)" : "Chỉnh sửa môn thể thao (UC_35.2)")</strong>
                             <div class="form-grid">
-                                <input @bind="sportFormName" class="toolbar-input" placeholder="Sport name *" />
-                                <select @bind="sportFormCategory" class="toolbar-select">
-                                    @foreach (var c in categories.Where(x => x != "All"))
-                                    {
-                                        <option value="@c">@c</option>
-                                    }
-                                </select>
-                                <input @bind="sportFormMetrics" class="toolbar-input" placeholder="Telemetry metrics (e.g. Weight/Kg, Reps/Sets)" />
-                                <input @bind="sportFormDesc" class="toolbar-input" placeholder="Short description" />
+                                <input @bind="sportFormName" class="toolbar-input" placeholder="Tên môn thể thao *" />
                             </div>
-                            <div class="form-actions">
-                                <button type="button" class="row-btn" @onclick="CancelSportForm">Cancel</button>
-                                <button type="button" class="row-btn add" @onclick="SaveSportForm">Save</button>
+                            <div class="form-actions mt-2">
+                                <button type="button" class="row-btn" @onclick="CancelSportForm" disabled="@isSubmitting">Hủy</button>
+                                <button type="button" class="row-btn add" @onclick="SaveSportFormAsync" disabled="@isSubmitting">
+                                    @(isSubmitting ? "Đang lưu..." : "Lưu môn thể thao")
+                                </button>
                             </div>
                         </div>
                     }
 
                     <div class="table-wrap">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Sport / Icon</th>
-                                    <th>Code</th>
-                                    <th>Telemetry Metrics</th>
-                                    <th>Coaches &amp; Posts</th>
-                                    <th>Status</th>
-                                    <th class="text-end">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var s in FilteredSports)
-                                {
+                        @if (isLoadingSports)
+                        {
+                            <div class="p-4 text-center muted">Đang tải danh sách môn thể thao...</div>
+                        }
+                        else
+                        {
+                            <table class="data-table">
+                                <thead>
                                     <tr>
-                                        <td>
-                                            <div class="sport-cell">
-                                                <span class="sport-ic"><AppIcon Name="@s.Icon" /></span>
-                                                <div><strong>@s.Name</strong><br /><small class="muted">@s.Description</small></div>
-                                            </div>
-                                        </td>
-                                        <td><code>@s.Code</code></td>
-                                        <td><small>@s.Metrics</small></td>
-                                        <td><small>@s.Coaches.ToString("N0") coaches<br />@s.Logs.ToString("N0") workout logs</small></td>
-                                        <td>
-                                            @if (s.Visible)
-                                            {
-                                                <span class="status-badge active">Visible</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="status-badge locked">Hidden</span>
-                                            }
-                                        </td>
-                                        <td class="text-end whitespace-nowrap">
-                                            @if (confirmDeleteId == s.Id)
-                                            {
-                                                <button type="button" class="row-btn lock" @onclick="() => DeleteSport(s)">Confirm?</button>
-                                                <button type="button" class="row-btn" @onclick="() => confirmDeleteId = null">No</button>
-                                            }
-                                            else
-                                            {
-                                                <button type="button" class="icon-btn" title="Edit (UC_35.2)" @onclick="() => StartSportEdit(s)"><AppIcon Name="pencil" /></button>
-                                                <button type="button" class="icon-btn danger" title="Delete (UC_35.3)" @onclick="() => confirmDeleteId = s.Id"><AppIcon Name="trash" /></button>
-                                            }
-                                        </td>
+                                        <th>Môn thể thao</th>
+                                        <th>Phân loại</th>
+                                        <th>HLV liên kết</th>
+                                        <th>Người dùng quan tâm</th>
+                                        <th>Lớp / Bài viết</th>
+                                        <th>Trạng thái</th>
+                                        <th class="text-end">Thao tác</th>
                                     </tr>
-                                }
-                                @if (!FilteredSports.Any())
-                                {
-                                    <tr><td colspan="6" class="text-center muted">No sports match.</td></tr>
-                                }
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    @foreach (var s in FilteredSports)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="sport-cell">
+                                                    <span class="sport-ic"><AppIcon Name="dumbbell" /></span>
+                                                    <div><strong>@s.SportName</strong><br /><small class="muted">@s.Description</small></div>
+                                                </div>
+                                            </td>
+                                            <td><code>@s.Category</code></td>
+                                            <td><small>@s.CoachCount HLV</small></td>
+                                            <td><small>@s.UserCount người dùng</small></td>
+                                            <td><small>@s.OpenClassCount bài viết</small></td>
+                                            <td>
+                                                <span class="status-badge active">@s.Status</span>
+                                            </td>
+                                            <td class="text-end whitespace-nowrap">
+                                                @if (confirmDeleteId == s.SportId)
+                                                {
+                                                    <button type="button" class="row-btn lock" @onclick="() => DeleteSportAsync(s)" disabled="@isDeleting">
+                                                        @(isDeleting ? "Đang xóa..." : "Xác nhận xóa")
+                                                    </button>
+                                                    <button type="button" class="row-btn" @onclick="() => confirmDeleteId = null" disabled="@isDeleting">Hủy</button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="icon-btn" title="Chỉnh sửa (UC_35.2)" @onclick="() => StartSportEdit(s)"><AppIcon Name="pencil" /></button>
+                                                    <button type="button" class="icon-btn danger" title="Xóa môn thể thao (UC_35.3)" @onclick="() => confirmDeleteId = s.SportId"><AppIcon Name="trash" /></button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (!FilteredSports.Any())
+                                    {
+                                        <tr><td colspan="7" class="text-center muted">Không có môn thể thao nào phù hợp.</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
                     </div>
-                    <p class="paging">Showing 1–@FilteredSports.Count() of @FilteredSports.Count() sports</p>
+                    <p class="paging">Hiển thị @FilteredSports.Count() / @sports.Count môn thể thao</p>
                 }
             </Authorized>
             <NotAuthorized>
                 <div class="auth-alert error" role="alert">
-                    <AppIcon Name="warning" /><span>You do not have access to this page.</span>
+                    <AppIcon Name="warning" /><span>Bạn không có quyền truy cập trang này.</span>
                 </div>
                 <button type="button" class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/login")'>
-                    Go to portal sign in
+                    Quay lại trang đăng nhập portal
                 </button>
             </NotAuthorized>
         </AuthorizeView>
@@ -271,30 +268,31 @@
 </div>
 
 @code {
-    // ---------- Mock data only (real UC_34/UC_35 APIs belong to another member) ----------
     private record MockUser(Guid Id, string FullName, string Email, string Phone, string Role, bool IsLocked);
-    private record MockSport(Guid Id, string Code, string Name, string Description, string Category, string Metrics, int Coaches, int Logs, bool Visible, string Icon);
 
     private string view = "sports";
     private string? toastMessage;
+    private bool isToastError = false;
 
     private string userSearch = "";
     private string roleFilter = "";
 
     private string sportSearch = "";
-    private string sportCategory = "All";
-    private string sportStatus = "";
+    private string sportCategory = "Tất cả";
     private bool showSportForm = false;
     private Guid? editingSportId;
     private string sportFormName = "";
-    private string sportFormCategory = "Gym & Strength";
-    private string sportFormMetrics = "";
-    private string sportFormDesc = "";
     private Guid? confirmDeleteId;
+
+    private bool isLoadingSports = false;
+    private bool isSubmitting = false;
+    private bool isDeleting = false;
+
+    private List<SportDto> sports = new();
 
     private readonly List<string> categories = new()
     {
-        "All", "Gym & Strength", "Cardio & Athletics", "Combat Sports", "Team Sports"
+        "Tất cả", "Cardio & Sức bền", "Thể lực & Gym", "Đối kháng & Võ thuật", "Thư giãn & Dưỡng sinh", "Sức bền & Kỹ thuật", "Tập trung & Chính xác", "Thể thao tổng hợp"
     };
 
     private List<MockUser> users = new()
@@ -307,32 +305,53 @@
         new(Guid.NewGuid(), "Phạm Học Viên B", "trainee2@gmail.com", "0905000005", "TRAINEE", true),
     };
 
-    private List<MockSport> sports = new()
+    protected override async Task OnInitializedAsync()
     {
-        new(Guid.NewGuid(), "SPORT_01", "Powerlifting & Weightlifting", "Barbell strength training", "Gym & Strength", "Weight/Kg, Reps/Sets", 1420, 92400, true, "dumbbell"),
-        new(Guid.NewGuid(), "SPORT_02", "Running & Marathon", "Road and trail running", "Cardio & Athletics", "GPS Route, Pace", 980, 76800, true, "activity"),
-        new(Guid.NewGuid(), "SPORT_03", "Boxing & Kickfit", "Striking combat training", "Combat Sports", "Rounds, Heart rate", 640, 41200, true, "fire"),
-        new(Guid.NewGuid(), "SPORT_04", "Yoga & Mobility", "Flexibility and breathwork", "Gym & Strength", "Flexibility, Breath", 520, 38500, true, "activity"),
-        new(Guid.NewGuid(), "SPORT_05", "Swimming", "Pool and open water", "Cardio & Athletics", "Laps, Pace", 410, 29800, true, "waves"),
-        new(Guid.NewGuid(), "SPORT_06", "Football", "Team field sport", "Team Sports", "Goals, Assists", 870, 52300, true, "ball"),
-        new(Guid.NewGuid(), "SPORT_07", "Basketball", "Team court sport", "Team Sports", "Points, Assists", 690, 44700, true, "ball"),
-        new(Guid.NewGuid(), "SPORT_08", "MMA", "Mixed martial arts", "Combat Sports", "Rounds, Wins", 350, 18900, false, "trophy"),
-    };
+        if (Navigation.Uri.Contains("/admin/sports"))
+        {
+            view = "sports";
+        }
+        await LoadSportsAsync();
+    }
+
+    private async Task LoadSportsAsync()
+    {
+        isLoadingSports = true;
+        try
+        {
+            var res = await SportService.GetSportsAsync();
+            if (res.Success && res.Data != null)
+            {
+                sports = res.Data;
+            }
+            else if (!string.IsNullOrEmpty(res.Message))
+            {
+                toastMessage = res.Message;
+                isToastError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Lỗi khi tải danh sách môn thể thao: {ex.Message}";
+            isToastError = true;
+        }
+        finally
+        {
+            isLoadingSports = false;
+        }
+    }
 
     private void SwitchView(string next)
     {
         view = next;
         toastMessage = null;
+        isToastError = false;
     }
 
     private void DemoSoon(string module)
     {
-        toastMessage = $"[Demo] {module} is not part of this preview.";
-    }
-
-    private void ShowToast(string message)
-    {
-        toastMessage = message;
+        toastMessage = $"Chức năng [{module}] sẽ được cập nhật trong phiên bản tiếp theo.";
+        isToastError = false;
     }
 
     private IEnumerable<MockUser> FilteredUsers =>
@@ -342,15 +361,13 @@
              u.Email.Contains(userSearch, StringComparison.OrdinalIgnoreCase)) &&
             (string.IsNullOrWhiteSpace(roleFilter) || u.Role == roleFilter));
 
-    private IEnumerable<MockSport> FilteredSports =>
+    private IEnumerable<SportDto> FilteredSports =>
         sports.Where(s =>
             (string.IsNullOrWhiteSpace(sportSearch) ||
-             s.Name.Contains(sportSearch, StringComparison.OrdinalIgnoreCase) ||
-             s.Code.Contains(sportSearch, StringComparison.OrdinalIgnoreCase)) &&
-            (sportCategory == "All" || s.Category == sportCategory) &&
-            (string.IsNullOrWhiteSpace(sportStatus) ||
-             (sportStatus == "visible" && s.Visible) ||
-             (sportStatus == "hidden" && !s.Visible)));
+             s.SportName.Contains(sportSearch, StringComparison.OrdinalIgnoreCase) ||
+             s.Category.Contains(sportSearch, StringComparison.OrdinalIgnoreCase) ||
+             s.Description.Contains(sportSearch, StringComparison.OrdinalIgnoreCase)) &&
+            (sportCategory == "Tất cả" || s.Category == sportCategory));
 
     private void SetLocked(MockUser user, bool locked)
     {
@@ -361,8 +378,9 @@
         }
         users[index] = users[index] with { IsLocked = locked };
         toastMessage = locked
-            ? $"[Demo] {user.FullName} would be locked (UC_34.1)."
-            : $"[Demo] {user.FullName} would be unlocked (UC_34.2).";
+            ? $"Đã khóa tài khoản {user.FullName} (UC_34.1)."
+            : $"Đã mở khóa tài khoản {user.FullName} (UC_34.2).";
+        isToastError = false;
     }
 
     private void ToggleSportForm()
@@ -370,19 +388,14 @@
         showSportForm = !showSportForm;
         editingSportId = null;
         sportFormName = "";
-        sportFormCategory = "Gym & Strength";
-        sportFormMetrics = "";
-        sportFormDesc = "";
+        confirmDeleteId = null;
     }
 
-    private void StartSportEdit(MockSport sport)
+    private void StartSportEdit(SportDto sport)
     {
         showSportForm = true;
-        editingSportId = sport.Id;
-        sportFormName = sport.Name;
-        sportFormCategory = sport.Category;
-        sportFormMetrics = sport.Metrics;
-        sportFormDesc = sport.Description;
+        editingSportId = sport.SportId;
+        sportFormName = sport.SportName;
         confirmDeleteId = null;
     }
 
@@ -390,48 +403,95 @@
     {
         showSportForm = false;
         editingSportId = null;
+        sportFormName = "";
     }
 
-    private void SaveSportForm()
+    private async Task SaveSportFormAsync()
     {
         if (string.IsNullOrWhiteSpace(sportFormName))
         {
-            toastMessage = "[Demo] Enter a sport name first.";
+            toastMessage = "Tên môn thể thao không được để trống.";
+            isToastError = true;
             return;
         }
 
-        if (editingSportId == null)
+        isSubmitting = true;
+        try
         {
-            var code = $"SPORT_{sports.Count + 1:00}";
-            sports.Add(new MockSport(Guid.NewGuid(), code, sportFormName.Trim(), sportFormDesc.Trim(),
-                sportFormCategory, sportFormMetrics.Trim(), 0, 0, true, "dumbbell"));
-            toastMessage = $"[Demo] Sport \"{sportFormName.Trim()}\" would be created (UC_35.1).";
-        }
-        else
-        {
-            var index = sports.FindIndex(s => s.Id == editingSportId);
-            if (index >= 0)
+            if (editingSportId == null)
             {
-                var current = sports[index];
-                sports[index] = current with
+                // Create Sport UC_35.1
+                var res = await SportService.CreateSportAsync(new CreateSportDto { SportName = sportFormName.Trim() });
+                if (res.Success)
                 {
-                    Name = sportFormName.Trim(),
-                    Category = sportFormCategory,
-                    Metrics = sportFormMetrics.Trim(),
-                    Description = sportFormDesc.Trim()
-                };
-                toastMessage = "[Demo] Sport would be updated (UC_35.2).";
+                    toastMessage = res.Message ?? $"Tạo môn thể thao \"{sportFormName.Trim()}\" thành công.";
+                    isToastError = false;
+                    CancelSportForm();
+                    await LoadSportsAsync();
+                }
+                else
+                {
+                    toastMessage = res.Message ?? "Tạo môn thể thao thất bại.";
+                    isToastError = true;
+                }
+            }
+            else
+            {
+                // Edit Sport UC_35.2
+                var res = await SportService.UpdateSportAsync(editingSportId.Value, new UpdateSportDto { SportName = sportFormName.Trim() });
+                if (res.Success)
+                {
+                    toastMessage = res.Message ?? "Cập nhật môn thể thao thành công.";
+                    isToastError = false;
+                    CancelSportForm();
+                    await LoadSportsAsync();
+                }
+                else
+                {
+                    toastMessage = res.Message ?? "Cập nhật môn thể thao thất bại.";
+                    isToastError = true;
+                }
             }
         }
-
-        CancelSportForm();
+        catch (Exception ex)
+        {
+            toastMessage = $"Lỗi xử lý: {ex.Message}";
+            isToastError = true;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
     }
 
-    private void DeleteSport(MockSport sport)
+    private async Task DeleteSportAsync(SportDto sport)
     {
-        sports.RemoveAll(s => s.Id == sport.Id);
-        confirmDeleteId = null;
-        toastMessage = $"[Demo] Sport \"{sport.Name}\" would be deleted (UC_35.3).";
+        isDeleting = true;
+        try
+        {
+            var res = await SportService.DeleteSportAsync(sport.SportId);
+            confirmDeleteId = null;
+            if (res.Success)
+            {
+                toastMessage = res.Message ?? $"Xóa môn thể thao \"{sport.SportName}\" thành công.";
+                isToastError = false;
+                await LoadSportsAsync();
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Không thể xóa môn thể thao vì môn thể thao này đang được sử dụng.";
+                isToastError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Lỗi khi xóa môn thể thao: {ex.Message}";
+            isToastError = true;
+        }
+        finally
+        {
+            isDeleting = false;
+        }
     }
 
     private async Task HandleLogout()

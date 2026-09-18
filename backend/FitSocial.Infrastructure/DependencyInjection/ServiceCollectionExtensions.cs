@@ -20,6 +20,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IPostService, PostService>();
+        services.AddScoped<ICoachService, CoachService>();
         return services;
     }
 
@@ -56,6 +58,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<ICoachProfileRepository, CoachProfileRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IPostRepository, PostRepository>();
+        services.AddScoped<ILocationRepository, LocationRepository>();
 
         return services;
     }

@@ -15,6 +15,12 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure maximum request body size (100MB for video/media uploads)
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024;
+});
+
 // Add services to the container.
 builder.Services.AddCors(options =>
 {
@@ -28,7 +34,8 @@ builder.Services.AddCors(options =>
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowCredentials()
+            .SetPreflightMaxAge(TimeSpan.FromHours(24));
     });
 });
 
@@ -60,6 +67,16 @@ builder.Services.AddApplicationServices();
 builder.Services.AddHttpClient();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
+
+// Cloudinary Singleton service registration (reuse HttpClient / SocketsHttpHandler connection pool)
+var cloudName = builder.Configuration["Cloudinary:CloudName"];
+var apiKey = builder.Configuration["Cloudinary:ApiKey"];
+var apiSecret = builder.Configuration["Cloudinary:ApiSecret"];
+if (!string.IsNullOrWhiteSpace(cloudName) && !string.IsNullOrWhiteSpace(apiKey) && !string.IsNullOrWhiteSpace(apiSecret))
+{
+    var account = new CloudinaryDotNet.Account(cloudName, apiKey, apiSecret);
+    builder.Services.AddSingleton(new CloudinaryDotNet.Cloudinary(account));
+}
 
 // JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? "FitSocial_Super_Secret_Key_For_Jwt_2026_SecureAuthenticationKey_1234567890";
@@ -93,6 +110,21 @@ builder.Services.AddAuthentication(options =>
                 context.Token = accessToken;
             }
             return Task.CompletedTask;
+        },
+        OnChallenge = async context =>
+        {
+            context.HandleResponse();
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(FitSocial.Application.DTOs.Common.ApiResponseDto<object>.Fail(
+                "Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."));
+        },
+        OnForbidden = async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(FitSocial.Application.DTOs.Common.ApiResponseDto<object>.Fail(
+                "Bạn không có quyền thực hiện thao tác này."));
         },
         OnTokenValidated = async context =>
         {
@@ -171,6 +203,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseMiddleware<FitSocial.API.Middleware.ExceptionHandlingMiddleware>();
+
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
@@ -184,5 +218,23 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+
+// Ensure PostType column exists in PostgreSQL database
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<FitSocial.Infrastructure.Data.FitSocialDbContext>();
+        Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(
+            dbContext.Database,
+            @"ALTER TABLE ""Posts"" ADD COLUMN IF NOT EXISTS ""PostType"" VARCHAR(50) DEFAULT 'FEED';
+              UPDATE ""Posts"" SET ""PostType"" = 'FEED' WHERE ""PostType"" IS NULL;"
+        );
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"DB Migration check: {ex.Message}");
+    }
+}
 
 app.Run();

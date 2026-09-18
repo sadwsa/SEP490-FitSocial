@@ -1,0 +1,279 @@
+@using FitSocial.Client.Models.Posts
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (Media != null && Media.Any())
+{
+    @if (Media.Count == 1)
+    {
+        var single = Media[0];
+        var singleKey = single.Id != Guid.Empty ? single.Id.ToString() : (single.MediaUrl ?? "single");
+        <div id="@containerId" class="relative w-full rounded-xl overflow-hidden mb-3 border border-gray-100 bg-black/5 flex items-center justify-center select-none group" @key="@($"single-box-{singleKey}")">
+            @if (single.MediaType?.Equals("VIDEO", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                <video @key="@($"single-vid-{singleKey}")"
+                       id="@GetVideoId(0)"
+                       src="@single.MediaUrl"
+                       controls
+                       playsinline
+                       muted
+                       preload="auto"
+                       class="single-media-video w-full max-h-[440px] bg-black rounded-xl object-contain block"></video>
+
+                <!-- Sound Toggle Button -->
+                <button type="button"
+                        @onclick="ToggleMute"
+                        @onclick:stopPropagation="true"
+                        class="absolute bottom-3 right-3 z-20 bg-black/60 hover:bg-black/85 backdrop-blur-md text-white p-2 rounded-full transition shadow-md flex items-center justify-center"
+                        title="@(isMuted ? "Bật âm thanh" : "Tắt âm thanh")">
+                    @if (isMuted)
+                    {
+                        <!-- Muted Speaker Icon -->
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                        </svg>
+                    }
+                    else
+                    {
+                        <!-- Unmuted Speaker Icon -->
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        </svg>
+                    }
+                </button>
+            }
+            else
+            {
+                <img @key="@($"single-img-{singleKey}")"
+                     src="@single.MediaUrl" alt="Post photo"
+                     class="w-full max-h-[440px] object-cover rounded-xl block" />
+            }
+        </div>
+    }
+    else
+    {
+        <div id="@containerId" class="relative w-full rounded-xl overflow-hidden mb-3 border border-gray-100 bg-black select-none group">
+            <!-- Media display container -->
+            <div class="relative w-full flex items-center justify-center min-h-[280px] max-h-[460px] bg-black">
+                @for (int i = 0; i < Media.Count; i++)
+                {
+                    var index = i;
+                    var item = Media[index];
+                    var isCurrent = (index == currentIndex);
+                    var itemKey = item.Id != Guid.Empty ? item.Id.ToString() : (item.MediaUrl ?? index.ToString());
+
+                    <div @key="@($"slide-{itemKey}")"
+                         class="slider-slide w-full h-full @(isCurrent ? "is-active flex items-center justify-center" : "hidden")"
+                         style="@(isCurrent ? "" : "display: none !important;")">
+                        @if (item.MediaType?.Equals("VIDEO", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            <video @key="@($"vid-{itemKey}")"
+                                   id="@GetVideoId(index)"
+                                   src="@item.MediaUrl"
+                                   controls
+                                   playsinline
+                                   muted
+                                   preload="auto"
+                                   class="w-full max-h-[460px] object-contain bg-black rounded-xl"></video>
+                        }
+                        else
+                        {
+                            <img @key="@($"img-{itemKey}")"
+                                 src="@item.MediaUrl"
+                                 alt="Post photo @(index + 1)"
+                                 class="w-full max-h-[460px] object-cover rounded-xl" />
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Slide Counter Badge (e.g. 1/3) -->
+            <div class="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-2.5 py-0.5 rounded-full z-20 shadow-sm pointer-events-none">
+                @(currentIndex + 1)/@Media.Count
+            </div>
+
+            <!-- Sound Toggle Button if current item is a video -->
+            @if (currentIndex >= 0 && currentIndex < Media.Count && Media[currentIndex].MediaType?.Equals("VIDEO", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                <button type="button"
+                        @onclick="ToggleMute"
+                        @onclick:stopPropagation="true"
+                        class="absolute top-3 left-3 z-20 bg-black/60 hover:bg-black/85 backdrop-blur-md text-white p-2 rounded-full transition shadow-md flex items-center justify-center"
+                        title="@(isMuted ? "Bật âm thanh" : "Tắt âm thanh")">
+                    @if (isMuted)
+                    {
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        </svg>
+                    }
+                </button>
+            }
+
+            <!-- Navigation Button: Previous -->
+            <button type="button"
+                    @onclick="PrevSlide"
+                    @onclick:stopPropagation="true"
+                    class="absolute left-2.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/55 hover:bg-black/85 text-white backdrop-blur-sm flex items-center justify-center transition-all shadow-md active:scale-95 z-20 focus:outline-none"
+                    title="Previous"
+                    aria-label="Previous media">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+
+            <!-- Navigation Button: Next -->
+            <button type="button"
+                    @onclick="NextSlide"
+                    @onclick:stopPropagation="true"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/55 hover:bg-black/85 text-white backdrop-blur-sm flex items-center justify-center transition-all shadow-md active:scale-95 z-20 focus:outline-none"
+                    title="Next"
+                    aria-label="Next media">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+
+            <!-- Slide Indicator Dots -->
+            <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full pointer-events-auto">
+                @for (int i = 0; i < Media.Count; i++)
+                {
+                    var dotIndex = i;
+                    <button type="button"
+                            @onclick="() => GoToSlide(dotIndex)"
+                            @onclick:stopPropagation="true"
+                            class="transition-all rounded-full @(dotIndex == currentIndex ? "w-4 h-1.5 bg-[#FF5500]" : "w-1.5 h-1.5 bg-white/60 hover:bg-white")"
+                            title="Slide @(dotIndex + 1)"
+                            aria-label="Slide @(dotIndex + 1)"></button>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public List<PostMediaDto>? Media { get; set; }
+
+    private int currentIndex = 0;
+    private readonly string sliderId = Guid.NewGuid().ToString("N");
+    private string containerId => $"slider-container-{sliderId}";
+    private bool shouldPlayCurrentVideo = false;
+    private bool isMuted = true;
+    private string lastMediaSignature = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        if (Media == null || Media.Count == 0)
+        {
+            currentIndex = 0;
+            lastMediaSignature = string.Empty;
+            return;
+        }
+
+        var currentSignature = string.Join("|", Media.Select(m => $"{m.Id}:{m.MediaUrl}"));
+        if (lastMediaSignature != currentSignature)
+        {
+            lastMediaSignature = currentSignature;
+            if (currentIndex >= Media.Count || currentIndex < 0)
+            {
+                currentIndex = 0;
+            }
+        }
+    }
+
+    private string GetVideoId(int index) => $"media-vid-{sliderId}-{index}";
+
+    private async Task PrevSlide()
+    {
+        if (Media == null || Media.Count <= 1) return;
+        int prev = (currentIndex - 1 + Media.Count) % Media.Count;
+        await SwitchToSlide(prev);
+    }
+
+    private async Task NextSlide()
+    {
+        if (Media == null || Media.Count <= 1) return;
+        int next = (currentIndex + 1) % Media.Count;
+        await SwitchToSlide(next);
+    }
+
+    private async Task GoToSlide(int index)
+    {
+        if (Media == null || index == currentIndex || index < 0 || index >= Media.Count) return;
+        await SwitchToSlide(index);
+    }
+
+    private async Task SwitchToSlide(int targetIndex)
+    {
+        try
+        {
+            // Tắt video cũ trước khi đổi slide
+            await JS.InvokeVoidAsync("fitMediaSlider.pauseAllVideos", containerId);
+        }
+        catch { }
+
+        currentIndex = targetIndex;
+        shouldPlayCurrentVideo = true;
+        StateHasChanged();
+    }
+
+    private async Task ToggleMute()
+    {
+        try
+        {
+            isMuted = await JS.InvokeAsync<bool>("fitMediaSlider.toggleMute", containerId);
+        }
+        catch
+        {
+            isMuted = !isMuted;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Kích hoạt theo dõi cuộn màn hình để tự động phát khi lướt tới
+                await JS.InvokeVoidAsync("fitMediaSlider.observe", containerId);
+            }
+            catch { }
+        }
+
+        if (shouldPlayCurrentVideo)
+        {
+            shouldPlayCurrentVideo = false;
+            if (Media != null && currentIndex >= 0 && currentIndex < Media.Count)
+            {
+                var currentItem = Media[currentIndex];
+                if (currentItem.MediaType?.Equals("VIDEO", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    try
+                    {
+                        await JS.InvokeVoidAsync("fitMediaSlider.playVideo", GetVideoId(currentIndex));
+                    }
+                    catch { }
+                }
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("fitMediaSlider.unobserve", containerId);
+            await JS.InvokeVoidAsync("fitMediaSlider.pauseAllVideos", containerId);
+        }
+        catch { }
+    }
+}

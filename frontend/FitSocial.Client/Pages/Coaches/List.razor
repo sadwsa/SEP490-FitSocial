@@ -1,0 +1,238 @@
+﻿@page "/coaches"
+@inject ICoachService CoachService
+@inject NavigationManager Navigation
+@attribute [Authorize]
+
+<style>
+    /* Instagram-like Orange Theme */
+    .insta-container {
+        background-color: #fafafa;
+        min-height: 100vh;
+        padding-top: 40px;
+        padding-bottom: 50px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .insta-header {
+        font-weight: 700;
+        font-size: 1.5rem;
+        color: #262626;
+    }
+
+    .insta-search-box {
+        background-color: #efefef;
+        border-radius: 8px;
+        border: none;
+        padding: 8px 16px;
+        font-size: 0.95rem;
+        color: #262626;
+    }
+
+        .insta-search-box:focus {
+            background-color: #efefef;
+            box-shadow: none;
+            border: 1px solid #FF7A00;
+        }
+
+    .insta-card {
+        background-color: #fff;
+        border: 1px solid #dbdbdb;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    /* Vòng màu cam quanh Avatar giống Instagram Story */
+    .insta-avatar-ring {
+        display: inline-block;
+        padding: 3px;
+        border-radius: 50%;
+        background: linear-gradient(45deg, #FFC107, #FF9800, #FF5722, #E64A19);
+    }
+
+    .insta-avatar {
+        width: 86px;
+        height: 86px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        object-fit: cover;
+    }
+
+        /* Tùy chọn 2: Nút viên thuốc (Pill), Gradient, Đổ bóng mờ */
+    .insta-btn-primary {
+        background: linear-gradient(135deg, #FF9800, #FF5722);
+        color: #fff;
+        font-weight: 600;
+        border-radius: 25px; /* Bo tròn hoàn toàn thành hình viên thuốc */
+        padding: 8px 20px;
+        border: none;
+        font-size: 0.95rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 4px 12px rgba(255, 87, 34, 0.25); /* Bóng đổ màu cam mờ */
+    }
+    .insta-btn-primary:hover {
+        transform: translateY(-2px); /* Hiệu ứng nảy lên nhẹ */
+        box-shadow: 0 6px 16px rgba(255, 87, 34, 0.4);
+        color: #fff;
+    }
+    .insta-btn-primary:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 8px rgba(255, 87, 34, 0.2);
+    }
+
+
+    .insta-stats {
+        display: flex;
+        justify-content: center;
+        gap: 25px;
+        border-top: 1px solid #efefef;
+        padding-top: 15px;
+        margin-top: 15px;
+    }
+
+    .insta-stat-val {
+        font-weight: 700;
+        color: #262626;
+        display: block;
+        font-size: 1.1rem;
+    }
+
+    .insta-stat-label {
+        font-size: 0.8rem;
+        color: #8e8e8e;
+    }
+</style>
+
+<div class="insta-container">
+    <div class="container" style="max-width: 935px;">
+        <!-- Kích thước chuẩn của Instagram Web -->
+        <!-- Header & Search -->
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4">
+            <h1 class="insta-header mb-3 mb-md-0">Discover Coaches</h1>
+
+            <form @onsubmit="SearchCoaches" class="d-flex gap-2" style="width: 100%; max-width: 550px;">
+                <input type="text" class="form-control insta-search-box w-100" placeholder="Search by name or bio..." @bind="searchKeyword">
+                <input type="number" class="form-control insta-search-box" style="width: 100px;" placeholder="Min Exp" min="0" @bind="minExperience">
+                <select class="form-select insta-search-box" style="width: 140px;" @bind="sortBy">
+                    <option value="">Sort: Default</option>
+                    <option value="exp_desc">Exp: High-Low</option>
+                    <option value="exp_asc">Exp: Low-High</option>
+                    <option value="name_asc">Name: A-Z</option>
+                </select>
+                <button type="submit" class="btn insta-btn-primary px-3"><i class="bi bi-search"></i></button>
+            </form>
+        </div>
+
+        <!-- Content -->
+        @if (isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border" style="color: #FF7A00;" role="status"></div>
+            </div>
+        }
+        else if (errorMessage != null)
+        {
+            <div class="alert alert-danger text-center">@errorMessage</div>
+        }
+        else if (!coaches.Any())
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-camera-fill fs-1 d-block mb-3" style="color: #dbdbdb;"></i>
+                <h4>No coaches found</h4>
+            </div>
+        }
+        else
+        {
+            <div class="row g-4">
+                @foreach (var coach in coaches)
+                {
+                    <div class="col-md-6 col-lg-4">
+                        <div class="insta-card h-100 p-4 text-center d-flex flex-column">
+
+                            <!-- Avatar with Orange Gradient Ring -->
+                            <div class="mb-3 mt-2">
+                                <div class="insta-avatar-ring">
+                                    @if (!string.IsNullOrEmpty(coach.AvatarUrl))
+                                    {
+                                        <img src="@coach.AvatarUrl" class="insta-avatar" alt="@coach.FullName" />
+                                    }
+                                    else
+                                    {
+                                        <div class="insta-avatar bg-light d-inline-flex align-items-center justify-content-center">
+                                            <i class="bi bi-person-fill text-secondary" style="font-size: 3rem;"></i>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Name & Username -->
+                            <h5 class="fw-bold text-dark mb-0">@coach.FullName</h5>
+                            <p class="text-muted small mb-3">@("@coach_" + coach.CoachId.ToString().Substring(0, 6))</p>
+
+                            <!-- Bio -->
+                            <p class="text-dark small mb-4 flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                @(string.IsNullOrEmpty(coach.Bio) ? "Fitness enthusiast & professional coach. Let's build your dream body together!" : coach.Bio)
+                            </p>
+
+                            <!-- Action Button -->
+                            <button class="insta-btn-primary w-100 mb-2">View Profile</button>
+
+                            <!-- Stats Footer (Like Instagram Posts/Followers/Following) -->
+                            <div class="insta-stats">
+                                <div class="insta-stat-item">
+                                    <span class="insta-stat-val">@coach.ExperienceYears</span>
+                                    <span class="insta-stat-label">Years Exp</span>
+                                </div>
+                                <div class="insta-stat-item">
+                                    <span class="insta-stat-val">5.0</span>
+                                    <span class="insta-stat-label">Rating</span>
+                                </div>
+                                <div class="insta-stat-item">
+                                    <span class="insta-stat-val">PRO</span>
+                                    <span class="insta-stat-label">Status</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private IEnumerable<CoachListDto> coaches = new List<CoachListDto>();
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    // Biến cho form filter & sort
+    private string? searchKeyword = "";
+    private int? minExperience;
+    private string? sortBy = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCoaches();
+    }
+
+    private async Task SearchCoaches()
+    {
+        await LoadCoaches();
+    }
+
+    private async Task LoadCoaches()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        var response = await CoachService.GetAllCoachesAsync(searchKeyword, minExperience, sortBy);
+        if (response.Success && response.Data != null)
+        {
+            coaches = response.Data;
+        }
+        else
+        {
+            errorMessage = response.Message ?? "Failed to load coaches.";
+        }
+
+        isLoading = false;
+    }
+}

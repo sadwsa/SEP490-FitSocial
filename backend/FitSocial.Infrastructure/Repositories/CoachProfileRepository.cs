@@ -42,4 +42,39 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
             .Take(count)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IEnumerable<CoachProfile>> GetAllCoachesWithDetailsAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, CancellationToken cancellationToken = default)
+    {
+        var query = DbSet.Include(c => c.Coach).AsQueryable();
+        // 1. Tìm kiếm theo tên / giới thiệu
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+        {
+            var keyword = searchKeyword.ToLower().Trim();
+            query = query.Where(c => (c.Coach.FullName != null && c.Coach.FullName.ToLower().Contains(keyword)) ||
+                                     (c.Bio != null && c.Bio.ToLower().Contains(keyword)));
+        }
+        // 2. Lọc theo năm kinh nghiệm tối thiểu
+        if (minExperience.HasValue && minExperience.Value > 0)
+        {
+            query = query.Where(c => c.ExperienceYears >= minExperience.Value);
+        }
+        // 3. Sắp xếp (Sort)
+        if (!string.IsNullOrWhiteSpace(sortBy))
+        {
+            query = sortBy.ToLower() switch
+            {
+                "exp_desc" => query.OrderByDescending(c => c.ExperienceYears),
+                "exp_asc" => query.OrderBy(c => c.ExperienceYears),
+                "name_asc" => query.OrderBy(c => c.Coach.FullName),
+                "name_desc" => query.OrderByDescending(c => c.Coach.FullName),
+                _ => query.OrderByDescending(c => c.ExperienceYears) // Mặc định
+            };
+        }
+        else
+        {
+            // Mặc định nếu không truyền gì thì xếp kinh nghiệm từ cao xuống thấp
+            query = query.OrderByDescending(c => c.ExperienceYears);
+        }
+        return await query.AsNoTracking().ToListAsync(cancellationToken);
+    }
 }

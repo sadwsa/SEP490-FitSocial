@@ -62,8 +62,8 @@ public class PostService : IPostService
         var url = $"posts?{string.Join("&", queryParams)}";
         var response = await _apiClient.GetAsync<PagedResult<PostDto>>(url);
 
-        // If backend returned no posts or is unreachable, fallback to sample English posts
-        if (!response.Success || response.Data == null || response.Data.Items == null || !response.Data.Items.Any())
+        // Fallback to sample posts only when backend is unreachable or request failed
+        if (!response.Success || response.Data == null)
         {
             var sampleItems = GetSamplePosts();
             if (!string.IsNullOrWhiteSpace(query.SearchTerm))
@@ -73,6 +73,13 @@ public class PostService : IPostService
                     (p.Content?.ToLowerInvariant().Contains(term) ?? false) ||
                     (p.AuthorName?.ToLowerInvariant().Contains(term) ?? false) ||
                     (p.SportName?.ToLowerInvariant().Contains(term) ?? false)
+                ).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.PostType))
+            {
+                sampleItems = sampleItems.Where(p => 
+                    string.Equals(p.PostType, query.PostType, StringComparison.OrdinalIgnoreCase)
                 ).ToList();
             }
 
@@ -90,6 +97,7 @@ public class PostService : IPostService
             };
         }
 
+        response.Data.Items ??= new List<PostDto>();
         return response;
     }
 

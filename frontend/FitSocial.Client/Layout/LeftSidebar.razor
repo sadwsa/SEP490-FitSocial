@@ -1,0 +1,11 @@
+@namespace FitSocial.Client.Layout
+
+<AppSidebar ActiveItem="@ActiveItem" Class="@Class">
+    @ChildContent
+</AppSidebar>
+
+@code {
+    [Parameter] public string? ActiveItem { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

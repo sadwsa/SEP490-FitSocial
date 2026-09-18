@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using FitSocial.Application.Commands.Posts;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Posts;
 using FitSocial.Application.Interfaces;
@@ -13,14 +12,10 @@ namespace FitSocial.API.Controllers;
 public class PostsController : ControllerBase
 {
     private readonly IPostService _postService;
-    private readonly IEditPostCommandHandler _editPostCommandHandler;
 
-    public PostsController(
-        IPostService postService,
-        IEditPostCommandHandler editPostCommandHandler)
+    public PostsController(IPostService postService)
     {
         _postService = postService;
-        _editPostCommandHandler = editPostCommandHandler;
     }
 
     /// <summary>
@@ -80,20 +75,7 @@ public class PostsController : ControllerBase
 
         var currentUserRole = GetCurrentUserRole();
 
-        var command = new EditPostCommand
-        {
-            PostId = postId,
-            CurrentUserId = currentUserId.Value,
-            CurrentUserRole = currentUserRole,
-            PostType = request.PostType,
-            Content = request.Content,
-            SportId = request.SportId,
-            LocationId = request.LocationId,
-            RemoveMediaIds = request.RemoveMediaIds ?? new(),
-            NewMedia = request.NewMedia ?? new()
-        };
-
-        var result = await _editPostCommandHandler.HandleAsync(command, HttpContext.RequestAborted);
+        var result = await _postService.EditPostAsync(postId, currentUserId.Value, currentUserRole, request, HttpContext.RequestAborted);
         return Ok(result);
     }
 

@@ -518,7 +518,7 @@
                                 }
 
                                 <!-- Post Media Slider -->
-                                <PostMediaSlider Media="@post.Media" />
+                                <PostMediaSlider @key="@GetPostMediaKey(post)" Media="@post.Media" />
 
                                 <!-- Engagement Stats -->
                                 @if (post.LikeCount > 0 || post.CommentCount > 0)
@@ -2431,6 +2431,7 @@
                 {
                     updatedPost.IsLikedByCurrentUser = posts[index].IsLikedByCurrentUser;
                     posts[index] = updatedPost;
+                    posts = new List<PostDto>(posts);
                 }
 
                 isSubmittingEditPost = false;
@@ -2466,6 +2467,14 @@
             isSubmittingEditPost = false;
             isUploadingEditMedia = false;
         }
+    }
+
+    private static string GetPostMediaKey(PostDto post)
+    {
+        var mediaSignature = post.Media != null && post.Media.Any()
+            ? string.Join("-", post.Media.Select(m => $"{m.Id}_{m.MediaUrl}"))
+            : "empty";
+        return $"slider-{post.Id}-{post.UpdatedAt?.Ticks ?? 0}-{post.Media?.Count ?? 0}-{mediaSignature}";
     }
 
     private static string GetTimeAgo(DateTime? date)

@@ -1,8 +1,8 @@
-using FitSocial.Application.Commands.Posts;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Posts;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
+using FitSocial.Application.Validation;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
@@ -19,8 +19,6 @@ public class PostService : IPostService
     private readonly ISportRepository _sports;
     private readonly ILocationRepository _locations;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IEditPostCommandHandler _editPostCommandHandler;
-    private readonly IDeletePostCommandHandler _deletePostCommandHandler;
     private readonly ILogger<PostService>? _logger;
 
     public PostService(
@@ -29,8 +27,6 @@ public class PostService : IPostService
         ISportRepository sports,
         ILocationRepository locations,
         IUnitOfWork unitOfWork,
-        IEditPostCommandHandler editPostCommandHandler,
-        IDeletePostCommandHandler deletePostCommandHandler,
         ILogger<PostService>? logger = null)
     {
         _posts = posts;
@@ -38,25 +34,212 @@ public class PostService : IPostService
         _sports = sports;
         _locations = locations;
         _unitOfWork = unitOfWork;
-        _editPostCommandHandler = editPostCommandHandler;
-        _deletePostCommandHandler = deletePostCommandHandler;
         _logger = logger;
     }
 
-    public Task<ApiResponseDto<PostDto>> EditPostAsync(EditPostCommand command, CancellationToken cancellationToken = default)
+    public async Task<ApiResponseDto<PostDto>> EditPostAsync(
+        Guid postId,
+        Guid currentUserId,
+        string currentUserRole,
+        EditPostRequestDto request,
+        CancellationToken cancellationToken = default)
     {
-        return _editPostCommandHandler.HandleAsync(command, cancellationToken);
+        // 1. Validate required fields (null, empty, whitespace checks)
+        var (isValid, errorMessage) = EditPostRequestValidator.Validate(postId, currentUserId, request);
+        if (!isValid)
+        {
+            throw new ValidationException(errorMessage!);
+        }
+
+        // 2. Parse PostType & Validate Business Rule: Role vs PostType
+        PostRolePolicy.TryParsePostType(request.PostType, out var parsedPostType);
+        if (!PostRolePolicy.IsPostTypeAllowedForRole(currentUserRole, parsedPostType))
+        {
+            throw new ForbiddenException(
+                $"Role '{currentUserRole}' is not permitted to select PostType '{parsedPostType}'. " +
+                $"Trainee can only select Normal or FindCoach; Coach can select Normal, FindCoach, or FindTrainee.");
+        }
+
+        // 3. Check post existence
+        var post = await _posts.GetByIdWithMediaAsync(postId, cancellationToken);
+        if (post == null || post.IsDeleted == true)
+        {
+            throw new NotFoundException($"Post with ID '{postId}' was not found.");
+        }
+
+        // 4. Authorization: User must be the post author / owner
+        if (!post.CanBeEditedBy(currentUserId))
+        {
+            throw new ForbiddenException("You do not have permission to edit this post. Only the author can edit their own post.");
+        }
+
+        // 5. Check user account lock status
+        var user = await _users.GetByIdAsync(currentUserId, cancellationToken);
+        if (user == null || user.IsLocked == true)
+        {
+            throw new ForbiddenException("Your account is locked and cannot edit posts.");
+        }
+
+        // 6. Verify Sport and Location exist
+        var sport = await _sports.GetByIdAsync(request.SportId, cancellationToken);
+        if (sport == null)
+        {
+            throw new NotFoundException($"Selected sport with ID '{request.SportId}' does not exist.");
+        }
+
+        var location = await _locations.GetByIdAsync(request.LocationId, cancellationToken);
+        if (location == null)
+        {
+            throw new NotFoundException($"Selected location with ID '{request.LocationId}' does not exist.");
+        }
+
+        // 7. Validate RemoveMediaIds: must all belong to this post
+        var existingMediaList = post.PostMedia.ToList();
+        var mediaToRemove = new List<PostMedium>();
+
+        if (request.RemoveMediaIds != null && request.RemoveMediaIds.Count > 0)
+        {
+            var existingMediaIds = existingMediaList.Select(m => m.Id).ToHashSet();
+
+            foreach (var removeId in request.RemoveMediaIds)
+            {
+                if (!existingMediaIds.Contains(removeId))
+                {
+                    throw new BusinessException(
+                        $"Media item with ID '{removeId}' does not belong to this post or does not exist.");
+                }
+
+                var mediaItem = existingMediaList.First(m => m.Id == removeId);
+                mediaToRemove.Add(mediaItem);
+            }
+        }
+
+        // 8. Validate media limit: at most 10 media items total (kept + new additions)
+        var newMediaCount = request.NewMedia?.Count ?? 0;
+        if (!Post.ValidateTotalMediaLimit(existingMediaList.Count, mediaToRemove.Count, newMediaCount, out var totalAfterEdit))
+        {
+            throw new BusinessException(
+                $"A post cannot contain more than {PostConstants.MaxMediaCount} media items in total (photos or videos combined). " +
+                $"Current kept: {existingMediaList.Count - mediaToRemove.Count}, New additions: {newMediaCount}. Total would be: {totalAfterEdit}.");
+        }
+
+        // 9. Execute update inside Database Transaction
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            // 9.1. Update post details
+            post.UpdateDetails(request.Content, parsedPostType, request.SportId, request.LocationId);
+
+            // 9.2. Remove requested media
+            if (mediaToRemove.Count > 0)
+            {
+                _posts.RemoveMediaRange(mediaToRemove);
+                foreach (var item in mediaToRemove)
+                {
+                    post.PostMedia.Remove(item);
+                }
+            }
+
+            // 9.3. Add new media items
+            if (request.NewMedia != null && request.NewMedia.Count > 0)
+            {
+                var now = DateTime.UtcNow;
+                foreach (var item in request.NewMedia)
+                {
+                    var newMedium = new PostMedium
+                    {
+
+                        PostId = post.Id,
+                        MediaUrl = item.MediaUrl.Trim(),
+                        MediaType = item.MediaType.Trim().ToUpperInvariant(),
+                        CreatedAt = now
+                    };
+                    post.PostMedia.Add(newMedium);
+                }
+            }
+
+            // 9.4. Commit transaction
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+
+        // 10. Return updated PostDto
+        var responseDto = new PostDto
+        {
+            Id = post.Id,
+            AuthorId = post.AuthorId,
+            AuthorName = user.FullName,
+            AuthorAvatarUrl = user.AvatarUrl,
+            Content = post.Content,
+            PostType = post.PostType,
+            SportId = sport.SportId,
+            SportName = sport.SportName,
+            LocationId = location.LocationId,
+            LocationName = location.LocationName,
+            LocationAddress = location.Address,
+            CreatedAt = post.CreatedAt,
+            UpdatedAt = post.UpdatedAt,
+            LikeCount = post.PostInteractions.Count,
+            CommentCount = post.Comments.Count,
+            IsLikedByCurrentUser = false,
+            Media = post.PostMedia
+                .OrderBy(pm => pm.CreatedAt)
+                .Select(pm => new PostMediaDto
+                {
+                    Id = pm.Id,
+                    MediaUrl = pm.MediaUrl ?? string.Empty,
+                    MediaType = pm.MediaType ?? string.Empty,
+                    CreatedAt = pm.CreatedAt
+                }).ToList()
+        };
+
+        return ApiResponseDto<PostDto>.Ok(responseDto, "Post updated successfully.");
     }
 
-    public Task<ApiResponseDto<bool>> DeletePostAsync(Guid postId, Guid currentUserId, string currentUserRole, CancellationToken cancellationToken = default)
+    public async Task<ApiResponseDto<bool>> DeletePostAsync(Guid postId, Guid currentUserId, string currentUserRole, CancellationToken cancellationToken = default)
     {
-        var command = new DeletePostCommand
+        // 1. Validate Post ID
+        if (postId == Guid.Empty)
         {
-            PostId = postId,
-            CurrentUserId = currentUserId,
-            CurrentUserRole = currentUserRole
-        };
-        return _deletePostCommandHandler.HandleAsync(command, cancellationToken);
+            throw new ValidationException("Post ID is required and cannot be empty.");
+        }
+
+        if (currentUserId == Guid.Empty)
+        {
+            throw new ForbiddenException("Invalid session or user identifier not found.");
+        }
+
+        // 2. Retrieve the post
+        var post = await _posts.GetByIdAsync(postId, cancellationToken);
+        if (post == null || post.IsDeleted == true)
+        {
+            throw new NotFoundException($"Post with ID '{postId}' was not found.");
+        }
+
+        // 3. Authorization check: Author or Admin/Staff
+        if (!post.CanBeDeletedBy(currentUserId, currentUserRole))
+        {
+            throw new ForbiddenException("You do not have permission to delete this post.");
+        }
+
+        // 4. Verify operating user lock status
+        var user = await _users.GetByIdAsync(currentUserId, cancellationToken);
+        if (user == null || user.IsLocked == true)
+        {
+            throw new ForbiddenException("Your account is locked and cannot perform this action.");
+        }
+
+        // 5. Execute Soft Delete
+        post.SoftDelete();
+
+        // 6. Persist changes
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<bool>.Ok(true, "Post deleted successfully.");
     }
 
     public async Task<ApiResponseDto<PostDto>> CreatePostAsync(

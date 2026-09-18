@@ -1,0 +1,299 @@
+@namespace FitSocial.Client.Layout
+@inject IAuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@using System.Security.Claims
+@using FitSocial.Client.Models.Auth
+
+<header class="sticky top-0 z-50 bg-white shadow-sm h-16 flex items-center justify-between px-4 lg:px-10 @Class"
+        style="display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important;">
+    
+    <!-- Left Section: Brand Logo & Search -->
+    <div class="flex items-center gap-4 w-1/3">
+        <!-- Brand Logo -->
+        <a href="home" class="flex-shrink-0 flex items-center hover:opacity-95 transition" title="FitSocial Home">
+            <img src="logo.jpg" alt="FitSocial"
+                 class="h-11 w-11 object-cover rounded-xl shadow-sm hover:scale-105 transition-transform duration-200" />
+        </a>
+
+        @if (ShowSearch)
+        {
+            <div class="hidden md:flex relative w-full max-w-sm">
+                <input type="text" placeholder="@SearchPlaceholder" value="@SearchTerm"
+                       @oninput="HandleInput" @onkeyup="HandleKeyUp"
+                       class="w-full bg-gray-100 rounded-full py-2 pl-4 pr-16 focus:outline-none focus:ring-2 focus:ring-[#FF5500] text-sm transition" />
+                <div class="absolute right-2.5 top-2 flex items-center gap-1">
+                    @if (!string.IsNullOrWhiteSpace(SearchTerm))
+                    {
+                        <button class="text-gray-400 hover:text-gray-600 p-0.5 rounded-full transition cursor-pointer"
+                                @onclick="HandleClear" title="Clear search">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    }
+                    <button class="text-gray-400 hover:text-[#FF5500] p-0.5 rounded-full transition cursor-pointer"
+                            @onclick="HandleSearch" title="Search">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Center Section (Optional for custom elements) -->
+    @if (CenterContent != null)
+    {
+        <div class="flex items-center justify-center">
+            @CenterContent
+        </div>
+    }
+
+    <!-- Right Section: Quick Actions & Profile Menu -->
+    <div class="flex items-center justify-end gap-3 md:gap-4 w-1/3">
+        @if (RightContent != null)
+        {
+            @RightContent
+        }
+        else
+        {
+            <!-- Shopping Cart -->
+            <a href="training-packages" class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition block" title="Shopping Cart">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z">
+                    </path>
+                </svg>
+                @if (CartCount > 0)
+                {
+                    <span class="absolute top-1 right-1 bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                        @CartCount
+                    </span>
+                }
+            </a>
+
+            <!-- Messages -->
+            <a href="messages" class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition block" title="Messages">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
+                    </path>
+                </svg>
+                @if (MessageCount > 0)
+                {
+                    <span class="absolute top-1 right-1 bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                        @MessageCount
+                    </span>
+                }
+            </a>
+
+            <!-- Notifications -->
+            <button class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition cursor-pointer" title="Notifications">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
+                    </path>
+                </svg>
+                @if (NotificationCount > 0)
+                {
+                    <span class="absolute top-1 right-1 bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                        @NotificationCount
+                    </span>
+                }
+            </button>
+        }
+
+        <!-- Profile Avatar & Dropdown -->
+        <div class="relative">
+            <button @onclick="ToggleProfileMenu"
+                    class="w-9 h-9 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold ml-2 shadow-sm hover:opacity-90 transition cursor-pointer"
+                    title="User Profile">
+                @EffectiveUserInitials
+            </button>
+
+            @if (showProfileMenu)
+            {
+                <div class="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in">
+                    <div class="px-4 py-2 border-b border-gray-100">
+                        <p class="text-sm font-semibold text-gray-900 truncate">@EffectiveUserName</p>
+                        <p class="text-xs text-[#FF5500] font-medium uppercase tracking-wider mt-0.5">@EffectiveUserRole</p>
+                    </div>
+
+                    <a href="profile"
+                       class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                        My Profile
+                    </a>
+
+                    <a href="change-password"
+                       class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                            </path>
+                        </svg>
+                        Change Password
+                    </a>
+
+                    <hr class="my-1 border-gray-100" />
+
+                    <button @onclick="HandleLogoutClick"
+                            class="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition text-left cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                            </path>
+                        </svg>
+                        Log Out
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+</header>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public bool ShowSearch { get; set; } = true;
+    [Parameter] public string SearchPlaceholder { get; set; } = "Search posts, coaches, friends...";
+    [Parameter] public string SearchTerm { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> SearchTermChanged { get; set; }
+    [Parameter] public EventCallback<ChangeEventArgs> OnSearchInput { get; set; }
+    [Parameter] public EventCallback<KeyboardEventArgs> OnSearchKeyUp { get; set; }
+    [Parameter] public EventCallback OnSearch { get; set; }
+    [Parameter] public EventCallback OnClearSearch { get; set; }
+
+    [Parameter] public string? UserName { get; set; }
+    [Parameter] public string? UserInitials { get; set; }
+    [Parameter] public string? UserRole { get; set; }
+
+    [Parameter] public int CartCount { get; set; } = 2;
+    [Parameter] public int MessageCount { get; set; } = 5;
+    [Parameter] public int NotificationCount { get; set; } = 9;
+
+    [Parameter] public EventCallback OnLogout { get; set; }
+    [Parameter] public RenderFragment? CenterContent { get; set; }
+    [Parameter] public RenderFragment? RightContent { get; set; }
+
+    private bool showProfileMenu = false;
+    private string loadedUserName = "User";
+    private string loadedUserInitials = "U";
+    private string loadedUserRole = "Athlete";
+
+    private string EffectiveUserName => !string.IsNullOrWhiteSpace(UserName) ? UserName : loadedUserName;
+    private string EffectiveUserInitials => !string.IsNullOrWhiteSpace(UserInitials) ? UserInitials : loadedUserInitials;
+    private string EffectiveUserRole => !string.IsNullOrWhiteSpace(UserRole) ? UserRole : loadedUserRole;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(UserName) || string.IsNullOrWhiteSpace(UserInitials))
+        {
+            await LoadCurrentUserAsync();
+        }
+    }
+
+    private async Task LoadCurrentUserAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                loadedUserName = user.Identity.Name ?? "Athlete";
+                var isCoach = user.IsInRole(AppRoles.Coach) ||
+                              user.IsInRole("COACH") ||
+                              string.Equals(user.FindFirst(ClaimTypes.Role)?.Value, AppRoles.Coach, StringComparison.OrdinalIgnoreCase);
+                loadedUserRole = isCoach ? "Coach" : "Trainee";
+
+                var parts = loadedUserName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    loadedUserInitials = parts.Length > 1
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            loadedUserName = "User";
+            loadedUserInitials = "U";
+            loadedUserRole = "Athlete";
+        }
+    }
+
+    private void ToggleProfileMenu()
+    {
+        showProfileMenu = !showProfileMenu;
+    }
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        SearchTerm = e.Value?.ToString() ?? string.Empty;
+        if (SearchTermChanged.HasDelegate)
+        {
+            await SearchTermChanged.InvokeAsync(SearchTerm);
+        }
+
+        if (OnSearchInput.HasDelegate)
+        {
+            await OnSearchInput.InvokeAsync(e);
+        }
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (OnSearchKeyUp.HasDelegate)
+        {
+            await OnSearchKeyUp.InvokeAsync(e);
+        }
+        else if (e.Key == "Enter" && OnSearch.HasDelegate)
+        {
+            await OnSearch.InvokeAsync();
+        }
+    }
+
+    private async Task HandleSearch()
+    {
+        if (OnSearch.HasDelegate)
+        {
+            await OnSearch.InvokeAsync();
+        }
+    }
+
+    private async Task HandleClear()
+    {
+        SearchTerm = string.Empty;
+        if (SearchTermChanged.HasDelegate)
+        {
+            await SearchTermChanged.InvokeAsync(SearchTerm);
+        }
+
+        if (OnClearSearch.HasDelegate)
+        {
+            await OnClearSearch.InvokeAsync();
+        }
+    }
+
+    private async Task HandleLogoutClick()
+    {
+        showProfileMenu = false;
+        if (OnLogout.HasDelegate)
+        {
+            await OnLogout.InvokeAsync();
+        }
+        else
+        {
+            await AuthService.LogoutAsync();
+            Navigation.NavigateTo("login");
+        }
+    }
+}

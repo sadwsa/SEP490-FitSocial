@@ -23,6 +23,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPostService, PostService>();
         services.AddScoped<ICoachService, CoachService>();
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
+        services.AddScoped<ISportService, SportService>();
+        services.AddScoped<IAdminUserService, AdminUserService>();
         return services;
     }
 

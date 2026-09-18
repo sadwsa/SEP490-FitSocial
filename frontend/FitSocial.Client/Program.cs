@@ -15,6 +15,7 @@ using FitSocial.Client.Services.Notifications;
 using FitSocial.Client.Services.Locations;
 using FitSocial.Client.Services.TrainingPackages;
 using FitSocial.Client.Services.Coaches;
+using FitSocial.Client.Services.Users;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -38,6 +39,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<GoogleSignInService>();
 builder.Services.AddScoped<ISportService, SportService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
+builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 builder.Services.AddScoped<PendingCoachRegistration>();
 builder.Services.AddScoped<IPaymentService, PaymentApiService>();

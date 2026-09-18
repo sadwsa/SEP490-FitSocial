@@ -204,8 +204,6 @@
                                         <option value="@c">@c</option>
                                     }
                                 </select>
-                                <input @bind="sportFormMetrics" class="toolbar-input" placeholder="Telemetry metrics (e.g. Weight/Kg, Reps/Sets)" />
-                                <input @bind="sportFormDesc" class="toolbar-input" placeholder="Short description" />
                             </div>
                             <div class="form-actions">
                                 <button type="button" class="row-btn" @onclick="CancelSportForm" disabled="@isSavingSport">Cancel</button>
@@ -230,7 +228,6 @@
                                 <tr>
                                     <th>Sport / Icon</th>
                                     <th>Code</th>
-                                    <th>Telemetry Metrics</th>
                                     <th>Coaches &amp; Posts</th>
                                     <th>Status</th>
                                     <th class="text-end">Actions</th>
@@ -247,7 +244,6 @@
                                             </div>
                                         </td>
                                         <td><code>@s.Code</code></td>
-                                        <td><small>@s.Metrics</small></td>
                                         <td><small>@s.CoachCount.ToString("N0") coaches<br />@s.PostCount.ToString("N0") posts</small></td>
                                         <td>
                                             @if (s.Visible)
@@ -275,7 +271,7 @@
                                 }
                                 @if (!isLoadingSports && !FilteredSports.Any())
                                 {
-                                    <tr><td colspan="6" class="text-center muted">No sports match.</td></tr>
+                                    <tr><td colspan="5" class="text-center muted">No sports match.</td></tr>
                                 }
                             </tbody>
                         </table>
@@ -309,8 +305,6 @@
     private Guid? editingSportId;
     private string sportFormName = "";
     private string sportFormCategory = "Gym & Strength";
-    private string sportFormMetrics = "";
-    private string sportFormDesc = "";
     private Guid? confirmDeleteId;
 
     private bool isLoadingSports = false;
@@ -453,8 +447,6 @@
         editingSportId = null;
         sportFormName = "";
         sportFormCategory = "Gym & Strength";
-        sportFormMetrics = "";
-        sportFormDesc = "";
     }
 
     private void StartSportEdit(SportDto sport)
@@ -463,8 +455,6 @@
         editingSportId = sport.SportId;
         sportFormName = sport.SportName;
         sportFormCategory = sport.Category;
-        sportFormMetrics = sport.Metrics;
-        sportFormDesc = sport.Description;
         confirmDeleteId = null;
     }
 

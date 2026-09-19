@@ -112,7 +112,7 @@ public partial class Home : ComponentBase, IDisposable
     {
         try
         {
-            var sportsTask = SportService.GetSportsAsync();
+            var sportsTask = SportService.GetPublicSportsAsync();
             var locationsTask = LocationService.GetLocationsAsync();
             await Task.WhenAll(sportsTask, locationsTask);
 

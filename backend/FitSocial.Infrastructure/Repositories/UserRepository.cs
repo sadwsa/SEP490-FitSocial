@@ -32,4 +32,54 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return DbSet.FirstOrDefaultAsync(u => u.GoogleProviderId == googleSub, cancellationToken);
     }
+
+    public async Task<(List<User> Items, int TotalCount)> ListUsersForAdminAsync(
+        string? search = null,
+        string? role = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var query = DbSet.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(u =>
+                (u.FullName != null && u.FullName.ToLower().Contains(s)) ||
+                u.Email.ToLower().Contains(s));
+        }
+
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            var r = role.Trim().ToUpper();
+            query = query.Where(u => u.RoleCode == r);
+        }
+
+        if (isLocked.HasValue)
+        {
+            if (isLocked.Value)
+            {
+                query = query.Where(u => u.IsLocked == true);
+            }
+            else
+            {
+                query = query.Where(u => u.IsLocked == null || u.IsLocked == false);
+            }
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        if (pageNumber < 1) pageNumber = 1;
+        if (pageSize < 1) pageSize = 10;
+
+        var items = await query
+            .OrderByDescending(u => u.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
 }

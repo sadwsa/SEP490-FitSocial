@@ -1,194 +1,201 @@
 @page "/training-packages"
+@layout EmptyLayout
 @inject ITrainingPackageService PackageService
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@using FitSocial.Client.Layout
+@using System.Security.Claims
 
-<style>
-    /* Instagram-like Orange Theme for Packages */
-    .insta-container {
-        background-color: #fafafa;
-        min-height: 100vh;
-        padding-top: 40px;
-        padding-bottom: 50px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
+<PageTitle>My Training Packages - FitSocial</PageTitle>
 
-    .insta-header {
-        font-weight: 700;
-        font-size: 1.5rem;
-        color: #262626;
-    }
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
 
-    .insta-card {
-        background-color: #fff;
-        border: 1px solid #dbdbdb;
-        border-radius: 8px;
-        overflow: hidden;
-    }
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
+                align-items: start !important;
+            }
 
-    /* Nút Tạo mới màu Cam Gradient */
-    .insta-btn-primary {
-        background: linear-gradient(135deg, #FF9800, #FF5722);
-        color: #fff;
-        font-weight: 600;
-        border-radius: 25px;
-        padding: 8px 20px;
-        border: none;
-        font-size: 0.95rem;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        box-shadow: 0 4px 12px rgba(255, 87, 34, 0.25);
-        text-decoration: none;
-        display: inline-block;
-    }
-
-        .insta-btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(255, 87, 34, 0.4);
-            color: #fff;
+            .home-left-sidebar { justify-self: start !important; }
+            .home-center-feed { justify-self: end !important; width: 100% !important; max-width: 42rem !important; min-width: 0 !important; }
+            .home-right-sidebar { justify-self: center !important; }
         }
+    </style>
 
-    /* Nút Xem chi tiết (Tối giản) */
-    .insta-btn-outline {
-        background-color: transparent;
-        color: #262626;
-        font-weight: 600;
-        border-radius: 8px;
-        padding: 7px 16px;
-        border: 1px solid #dbdbdb;
-        font-size: 0.95rem;
-        transition: all 0.2s ease;
-        width: 100%;
-    }
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="packages" />
 
-        .insta-btn-outline:hover {
-            background-color: #FAFAFA;
-            border-color: #c7c7c7;
-        }
-
-    /* Badges Trạng thái */
-    .insta-badge-active {
-        background-color: rgba(255, 122, 0, 0.1);
-        color: #FF7A00;
-    }
-
-    .insta-badge-inactive {
-        background-color: #efefef;
-        color: #8e8e8e;
-    }
-
-    /* Khung chứa Chỉ số (Ngày / Giá tiền) */
-    .insta-stats {
-        display: flex;
-        justify-content: center;
-        gap: 30px;
-        border-top: 1px solid #efefef;
-        padding-top: 15px;
-        margin-top: 15px;
-        margin-bottom: 15px;
-    }
-
-    .insta-stat-item {
-        text-align: center;
-    }
-
-    .insta-stat-val {
-        font-weight: 700;
-        color: #262626;
-        display: block;
-        font-size: 1.1rem;
-    }
-
-    .insta-stat-label {
-        font-size: 0.8rem;
-        color: #8e8e8e;
-    }
-</style>
-
-<div class="insta-container">
-    <div class="container" style="max-width: 935px;">
-        <!-- Header -->
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-5">
-            <h1 class="insta-header mb-3 mb-md-0">My Training Packages</h1>
-
-            <AuthorizeView Roles="COACH">
-                <Authorized>
-                    <a href="/training-packages/create" class="insta-btn-primary">
-                        <i class="bi bi-plus-lg me-2"></i> Create New
-                    </a>
-                </Authorized>
-            </AuthorizeView>
-        </div>
-
-        @if (isLoading)
-        {
-            <div class="text-center py-5">
-                <div class="spinner-border" style="color: #FF7A00;" role="status"></div>
-                <p class="mt-3 text-muted">Loading your packages...</p>
-            </div>
-        }
-        else if (errorMessage != null)
-        {
-            <div class="alert alert-danger text-center shadow-sm border-0">@errorMessage</div>
-        }
-        else if (!packages.Any())
-        {
-            <!-- Trạng thái trống (Empty State) xịn xò -->
-            <div class="text-center py-5 bg-white rounded-4 border" style="border-color: #dbdbdb !important;">
-                <i class="bi bi-box-seam fs-1 d-block mb-3" style="color: #dbdbdb;"></i>
-                <h4 class="fw-bold text-dark">No packages yet</h4>
-                <p class="text-muted mb-4">Create your first training package to start getting clients.</p>
+        <!-- Center Column -->
+        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-10">
+            <!-- Header Section -->
+            <div class="bg-white rounded-xl shadow-sm p-5 flex justify-between items-center gap-4">
+                <h1 class="text-xl font-bold text-gray-800">My Training Packages</h1>
                 <AuthorizeView Roles="COACH">
                     <Authorized>
-                        <a href="/training-packages/create" class="insta-btn-primary">Create Package</a>
+                        <button @onclick="ToggleCreateForm" class="bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white px-4 py-2 rounded-lg font-semibold text-sm hover:shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2">
+                            @if (showCreateForm)
+                            {
+                                <span>Cancel</span>
+                            }
+                            else
+                            {
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                <span>Create New</span>
+                            }
+                        </button>
                     </Authorized>
                 </AuthorizeView>
             </div>
-        }
-        else
-        {
-            <div class="row g-4">
-                @foreach (var pkg in packages)
-                {
-                    <div class="col-md-6 col-lg-4">
-                        <div class="insta-card h-100 p-4 d-flex flex-column text-center hover-lift">
 
-                            <!-- Status Badge -->
-                            <div class="d-flex justify-content-center mb-3">
-                                @if (pkg.IsActive)
+            <!-- Content -->
+            @if (showCreateForm)
+            {
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h2 class="text-lg font-bold text-gray-800 mb-5">Create New Package</h2>
+
+                    @if (!string.IsNullOrEmpty(createErrorMessage))
+                    {
+                        <div class="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium mb-4">@createErrorMessage</div>
+                    }
+
+                    <EditForm Model="@createDto" OnValidSubmit="HandleCreateSubmit">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Package Title</label>
+                            <InputText @bind-Value="createDto.Title" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#FF5500] focus:border-transparent outline-none transition-all text-sm" placeholder="e.g. 30 Days Weight Loss" />
+                            <ValidationMessage For="@(() => createDto.Title)" class="text-red-500 text-xs mt-1" />
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Price (VNĐ)</label>
+                                <InputNumber @bind-Value="createDto.Price" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#FF5500] focus:border-transparent outline-none transition-all text-sm" placeholder="100000" />
+                                <ValidationMessage For="@(() => createDto.Price)" class="text-red-500 text-xs mt-1" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Duration (Days)</label>
+                                <InputNumber @bind-Value="createDto.DurationDays" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#FF5500] focus:border-transparent outline-none transition-all text-sm" placeholder="30" />
+                                <ValidationMessage For="@(() => createDto.DurationDays)" class="text-red-500 text-xs mt-1" />
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 mb-6">
+                            <InputCheckbox @bind-Value="createDto.IsActive" id="isActiveSwitch" class="w-4 h-4 text-[#FF5500] rounded focus:ring-[#FF5500]" />
+                            <label for="isActiveSwitch" class="text-sm font-medium text-gray-700 cursor-pointer">Set as Active immediately</label>
+                        </div>
+
+                        <div class="flex justify-end gap-3">
+                            <button type="button" @onclick="ToggleCreateForm" class="px-5 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                                Cancel
+                            </button>
+                            <button type="submit" disabled="@isSubmitting" class="px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-[#FF8C00] to-[#FF5500] rounded-lg hover:shadow-md transition-all flex items-center gap-2 disabled:opacity-70">
+                                @if (isSubmitting)
                                 {
-                                    <span class="badge insta-badge-active px-3 py-2 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i> Active</span>
+                                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Creating...</span>
                                 }
                                 else
                                 {
-                                    <span class="badge insta-badge-inactive px-3 py-2 rounded-pill"><i class="bi bi-pause-circle-fill me-1"></i> Inactive</span>
+                                    <span>Create Package</span>
                                 }
-                            </div>
-
-                            <!-- Title -->
-                            <h4 class="card-title fw-bold text-dark mb-1">@pkg.Title</h4>
-                            <p class="text-muted small mb-3">By @pkg.CoachName</p>
-
-                            <!-- Stats (Days & Price) -->
-                            <div class="insta-stats mt-auto">
-                                <div class="insta-stat-item">
-                                    <span class="insta-stat-val">@pkg.DurationDays</span>
-                                    <span class="insta-stat-label">Days</span>
-                                </div>
-                                <div class="insta-stat-item">
-                                    <!-- Giá tiền nổi bật với màu Cam -->
-                                    <span class="insta-stat-val" style="color: #FF7A00;">@pkg.Price.ToString("N0")đ</span>
-                                    <span class="insta-stat-label">Price</span>
-                                </div>
-                            </div>
-
-                            <!-- Action -->
-                            <button @onclick="() => ViewDetails(pkg.PackageId)" class="insta-btn-outline mt-2">
-                                View Details
                             </button>
                         </div>
+                    </EditForm>
+                </div>
+            }
+            else if (isLoading)
+            {
+                <div class="flex flex-col items-center justify-center py-10">
+                    <div class="w-8 h-8 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-3"></div>
+                    <p class="text-sm text-gray-500">Loading your packages...</p>
+                </div>
+            }
+            else if (errorMessage != null)
+            {
+                <div class="bg-red-50 text-red-600 p-4 rounded-xl text-center text-sm font-medium">@errorMessage</div>
+            }
+            else if (!packages.Any())
+            {
+                <div class="bg-white rounded-xl shadow-sm p-10 text-center flex flex-col items-center border border-gray-100">
+                    <div class="w-16 h-16 mb-4 text-gray-300">
+                        <svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                     </div>
-                }
-            </div>
-        }
+                    <h4 class="font-bold text-gray-800 text-lg mb-2">No packages yet</h4>
+                    <p class="text-sm text-gray-500 mb-5">Create your first training package to start getting clients.</p>
+                    <AuthorizeView Roles="COACH">
+                        <Authorized>
+                            <button @onclick="ToggleCreateForm" class="bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:shadow-md transition-all">Create Package</button>
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
+            }
+            else
+            {
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100 text-gray-600">
+                                    <th class="p-4 font-semibold text-sm">Name</th>
+                                    <th class="p-4 font-semibold text-sm">Duration</th>
+                                    <th class="p-4 font-semibold text-sm">Price</th>
+                                    <th class="p-4 font-semibold text-sm text-center">Status</th>
+                                    <th class="p-4 font-semibold text-sm text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var pkg in packages)
+                                {
+                                    <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                                        <td class="p-4 text-sm font-bold text-gray-800">@pkg.Title</td>
+                                        <td class="p-4 text-sm text-gray-600">@(pkg.DurationDays >= 7 && pkg.DurationDays % 7 == 0 ? $"{pkg.DurationDays / 7} Weeks" : $"{pkg.DurationDays} Days")</td>
+                                        <td class="p-4 text-sm font-semibold text-[#FF5500]">@(pkg.Price >= 1000 ? (pkg.Price / 1000).ToString("0") + "k" : pkg.Price.ToString("N0") + "đ")</td>
+                                        <td class="p-4 text-sm text-center">
+                                            @if (pkg.IsActive)
+                                            {
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md bg-green-50 text-green-600 text-xs font-bold border border-green-100">
+                                                    Active
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md bg-gray-100 text-gray-500 text-xs font-bold border border-gray-200">
+                                                    Inactive
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="p-4 text-sm text-center text-gray-400">
+                                            <a href="/training-packages/edit/@pkg.PackageId" class="text-[#FF8C00] hover:text-[#FF5500] font-semibold hover:underline">Edit</a> |
+                                            <button class="text-red-500 hover:text-red-600 font-semibold hover:underline cursor-pointer">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </section>
+
+        <!-- Right Sidebar (Empty) -->
+        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
     </div>
 </div>
 
@@ -196,8 +203,56 @@
     private IEnumerable<TrainingPackageResponseDto> packages = new List<TrainingPackageResponseDto>();
     private bool isLoading = true;
     private string? errorMessage;
+    
+    // Create form state
+    private bool showCreateForm = false;
+    private CreateTrainingPackageDto createDto = new();
+    private bool isSubmitting = false;
+    private string? createErrorMessage;
+
+    // Header state
+    private string? headerSearchTerm = "";
+    private string userName = "User";
+    private string userInitials = "U";
+    private string userRole = "Trainee";
 
     protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        await LoadPackages();
+    }
+    
+    private void ToggleCreateForm()
+    {
+        showCreateForm = !showCreateForm;
+        if (showCreateForm)
+        {
+            createDto = new CreateTrainingPackageDto(); // Reset form
+            createErrorMessage = null;
+        }
+    }
+
+    private async Task HandleCreateSubmit()
+    {
+        isSubmitting = true;
+        createErrorMessage = null;
+
+        var response = await PackageService.CreatePackageAsync(createDto);
+
+        if (response.Success)
+        {
+            showCreateForm = false;
+            await LoadPackages(); // Reload list
+        }
+        else
+        {
+            createErrorMessage = response.Message ?? "An error occurred while creating the package.";
+        }
+
+        isSubmitting = false;
+    }
+
+    private async Task LoadPackages()
     {
         var response = await PackageService.GetMyPackagesAsync();
         if (response.Success && response.Data != null)
@@ -209,6 +264,59 @@
             errorMessage = response.Message ?? "Failed to load packages.";
         }
         isLoading = false;
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
+                userRole = isCoach ? "Coach" : "Trainee";
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1 
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper() 
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            userInitials = "U";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e)
+    {
+        headerSearchTerm = e.Value?.ToString();
+    }
+
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e)
+    {
+        // No search implemented on this page for header
+    }
+
+    private void ExecuteHeaderSearch()
+    {
+        // No search implemented
+    }
+
+    private void ClearHeaderSearch()
+    {
+        headerSearchTerm = string.Empty;
     }
 
     private void ViewDetails(Guid id)

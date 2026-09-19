@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Blazored.LocalStorage;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Services.Auth;
@@ -72,9 +73,11 @@ public class ApiClient
             }
             if (response.IsSuccessStatusCode)
             {
+                var json = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 try
                 {
-                    var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<T>>();
+                    var apiResponse = JsonSerializer.Deserialize<ApiResponse<T>>(json, options);
                     if (apiResponse != null)
                     {
                         return apiResponse;
@@ -82,8 +85,12 @@ public class ApiClient
                 }
                 catch
                 {
-                    var data = await response.Content.ReadFromJsonAsync<T>();
-                    return new ApiResponse<T> { Success = true, Data = data };
+                    try
+                    {
+                        var data = JsonSerializer.Deserialize<T>(json, options);
+                        return new ApiResponse<T> { Success = true, Data = data };
+                    }
+                    catch { }
                 }
 
                 return new ApiResponse<T> { Success = true };
@@ -91,7 +98,8 @@ public class ApiClient
 
             try
             {
-                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<T>>();
+                var errorJson = await response.Content.ReadAsStringAsync();
+                var errorResponse = JsonSerializer.Deserialize<ApiResponse<T>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
                 {
                     return errorResponse;
@@ -129,9 +137,11 @@ public class ApiClient
             }
             if (response.IsSuccessStatusCode)
             {
+                var json = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 try
                 {
-                    var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                    var apiResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(json, options);
                     if (apiResponse != null)
                     {
                         return apiResponse;
@@ -139,8 +149,12 @@ public class ApiClient
                 }
                 catch
                 {
-                    var data = await response.Content.ReadFromJsonAsync<TResult>();
-                    return new ApiResponse<TResult> { Success = true, Data = data };
+                    try
+                    {
+                        var data = JsonSerializer.Deserialize<TResult>(json, options);
+                        return new ApiResponse<TResult> { Success = true, Data = data };
+                    }
+                    catch { }
                 }
 
                 return new ApiResponse<TResult> { Success = true };
@@ -148,7 +162,8 @@ public class ApiClient
 
             try
             {
-                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                var errorJson = await response.Content.ReadAsStringAsync();
+                var errorResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
                 {
                     return errorResponse;
@@ -238,20 +253,8 @@ public class ApiClient
 
             try
             {
-                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
-                if (errorResponse != null)
-                {
-                    return errorResponse;
-                }
-            }
-            catch
-            {
-
-            }
-
-            try
-            {
-                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                var errorJson = await response.Content.ReadAsStringAsync();
+                var errorResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
                 {
                     return errorResponse;
@@ -289,9 +292,11 @@ public class ApiClient
             }
             if (response.IsSuccessStatusCode)
             {
+                var json = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 try
                 {
-                    var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                    var apiResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(json, options);
                     if (apiResponse != null)
                     {
                         return apiResponse;
@@ -299,14 +304,21 @@ public class ApiClient
                 }
                 catch
                 {
-                    var data = await response.Content.ReadFromJsonAsync<TResult>();
-                    return new ApiResponse<TResult> { Success = true, Data = data };
+                    try
+                    {
+                        var data = JsonSerializer.Deserialize<TResult>(json, options);
+                        return new ApiResponse<TResult> { Success = true, Data = data };
+                    }
+                    catch { }
                 }
+                
+                return new ApiResponse<TResult> { Success = true };
             }
 
             try
             {
-                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
+                var errorJson = await response.Content.ReadAsStringAsync();
+                var errorResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
                 {
                     return errorResponse;

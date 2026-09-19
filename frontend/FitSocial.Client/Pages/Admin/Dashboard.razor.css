@@ -318,6 +318,23 @@
     background: #fff7f3;
 }
 
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: 1px;
+}
+
+.status-dot.dot-active {
+    background: #16a34a;
+}
+
+.status-dot.dot-locked {
+    background: #dc2626;
+}
+
 /* Sport form */
 .sport-form {
     border: 1.5px solid #ffd9c7;
@@ -574,6 +591,99 @@
     font-size: 0.76rem;
     color: #94a3b8;
     margin: 0;
+}
+
+/* Pagination */
+.pagination-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+    padding: 6px 2px;
+}
+
+.pagination-info {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.pagination-info strong {
+    color: #1e293b;
+    font-weight: 700;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.page-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.page-btn:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: #fff7f3;
+}
+
+.page-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
+
+.page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #94a3b8;
+}
+
+.page-dots {
+    padding: 0 4px;
+    color: #94a3b8;
+    font-size: 0.85rem;
+}
+
+.page-size-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.page-size-select {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 0.78rem;
+    color: #334155;
+    background: #fff;
+    cursor: pointer;
+}
+
+.page-size-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
 }
 
 .btn-back {

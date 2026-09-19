@@ -11,7 +11,12 @@ namespace FitSocial.Client.Services.Users;
 
 public interface IUserService
 {
-    Task<ApiResponse<List<AdminUserDto>>> GetUsersAsync(string? search = null, string? role = null);
+    Task<ApiResponse<PagedResult<AdminUserDto>>> GetUsersAsync(
+        string? search = null,
+        string? role = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
 }
 
@@ -40,7 +45,12 @@ public class UserService : IUserService
         }
     }
 
-    public async Task<ApiResponse<List<AdminUserDto>>> GetUsersAsync(string? search = null, string? role = null)
+    public async Task<ApiResponse<PagedResult<AdminUserDto>>> GetUsersAsync(
+        string? search = null,
+        string? role = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10)
     {
         try
         {
@@ -54,6 +64,12 @@ public class UserService : IUserService
             {
                 query.Add($"role={Uri.EscapeDataString(role.Trim())}");
             }
+            if (isLocked.HasValue)
+            {
+                query.Add($"isLocked={isLocked.Value.ToString().ToLowerInvariant()}");
+            }
+            query.Add($"pageNumber={pageNumber}");
+            query.Add($"pageSize={pageSize}");
 
             var endpoint = "admin/users";
             if (query.Count > 0)
@@ -62,14 +78,14 @@ public class UserService : IUserService
             }
 
             var response = await _httpClient.GetAsync(endpoint);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<AdminUserDto>>>();
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResult<AdminUserDto>>>();
             if (response.IsSuccessStatusCode && result != null && result.Success)
             {
-                result.Data ??= new List<AdminUserDto>();
+                result.Data ??= new PagedResult<AdminUserDto>();
                 return result;
             }
 
-            return result ?? new ApiResponse<List<AdminUserDto>>
+            return result ?? new ApiResponse<PagedResult<AdminUserDto>>
             {
                 Success = false,
                 Message = $"Unable to load user accounts (Status: {response.StatusCode})"
@@ -77,7 +93,7 @@ public class UserService : IUserService
         }
         catch (Exception ex)
         {
-            return new ApiResponse<List<AdminUserDto>>
+            return new ApiResponse<PagedResult<AdminUserDto>>
             {
                 Success = false,
                 Message = $"Connection error: {ex.Message}"

@@ -21,11 +21,18 @@ public class AdminUserService : IAdminUserService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<ApiResponseDto<List<AdminUserDto>>> GetUsersAsync(string? search = null, string? role = null, CancellationToken cancellationToken = default)
+    public async Task<ApiResponseDto<PagedResultDto<AdminUserDto>>> GetUsersAsync(
+        string? search = null,
+        string? role = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var users = await _userRepository.ListUsersForAdminAsync(search, role, cancellationToken);
+            var (users, totalCount) = await _userRepository.ListUsersForAdminAsync(
+                search, role, isLocked, pageNumber, pageSize, cancellationToken);
 
             var dtos = users.Select(u => new AdminUserDto
             {
@@ -39,11 +46,13 @@ public class AdminUserService : IAdminUserService
                 LastActiveAt = u.LastActiveAt
             }).ToList();
 
-            return ApiResponseDto<List<AdminUserDto>>.Ok(dtos, "User list retrieved successfully.");
+            var pagedResult = PagedResultDto<AdminUserDto>.Create(dtos, totalCount, pageNumber, pageSize);
+
+            return ApiResponseDto<PagedResultDto<AdminUserDto>>.Ok(pagedResult, "User list retrieved successfully.");
         }
         catch (Exception ex)
         {
-            return ApiResponseDto<List<AdminUserDto>>.Fail($"Error retrieving users: {ex.Message}");
+            return ApiResponseDto<PagedResultDto<AdminUserDto>>.Fail($"Error retrieving users: {ex.Message}");
         }
     }
 

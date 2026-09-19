@@ -26,13 +26,19 @@ public class AdminUsersController : ControllerBase
     }
 
     /// <summary>
-    /// Get user accounts for admin console with optional search and role filters
+    /// Get user accounts for admin console with optional search, role, and lock status filters and pagination
     /// </summary>
     [HttpGet]
-    [ProducesResponseType(typeof(ApiResponseDto<List<AdminUserDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetUsers([FromQuery] string? search, [FromQuery] string? role, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(ApiResponseDto<PagedResultDto<AdminUserDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetUsers(
+        [FromQuery] string? search,
+        [FromQuery] string? role,
+        [FromQuery] bool? isLocked,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _adminUserService.GetUsersAsync(search, role, cancellationToken);
+        var result = await _adminUserService.GetUsersAsync(search, role, isLocked, pageNumber, pageSize, cancellationToken);
         return Ok(result);
     }
 

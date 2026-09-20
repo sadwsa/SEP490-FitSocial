@@ -31,7 +31,7 @@ public class SportsController : ControllerBase
     /// Get full sports list with counts and details for Admin / Staff console
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
+    //[Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
     [ProducesResponseType(typeof(ApiResponseDto<List<SportDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSports(CancellationToken cancellationToken)
     {

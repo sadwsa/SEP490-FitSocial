@@ -9,6 +9,12 @@ namespace FitSocial.Application.Interfaces;
 
 public interface IAdminUserService
 {
-    Task<ApiResponseDto<List<AdminUserDto>>> GetUsersAsync(string? search = null, string? role = null, CancellationToken cancellationToken = default);
+    Task<ApiResponseDto<PagedResultDto<AdminUserDto>>> GetUsersAsync(
+        string? search = null,
+        string? role = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default);
     Task<ApiResponseDto<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked, Guid? adminId = null, CancellationToken cancellationToken = default);
 }

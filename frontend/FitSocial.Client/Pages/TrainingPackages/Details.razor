@@ -1,51 +1,107 @@
 @page "/training-packages/{Id:guid}"
+@layout EmptyLayout
 @inject ITrainingPackageService PackageService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@using FitSocial.Client.Layout
+@using System.Security.Claims
 
-<div class="container py-5">
-    @if (isLoading)
-    {
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary"></div>
-        </div>
-    }
-    else if (package == null)
-    {
-        <div class="alert alert-warning rounded-3 shadow-sm">@errorMessage</div>
-    }
-    else
-    {
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
-                    <div class="bg-primary bg-gradient p-5 text-white text-center">
-                        <h1 class="display-5 fw-bold mb-0">@package.Title</h1>
-                        <p class="lead mt-2 mb-0 opacity-75">Curated by @package.CoachName</p>
+<PageTitle>Package Details - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
+                align-items: start !important;
+            }
+            .home-left-sidebar { justify-self: start !important; }
+            .home-center-feed { justify-self: center !important; width: 100% !important; max-width: 42rem !important; min-width: 0 !important; }
+            .home-right-sidebar { justify-self: center !important; }
+        }
+    </style>
+
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="packages" />
+
+        <!-- Center Column -->
+        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-10">
+            @if (isLoading)
+            {
+                <div class="flex flex-col items-center justify-center py-20">
+                    <div class="w-10 h-10 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-500 font-medium">Loading package details...</p>
+                </div>
+            }
+            else if (package == null)
+            {
+                <div class="bg-red-50 border border-red-100 rounded-xl p-8 text-center shadow-sm">
+                    <svg class="w-16 h-16 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Oops!</h3>
+                    <p class="text-gray-600 mb-6">@errorMessage</p>
+                    <a href="/training-packages" class="inline-flex items-center gap-2 bg-gray-800 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-700 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                        Back to Packages
+                    </a>
+                </div>
+            }
+            else
+            {
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="bg-gradient-to-br from-[#FF8C00] to-[#FF5500] p-10 text-center relative overflow-hidden">
+                        <!-- Decorative background element -->
+                        <div class="absolute -right-10 -top-10 opacity-10">
+                            <svg class="w-40 h-40" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+                        </div>
+                        <h1 class="text-3xl font-extrabold text-white mb-2 relative z-10">@package.Title</h1>
+                        <p class="text-orange-50 font-medium text-lg relative z-10">Curated by <span class="font-bold underline decoration-orange-300">@package.CoachName</span></p>
                     </div>
-                    <div class="card-body p-5">
-                        <div class="row text-center mb-5">
-                            <div class="col-6 border-end">
-                                <h6 class="text-uppercase text-muted fw-bold mb-2">Duration</h6>
-                                <h3 class="fw-bolder text-dark">@package.DurationDays <small class="text-muted fs-6">Days</small></h3>
+                    
+                    <div class="p-8">
+                        <div class="flex flex-col md:flex-row text-center divide-y md:divide-y-0 md:divide-x divide-gray-100 mb-8 bg-gray-50 rounded-xl p-4">
+                            <div class="flex-1 py-4 md:py-2">
+                                <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">Duration</h6>
+                                <div class="flex items-baseline justify-center gap-1">
+                                    <h3 class="text-4xl font-black text-gray-800">@package.DurationDays</h3>
+                                    <span class="text-gray-500 font-medium">Days</span>
+                                </div>
                             </div>
-                            <div class="col-6">
-                                <h6 class="text-uppercase text-muted fw-bold mb-2">Investment</h6>
-                                <h3 class="fw-bolder text-primary">@package.Price.ToString("N0") VNĐ</h3>
+                            <div class="flex-1 py-4 md:py-2">
+                                <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">Investment</h6>
+                                <h3 class="text-3xl font-black text-[#FF5500]">@package.Price.ToString("N0")<span class="text-xl ml-1">VNĐ</span></h3>
                             </div>
                         </div>
 
-                        <div class="d-grid gap-2 mt-4">
-                            <button class="btn btn-primary btn-lg rounded-pill fw-bold shadow-sm">
+                        <div class="flex flex-col gap-3">
+                            <button class="w-full bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                                 Subscribe Now
                             </button>
-                            <a href="/training-packages" class="btn btn-light btn-lg rounded-pill fw-semibold mt-2">
+                            <a href="/training-packages" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold text-center transition-colors">
                                 Back to List
                             </a>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    }
+            }
+        </section>
+
+        <!-- Right Sidebar (Empty) -->
+        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
+    </div>
 </div>
 
 @code {
@@ -55,9 +111,16 @@
     private TrainingPackageResponseDto? package;
     private bool isLoading = true;
     private string errorMessage = "Package not found.";
+    
+    // Header state
+    private string? headerSearchTerm = "";
+    private string userName = "User";
+    private string userInitials = "U";
+    private string userRole = "Trainee";
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadUserInfoAsync();
         var response = await PackageService.GetPackageByIdAsync(Id);
         if (response.Success)
         {
@@ -69,4 +132,46 @@
         }
         isLoading = false;
     }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
+                userRole = isCoach ? "Coach" : "Trainee";
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1 
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper() 
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            userInitials = "U";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e)
+    {
+        headerSearchTerm = e.Value?.ToString();
+    }
+
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
+    private void ExecuteHeaderSearch() { }
+    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
 }

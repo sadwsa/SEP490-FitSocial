@@ -1,8 +1,10 @@
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPackage;
 using FitSocial.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -26,11 +28,11 @@ namespace FitSocial.API.Controllers
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdString, out var currentUserId))
             {
-                return Unauthorized(new { message = "Invalid token or user ID" });
+                return Unauthorized(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Fail("Invalid token or user ID"));
             }
 
             var result = await _service.GetMyPackagesAsync(currentUserId);
-            return Ok(result);
+            return Ok(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Ok(result));
         }
 
         [HttpGet("{id}")]
@@ -39,9 +41,9 @@ namespace FitSocial.API.Controllers
             var result = await _service.GetPackageByIdAsync(id);
             if (result == null)
             {
-                return NotFound(new { message = "Training package not found" });
+                return NotFound(ApiResponseDto<TrainingPackageResponseDto>.Fail("Training package not found"));
             }
-            return Ok(result);
+            return Ok(ApiResponseDto<TrainingPackageResponseDto>.Ok(result));
         }
 
         [HttpPost]
@@ -51,13 +53,12 @@ namespace FitSocial.API.Controllers
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdString, out var currentUserId))
             {
-                return Unauthorized(new { message = "Invalid token or user ID" });
+                return Unauthorized(ApiResponseDto<TrainingPackageResponseDto>.Fail("Invalid token or user ID"));
             }
 
             var result = await _service.CreatePackageAsync(currentUserId, dto);
 
-            // Theo chuẩn RESTful, Create xong sẽ trả về 201 Created cùng URL để lấy chi tiết
-            return CreatedAtAction(nameof(GetPackageById), new { id = result.PackageId }, result);
+            return CreatedAtAction(nameof(GetPackageById), new { id = result.PackageId }, ApiResponseDto<TrainingPackageResponseDto>.Ok(result, "Package created successfully"));
         }
     }
 }

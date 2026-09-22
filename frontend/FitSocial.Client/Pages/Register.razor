@@ -303,11 +303,15 @@
                 <div class="qr-amount">@previewAmount VND</div>
                 <div class="order-box"><div class="order-row"><span>Content</span><strong>COACH ACTIVATION</strong></div><div class="order-row"><span>Account</span><span>@activation?.AccountNumber (@activation?.AccountName)</span></div><div class="order-row"><span>Order code</span><span>@activation?.OrderCode</span></div></div>
                 <p class="pay-note">Keep exact amount and content. Expires in about 15 minutes.</p>
+                @if (isPollingPayment)
+                {
+                    <div class="auth-alert info" style="margin:10px 0; display:flex; align-items:center; gap:8px;"><span class="spinner-border spinner-border-sm"></span><span>Detecting payment automatically... (@pollAttempts) — will redirect to login when paid.</span></div>
+                }
                 <div class="pay-actions">
                     <button type="button" class="btn-back" @onclick="HandleCancelOrderAsync" disabled="@isLoading">Cancel order</button>
                     <button type="button" class="btn-auth-primary btn-coach flex-grow-1" @onclick="HandleVerifyPaidAsync" disabled="@isLoading">@if (isLoading) { <span class="spinner-border spinner-border-sm me-2"></span><span>Verifying...</span> } else { <span>I've Paid — Verify Now →</span> }</button>
                 </div>
-                <p class="pay-note text-center"><a href="@activation?.CheckoutUrl" target="_blank">Open full PayOS checkout</a></p>
+                <p class="pay-note text-center"><a href="@activation?.CheckoutUrl" target="_blank">Open full PayOS checkout</a> • Auto-detect every 3s, or click Verify Now for instant check.</p>
             </div>
         }
     }
@@ -353,6 +357,9 @@
     private bool isVerifyingEkyc = false;
     private string previewAmount = "2,000";
     private ActivationLink? activation;
+    private Timer? paymentPollTimer;
+    private bool isPollingPayment = false;
+    private int pollAttempts = 0;
 
     private string QrImageUrl
     {
@@ -488,8 +495,11 @@
         if (string.IsNullOrWhiteSpace(registerModel.FaceImageUrl)) { ekycError = "Please capture your live face image."; return; }
         isVerifyingEkyc = true;
         var res = await EkycService.VerifyAsync(new EkycRequest { FrontCardUrl = registerModel.FrontCardUrl, BackCardUrl = registerModel.BackCardUrl, FaceImageUrl = registerModel.FaceImageUrl, FaceImageLeftUrl = registerModel.FaceImageLeftUrl, FaceImageRightUrl = registerModel.FaceImageRightUrl });
+        if (!res.Success) { isVerifyingEkyc = false; ekycError = res.Error ?? "ID verification failed."; return; }
+        // Check duplicate CCCD ngay trên trang CCCD (1 người 1 CCCD, cho phép cùng email retry)
+        var dup = await EkycService.CheckIdCardAsync(res.Data?.IdCardNumber ?? "", registerModel.Email);
         isVerifyingEkyc = false;
-        if (!res.Success) { ekycError = res.Error ?? "ID verification failed."; return; }
+        if (!dup.Success) { ekycError = dup.Error ?? "This ID card has already been used for another coach."; return; }
         ekycResult = res.Data;
         showCoachErrors = false;
         showTermsError = false;
@@ -524,6 +534,48 @@
         activation = link.Data;
         coachStep = 5;
         isLoading = false;
+        StartPaymentPolling();
+    }
+
+    private void StartPaymentPolling()
+    {
+        StopPaymentPolling();
+        isPollingPayment = true;
+        pollAttempts = 0;
+        paymentPollTimer = new Timer(3000);
+        paymentPollTimer.Elapsed += async (s, e) => await AutoCheckPaymentAsync();
+        paymentPollTimer.AutoReset = true;
+        paymentPollTimer.Start();
+    }
+
+    private void StopPaymentPolling()
+    {
+        isPollingPayment = false;
+        paymentPollTimer?.Stop();
+        paymentPollTimer?.Dispose();
+        paymentPollTimer = null;
+    }
+
+    private async Task AutoCheckPaymentAsync()
+    {
+        if (activation == null || !isPollingPayment) return;
+        pollAttempts++;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var res = await PaymentService.CompleteActivationAsync(activation.OrderCode);
+            if (res.Success)
+            {
+                StopPaymentPolling();
+                successMessage = "Payment successful! Coach account created. Redirecting to login...";
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(1200);
+                Navigation.NavigateTo("/login");
+            }
+            // else still polling silently - don't show error
+        }
+        catch { /* keep polling */ }
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task HandleVerifyPaidAsync()
@@ -531,13 +583,14 @@
         if (activation == null) return;
         isLoading = true; errorMessage = null;
         var res = await PaymentService.CompleteActivationAsync(activation.OrderCode);
-        if (res.Success) { successMessage = "Payment successful! Coach account created. Redirecting to login..."; await Task.Delay(1500); Navigation.NavigateTo("/login"); }
+        if (res.Success) { StopPaymentPolling(); successMessage = "Payment successful! Coach account created. Redirecting to login..."; await Task.Delay(1500); Navigation.NavigateTo("/login"); }
         else errorMessage = res.Message ?? "Payment not completed yet.";
         isLoading = false;
     }
 
     private async Task HandleCancelOrderAsync()
     {
+        StopPaymentPolling();
         if (activation != null) await PaymentService.CancelActivationAsync(activation.OrderCode);
         coachStep = 4;
     }
@@ -551,5 +604,5 @@
         timer.Start();
     }
 
-    public void Dispose() { timer?.Dispose(); }
+    public void Dispose() { timer?.Dispose(); StopPaymentPolling(); }
 }

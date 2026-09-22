@@ -273,18 +273,4 @@ public class ViettelEkycService : IEkycService
 
         return (true, null, extract);
     }
-
-    private static EkycExtract CreateFallbackExtract(byte[] frontBytes, string frontUrl)
-    {
-        string fallbackId;
-        try
-        {
-            using var sha = SHA256.Create();
-            var hash = sha.ComputeHash(frontBytes);
-            ulong num = BitConverter.ToUInt64(hash, 0) % 1000000000000UL;
-            fallbackId = num.ToString().PadLeft(12, '0');
-        }
-        catch { fallbackId = Math.Abs(frontUrl.GetHashCode()).ToString().PadLeft(12, '0')[..12]; }
-        return new EkycExtract(fallbackId, "PENDING MANUAL REVIEW", null, "Pending", "Viettel 500 - pending manual verification");
-    }
 }

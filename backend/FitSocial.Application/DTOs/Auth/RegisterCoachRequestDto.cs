@@ -53,6 +53,11 @@ public class RegisterCoachRequestDto
     public string? FrontCardUrl { get; set; }
     public string? BackCardUrl { get; set; }
     public string? FaceImageUrl { get; set; }
+    /// <summary>Optional extra liveness poses: Left/Right/Top/Bottom (lại gần/ra xa được map vào Portrait, trái/phải vào Left/Right)</summary>
+    public string? FaceImageLeftUrl { get; set; }
+    public string? FaceImageRightUrl { get; set; }
+    public string? FaceImageTopUrl { get; set; }
+    public string? FaceImageBottomUrl { get; set; }
 
     /// <summary>Multiple certificates for the coach (replaces single CertificateUrl).</summary>
     public List<FitSocial.Application.DTOs.Coach.CoachCertificateDto>? Certificates { get; set; }

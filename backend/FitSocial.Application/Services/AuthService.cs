@@ -232,6 +232,17 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("This email is already in use.");
         }
 
+        if (request.TermId == null || request.TermId == Guid.Empty)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("You must agree to the Terms and Privacy Policy.");
+        }
+
+        var term = await _terms.GetByIdAsync(request.TermId.Value);
+        if (term == null)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Selected terms version is not valid.");
+        }
+
         var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
         if (normalizedPhone != null &&
             await _users.ExistsByPhoneAsync(normalizedPhone))
@@ -249,6 +260,7 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail(otpMessage);
         }
 
+        var now = DateTime.UtcNow;
         var newUser = new User
         {
             UserId = Guid.NewGuid(),
@@ -261,11 +273,20 @@ public class AuthService : IAuthService
             RoleCode = RoleConstants.Trainee,
             IsInternal = false,
             IsLocked = false,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         await _users.AddAsync(newUser);
+
+        // Record agreement (same as Coach flow, without IP)
+        await _agreements.AddAsync(new UserAgreement
+        {
+            AgreementId = Guid.NewGuid(),
+            UserId = newUser.UserId,
+            TermId = term.TermId,
+            AcceptedAt = now
+        });
 
         try
         {
@@ -318,10 +339,18 @@ public class AuthService : IAuthService
         {
             FrontCardUrl = request.FrontCardUrl!,
             BackCardUrl = request.BackCardUrl!,
-            FaceImageUrl = request.FaceImageUrl
+            FaceImageUrl = request.FaceImageUrl,
+            FaceImageLeftUrl = request.FaceImageLeftUrl,
+            FaceImageRightUrl = request.FaceImageRightUrl,
+            FaceImageTopUrl = request.FaceImageTopUrl,
+            FaceImageBottomUrl = request.FaceImageBottomUrl
         });
         if (!ekycResult.Success)
             return ApiResponseDto<User>.Fail(ekycResult.Error ?? "ID verification failed.");
+
+        // 1 person = 1 CCCD: block if this IdCardNumber already belongs to another coach
+        if (await _ekycs.ExistsByIdCardNumberAsync(ekycResult.Result.IdCardNumber, existing?.UserId))
+            return ApiResponseDto<User>.Fail("This ID card has already been used for another coach.");
 
         var now = DateTime.UtcNow;
         User user;

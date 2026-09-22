@@ -155,8 +155,9 @@
 
             <label class="terms">
                 <input type="checkbox" @bind="agreedTerms" />
-                <span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> of the FitSocial sports platform.</span>
+                <span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> of the FitSocial sports platform. @(latestTerm != null ? $"({latestTerm.Version})" : "")</span>
             </label>
+            @if (latestTerm != null) { <details class="terms-box"><summary>@latestTerm.Title</summary><div class="terms-content">@latestTerm.Content</div></details> }
             @if (showTermsError && !agreedTerms) { <div class="field-error">Please agree to the terms of service to continue.</div> }
 
             <button type="submit" class="btn-auth-primary" disabled="@isLoading">
@@ -215,12 +216,27 @@
         }
         else if (coachStep == 2)
         {
-            <!-- Step 2: eKYC -->
+            <!-- Step 2: CCCD - thực: Bóc tách + Face Matching + Liveness (Portrait + Left/Right + Gần/Xa) -->
             <div class="field"><label>Identity card (CCCD) - Front side <span class="req">*</span></label><UploadBox Label="Front" UploadTitle="Upload Front Side of CCCD" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="registerModel.FrontCardUrl" /></div>
             <div class="field"><label>Identity card (CCCD) - Back side <span class="req">*</span></label><UploadBox Label="Back" UploadTitle="Upload Back Side of CCCD" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="registerModel.BackCardUrl" /></div>
-            <div class="field"><label>Live Face Verification (Biometric) <span class="req">*</span></label><LiveFaceCapture @bind-Value="registerModel.FaceImageUrl" /></div>
+            <div class="field">
+                <label>Live Face Verification (Biometric) <span class="req">*</span></label>
+                <div class="liveness-instruct alert alert-info" style="font-size:13px; margin-bottom:8px; padding:8px 10px; border-radius:8px; background:#e8f4fd; border:1px solid #b6e0ff;">
+                    <strong>Hướng dẫn sống:</strong> Nhìn thẳng (Portrait) - đưa mặt lại gần/ra xa 20cm để rõ nét - sau đó quay trái 30° và phải 30° nếu muốn tăng độ chính xác. Ánh sáng đủ, không đeo kính râm.
+                </div>
+                <LiveFaceCapture @bind-Value="registerModel.FaceImageUrl" />
+                <small class="muted">Bắt buộc: Portrait chính diện (dùng cho đối sánh + liveness Portrait)</small>
+            </div>
+            <details class="field" open>
+                <summary style="cursor:pointer; font-weight:600; margin:6px 0;">Nâng cao: Thêm pose trái/phải (khuyến nghị - tăng tỉ lệ pass liveness)</summary>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px;">
+                    <div><label>Left pose - Quay trái 30° <small class="muted">(optional)</small></label><LiveFaceCapture @bind-Value="registerModel.FaceImageLeftUrl" /></div>
+                    <div><label>Right pose - Quay phải 30° <small class="muted">(optional)</small></label><LiveFaceCapture @bind-Value="registerModel.FaceImageRightUrl" /></div>
+                </div>
+                <small class="muted">Nếu có Left/Right, backend sẽ gọi <code>face_liveness</code> với <code>label_pose=Left/Right</code> thêm ngoài <code>Portrait</code>. Gần/xa thực hiện trong lúc capture Portrait (tiến/lùi 20cm).</small>
+            </details>
             @if (!string.IsNullOrEmpty(ekycError)) { <div class="field-error">@ekycError</div> }
-            @if (ekycResult != null) { <div class="auth-alert success"><AppIcon Name="check" /><span>eKYC verified: @ekycResult.FullNameOnCard (@ekycResult.IdCardNumber)</span></div> }
+            @if (ekycResult != null) { <div class="auth-alert success"><AppIcon Name="check" /><span>CCCD verified: @ekycResult.FullNameOnCard (@ekycResult.IdCardNumber)</span></div> }
             <div class="wiz-actions">
                 <button type="button" class="btn-back" @onclick="() => coachStep = 1">← Back</button>
                 <button type="button" class="btn-auth-primary btn-coach flex-grow-1" @onclick="HandleEkycNext" disabled="@isVerifyingEkyc">@if (isVerifyingEkyc) { <span class="spinner-border spinner-border-sm me-2"></span><span>Verifying...</span> } else { <span>Next: Certificates →</span> }</button>
@@ -268,7 +284,7 @@
                 <p><strong>Experience:</strong> @registerModel.ExperienceYears years</p>
                 <p><strong>Bio:</strong> @registerModel.Biography</p>
                 <p><strong>Certificates:</strong> @registerModel.Certificates.Count file(s)</p>
-                <p><strong>eKYC:</strong> @(ekycResult?.IdCardNumber ?? "Verified")</p>
+                <p><strong>CCCD:</strong> @(ekycResult?.IdCardNumber ?? "Verified")</p>
                 @if (latestTerm != null) { <p><strong>Terms:</strong> @latestTerm.Version - @latestTerm.Title (Agreed)</p> }
                 <hr />
                 <p class="fw-bold">Total: @previewAmount VND</p>
@@ -348,7 +364,7 @@
         }
     }
 
-    private string GetStepLabel(int step) => step switch { 1 => "Account", 2 => "eKYC", 3 => "Certificates", 4 => "Confirm", 5 => "Pay", _ => step.ToString() };
+    private string GetStepLabel(int step) => step switch { 1 => "Account", 2 => "CCCD", 3 => "Certificates", 4 => "Confirm", 5 => "Pay", _ => step.ToString() };
 
     protected override void OnInitialized()
     {
@@ -426,6 +442,12 @@
         if (!otpOk) { errorMessage = "Please enter the full 6-digit OTP code."; return; }
         if (!agreedTerms) { errorMessage = "Please agree to the terms of service to continue."; return; }
         if (!formValid) { errorMessage = "Please review the information you entered."; return; }
+        // Map TermId for trainee (coach sets it in step 3)
+        if (!isCoach)
+        {
+            if (latestTerm == null) { errorMessage = "Terms are still loading. Please try again in a moment."; return; }
+            registerModel.TermId = latestTerm.TermId;
+        }
         isLoading = true;
         if (!isCoach) registerModel.PhoneNumber = null;
         registerModel.Gender = null; registerModel.DateOfBirth = null;
@@ -465,7 +487,7 @@
         if (string.IsNullOrWhiteSpace(registerModel.FrontCardUrl) || string.IsNullOrWhiteSpace(registerModel.BackCardUrl)) { ekycError = "Please upload both front and back of your ID card."; return; }
         if (string.IsNullOrWhiteSpace(registerModel.FaceImageUrl)) { ekycError = "Please capture your live face image."; return; }
         isVerifyingEkyc = true;
-        var res = await EkycService.VerifyAsync(new EkycRequest { FrontCardUrl = registerModel.FrontCardUrl, BackCardUrl = registerModel.BackCardUrl, FaceImageUrl = registerModel.FaceImageUrl });
+        var res = await EkycService.VerifyAsync(new EkycRequest { FrontCardUrl = registerModel.FrontCardUrl, BackCardUrl = registerModel.BackCardUrl, FaceImageUrl = registerModel.FaceImageUrl, FaceImageLeftUrl = registerModel.FaceImageLeftUrl, FaceImageRightUrl = registerModel.FaceImageRightUrl });
         isVerifyingEkyc = false;
         if (!res.Success) { ekycError = res.Error ?? "ID verification failed."; return; }
         ekycResult = res.Data;

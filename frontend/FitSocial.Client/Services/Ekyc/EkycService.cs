@@ -7,6 +7,10 @@ public class EkycRequest
     public string FrontCardUrl { get; set; } = string.Empty;
     public string BackCardUrl { get; set; } = string.Empty;
     public string? FaceImageUrl { get; set; }
+    public string? FaceImageLeftUrl { get; set; }
+    public string? FaceImageRightUrl { get; set; }
+    public string? FaceImageTopUrl { get; set; }
+    public string? FaceImageBottomUrl { get; set; }
 }
 
 public interface IEkycService

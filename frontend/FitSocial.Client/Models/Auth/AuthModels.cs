@@ -45,6 +45,10 @@ public class RegisterRequest
     public string? FrontCardUrl { get; set; }
     public string? BackCardUrl { get; set; }
     public string? FaceImageUrl { get; set; }
+    public string? FaceImageLeftUrl { get; set; }
+    public string? FaceImageRightUrl { get; set; }
+    public string? FaceImageTopUrl { get; set; }
+    public string? FaceImageBottomUrl { get; set; }
     public List<CoachCertificateItem> Certificates { get; set; } = new();
 }
 

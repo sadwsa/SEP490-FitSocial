@@ -1,10 +1,9 @@
-@page "/home"
+﻿@page "/home"
 @namespace FitSocial.Client.Pages
 @layout EmptyLayout
 @attribute [Authorize(Roles = "TRAINEE,COACH")]
 @implements IDisposable
 @inject IPostService PostService
-@inject ISportService SportService
 @inject ILocationService LocationService
 @inject IAuthService AuthService
 @inject AuthenticationStateProvider AuthStateProvider
@@ -90,8 +89,8 @@
 
                     <!-- Filter Bar -->
                     <PostFilterBar TotalCount="@totalCount" SearchTerm="@searchTerm" SelectedPostType="@selectedPostType"
-                                   SelectedSportId="@selectedFilterSportId" SelectedLocationId="@selectedFilterLocationId"
-                                   AvailableSports="@availableSports" AvailableLocations="@availableLocations"
+                                   SelectedLocationId="@selectedFilterLocationId"
+                                   AvailableLocations="@availableLocations"
                                    OnApplyFilters="HandleApplyFilters" OnClearSearch="ClearSearch" OnResetAll="ResetAllSearchAndFilters" />
 
                     <!-- Feed Posts Stream -->
@@ -202,7 +201,7 @@
                                         D</div>
                                         <div>
                                             <h4 class="text-sm font-semibold text-gray-900">Coach Dat</h4>
-                                            <p class="text-xs text-[#FF8C00]">⭐ 4.9</p>
+                                            <p class="text-xs text-[#FF8C00]">â­ 4.9</p>
                                         </div>
                                     </div>
                                     <a href="community"
@@ -215,7 +214,7 @@
                                             T</div>
                                             <div>
                                                 <h4 class="text-sm font-semibold text-gray-900">Coach Tuan</h4>
-                                                <p class="text-xs text-[#FF8C00]">⭐ 4.8</p>
+                                                <p class="text-xs text-[#FF8C00]">â­ 4.8</p>
                                             </div>
                                         </div>
                                         <a href="community"
@@ -228,7 +227,7 @@
                                                 A</div>
                                                 <div>
                                                     <h4 class="text-sm font-semibold text-gray-900">Coach Alex</h4>
-                                                    <p class="text-xs text-[#FF8C00]">⭐ 5.0</p>
+                                                    <p class="text-xs text-[#FF8C00]">â­ 5.0</p>
                                                 </div>
                                             </div>
                                             <a href="community"
@@ -250,19 +249,19 @@
                                         <a href="workouts" class="group cursor-pointer block">
                                             <h4 class="text-sm font-semibold text-gray-900 group-hover:text-[#FF5500] transition-colors">
                                                 30-Day Full Body Fat Loss</h4>
-                                                <p class="text-xs text-gray-500">By Coach Dat • $20.00</p>
+                                                <p class="text-xs text-gray-500">By Coach Dat â€¢ $20.00</p>
                                             </a>
                                             <hr class="border-gray-100">
                                             <a href="workouts" class="group cursor-pointer block">
                                                 <h4 class="text-sm font-semibold text-gray-900 group-hover:text-[#FF5500] transition-colors">
                                                     High-Intensity Hypertrophy</h4>
-                                                    <p class="text-xs text-gray-500">By Coach Tuan • $32.00</p>
+                                                    <p class="text-xs text-gray-500">By Coach Tuan â€¢ $32.00</p>
                                                 </a>
                                                 <hr class="border-gray-100">
                                                 <a href="workouts" class="group cursor-pointer block">
                                                     <h4 class="text-sm font-semibold text-gray-900 group-hover:text-[#FF5500] transition-colors">
                                                         Core & Functional Mobility</h4>
-                                                        <p class="text-xs text-gray-500">By Coach Alex • $25.00</p>
+                                                        <p class="text-xs text-gray-500">By Coach Alex â€¢ $25.00</p>
                                                     </a>
                                                 </div>
                                                 <a href="workouts"
@@ -276,12 +275,12 @@
 
                                     <!-- Create Post Modal Dialog -->
                                     <CreatePostModal IsVisible="@showCreatePostModal" InitialPostType="@createPostInitialType" IsCoach="@isCoach"
-                                                     UserName="@userName" UserInitials="@userInitials" AvailableSports="@availableSports"
+                                                     UserName="@userName" UserInitials="@userInitials" 
                                                      AvailableLocations="@availableLocations" OnClose="CloseCreatePostModal" OnPostCreated="OnPostCreated" />
 
                                     <!-- Edit Post Modal Dialog -->
                                     <EditPostModal IsVisible="@showEditPostModal" Post="@editingPost" IsCoach="@isCoach"
-                                                   AvailableSports="@availableSports" AvailableLocations="@availableLocations" OnClose="CloseEditPostModal"
+                                                   AvailableLocations="@availableLocations" OnClose="CloseEditPostModal"
                                                    OnPostUpdated="OnPostUpdated" />
 
                                     <!-- Delete Confirmation Modal Dialog -->

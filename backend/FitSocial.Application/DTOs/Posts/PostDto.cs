@@ -1,4 +1,4 @@
-namespace FitSocial.Application.DTOs.Posts;
+﻿namespace FitSocial.Application.DTOs.Posts;
 
 public class PostDto
 {
@@ -8,8 +8,6 @@ public class PostDto
     public string? AuthorAvatarUrl { get; set; }
     public string? Content { get; set; }
     public string PostType { get; set; } = string.Empty;
-    public Guid SportId { get; set; }
-    public string? SportName { get; set; }
     public Guid LocationId { get; set; }
     public string? LocationName { get; set; }
     public string? LocationAddress { get; set; }

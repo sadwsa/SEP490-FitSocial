@@ -46,7 +46,7 @@
                                 <span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full @(IsCoach ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800")">
                                     @(IsCoach ? "Coach" : "Trainee")
                                 </span>
-                                <span class="text-xs text-gray-400">• Public Feed</span>
+                                <span class="text-xs text-gray-400">â€¢ Public Feed</span>
                             </div>
                         </div>
                     </div>
@@ -161,70 +161,38 @@
                     }
                 </div>
 
-                <!-- Sport & Location Required Dropdowns (2 Columns) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider @(hasAttemptedSubmit && selectedSportId == Guid.Empty ? "text-red-700" : "text-gray-600") mb-1.5 flex items-center gap-1.5">
-                            <svg class="w-4 h-4 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                            </svg>
-                            Sport / Discipline <span class="text-red-500">*</span>
-                        </label>
-                        <select @bind="selectedSportId"
-                                class="w-full text-sm bg-gray-50 border @(hasAttemptedSubmit && selectedSportId == Guid.Empty ? "border-red-500 ring-2 ring-red-200 bg-red-50/20 text-red-900" : "border-gray-200 text-gray-800") rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition">
-                            <option value="@Guid.Empty">-- Select Sport --</option>
-                            @foreach (var s in AvailableSports)
-                            {
-                                <option value="@s.SportId">@s.SportName</option>
-                            }
-                        </select>
-                        @if (hasAttemptedSubmit && selectedSportId == Guid.Empty)
+                <!-- Gym / Location Dropdown (Required) -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider @(hasAttemptedSubmit && selectedLocationId == Guid.Empty ? "text-red-700" : "text-gray-600") mb-1.5 flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
+                            </path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        Gym / Location <span class="text-red-500">*</span>
+                    </label>
+                    <select @bind="selectedLocationId"
+                            class="w-full text-sm bg-gray-50 border @(hasAttemptedSubmit && selectedLocationId == Guid.Empty ? "border-red-500 ring-2 ring-red-200 bg-red-50/20 text-red-900" : "border-gray-200 text-gray-800") rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition">
+                        <option value="@Guid.Empty">-- Select Location --</option>
+                        @foreach (var l in AvailableLocations)
                         {
-                            <p class="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1 animate-in fade-in">
-                                <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd"
-                                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                          clip-rule="evenodd"></path>
-                                </svg>
-                                Sport is required. Please select one.
-                            </p>
+                            <option value="@l.LocationId">@l.LocationName</option>
                         }
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider @(hasAttemptedSubmit && selectedLocationId == Guid.Empty ? "text-red-700" : "text-gray-600") mb-1.5 flex items-center gap-1.5">
-                            <svg class="w-4 h-4 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
-                                </path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </select>
+                    @if (hasAttemptedSubmit && selectedLocationId == Guid.Empty)
+                    {
+                        <p class="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1 animate-in fade-in">
+                            <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                      clip-rule="evenodd"></path>
                             </svg>
-                            Gym / Location <span class="text-red-500">*</span>
-                        </label>
-                        <select @bind="selectedLocationId"
-                                class="w-full text-sm bg-gray-50 border @(hasAttemptedSubmit && selectedLocationId == Guid.Empty ? "border-red-500 ring-2 ring-red-200 bg-red-50/20 text-red-900" : "border-gray-200 text-gray-800") rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition">
-                            <option value="@Guid.Empty">-- Select Location --</option>
-                            @foreach (var l in AvailableLocations)
-                            {
-                                <option value="@l.LocationId">@l.LocationName</option>
-                            }
-                        </select>
-                        @if (hasAttemptedSubmit && selectedLocationId == Guid.Empty)
-                        {
-                            <p class="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1 animate-in fade-in">
-                                <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd"
-                                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                          clip-rule="evenodd"></path>
-                                </svg>
-                                Location is required. Please select one.
-                            </p>
-                        }
-                    </div>
+                            Location is required. Please select one.
+                        </p>
+                    }
                 </div>
-
                 <!-- Media Upload Section (Optional, Max 10) -->
                 <div class="border border-dashed border-gray-300 hover:border-orange-300 rounded-2xl p-4 bg-gray-50/50 transition">
                     <div class="flex items-center justify-between mb-2">
@@ -275,7 +243,7 @@
                                     else
                                     {
                                         <div class="p-2 text-center text-xs text-gray-600 truncate">
-                                            <span class="text-2xl">🎬</span>
+                                            <span class="text-2xl">ðŸŽ¬</span>
                                             <p class="truncate text-[10px] mt-1 font-medium">@media.FileName</p>
                                         </div>
                                     }
@@ -390,8 +358,6 @@
     [Parameter]
     public string UserInitials { get; set; } = "Me";
 
-    [Parameter]
-    public List<SportDto> AvailableSports { get; set; } = new();
 
     [Parameter]
     public List<LocationDto> AvailableLocations { get; set; } = new();
@@ -404,7 +370,6 @@
 
     private string createPostContent = string.Empty;
     private string createPostType = string.Empty;
-    private Guid selectedSportId = Guid.Empty;
     private Guid selectedLocationId = Guid.Empty;
     private bool hasAttemptedSubmit = false;
     private List<SelectedMediaItem> selectedMedia = new();
@@ -432,7 +397,6 @@
     {
         createPostContent = string.Empty;
         createPostType = string.Empty;
-        selectedSportId = Guid.Empty;
         selectedLocationId = Guid.Empty;
         selectedMedia.Clear();
         createPostErrorMessage = null;
@@ -460,7 +424,7 @@
 
     private string GetPostPlaceholder() => createPostType switch
     {
-        "Find Coach" => "Describe your fitness goals, preferred sport/routine, budget, or schedule to find the ideal coach...",
+        "Find Coach" => "Describe your fitness goals, routine, budget, or schedule to find the ideal coach...",
         "Find Trainee" => "Describe your coaching programs, specialties, open slots, or fitness plans for prospective students...",
         _ => "What's on your mind about today's workout? Share your achievements, tips, or routine..."
     };
@@ -629,12 +593,11 @@
         bool isPostTypeMissing = string.IsNullOrWhiteSpace(createPostType);
         bool isPostTypeUnauthorized = createPostType == "Find Trainee" && !IsCoach;
         bool isContentMissing = string.IsNullOrWhiteSpace(contentTrimmed);
-        bool isSportMissing = selectedSportId == Guid.Empty;
         bool isLocationMissing = selectedLocationId == Guid.Empty;
         bool isMediaExceeded = selectedMedia.Count > 10;
         bool isContentTooLong = contentTrimmed.Length > 5000;
 
-        if (isPostTypeMissing || isPostTypeUnauthorized || isContentMissing || isSportMissing || isLocationMissing || isMediaExceeded || isContentTooLong)
+        if (isPostTypeMissing || isPostTypeUnauthorized || isContentMissing || isLocationMissing || isMediaExceeded || isContentTooLong)
         {
             if (isPostTypeUnauthorized)
             {
@@ -689,7 +652,6 @@
             {
                 Content = contentTrimmed,
                 PostType = createPostType,
-                SportId = selectedSportId,
                 LocationId = selectedLocationId,
                 Media = uploadedMedia
             };

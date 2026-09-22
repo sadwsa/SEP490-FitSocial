@@ -1,4 +1,4 @@
-﻿@namespace FitSocial.Client.Components.Posts
+@namespace FitSocial.Client.Components.Posts
 <article class="bg-white rounded-xl shadow-sm p-4 transition hover:shadow-md w-full min-w-0">
     <div class="flex justify-between items-center mb-3">
         <div class="flex items-center gap-3">
@@ -273,29 +273,6 @@
 
         return date.Value.ToLocalTime().ToString("MMM dd, yyyy");
     }
-    private static string GetAuthorInitial(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "U";
-        var trimmed = name.Trim();
-        return trimmed.Length > 0 ? char.ToUpperInvariant(trimmed[0]).ToString() : "U";
-    }
-
-    private static bool HasValidAvatarUrl(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return false;
-        var trimmed = url.Trim();
-        if (trimmed.Equals("null", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("undefined", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uriResult))
-        {
-            return uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps;
-        }
-
-        return trimmed.StartsWith('/') && !trimmed.StartsWith("//");
-    }
+    private static string GetAuthorInitial(string? name) => AvatarHelper.GetInitial(name);
+    private static bool HasValidAvatarUrl(string? url) => AvatarHelper.HasValidAvatarUrl(url);
 }

@@ -645,4 +645,25 @@ public class AuthService : IAuthService
 
         return ApiResponseDto<bool>.Ok(true, "Password changed successfully. Please sign in again.");
     }
+
+    public async Task<ApiResponseDto<UserDto>> GetCurrentUserAsync(Guid userId)
+    {
+        var user = await _users.GetByIdAsync(userId);
+        if (user == null || user.IsLocked == true)
+        {
+            return ApiResponseDto<UserDto>.Fail("User not found or account is locked.");
+        }
+
+        var dto = new UserDto
+        {
+            Id = user.UserId,
+            FullName = user.FullName ?? string.Empty,
+            Email = user.Email,
+            PhoneNumber = user.PhoneNumber,
+            RoleCode = user.RoleCode,
+            AvatarUrl = user.AvatarUrl
+        };
+
+        return ApiResponseDto<UserDto>.Ok(dto);
+    }
 }

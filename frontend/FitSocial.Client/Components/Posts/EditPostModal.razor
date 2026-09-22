@@ -1,4 +1,4 @@
-﻿@namespace FitSocial.Client.Components.Posts
+@namespace FitSocial.Client.Components.Posts
 @using System.IO
 @inject IPostService PostService
 @inject IFileUploadService FileUploadService
@@ -33,6 +33,39 @@
 
             <!-- Modal Body -->
             <div class="px-6 py-5 overflow-y-auto space-y-5 flex-1 bg-white">
+
+                <!-- Author & Info Row -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3.5">
+                        @if (AvatarHelper.HasValidAvatarUrl(Post.AuthorAvatarUrl))
+                        {
+                            <div class="w-11 h-11 rounded-full flex-shrink-0 relative overflow-hidden shadow-sm border border-gray-100">
+                                <img src="@Post.AuthorAvatarUrl" alt="@(Post.AuthorName ?? "Author")"
+                                     class="w-full h-full object-cover"
+                                     onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                                <div class="w-full h-full rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white items-center justify-center font-bold text-base"
+                                     style="display: none;">
+                                    @AvatarHelper.GetInitials(Post.AuthorName)
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="w-11 h-11 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-base shadow-sm flex-shrink-0">
+                                @AvatarHelper.GetInitials(Post.AuthorName)
+                            </div>
+                        }
+                        <div>
+                            <h4 class="font-bold text-gray-900 text-sm">@(Post.AuthorName ?? "Athlete")</h4>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                <span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full @(IsCoach ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800")">
+                                    @(IsCoach ? "Coach" : "Trainee")
+                                </span>
+                                <span class="text-xs text-gray-400">&bull; Public Feed</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Post Type Selector -->
                 <div class="space-y-2 p-3 rounded-2xl @(hasAttemptedEditSubmit && string.IsNullOrWhiteSpace(editPostType) ? "border-2 border-red-400 bg-red-50/20" : "")">

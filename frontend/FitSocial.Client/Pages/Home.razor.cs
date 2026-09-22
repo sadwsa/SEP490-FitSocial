@@ -1,10 +1,11 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Posts;
 using FitSocial.Client.Models.Locations;
+using FitSocial.Client.Models.Coaches;
 
 namespace FitSocial.Client.Pages;
 
@@ -25,6 +26,11 @@ public partial class Home : ComponentBase, IDisposable
     private string userName = "Me";
     private string userInitials = "Me";
     private string userRole = "Athlete";
+    private string? currentUserAvatarUrl;
+
+    // Top coaches state
+    private List<TopCoachDto> topCoaches = new();
+    private bool isLoadingTopCoaches = true;
 
     // Edit post state
     private bool showEditPostModal = false;
@@ -64,7 +70,7 @@ public partial class Home : ComponentBase, IDisposable
     protected override async Task OnInitializedAsync()
     {
         await LoadUserInfoAsync();
-        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync());
+        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), LoadTopCoachesAsync());
     }
 
     private async Task LoadUserInfoAsync()
@@ -88,19 +94,44 @@ public partial class Home : ComponentBase, IDisposable
                           user.IsInRole("COACH") ||
                           string.Equals(user.FindFirst(ClaimTypes.Role)?.Value, AppRoles.Coach, StringComparison.OrdinalIgnoreCase);
                 userRole = isCoach ? "Coach" : "Trainee";
+                userInitials = AvatarHelper.GetInitials(userName);
 
-                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length > 0)
+                var meRes = await AuthService.GetCurrentUserAsync();
+                if (meRes.Success && meRes.Data != null)
                 {
-                    userInitials = parts.Length > 1
-                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
-                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                    currentUserAvatarUrl = meRes.Data.AvatarUrl;
+                    if (!string.IsNullOrWhiteSpace(meRes.Data.FullName))
+                    {
+                        userName = meRes.Data.FullName;
+                        userInitials = AvatarHelper.GetInitials(userName);
+                    }
                 }
             }
         }
         catch
         {
             userInitials = "Me";
+        }
+    }
+
+    private async Task LoadTopCoachesAsync()
+    {
+        try
+        {
+            isLoadingTopCoaches = true;
+            var response = await CoachService.GetTopCoachesAsync(5);
+            if (response.Success && response.Data != null)
+            {
+                topCoaches = response.Data;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading top coaches: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingTopCoaches = false;
         }
     }
 

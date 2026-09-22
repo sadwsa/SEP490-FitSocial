@@ -23,6 +23,7 @@ public interface IAuthService
     Task<bool> IsAuthenticatedAsync();
     Task PersistLoginAsync(AuthResponse data);
     Task<bool> RefreshTokenAsync();
+    Task<ApiResponse<UserInfo>> GetCurrentUserAsync();
 }
 
 public class AuthService : IAuthService
@@ -417,5 +418,47 @@ public class AuthService : IAuthService
     {
         var token = await GetTokenAsync();
         return !string.IsNullOrEmpty(token);
+    }
+
+    public async Task<ApiResponse<UserInfo>> GetCurrentUserAsync()
+    {
+        try
+        {
+            var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return new ApiResponse<UserInfo>
+                {
+                    Success = false,
+                    Message = "No authentication token found"
+                };
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, "auth/me");
+            request.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _httpClient.SendAsync(request);
+            var (result, raw) = await ReadResponseAsync<UserInfo>(response);
+            if (response.IsSuccessStatusCode && result != null && result.Success && result.Data != null)
+            {
+                return result;
+            }
+
+            if (result != null)
+            {
+                return result;
+            }
+
+            return UnexpectedResponse<UserInfo>(response, raw, "Could not fetch current user profile.");
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<UserInfo>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
     }
 }

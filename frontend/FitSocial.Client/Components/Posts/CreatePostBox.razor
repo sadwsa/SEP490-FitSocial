@@ -2,9 +2,24 @@
 
 <div class="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow">
     <div class="flex gap-3 items-center">
-        <div class="w-10 h-10 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-            @UserInitials
-        </div>
+        @if (AvatarHelper.HasValidAvatarUrl(UserAvatarUrl))
+        {
+            <div class="w-10 h-10 rounded-full flex-shrink-0 relative overflow-hidden shadow-sm border border-gray-100">
+                <img src="@UserAvatarUrl" alt=""
+                     class="w-full h-full object-cover"
+                     onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                <div class="w-full h-full rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white items-center justify-center font-bold text-sm"
+                     style="display: none;">
+                    @UserInitials
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="w-10 h-10 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                @UserInitials
+            </div>
+        }
         <div @onclick='() => Open()'
              class="w-full bg-gray-100 hover:bg-gray-200/80 rounded-full py-2.5 px-4 text-gray-500 text-sm transition cursor-pointer flex items-center select-none">
             <span>What's on your mind about today's workout?</span>
@@ -57,6 +72,9 @@
 @code {
     [Parameter]
     public string UserInitials { get; set; } = "Me";
+
+    [Parameter]
+    public string? UserAvatarUrl { get; set; }
 
     [Parameter]
     public bool IsCoach { get; set; }

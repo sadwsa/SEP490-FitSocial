@@ -258,4 +258,30 @@ public class AuthController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Gets the current authenticated user's profile and database data (including AvatarUrl).
+    /// </summary>
+    [HttpGet("me")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<UserDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<UserDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCurrentUser()
+    {
+        var userIdValue = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized(ApiResponseDto<UserDto>.Fail("Invalid session. Please sign in again."));
+        }
+
+        var result = await _authService.GetCurrentUserAsync(userId);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+
+        return Ok(result);
+    }
 }

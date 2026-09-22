@@ -1,9 +1,10 @@
-﻿@page "/home"
+@page "/home"
 @namespace FitSocial.Client.Pages
 @layout EmptyLayout
 @attribute [Authorize(Roles = "TRAINEE,COACH")]
 @implements IDisposable
 @inject IPostService PostService
+@inject ICoachService CoachService
 @inject ILocationService LocationService
 @inject IAuthService AuthService
 @inject AuthenticationStateProvider AuthStateProvider
@@ -41,6 +42,7 @@
                UserName="@userName"
                UserInitials="@userInitials"
                UserRole="@userRole"
+               UserAvatarUrl="@currentUserAvatarUrl"
                OnLogout="HandleLogout" />
 
             <style>
@@ -85,7 +87,7 @@
                 <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0">
 
                     <!-- Create Post Box -->
-                    <CreatePostBox UserInitials="@userInitials" IsCoach="@isCoach" OnOpen="HandleCreatePostBoxOpen" />
+                    <CreatePostBox UserInitials="@userInitials" UserAvatarUrl="@currentUserAvatarUrl" IsCoach="@isCoach" OnOpen="HandleCreatePostBoxOpen" />
 
                     <!-- Filter Bar -->
                     <PostFilterBar TotalCount="@totalCount" SearchTerm="@searchTerm" SelectedPostType="@selectedPostType"
@@ -183,7 +185,7 @@
                 <!-- Right Sidebar: Widgets & Shortcuts -->
                 <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24">
 
-                    <!-- Top 3 Coaches Box -->
+                    <!-- Top 5 Coaches Box -->
                     <div class="bg-white rounded-xl shadow-sm p-4">
                         <h3 class="font-bold text-gray-800 mb-3 text-sm flex items-center gap-2">
                             <svg class="w-5 h-5 text-[#FF8C00]" fill="currentColor" viewBox="0 0 20 20">
@@ -193,50 +195,76 @@
                             </svg>
                             Top 5 Coaches
                         </h3>
-                        <div class="flex flex-col gap-4">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <div
-                                        class="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-bold">
-                                        D</div>
-                                        <div>
-                                            <h4 class="text-sm font-semibold text-gray-900">Coach Dat</h4>
-                                            <p class="text-xs text-[#FF8C00]">â­ 4.9</p>
-                                        </div>
-                                    </div>
-                                    <a href="community"
-                                       class="text-xs text-[#FF5500] font-semibold hover:bg-orange-50 px-3 py-1 rounded-lg border border-transparent hover:border-orange-200 transition">View</a>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <div
-                                            class="w-8 h-8 rounded-full bg-[#FF5500] flex items-center justify-center text-white text-xs font-bold">
-                                            T</div>
-                                            <div>
-                                                <h4 class="text-sm font-semibold text-gray-900">Coach Tuan</h4>
-                                                <p class="text-xs text-[#FF8C00]">â­ 4.8</p>
+                        @if (isLoadingTopCoaches)
+                        {
+                            <div class="flex flex-col gap-3">
+                                @for (int i = 0; i < 3; i++)
+                                {
+                                    <div class="flex items-center justify-between animate-pulse">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-8 rounded-full bg-gray-200"></div>
+                                            <div class="space-y-1">
+                                                <div class="h-3 bg-gray-200 rounded w-20"></div>
+                                                <div class="h-2.5 bg-gray-200 rounded w-12"></div>
                                             </div>
                                         </div>
-                                        <a href="community"
-                                           class="text-xs text-[#FF5500] font-semibold hover:bg-orange-50 px-3 py-1 rounded-lg border border-transparent hover:border-orange-200 transition">View</a>
+                                        <div class="h-6 w-12 bg-gray-200 rounded-lg"></div>
                                     </div>
+                                }
+                            </div>
+                        }
+                        else if (topCoaches == null || !topCoaches.Any())
+                        {
+                            <p class="text-xs text-gray-400 py-2 text-center">No coaches found</p>
+                        }
+                        else
+                        {
+                            <div class="flex flex-col gap-3.5">
+                                @foreach (var coach in topCoaches)
+                                {
                                     <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <div
-                                                class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs font-bold">
-                                                A</div>
-                                                <div>
-                                                    <h4 class="text-sm font-semibold text-gray-900">Coach Alex</h4>
-                                                    <p class="text-xs text-[#FF8C00]">â­ 5.0</p>
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="w-8 h-8 rounded-full flex-shrink-0 relative overflow-hidden shadow-xs border border-gray-100">
+                                                @if (AvatarHelper.HasValidAvatarUrl(coach.AvatarUrl))
+                                                {
+                                                    <img src="@coach.AvatarUrl" alt="@coach.FullName"
+                                                         class="w-full h-full object-cover"
+                                                         onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                                                    <div class="w-full h-full rounded-full bg-gradient-to-r from-orange-400 to-amber-500 text-white items-center justify-center font-bold text-xs"
+                                                         style="display: none;">
+                                                        @AvatarHelper.GetInitial(coach.FullName)
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="w-full h-full rounded-full bg-gradient-to-r from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-xs">
+                                                        @AvatarHelper.GetInitial(coach.FullName)
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <h4 class="text-sm font-semibold text-gray-900 truncate" title="@coach.FullName">@coach.FullName</h4>
+                                                <div class="flex items-center gap-1 text-xs text-[#FF8C00]">
+                                                    <svg class="w-3.5 h-3.5 flex-shrink-0 fill-current" viewBox="0 0 20 20">
+                                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                                    </svg>
+                                                    <span class="font-medium">@(coach.Rating > 0 ? coach.Rating.ToString("0.0") : "5.0")</span>
+                                                    @if (coach.TotalReviews > 0)
+                                                    {
+                                                        <span class="text-gray-400 text-[10px]">(@coach.TotalReviews)</span>
+                                                    }
                                                 </div>
                                             </div>
-                                            <a href="community"
-                                               class="text-xs text-[#FF5500] font-semibold hover:bg-orange-50 px-3 py-1 rounded-lg border border-transparent hover:border-orange-200 transition">View</a>
                                         </div>
+                                        <a href="coaches"
+                                           class="text-xs text-[#FF5500] font-semibold hover:bg-orange-50 px-2.5 py-1 rounded-lg border border-transparent hover:border-orange-200 transition flex-shrink-0">View</a>
                                     </div>
-                                </div>
+                                }
+                            </div>
+                        }
+                    </div>
 
-                                <!-- Latest Workout Packages Box -->
+                    <!-- Latest Workout Packages Box -->
                                 <div class="bg-white rounded-xl shadow-sm p-4">
                                     <h3 class="font-bold text-gray-800 mb-3 text-sm flex items-center gap-2">
                                         <svg class="w-5 h-5 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,10 +301,10 @@
                                         </aside>
                                     </div>
 
-                                    <!-- Create Post Modal Dialog -->
-                                    <CreatePostModal IsVisible="@showCreatePostModal" InitialPostType="@createPostInitialType" IsCoach="@isCoach"
-                                                     UserName="@userName" UserInitials="@userInitials" 
-                                                     AvailableLocations="@availableLocations" OnClose="CloseCreatePostModal" OnPostCreated="OnPostCreated" />
+                                     <!-- Create Post Modal Dialog -->
+                                     <CreatePostModal IsVisible="@showCreatePostModal" InitialPostType="@createPostInitialType" IsCoach="@isCoach"
+                                                      UserName="@userName" UserInitials="@userInitials" UserAvatarUrl="@currentUserAvatarUrl"
+                                                      AvailableLocations="@availableLocations" OnClose="CloseCreatePostModal" OnPostCreated="OnPostCreated" />
 
                                     <!-- Edit Post Modal Dialog -->
                                     <EditPostModal IsVisible="@showEditPostModal" Post="@editingPost" IsCoach="@isCoach"

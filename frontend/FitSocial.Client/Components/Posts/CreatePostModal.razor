@@ -1,4 +1,4 @@
-@namespace FitSocial.Client.Components.Posts
+﻿@namespace FitSocial.Client.Components.Posts
 @inject IPostService PostService
 @inject IFileUploadService FileUploadService
 @inject IJSRuntime JS
@@ -46,7 +46,7 @@
                                 <span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full @(IsCoach ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800")">
                                     @(IsCoach ? "Coach" : "Trainee")
                                 </span>
-                                <span class="text-xs text-gray-400">â€¢ Public Feed</span>
+                                <span class="text-xs text-gray-400">&bull; Public Feed</span>
                             </div>
                         </div>
                     </div>
@@ -243,7 +243,7 @@
                                     else
                                     {
                                         <div class="p-2 text-center text-xs text-gray-600 truncate">
-                                            <span class="text-2xl">ðŸŽ¬</span>
+                                            <svg class="w-8 h-8 text-orange-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                                             <p class="truncate text-[10px] mt-1 font-medium">@media.FileName</p>
                                         </div>
                                     }

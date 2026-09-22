@@ -2,17 +2,24 @@
 <article class="bg-white rounded-xl shadow-sm p-4 transition hover:shadow-md w-full min-w-0">
     <div class="flex justify-between items-center mb-3">
         <div class="flex items-center gap-3">
-            @if (!string.IsNullOrWhiteSpace(Post.AuthorAvatarUrl))
-            {
-                <img src="@Post.AuthorAvatarUrl" alt="@Post.AuthorName"
-                     class="w-10 h-10 rounded-full object-cover border border-gray-100" />
-            }
-            else
-            {
-                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm">
-                    @(string.IsNullOrWhiteSpace(Post.AuthorName) ? "U" : Post.AuthorName.Substring(0, 1).ToUpper())
-                </div>
-            }
+            <div class="relative w-10 h-10 flex-shrink-0">
+                @if (HasValidAvatarUrl(Post.AuthorAvatarUrl))
+                {
+                    <img src="@Post.AuthorAvatarUrl" alt=""
+                         class="w-10 h-10 rounded-full object-cover border border-gray-100 flex-shrink-0"
+                         onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 items-center justify-center text-white font-bold text-sm flex-shrink-0 select-none shadow-xs"
+                         style="display: none;">
+                        @GetAuthorInitial(Post.AuthorName)
+                    </div>
+                }
+                else
+                {
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 select-none shadow-xs">
+                        @GetAuthorInitial(Post.AuthorName)
+                    </div>
+                }
+            </div>
             <div>
                 <h3 class="font-bold text-gray-900 text-sm">@(Post.AuthorName ?? "FitSocial Athlete")</h3>
                 <!-- Post Metadata -->
@@ -20,7 +27,7 @@
                     <span>@GetTimeAgo(Post.CreatedAt)</span>
                     @if (!string.IsNullOrWhiteSpace(Post.PostType))
                     {
-                        <span>â€¢</span>
+                        <span>&bull;</span>
                         @if (Post.PostType.Equals("Find Coach", StringComparison.OrdinalIgnoreCase) || Post.PostType.Equals("FindCoach", StringComparison.OrdinalIgnoreCase))
                         {
                             <span class="inline-flex items-center gap-1 bg-amber-50 text-amber-700 font-semibold px-2 py-0.5 rounded-full border border-amber-200 text-[11px]">
@@ -51,7 +58,7 @@
                     }
                     @if (!string.IsNullOrWhiteSpace(Post.LocationName) || !string.IsNullOrWhiteSpace(Post.LocationAddress))
                     {
-                        <span>â€¢</span>
+                        <span>&bull;</span>
                         <span class="flex items-center gap-0.5 text-gray-500 truncate max-w-[200px]"
                               title="@(Post.LocationName ?? Post.LocationAddress)">
                             <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none"
@@ -265,5 +272,30 @@
         if (timeSpan.TotalDays < 7) return $"{(int)timeSpan.TotalDays}d ago";
 
         return date.Value.ToLocalTime().ToString("MMM dd, yyyy");
+    }
+    private static string GetAuthorInitial(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var trimmed = name.Trim();
+        return trimmed.Length > 0 ? char.ToUpperInvariant(trimmed[0]).ToString() : "U";
+    }
+
+    private static bool HasValidAvatarUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        var trimmed = url.Trim();
+        if (trimmed.Equals("null", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("undefined", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uriResult))
+        {
+            return uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps;
+        }
+
+        return trimmed.StartsWith('/') && !trimmed.StartsWith("//");
     }
 }

@@ -116,6 +116,7 @@
                 {
                     <img src="@EffectiveUserAvatarUrl" alt="@EffectiveUserName"
                          class="w-full h-full rounded-full object-cover border border-gray-200"
+                         referrerpolicy="no-referrer" loading="lazy"
                          onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
                     <div class="w-full h-full rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white items-center justify-center font-bold text-xs"
                          style="display: none;">
@@ -138,6 +139,7 @@
                         {
                             <img src="@EffectiveUserAvatarUrl" alt="@EffectiveUserName"
                                  class="w-9 h-9 rounded-full object-cover border border-gray-100 flex-shrink-0"
+                                 referrerpolicy="no-referrer" loading="lazy"
                                  onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
                             <div class="w-9 h-9 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white items-center justify-center font-bold text-xs flex-shrink-0"
                                  style="display: none;">
@@ -227,6 +229,11 @@
     private string EffectiveUserRole => !string.IsNullOrWhiteSpace(UserRole) ? UserRole : loadedUserRole;
     private string? EffectiveUserAvatarUrl => !string.IsNullOrWhiteSpace(UserAvatarUrl) ? UserAvatarUrl : loadedUserAvatarUrl;
 
+    protected override void OnParametersSet()
+    {
+        StateHasChanged();
+    }
+
     protected override async Task OnInitializedAsync()
     {
         if (string.IsNullOrWhiteSpace(UserName) || string.IsNullOrWhiteSpace(UserInitials) || string.IsNullOrWhiteSpace(UserAvatarUrl))
@@ -259,6 +266,7 @@
                         loadedUserName = meResponse.Data.FullName;
                         loadedUserInitials = AvatarHelper.GetInitials(loadedUserName);
                     }
+                    StateHasChanged();
                 }
             }
         }
@@ -267,6 +275,10 @@
             loadedUserName = "User";
             loadedUserInitials = "U";
             loadedUserRole = "Athlete";
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
 

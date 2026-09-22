@@ -105,12 +105,22 @@ public partial class Home : ComponentBase, IDisposable
                         userName = meRes.Data.FullName;
                         userInitials = AvatarHelper.GetInitials(userName);
                     }
+                    StateHasChanged();
+                }
+                else
+                {
+                    Console.WriteLine($"[Home] AuthService.GetCurrentUserAsync returned: Success={meRes.Success}, Message='{meRes.Message}'");
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[Home] Error loading user info: {ex.Message}");
             userInitials = "Me";
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
 

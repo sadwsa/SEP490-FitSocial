@@ -7,6 +7,7 @@
             <div class="w-10 h-10 rounded-full flex-shrink-0 relative overflow-hidden shadow-sm border border-gray-100">
                 <img src="@UserAvatarUrl" alt=""
                      class="w-full h-full object-cover"
+                     referrerpolicy="no-referrer" loading="lazy"
                      onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
                 <div class="w-full h-full rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white items-center justify-center font-bold text-sm"
                      style="display: none;">
@@ -81,6 +82,11 @@
 
     [Parameter]
     public EventCallback<(string? trigger, string? postType)> OnOpen { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        StateHasChanged();
+    }
 
     private async Task Open(string? trigger = null, string? postType = null)
     {

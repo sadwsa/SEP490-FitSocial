@@ -439,10 +439,37 @@ public class AuthService : IAuthService
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
             var response = await _httpClient.SendAsync(request);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                var refreshed = await RefreshTokenAsync();
+                if (refreshed)
+                {
+                    token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+                    using var retryRequest = new HttpRequestMessage(HttpMethod.Get, "auth/me");
+                    retryRequest.Headers.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    response = await _httpClient.SendAsync(retryRequest);
+                }
+            }
+
             var (result, raw) = await ReadResponseAsync<UserInfo>(response);
             if (response.IsSuccessStatusCode && result != null && result.Success && result.Data != null)
             {
                 return result;
+            }
+
+            if (response.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(raw))
+            {
+                try
+                {
+                    var directUser = JsonSerializer.Deserialize<UserInfo>(raw, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (directUser != null && !string.IsNullOrWhiteSpace(directUser.FullName))
+                    {
+                        return new ApiResponse<UserInfo> { Success = true, Data = directUser };
+                    }
+                }
+                catch { }
             }
 
             if (result != null)
@@ -454,6 +481,7 @@ public class AuthService : IAuthService
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "GetCurrentUserAsync failed");
             return new ApiResponse<UserInfo>
             {
                 Success = false,

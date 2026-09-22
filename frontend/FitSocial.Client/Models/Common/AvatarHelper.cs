@@ -13,9 +13,15 @@ public static class AvatarHelper
         var trimmed = url.Trim();
         if (trimmed.Equals("null", StringComparison.OrdinalIgnoreCase) ||
             trimmed.Equals("undefined", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
+            trimmed.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("string", StringComparison.OrdinalIgnoreCase))
         {
             return false;
+        }
+
+        if (trimmed.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
         }
 
         if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uriResult))
@@ -23,7 +29,7 @@ public static class AvatarHelper
             return uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps;
         }
 
-        return trimmed.StartsWith('/') && !trimmed.StartsWith("//");
+        return !trimmed.StartsWith("javascript:", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string GetInitial(string? name)

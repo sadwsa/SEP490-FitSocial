@@ -32,9 +32,6 @@ public class RegisterCoachRequestDto
 
     public DateOnly? DateOfBirth { get; set; }
 
-    [MinLength(1, ErrorMessage = "Please select at least one specialty")]
-    public List<Guid>? SpecialtySportIds { get; set; }
-
     [Required(ErrorMessage = "Please enter your years of experience")]
     [Range(0, 60, ErrorMessage = "Years of experience must be between 0 and 60")]
     public int? ExperienceYears { get; set; }
@@ -47,4 +44,16 @@ public class RegisterCoachRequestDto
 
     [StringLength(2048, ErrorMessage = "Identity card link is too long")]
     public string? IdentityCardUrl { get; set; }
+
+    // --- 5-step flow (all data comes from frontend, no mock) ---
+    /// <summary>Version of terms the user agreed to (TermsAndPolicies.TermID).</summary>
+    public Guid? TermId { get; set; }
+
+    /// <summary>eKYC front/back/face image URLs (uploaded via /upload, verified before payment).</summary>
+    public string? FrontCardUrl { get; set; }
+    public string? BackCardUrl { get; set; }
+    public string? FaceImageUrl { get; set; }
+
+    /// <summary>Multiple certificates for the coach (replaces single CertificateUrl).</summary>
+    public List<FitSocial.Application.DTOs.Coach.CoachCertificateDto>? Certificates { get; set; }
 }

@@ -36,12 +36,23 @@ public class RegisterRequest
     public string? PhoneNumber { get; set; }
     public string? Gender { get; set; } = "MALE";
     public DateOnly? DateOfBirth { get; set; }
-    public List<Guid> FavoriteSportIds { get; set; } = new();
-    public List<Guid> SpecialtySportIds { get; set; } = new();
     public int? ExperienceYears { get; set; }
     public string? Biography { get; set; }
     public string? CertificateUrl { get; set; }
     public string? IdentityCardUrl { get; set; }
+    // --- Coach 5-step flow ---
+    public Guid? TermId { get; set; }
+    public string? FrontCardUrl { get; set; }
+    public string? BackCardUrl { get; set; }
+    public string? FaceImageUrl { get; set; }
+    public List<CoachCertificateItem> Certificates { get; set; } = new();
+}
+
+public class CoachCertificateItem
+{
+    public string? CertificateName { get; set; }
+    public string CertificateUrl { get; set; } = string.Empty;
+    public DateOnly? IssuedDate { get; set; }
 }
 
 

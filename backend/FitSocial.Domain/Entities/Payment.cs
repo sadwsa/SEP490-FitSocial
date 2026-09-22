@@ -15,7 +15,7 @@ public partial class Payment
 
     public string? Method { get; set; }
 
-    public string? GatewayId { get; set; }
+    public int? GatewayId { get; set; }
 
     public string? TransactionRef { get; set; }
 
@@ -31,5 +31,9 @@ public partial class Payment
 
     public DateTime? UpdatedAt { get; set; }
 
+    public string? GatewayResponseRaw { get; set; }
+
     public virtual Order Order { get; set; } = null!;
+
+    public virtual PaymentGatewayConfig? Gateway { get; set; }
 }

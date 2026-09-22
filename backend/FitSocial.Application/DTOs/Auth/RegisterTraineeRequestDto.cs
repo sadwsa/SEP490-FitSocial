@@ -30,6 +30,4 @@ public class RegisterTraineeRequestDto
     public string? Gender { get; set; }
 
     public DateOnly? DateOfBirth { get; set; }
-
-    public List<Guid>? FavoriteSportIds { get; set; }
 }

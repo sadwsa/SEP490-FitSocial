@@ -1,0 +1,142 @@
+@page "/admin/coach-subscription-plans"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.SystemOperations
+@using FitSocial.Client.Services.SystemOperations
+@inject ISystemOperationsService SystemOps
+@inject NavigationManager Navigation
+
+<PageTitle>Coach Subscription Plans - System Operations</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+            <Authorized>
+                <h2 class="view-title">Coach Subscription Plans</h2>
+                <p class="view-sub">Manage and monitor coach subscription plans across the FitSocial platform.</p>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="auth-alert error"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+                }
+
+                <!-- Stats -->
+                <div class="stats-grid" style="display:grid; grid-template-columns: repeat(2,1fr); gap:12px; margin:16px 0;">
+                    <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                        <small class="muted">Total Plans</small><div style="font-size:22px; font-weight:700;">@data?.TotalPlans</div>
+                    </div>
+                    <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                        <small class="muted">Active Plans</small><div style="font-size:22px; font-weight:700; color:#16a34a;">@data?.ActivePlansCount</div>
+                    </div>
+                </div>
+
+                <div class="toolbar" style="display:flex; gap:8px; align-items:center; margin:12px 0;">
+                    <div class="search-wrap" style="flex:1; position:relative;">
+                        <span class="search-icon" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8;"><AppIcon Name="search" /></span>
+                        <input value="@search" @oninput="OnSearchInput" class="toolbar-input" style="width:100%; padding-left:32px;" placeholder="Search currency or amount..." />
+                    </div>
+                    <select value="@statusFilter" @onchange="OnStatusFilterChanged" class="toolbar-select" style="min-width:140px;">
+                        <option value="">All statuses</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                    <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="LoadAsync" disabled="@isLoading"><span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh</button>
+                </div>
+
+                @if (isLoading)
+                {
+                    <div class="py-3 text-center muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading subscription plans...</div>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Image</th>
+                                    <th>Description</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Subscribers</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (data?.Plans.Any() == true)
+                                {
+                                    @foreach (var p in data.Plans)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(p.ImageUrl))
+                                                {
+                                                    <img src="@p.ImageUrl" alt="Plan" style="width:48px; height:48px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb;" />
+                                                }
+                                                else
+                                                {
+                                                    <div style="width:48px; height:48px; border-radius:8px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; border:1px solid #e5e7eb;"><AppIcon Name="trophy" /></div>
+                                                }
+                                            </td>
+                                            <td><span title="@p.Description">@(string.IsNullOrWhiteSpace(p.Description) ? "—" : p.Description)</span></td>
+                                            <td><strong>@p.Amount.ToString("N0") @p.Currency</strong></td>
+                                            <td>
+                                                @if (p.IsActive) { <span class="status-badge active">Active</span> } else { <span class="status-badge locked">Inactive</span> }
+                                            </td>
+                                            <td><span class="role-badge">@p.SubscriberCount total</span> <small class="muted">(@p.ActiveSubscriberCount active)</small></td>
+                                            <td><small>@p.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small></td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr><td colspan="6" class="text-center muted py-4">No subscription plans found.</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                }
+            </Authorized>
+            <NotAuthorized>
+                <div class="auth-alert error"><AppIcon Name="warning" /><span>You do not have access.</span></div>
+            </NotAuthorized>
+        </AuthorizeView>
+
+@code {
+    private CoachSubscriptionPlansResponseDto? data;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string search = "";
+    private string statusFilter = "";
+    private System.Timers.Timer? debounce;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            bool? isActive = statusFilter switch { "active" => true, "inactive" => false, _ => null };
+            var res = await SystemOps.GetCoachSubscriptionPlansAsync(isActive, string.IsNullOrWhiteSpace(search) ? null : search, 1, 20);
+            if (res.Success && res.Data != null) data = res.Data;
+            else errorMessage = res.Message ?? "Failed to load plans.";
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        search = e.Value?.ToString() ?? "";
+        debounce?.Stop(); debounce?.Dispose();
+        debounce = new System.Timers.Timer(400) { AutoReset = false };
+        debounce.Elapsed += async (_, _) => { await InvokeAsync(LoadAsync); await InvokeAsync(StateHasChanged); };
+        debounce.Start();
+    }
+
+    private async Task OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        statusFilter = e.Value?.ToString() ?? "";
+        await LoadAsync();
+    }
+}

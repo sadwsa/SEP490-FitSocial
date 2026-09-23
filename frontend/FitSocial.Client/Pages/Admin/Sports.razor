@@ -1,0 +1,197 @@
+@page "/admin/sports"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.Sports
+@using FitSocial.Client.Services.Sports
+@inject ISportService SportService
+@inject NavigationManager Navigation
+
+<PageTitle>Sport Categories - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert info" role="alert"><AppIcon Name="info" /><span>@toastMessage</span></div>
+        }
+
+        <h2 class="view-title">Sport Categories</h2>
+        <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.PostCount)" />
+
+        <div class="toolbar wrap">
+            <div class="search-wrap grow">
+                <span class="search-icon"><AppIcon Name="search" /></span>
+                <input @bind="sportSearch" @bind:event="oninput" class="toolbar-input" placeholder="Search by name or code (e.g. SPORT_01)..." />
+            </div>
+            <select @bind="sportStatus" class="toolbar-select">
+                <option value="">All statuses</option>
+                <option value="visible">Visible</option>
+                <option value="hidden">Hidden</option>
+            </select>
+            <button type="button" class="row-btn" @onclick="LoadSportsAsync" disabled="@isLoadingSports">
+                <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
+            </button>
+            <button type="button" class="row-btn add" @onclick="ToggleSportForm">+ Add New Sport</button>
+        </div>
+
+        <div class="cat-tabs">
+            @foreach (var c in categories)
+            {
+                <button type="button" class="cat-tab @(sportCategory == c ? "active" : "")" @onclick="() => sportCategory = c">@c</button>
+            }
+        </div>
+
+        @if (showSportForm)
+        {
+            <div class="sport-form">
+                <strong>@(editingSportId == null ? "Add new sport" : "Edit sport")</strong>
+                <div class="form-grid">
+                    <input @bind="sportFormName" class="toolbar-input" placeholder="Sport name *" />
+                    <select @bind="sportFormCategory" class="toolbar-select">
+                        @foreach (var c in categories.Where(x => x != "All"))
+                        {
+                            <option value="@c">@c</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="row-btn" @onclick="CancelSportForm" disabled="@isSavingSport">Cancel</button>
+                    <button type="button" class="row-btn add" @onclick="SaveSportFormAsync" disabled="@isSavingSport">@(isSavingSport ? "Saving..." : "Save")</button>
+                </div>
+            </div>
+        }
+
+        @if (isLoadingSports)
+        {
+            <div class="py-3 text-center muted"><span class="spinner-border spinner-border-sm me-2" role="status"></span><span>Loading sport categories from database...</span></div>
+        }
+
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Sport / Icon</th>
+                        <th>Code</th>
+                        <th>Coaches &amp; Posts</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in FilteredSports)
+                    {
+                        <tr>
+                            <td>
+                                <div class="sport-cell">
+                                    <span class="sport-ic"><AppIcon Name="@s.Icon" /></span>
+                                    <div><strong>@s.SportName</strong><br /><small class="muted">@s.Description</small></div>
+                                </div>
+                            </td>
+                            <td><code>@s.Code</code></td>
+                            <td><small>@s.CoachCount.ToString("N0") coaches<br />@s.PostCount.ToString("N0") posts</small></td>
+                            <td>
+                                @if (s.Visible) { <span class="status-badge active">Visible</span> } else { <span class="status-badge locked">Hidden</span> }
+                            </td>
+                            <td class="text-end whitespace-nowrap">
+                                @if (confirmDeleteId == s.SportId)
+                                {
+                                    <button type="button" class="row-btn lock" @onclick="() => DeleteSportAsync(s)">Confirm?</button>
+                                    <button type="button" class="row-btn" @onclick="() => confirmDeleteId = null">No</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="icon-btn" title="Edit" @onclick="() => StartSportEdit(s)"><AppIcon Name="pencil" /></button>
+                                    <button type="button" class="icon-btn danger" title="Delete" @onclick="() => confirmDeleteId = s.SportId"><AppIcon Name="trash" /></button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (!isLoadingSports && !FilteredSports.Any())
+                    {
+                        <tr><td colspan="5" class="text-center muted">No sports match.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="paging">Showing 1–@FilteredSports.Count() of @FilteredSports.Count() sports</p>
+    </Authorized>
+    <NotAuthorized>
+        <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>You do not have access to this page.</span></div>
+        <button type="button" class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/login")'>Go to portal sign in</button>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string? toastMessage;
+    private string sportSearch = "";
+    private string sportCategory = "All";
+    private string sportStatus = "";
+    private bool showSportForm = false;
+    private Guid? editingSportId;
+    private string sportFormName = "";
+    private string sportFormCategory = "Gym & Strength";
+    private Guid? confirmDeleteId;
+    private bool isLoadingSports = false;
+    private bool isSavingSport = false;
+    private readonly List<string> categories = new() { "All", "Gym & Strength", "Cardio & Athletics", "Combat Sports", "Team Sports" };
+    private List<SportDto> sports = new();
+
+    protected override async Task OnInitializedAsync() => await LoadSportsAsync();
+
+    private async Task LoadSportsAsync()
+    {
+        isLoadingSports = true;
+        try
+        {
+            var res = await SportService.GetSportsAsync();
+            if (res.Success && res.Data != null) sports = res.Data;
+            else if (!string.IsNullOrEmpty(res.Message)) toastMessage = res.Message;
+        }
+        catch (Exception ex) { toastMessage = $"Failed to load sports: {ex.Message}"; }
+        finally { isLoadingSports = false; }
+    }
+
+    private IEnumerable<SportDto> FilteredSports =>
+        sports.Where(s =>
+            (string.IsNullOrWhiteSpace(sportSearch) || s.SportName.Contains(sportSearch, StringComparison.OrdinalIgnoreCase) || s.Code.Contains(sportSearch, StringComparison.OrdinalIgnoreCase)) &&
+            (sportCategory == "All" || s.Category == sportCategory) &&
+            (string.IsNullOrWhiteSpace(sportStatus) || (sportStatus == "visible" && s.Visible) || (sportStatus == "hidden" && !s.Visible)));
+
+    private void ToggleSportForm() { showSportForm = !showSportForm; editingSportId = null; sportFormName = ""; sportFormCategory = "Gym & Strength"; }
+    private void StartSportEdit(SportDto sport) { showSportForm = true; editingSportId = sport.SportId; sportFormName = sport.SportName; sportFormCategory = sport.Category; confirmDeleteId = null; }
+    private void CancelSportForm() { showSportForm = false; editingSportId = null; }
+    private async Task SaveSportFormAsync()
+    {
+        if (string.IsNullOrWhiteSpace(sportFormName)) { toastMessage = "Enter a sport name first."; return; }
+        isSavingSport = true;
+        try
+        {
+            if (editingSportId == null)
+            {
+                var res = await SportService.CreateSportAsync(new CreateSportDto { SportName = sportFormName.Trim() });
+                if (res.Success) { toastMessage = res.Message ?? $"Sport '{sportFormName.Trim()}' created."; CancelSportForm(); await LoadSportsAsync(); }
+                else toastMessage = res.Message ?? "Failed to create sport.";
+            }
+            else
+            {
+                var res = await SportService.UpdateSportAsync(editingSportId.Value, new UpdateSportDto { SportName = sportFormName.Trim() });
+                if (res.Success) { toastMessage = res.Message ?? "Sport updated."; CancelSportForm(); await LoadSportsAsync(); }
+                else toastMessage = res.Message ?? "Failed to update sport.";
+            }
+        }
+        catch (Exception ex) { toastMessage = $"Error: {ex.Message}"; }
+        finally { isSavingSport = false; }
+    }
+
+    private async Task DeleteSportAsync(SportDto sport)
+    {
+        confirmDeleteId = null;
+        try
+        {
+            var res = await SportService.DeleteSportAsync(sport.SportId);
+            if (res.Success) { toastMessage = res.Message ?? $"Sport '{sport.SportName}' deleted."; await LoadSportsAsync(); }
+            else toastMessage = res.Message ?? "Failed to delete sport.";
+        }
+        catch (Exception ex) { toastMessage = $"Error: {ex.Message}"; }
+    }
+}

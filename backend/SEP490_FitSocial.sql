@@ -407,6 +407,8 @@ CREATE TABLE "Price" (
     "Amount" NUMERIC(18,2),
     "Currency" VARCHAR(10),
     "IsActive" BOOLEAN DEFAULT TRUE,
+    "ImageUrl" VARCHAR(2048),
+    "Description" VARCHAR(500),
     "CreatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

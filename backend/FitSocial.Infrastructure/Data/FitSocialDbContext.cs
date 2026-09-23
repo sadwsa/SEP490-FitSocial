@@ -792,6 +792,8 @@ public partial class FitSocialDbContext : DbContext
                 .HasColumnType("timestamp without time zone");
             entity.Property(e => e.Currency).HasMaxLength(10);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.ImageUrl).HasMaxLength(2048);
+            entity.Property(e => e.Description).HasMaxLength(500);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>

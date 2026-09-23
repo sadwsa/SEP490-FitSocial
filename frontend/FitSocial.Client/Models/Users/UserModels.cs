@@ -18,3 +18,28 @@ public class UpdateUserLockStatusRequest
 {
     public bool IsLocked { get; set; }
 }
+
+/// <summary>
+/// Profile model for the currently logged-in user (Trainee or Coach).
+/// Does not expose internal UserId or certificate information.
+/// </summary>
+public class UserProfileModel
+{
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public string? PhoneNumber { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string Role { get; set; } = string.Empty;
+    public DateTime? CreatedAt { get; set; }
+
+    // Coach-specific fields (null when role is Trainee)
+    public string? Bio { get; set; }
+    public int? ExperienceYears { get; set; }
+    public string? ApprovalStatus { get; set; }
+
+    public bool IsCoach => string.Equals(Role, "COACH", StringComparison.OrdinalIgnoreCase);
+    public bool IsTrainee => string.Equals(Role, "TRAINEE", StringComparison.OrdinalIgnoreCase);
+}
+

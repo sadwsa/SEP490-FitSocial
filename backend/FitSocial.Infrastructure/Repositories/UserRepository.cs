@@ -82,4 +82,11 @@ public class UserRepository : Repository<User>, IUserRepository
 
         return (items, totalCount);
     }
+
+    public Task<User?> FindWithCoachProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return DbSet.AsNoTracking()
+            .Include(u => u.CoachProfileCoach)
+            .FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
+    }
 }

@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
         services.AddScoped<ISportService, SportService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
+        services.AddScoped<IUserService, UserService>();
         return services;
     }
 

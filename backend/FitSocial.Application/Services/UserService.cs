@@ -1,11 +1,15 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.DTOs.Locations;
 using FitSocial.Application.DTOs.Users;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
+using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 
 namespace FitSocial.Application.Services;
@@ -68,5 +72,68 @@ public class UserService : IUserService
         };
 
         return ApiResponseDto<UserProfileDto>.Ok(traineeDto, "Profile retrieved successfully.");
+    }
+
+    public async Task<ApiResponseDto<UserProfileResponseDto>> GetUserProfileAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.FindUserProfileByIdAsync(userId, cancellationToken);
+        if (user == null || user.IsLocked == true)
+        {
+            throw new NotFoundException("User profile not found.");
+        }
+
+        var role = user.RoleCode?.Trim().ToUpperInvariant() ?? RoleConstants.Trainee;
+
+        if (role == RoleConstants.Coach)
+        {
+            var coachProfile = user.CoachProfileCoach;
+            var reviewsWithRating = coachProfile?.Reviews?.Where(r => r.Rating != null).ToList() ?? new List<Review>();
+            var totalReviews = reviewsWithRating.Count;
+            var averageRating = totalReviews > 0
+                ? reviewsWithRating.Select(r => (double)r.Rating!.Value).Average()
+                : 0.0;
+
+            var locationSummary = (coachProfile != null && coachProfile.Locations != null && coachProfile.Locations.Count > 0)
+                ? string.Join(", ", coachProfile.Locations.Select(l => l.LocationName))
+                : null;
+
+            var coachDto = new CoachProfileResponseDto
+            {
+                UserId = user.UserId,
+                FullName = user.FullName ?? string.Empty,
+                AvatarUrl = user.AvatarUrl,
+                DateOfBirth = user.DateOfBirth,
+                Gender = user.Gender,
+                Role = RoleConstants.Coach,
+                Bio = coachProfile?.Bio,
+                Location = locationSummary,
+                CreatedAt = user.CreatedAt,
+                ExperienceYears = coachProfile?.ExperienceYears,
+                Rating = Math.Round(averageRating, 1),
+                TotalReviews = totalReviews
+            };
+
+            return ApiResponseDto<UserProfileResponseDto>.Ok(coachDto, "User profile retrieved successfully.");
+        }
+
+        if (role == RoleConstants.Trainee)
+        {
+            var traineeDto = new TraineeProfileResponseDto
+            {
+                UserId = user.UserId,
+                FullName = user.FullName ?? string.Empty,
+                AvatarUrl = user.AvatarUrl,
+                DateOfBirth = user.DateOfBirth,
+                Gender = user.Gender,
+                Role = RoleConstants.Trainee,
+                Bio = null,
+                Location = null,
+                CreatedAt = user.CreatedAt
+            };
+
+            return ApiResponseDto<UserProfileResponseDto>.Ok(traineeDto, "User profile retrieved successfully.");
+        }
+
+        throw new NotFoundException("User profile not found.");
     }
 }

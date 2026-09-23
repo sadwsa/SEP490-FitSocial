@@ -1,4 +1,5 @@
 @namespace FitSocial.Client.Components.Posts
+@inject NavigationManager Navigation
 <article class="bg-white rounded-xl shadow-sm p-4 transition hover:shadow-md w-full min-w-0">
     <div class="flex justify-between items-center mb-3">
         <div class="flex items-center gap-3">
@@ -22,7 +23,19 @@
                 }
             </div>
             <div>
-                <h3 class="font-bold text-gray-900 text-sm">@(Post.AuthorName ?? "FitSocial Athlete")</h3>
+                <h3 class="font-bold text-gray-900 text-sm">
+                    @if (Post.AuthorId != Guid.Empty)
+                    {
+                        <button type="button" @onclick="HandleAuthorClick"
+                                class="font-bold text-gray-900 text-sm hover:text-[#FF5500] hover:underline transition-colors cursor-pointer text-left p-0 bg-transparent border-0 inline">
+                            @(Post.AuthorName ?? "FitSocial Athlete")
+                        </button>
+                    }
+                    else
+                    {
+                        <span>@(Post.AuthorName ?? "FitSocial Athlete")</span>
+                    }
+                </h3>
                 <!-- Post Metadata -->
                 <div class="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
                     <span>@GetTimeAgo(Post.CreatedAt)</span>
@@ -202,6 +215,9 @@
     [Parameter]
     public EventCallback<PostDto> OnComment { get; set; }
 
+    [Parameter]
+    public EventCallback<Guid> OnAuthorClick { get; set; }
+
     private bool isMenuOpen = false;
 
     private bool IsOwnPost => CurrentUserId.HasValue && Post.AuthorId == CurrentUserId.Value;
@@ -209,6 +225,26 @@
     private void ToggleMenu()
     {
         isMenuOpen = !isMenuOpen;
+    }
+
+    private async Task HandleAuthorClick()
+    {
+        if (Post.AuthorId == Guid.Empty) return;
+
+        if (OnAuthorClick.HasDelegate)
+        {
+            await OnAuthorClick.InvokeAsync(Post.AuthorId);
+            return;
+        }
+
+        if (CurrentUserId.HasValue && Post.AuthorId == CurrentUserId.Value)
+        {
+            Navigation.NavigateTo("/profile");
+        }
+        else
+        {
+            Navigation.NavigateTo($"/profile/{Post.AuthorId}");
+        }
     }
 
     private async Task HandleLike()

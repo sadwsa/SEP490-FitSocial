@@ -48,4 +48,18 @@ public class UsersController : ControllerBase
         var result = await _userService.GetOwnProfileAsync(userId, HttpContext.RequestAborted);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Gets the profile of another user by userId (Trainee or Coach).
+    /// Requires authentication. Does not expose sensitive credentials, certificates, or coach sports.
+    /// </summary>
+    [HttpGet("{userId:guid}/profile")]
+    [ProducesResponseType(typeof(ApiResponseDto<UserProfileResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserProfile([FromRoute] Guid userId)
+    {
+        var result = await _userService.GetUserProfileAsync(userId, HttpContext.RequestAborted);
+        return Ok(result);
+    }
 }

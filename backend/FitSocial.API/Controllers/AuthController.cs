@@ -43,6 +43,31 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Verify OTP without consuming it (for multi-step flows like Coach registration).
+    /// The final step will consume it via Validate.
+    /// </summary>
+    [HttpPost("verify-otp")]
+    [EnableRateLimiting("OtpPolicy")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid data"));
+        }
+
+        var result = await _authService.VerifyOtpAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Register a Trainee account with OTP verification (UC_01)
     /// </summary>
     [HttpPost("register-trainee")]

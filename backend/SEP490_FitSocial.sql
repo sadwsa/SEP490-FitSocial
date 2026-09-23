@@ -407,6 +407,8 @@ CREATE TABLE "Price" (
     "Amount" NUMERIC(18,2),
     "Currency" VARCHAR(10),
     "IsActive" BOOLEAN DEFAULT TRUE,
+    "ImageUrl" VARCHAR(2048),
+    "Description" VARCHAR(500),
     "CreatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -587,3 +589,77 @@ ALTER TABLE "Reviews" ADD FOREIGN KEY ("TraineeID") REFERENCES "Users"("UserID")
 ALTER TABLE "Reviews" ADD FOREIGN KEY ("CoachID") REFERENCES "CoachProfiles"("CoachID");
 
 ALTER TABLE "AuditLogs" ADD FOREIGN KEY ("ActorAccountID") REFERENCES "Users"("UserID") ON DELETE SET NULL;
+
+
+
+-- ==============================================================================
+-- 1. BẢNG QUẢN LÝ ĐIỀU KHOẢN VÀ SỰ ĐỒNG Ý (TERMS & AGREEMENTS)
+-- ==============================================================================
+
+CREATE TABLE "TermsAndPolicies" (
+    "TermID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "Version" VARCHAR(50) NOT NULL UNIQUE,
+    "Title" VARCHAR(255) NOT NULL,
+    "Content" TEXT NOT NULL,
+    "EffectiveDate" TIMESTAMP NOT NULL,
+    "CreatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE "UserAgreements" (
+    "AgreementID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "UserID" UUID NOT NULL,
+    "TermID" UUID NOT NULL,
+    "IpAddress" VARCHAR(45),
+    "AcceptedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "UQ_User_Term" UNIQUE ("UserID", "TermID")
+);
+
+ALTER TABLE "UserAgreements" ADD FOREIGN KEY ("UserID") REFERENCES "Users"("UserID") ON DELETE CASCADE;
+ALTER TABLE "UserAgreements" ADD FOREIGN KEY ("TermID") REFERENCES "TermsAndPolicies"("TermID") ON DELETE CASCADE;
+
+
+-- ==============================================================================
+-- 2. BẢNG LƯU TRỮ DỮ LIỆU eKYC (VIETTEL eKYC & OCR & LIVENESS)
+-- ==============================================================================
+
+CREATE TABLE "CoachEkycVerifications" (
+    "EkycID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "CoachID" UUID NOT NULL,
+    "IdCardNumber" VARCHAR(20) UNIQUE,
+    "FullNameOnCard" VARCHAR(100),
+    "DateOfBirthOnCard" DATE,
+    "FrontCardUrl" VARCHAR(2048) NOT NULL,
+    "BackCardUrl" VARCHAR(2048) NOT NULL,
+    "FaceImageUrl" VARCHAR(2048),
+    "LivenessScore" NUMERIC(5,2),
+    "FaceMatchConfidence" NUMERIC(5,2),
+    "VerificationStatus" VARCHAR(50) DEFAULT 'Pending', -- Pending, Success, Failed
+    "FailureReason" TEXT,
+    "CreatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "UpdatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE "CoachEkycVerifications" ADD FOREIGN KEY ("CoachID") REFERENCES "CoachProfiles"("CoachID") ON DELETE CASCADE;
+
+
+-- ==============================================================================
+-- 3. MỞ RỘNG BẢNG THANH TOÁN (HỖ TRỢ LƯU LOG KHI TÍCH HỢP MOMO & PAYOS)
+-- ==============================================================================
+
+ALTER TABLE "Payments" ADD COLUMN IF NOT EXISTS "GatewayResponseRaw" JSONB;
+
+
+-- 1. Thêm cột tạm thời kiểu INT
+ALTER TABLE "Payments" ADD COLUMN "TempGatewayID" INT;
+
+-- 2. Map dữ liệu cũ sang ID số (Ví dụ gán ID cho PayOS là 1, MoMo là 2...)
+UPDATE "Payments" SET "TempGatewayID" = 1 WHERE "GatewayID" = 'PAYOS';
+UPDATE "Payments" SET "TempGatewayID" = 2 WHERE "GatewayID" = 'MOMO';
+-- (Cập nhật tiếp cho các giá trị khác nếu có)
+
+-- 3. Xóa cột GatewayID cũ và đổi tên cột tạm thành GatewayID
+ALTER TABLE "Payments" DROP COLUMN "GatewayID";
+ALTER TABLE "Payments" RENAME COLUMN "TempGatewayID" TO "GatewayID";
+
+-- 4. Thêm ràng buộc khóa ngoại chuẩn
+ALTER TABLE "Payments" ADD FOREIGN KEY ("GatewayID") REFERENCES "PaymentGatewayConfigs"("GatewayID");

@@ -14,6 +14,7 @@ public interface IAuthService
     Task<ApiResponse<AuthResponse>> AdminLoginAsync(LoginRequest request);
     Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null);
     Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
+    Task<ApiResponse<bool>> VerifyOtpAsync(string email, string otpCode, string purpose);
     Task<ApiResponse<bool>> ForgotPasswordAsync(string email);
     Task<ApiResponse<bool>> ResetPasswordAsync(ResetPasswordRequest request);
     Task<ApiResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request);
@@ -23,6 +24,7 @@ public interface IAuthService
     Task<bool> IsAuthenticatedAsync();
     Task PersistLoginAsync(AuthResponse data);
     Task<bool> RefreshTokenAsync();
+    Task<ApiResponse<UserInfo>> GetCurrentUserAsync();
 }
 
 public class AuthService : IAuthService
@@ -113,6 +115,21 @@ public class AuthService : IAuthService
                 Success = false,
                 Message = $"Connection error: {ex.Message}"
             };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> VerifyOtpAsync(string email, string otpCode, string purpose)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/verify-otp", new { email, otpCode, purpose });
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (result != null) return result;
+            return new ApiResponse<bool> { Success = false, Message = $"Verification failed (Code: {response.StatusCode})" };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool> { Success = false, Message = $"Connection error: {ex.Message}" };
         }
     }
 
@@ -417,5 +434,75 @@ public class AuthService : IAuthService
     {
         var token = await GetTokenAsync();
         return !string.IsNullOrEmpty(token);
+    }
+
+    public async Task<ApiResponse<UserInfo>> GetCurrentUserAsync()
+    {
+        try
+        {
+            var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return new ApiResponse<UserInfo>
+                {
+                    Success = false,
+                    Message = "No authentication token found"
+                };
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, "auth/me");
+            request.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                var refreshed = await RefreshTokenAsync();
+                if (refreshed)
+                {
+                    token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+                    using var retryRequest = new HttpRequestMessage(HttpMethod.Get, "auth/me");
+                    retryRequest.Headers.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    response = await _httpClient.SendAsync(retryRequest);
+                }
+            }
+
+            var (result, raw) = await ReadResponseAsync<UserInfo>(response);
+            if (response.IsSuccessStatusCode && result != null && result.Success && result.Data != null)
+            {
+                return result;
+            }
+
+            if (response.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(raw))
+            {
+                try
+                {
+                    var directUser = JsonSerializer.Deserialize<UserInfo>(raw, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (directUser != null && !string.IsNullOrWhiteSpace(directUser.FullName))
+                    {
+                        return new ApiResponse<UserInfo> { Success = true, Data = directUser };
+                    }
+                }
+                catch { }
+            }
+
+            if (result != null)
+            {
+                return result;
+            }
+
+            return UnexpectedResponse<UserInfo>(response, raw, "Could not fetch current user profile.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetCurrentUserAsync failed");
+            return new ApiResponse<UserInfo>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
     }
 }

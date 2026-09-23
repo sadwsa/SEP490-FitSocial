@@ -1,0 +1,166 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject HttpClient Http
+@implements IAsyncDisposable
+
+<div class="face-capture">
+    @if (!string.IsNullOrEmpty(Value))
+    {
+        <img src="@Value" alt="Face capture" class="face-preview" />
+        <div class="face-actions">
+            <button type="button" class="btn-retake" @onclick="Retake">Retake</button>
+            <button type="button" class="btn-remove" @onclick="Clear">Remove</button>
+        </div>
+        <small class="face-success"><AppIcon Name="check" /> Face captured</small>
+    }
+    else
+    {
+        <div class="camera-box">
+            <video id="@videoId" autoplay playsinline muted class="camera-video"></video>
+            <canvas id="@canvasId" style="display:none"></canvas>
+            @if (!cameraStarted)
+            {
+                <div class="camera-placeholder">
+                    <p>Position your face inside the frame & click Start</p>
+                </div>
+            }
+            else
+            {
+                <div class="face-overlay"></div>
+            }
+        </div>
+        <div class="face-actions">
+            @if (!cameraStarted)
+            {
+                <button type="button" class="btn-auth-primary btn-coach" @onclick="StartCamera">Start Camera</button>
+            }
+            else
+            {
+                <button type="button" class="btn-auth-primary btn-coach" @onclick="Capture" disabled="@isUploading">
+                    @if (isUploading) { <span class="spinner-border spinner-border-sm me-2"></span><span>Uploading...</span> } else { <span>Capture</span> }
+                </button>
+                <button type="button" class="btn-back" @onclick="StopCamera">Stop</button>
+            }
+        </div>
+        <div class="upload-fallback">
+            <small>Or upload a photo instead:</small>
+            <InputFile OnChange="HandleFileUpload" accept=".jpg,.jpeg,.png" />
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(error)) { <div class="field-error">@error</div> }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    private string videoId = $"faceVid_{Guid.NewGuid():N}";
+    private string canvasId = $"faceCan_{Guid.NewGuid():N}";
+    private bool cameraStarted = false;
+    private bool isUploading = false;
+    private string? error;
+
+    private async Task StartCamera()
+    {
+        error = null;
+        var ok = await JS.InvokeAsync<bool>("fitSocialFace.start", videoId);
+        cameraStarted = ok;
+        if (!ok) error = "Could not access camera. Please allow permission or upload a photo.";
+        StateHasChanged();
+    }
+
+    private async Task Capture()
+    {
+        error = null;
+        isUploading = true;
+        StateHasChanged();
+        try
+        {
+            var dataUrl = await JS.InvokeAsync<string?>("fitSocialFace.capture", videoId, canvasId);
+            if (string.IsNullOrEmpty(dataUrl))
+            {
+                error = "Capture failed. Please try again.";
+                return;
+            }
+            var url = await UploadDataUrlAsync(dataUrl);
+            if (!string.IsNullOrEmpty(url))
+            {
+                await ValueChanged.InvokeAsync(url);
+                await JS.InvokeVoidAsync("fitSocialFace.stop", videoId);
+                cameraStarted = false;
+            }
+        }
+        finally { isUploading = false; }
+    }
+
+    private async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        if (file.Size > 10 * 1024 * 1024) { error = "File must not exceed 10MB."; return; }
+        isUploading = true;
+        error = null;
+        StateHasChanged();
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            await using var stream = file.OpenReadStream(10 * 1024 * 1024);
+            content.Add(new StreamContent(stream), "file", file.Name);
+            var resp = await Http.PostAsync("upload", content);
+            var raw = await resp.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            if (doc.RootElement.TryGetProperty("data", out var dataEl))
+            {
+                var url = dataEl.GetString();
+                if (!string.IsNullOrEmpty(url)) await ValueChanged.InvokeAsync(url);
+                else error = "Upload failed.";
+            }
+            else error = "Upload failed.";
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { isUploading = false; }
+    }
+
+    private async Task<string?> UploadDataUrlAsync(string dataUrl)
+    {
+        try
+        {
+            var base64 = dataUrl.Substring(dataUrl.IndexOf(',') + 1);
+            var bytes = Convert.FromBase64String(base64);
+            using var content = new MultipartFormDataContent();
+            content.Add(new ByteArrayContent(bytes), "file", $"face_{DateTime.UtcNow:yyyyMMddHHmmss}.jpg");
+            var resp = await Http.PostAsync("upload", content);
+            var raw = await resp.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            if (doc.RootElement.TryGetProperty("data", out var dataEl))
+            {
+                return dataEl.GetString();
+            }
+            error = "Upload failed.";
+            return null;
+        }
+        catch (Exception ex) { error = ex.Message; return null; }
+    }
+
+    private async Task Retake()
+    {
+        await ValueChanged.InvokeAsync(null);
+        error = null;
+    }
+
+    private async Task Clear()
+    {
+        await ValueChanged.InvokeAsync(null);
+    }
+
+    private async Task StopCamera()
+    {
+        await JS.InvokeVoidAsync("fitSocialFace.stop", videoId);
+        cameraStarted = false;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("fitSocialFace.stop", videoId); } catch {}
+    }
+}

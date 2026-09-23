@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FitSocial.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -57,6 +57,14 @@ public partial class FitSocialDbContext : DbContext
     public virtual DbSet<Payout> Payouts { get; set; }
 
     public virtual DbSet<PayoutItem> PayoutItems { get; set; }
+
+    public virtual DbSet<TermsAndPolicy> TermsAndPolicies { get; set; }
+
+    public virtual DbSet<UserAgreement> UserAgreements { get; set; }
+
+    public virtual DbSet<CoachEkycVerification> CoachEkycVerifications { get; set; }
+
+    public virtual DbSet<CoachCertificate> CoachCertificates { get; set; }
 
     public virtual DbSet<Post> Posts { get; set; }
 
@@ -593,11 +601,13 @@ public partial class FitSocialDbContext : DbContext
                 .HasColumnType("timestamp without time zone");
             entity.Property(e => e.Currency).HasMaxLength(10);
             entity.Property(e => e.GatewayId)
-                .HasMaxLength(50)
                 .HasColumnName("GatewayID");
             entity.Property(e => e.GatewayTransactionId)
                 .HasMaxLength(100)
                 .HasColumnName("GatewayTransactionID");
+            entity.Property(e => e.GatewayResponseRaw)
+                .HasColumnType("jsonb")
+                .HasColumnName("GatewayResponseRaw");
             entity.Property(e => e.Method).HasMaxLength(50);
             entity.Property(e => e.OrderId).HasColumnName("OrderID");
             entity.Property(e => e.ProcessedAt).HasColumnType("timestamp without time zone");
@@ -610,6 +620,10 @@ public partial class FitSocialDbContext : DbContext
             entity.HasOne(d => d.Order).WithMany(p => p.Payments)
                 .HasForeignKey(d => d.OrderId)
                 .HasConstraintName("Payments_OrderID_fkey");
+
+            entity.HasOne(d => d.Gateway).WithMany()
+                .HasForeignKey(d => d.GatewayId)
+                .HasConstraintName("Payments_GatewayID_fkey");
         });
 
         modelBuilder.Entity<PaymentGatewayConfig>(entity =>
@@ -707,7 +721,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.PostType)
                 .HasMaxLength(50)
                 .HasColumnName("PostType");
-            entity.Property(e => e.SportId).HasColumnName("SportID");
+
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
@@ -720,9 +734,7 @@ public partial class FitSocialDbContext : DbContext
                 .HasForeignKey(d => d.LocationId)
                 .HasConstraintName("Posts_LocationID_fkey");
 
-            entity.HasOne(d => d.Sport).WithMany(p => p.Posts)
-                .HasForeignKey(d => d.SportId)
-                .HasConstraintName("Posts_SportID_fkey");
+
         });
 
         modelBuilder.Entity<PostInteraction>(entity =>
@@ -780,6 +792,8 @@ public partial class FitSocialDbContext : DbContext
                 .HasColumnType("timestamp without time zone");
             entity.Property(e => e.Currency).HasMaxLength(10);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.ImageUrl).HasMaxLength(2048);
+            entity.Property(e => e.Description).HasMaxLength(500);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>
@@ -1095,15 +1109,66 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.TraineeId).HasColumnName("TraineeID");
             entity.Property(e => e.TrainingPlanExerciseId).HasColumnName("TrainingPlanExerciseID");
 
-            entity.HasOne(d => d.Trainee).WithMany(p => p.WorkoutCompletionLogs)
-                .HasForeignKey(d => d.TraineeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("WorkoutCompletionLog_TraineeID_fkey");
-
             entity.HasOne(d => d.TrainingPlanExercise).WithMany(p => p.WorkoutCompletionLogs)
                 .HasForeignKey(d => d.TrainingPlanExerciseId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("WorkoutCompletionLog_TrainingPlanExerciseID_fkey");
+        });
+
+        modelBuilder.Entity<TermsAndPolicy>(entity =>
+        {
+            entity.HasKey(e => e.TermId).HasName("TermsAndPolicies_pkey");
+            entity.ToTable("TermsAndPolicies");
+            entity.Property(e => e.TermId).HasColumnName("TermID").HasDefaultValueSql("gen_random_uuid()");
+            entity.HasIndex(e => e.Version).IsUnique();
+            entity.Property(e => e.Version).HasMaxLength(50);
+            entity.Property(e => e.Title).HasMaxLength(255);
+            entity.Property(e => e.EffectiveDate).HasColumnType("timestamp without time zone");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP").HasColumnType("timestamp without time zone");
+        });
+
+        modelBuilder.Entity<UserAgreement>(entity =>
+        {
+            entity.HasKey(e => e.AgreementId).HasName("UserAgreements_pkey");
+            entity.ToTable("UserAgreements");
+            entity.HasIndex(e => new { e.UserId, e.TermId }, "UQ_User_Term").IsUnique();
+            entity.Property(e => e.AgreementId).HasColumnName("AgreementID").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.UserId).HasColumnName("UserID");
+            entity.Property(e => e.TermId).HasColumnName("TermID");
+            entity.Property(e => e.IpAddress).HasMaxLength(45).HasColumnName("IpAddress");
+            entity.Property(e => e.AcceptedAt).HasDefaultValueSql("CURRENT_TIMESTAMP").HasColumnType("timestamp without time zone");
+            entity.HasOne(d => d.User).WithMany().HasForeignKey(d => d.UserId).HasConstraintName("UserAgreements_UserID_fkey").OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(d => d.Term).WithMany(p => p.UserAgreements).HasForeignKey(d => d.TermId).HasConstraintName("UserAgreements_TermID_fkey").OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CoachEkycVerification>(entity =>
+        {
+            entity.HasKey(e => e.EkycId).HasName("CoachEkycVerifications_pkey");
+            entity.ToTable("CoachEkycVerifications");
+            entity.Property(e => e.EkycId).HasColumnName("EkycID").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CoachId).HasColumnName("CoachID");
+            entity.HasIndex(e => e.IdCardNumber).IsUnique();
+            entity.Property(e => e.IdCardNumber).HasMaxLength(20);
+            entity.Property(e => e.FullNameOnCard).HasMaxLength(100);
+            entity.Property(e => e.FrontCardUrl).HasMaxLength(2048);
+            entity.Property(e => e.BackCardUrl).HasMaxLength(2048);
+            entity.Property(e => e.FaceImageUrl).HasMaxLength(2048);
+            entity.Property(e => e.VerificationStatus).HasMaxLength(50).HasDefaultValue("Pending");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP").HasColumnType("timestamp without time zone");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP").HasColumnType("timestamp without time zone");
+            entity.HasOne(d => d.Coach).WithMany(p => p.CoachEkycVerifications).HasForeignKey(d => d.CoachId).HasConstraintName("CoachEkycVerifications_CoachID_fkey").OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CoachCertificate>(entity =>
+        {
+            entity.HasKey(e => e.CertificateId).HasName("CoachCertificates_pkey");
+            entity.ToTable("CoachCertificates");
+            entity.Property(e => e.CertificateId).HasColumnName("CertificateID").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CoachId).HasColumnName("CoachID");
+            entity.Property(e => e.CertificateName).HasMaxLength(255);
+            entity.Property(e => e.CertificateUrl).HasMaxLength(2048);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP").HasColumnType("timestamp without time zone");
+            entity.HasOne(d => d.Coach).WithMany(p => p.CoachCertificates).HasForeignKey(d => d.CoachId).HasConstraintName("CoachCertificates_CoachID_fkey").OnDelete(DeleteBehavior.Cascade);
         });
 
         OnModelCreatingPartial(modelBuilder);

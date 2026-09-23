@@ -1,0 +1,252 @@
+@page "/admin/users"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@implements IDisposable
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.Users
+@using FitSocial.Client.Services.Users
+@inject IUserService UserService
+@inject NavigationManager Navigation
+
+<PageTitle>User Accounts - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert info" role="alert"><AppIcon Name="info" /><span>@toastMessage</span></div>
+        }
+
+        <h2 class="view-title">User Accounts</h2>
+        <p class="view-sub">Manage and monitor user accounts across the FitSocial platform.</p>
+
+        <div class="cat-tabs mb-3">
+            <button type="button" class="cat-tab @(userStatusFilter == "active" ? "active" : "")" @onclick='() => SetUserStatusFilterAsync("active")'>
+                <span class="status-dot dot-active"></span> Active Accounts
+            </button>
+            <button type="button" class="cat-tab @(userStatusFilter == "locked" ? "active" : "")" @onclick='() => SetUserStatusFilterAsync("locked")'>
+                <span class="status-dot dot-locked"></span> Locked Accounts
+            </button>
+            <button type="button" class="cat-tab @(userStatusFilter == "all" ? "active" : "")" @onclick='() => SetUserStatusFilterAsync("all")'>
+                All Accounts
+            </button>
+        </div>
+
+        <div class="toolbar">
+            <div class="search-wrap">
+                <span class="search-icon"><AppIcon Name="search" /></span>
+                <input value="@userSearch" @oninput="OnUserSearchInput" @onkeydown="HandleUserSearchKeyDown" class="toolbar-input" placeholder="Search name or email..." />
+            </div>
+            <select value="@roleFilter" @onchange="OnRoleFilterChangedAsync" class="toolbar-select">
+                <option value="">All roles</option>
+                <option value="TRAINEE">Trainee</option>
+                <option value="COACH">Coach</option>
+                <option value="STAFF">Staff</option>
+                <option value="ADMIN">Admin</option>
+            </select>
+            <button type="button" class="row-btn" @onclick="LoadUsersAsync" disabled="@isLoadingUsers">
+                <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
+            </button>
+        </div>
+
+        @if (isLoadingUsers)
+        {
+            <div class="py-3 text-center muted">
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <span>Loading user accounts from database...</span>
+            </div>
+        }
+
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in pagedUsers.Items)
+                    {
+                        <tr>
+                            <td><strong>@u.FullName</strong><br /><small class="muted">@(u.PhoneNumber ?? "No phone")</small></td>
+                            <td>@u.Email</td>
+                            <td><span class="role-badge @u.RoleCode.ToLower()">@u.RoleCode</span></td>
+                            <td>
+                                @if (u.IsLocked)
+                                {
+                                    <span class="status-badge locked">Locked</span>
+                                }
+                                else
+                                {
+                                    <span class="status-badge active">Active</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (u.IsLocked)
+                                {
+                                    <button type="button" class="row-btn unlock" disabled="@isLockingUser" @onclick="() => SetLockedAsync(u, false)">Unlock</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="row-btn lock" disabled="@isLockingUser" @onclick="() => SetLockedAsync(u, true)">Lock</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (!isLoadingUsers && !pagedUsers.Items.Any())
+                    {
+                        <tr><td colspan="5" class="text-center muted py-4">No accounts match.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination-container">
+            <div class="pagination-info">
+                @if (pagedUsers.TotalCount > 0)
+                {
+                    var start = (userCurrentPage - 1) * userPageSize + 1;
+                    var end = Math.Min(userCurrentPage * userPageSize, pagedUsers.TotalCount);
+                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedUsers.TotalCount</strong> accounts</span>
+                }
+                else
+                {
+                    <span>0 accounts</span>
+                }
+            </div>
+            @if (pagedUsers.TotalPages > 1)
+            {
+                <div class="pagination-controls">
+                    <button type="button" class="page-btn" disabled="@(!pagedUsers.HasPreviousPage)" @onclick="() => GoToUserPageAsync(userCurrentPage - 1)">‹ Previous</button>
+                    @foreach (var p in GetVisibleUserPageNumbers())
+                    {
+                        if (p == -1) { <span class="page-dots">…</span> }
+                        else { var pageNum = p; <button type="button" class="page-btn @(pageNum == userCurrentPage ? "active" : "")" @onclick="() => GoToUserPageAsync(pageNum)">@pageNum</button> }
+                    }
+                    <button type="button" class="page-btn" disabled="@(!pagedUsers.HasNextPage)" @onclick="() => GoToUserPageAsync(userCurrentPage + 1)">Next ›</button>
+                </div>
+            }
+            <div class="page-size-selector">
+                <span>Per page:</span>
+                <select value="@userPageSize" @onchange="OnUserPageSizeChangedAsync" class="page-size-select">
+                    <option value="10">10 / page</option>
+                    <option value="20">20 / page</option>
+                    <option value="50">50 / page</option>
+                </select>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>You do not have access to this page.</span></div>
+        <button type="button" class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/login")'>Go to portal sign in</button>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string? toastMessage;
+    private string userSearch = "";
+    private string roleFilter = "";
+    private string userStatusFilter = "active";
+    private int userCurrentPage = 1;
+    private int userPageSize = 10;
+    private PagedResult<AdminUserDto> pagedUsers = new();
+    private System.Timers.Timer? searchDebounceTimer;
+    private bool isLoadingUsers = false;
+    private bool isLockingUser = false;
+
+    protected override async Task OnInitializedAsync() => await LoadUsersAsync();
+
+    private async Task LoadUsersAsync()
+    {
+        isLoadingUsers = true;
+        try
+        {
+            bool? isLocked = userStatusFilter switch { "active" => false, "locked" => true, _ => null };
+            var res = await UserService.GetUsersAsync(userSearch, roleFilter, isLocked, userCurrentPage, userPageSize);
+            if (res.Success && res.Data != null)
+            {
+                pagedUsers = res.Data;
+                if (pagedUsers.TotalPages > 0 && userCurrentPage > pagedUsers.TotalPages)
+                {
+                    userCurrentPage = pagedUsers.TotalPages;
+                    await LoadUsersAsync();
+                    return;
+                }
+            }
+            else if (!string.IsNullOrEmpty(res.Message)) toastMessage = res.Message;
+        }
+        catch (Exception ex) { toastMessage = $"Failed to load users: {ex.Message}"; }
+        finally { isLoadingUsers = false; }
+    }
+
+    private async Task SetUserStatusFilterAsync(string status)
+    {
+        if (userStatusFilter == status) return;
+        userStatusFilter = status;
+        userCurrentPage = 1;
+        await LoadUsersAsync();
+    }
+
+    private async Task OnRoleFilterChangedAsync(ChangeEventArgs e)
+    {
+        roleFilter = e.Value?.ToString() ?? "";
+        userCurrentPage = 1;
+        await LoadUsersAsync();
+    }
+
+    private void OnUserSearchInput(ChangeEventArgs e)
+    {
+        userSearch = e.Value?.ToString() ?? "";
+        searchDebounceTimer?.Stop(); searchDebounceTimer?.Dispose();
+        searchDebounceTimer = new System.Timers.Timer(400) { AutoReset = false };
+        searchDebounceTimer.Elapsed += async (_, _) => { userCurrentPage = 1; await InvokeAsync(LoadUsersAsync); await InvokeAsync(StateHasChanged); };
+        searchDebounceTimer.Start();
+    }
+
+    private async Task HandleUserSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { searchDebounceTimer?.Stop(); userCurrentPage = 1; await LoadUsersAsync(); }
+    }
+
+    private async Task GoToUserPageAsync(int page)
+    {
+        if (page < 1 || (pagedUsers.TotalPages > 0 && page > pagedUsers.TotalPages) || page == userCurrentPage) return;
+        userCurrentPage = page;
+        await LoadUsersAsync();
+    }
+
+    private async Task OnUserPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var newSize) && newSize > 0) { userPageSize = newSize; userCurrentPage = 1; await LoadUsersAsync(); }
+    }
+
+    private IEnumerable<int> GetVisibleUserPageNumbers()
+    {
+        var total = pagedUsers.TotalPages;
+        if (total <= 1) yield break;
+        var current = userCurrentPage; var delta = 2;
+        var left = Math.Max(1, current - delta); var right = Math.Min(total, current + delta);
+        if (left > 1) { yield return 1; if (left > 2) yield return -1; }
+        for (var i = left; i <= right; i++) yield return i;
+        if (right < total) { if (right < total - 1) yield return -1; yield return total; }
+    }
+
+    private async Task SetLockedAsync(AdminUserDto user, bool locked)
+    {
+        isLockingUser = true;
+        try
+        {
+            var res = await UserService.SetUserLockStatusAsync(user.UserId, locked);
+            if (res.Success) { toastMessage = res.Message ?? (locked ? $"{user.FullName} has been locked." : $"{user.FullName} has been unlocked."); await LoadUsersAsync(); }
+            else toastMessage = res.Message ?? "Failed to update user lock status.";
+        }
+        catch (Exception ex) { toastMessage = $"Error: {ex.Message}"; }
+        finally { isLockingUser = false; }
+    }
+
+    public void Dispose() { searchDebounceTimer?.Stop(); searchDebounceTimer?.Dispose(); }
+}

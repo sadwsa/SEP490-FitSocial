@@ -8,7 +8,7 @@ public interface IPaymentService
 {
     Task<ApiResponseDto<CoachActivationPreviewDto>> PrepareCoachActivationAsync(RegisterCoachRequestDto request);
 
-    Task<ApiResponseDto<ActivationLinkDto>> CreateActivationLinkAsync(RegisterCoachRequestDto request, string originUrl);
+    Task<ApiResponseDto<ActivationLinkDto>> CreateActivationLinkAsync(RegisterCoachRequestDto request, string originUrl, string? ipAddress = null);
 
     Task<ApiResponseDto<AuthResponseDto>> CompleteActivationAsync(long orderCode);
 

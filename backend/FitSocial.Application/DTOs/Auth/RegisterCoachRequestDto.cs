@@ -59,6 +59,10 @@ public class RegisterCoachRequestDto
     public string? FaceImageTopUrl { get; set; }
     public string? FaceImageBottomUrl { get; set; }
 
+    /// <summary>Selected subscription plan (Price) for the coach. Must be an active Price.</summary>
+    [Required(ErrorMessage = "Please select a subscription plan.")]
+    public Guid? PriceId { get; set; }
+
     /// <summary>Multiple certificates for the coach (replaces single CertificateUrl).</summary>
     public List<FitSocial.Application.DTOs.Coach.CoachCertificateDto>? Certificates { get; set; }
 }

@@ -714,9 +714,16 @@
 .cstep-line { flex: 1; height: 2px; background: #e2e8f0; margin: 0 2px 16px; }
 .cstep-line.done { background: var(--secondary-color); }
 
-.wiz-actions { display: flex; gap: 10px; margin-top: 16px; }
-.btn-back { flex: 0 0 auto; padding: 10px 18px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #334155; font-weight: 600; cursor: pointer; }
+.wiz-actions { display: flex; gap: 10px; margin-top: 16px; align-items: stretch; }
+.wiz-actions .btn-back,
+.wiz-actions .btn-auth-primary { min-height: 44px; padding: 12px 18px; font-size: 0.88rem; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+.btn-back { flex: 0 0 auto; min-height: 44px; padding: 12px 18px; font-size: 0.88rem; font-weight: 600; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 .btn-back:hover { background: #f8fafc; }
+.wiz-actions .btn-auth-primary { flex: 1 1 auto; margin-top: 0; }
+.pay-actions { display: flex; gap: 10px; margin-top: 12px; align-items: stretch; }
+.pay-actions .btn-back,
+.pay-actions .btn-auth-primary { min-height: 44px; padding: 12px 18px; font-size: 0.88rem; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+.pay-actions .btn-auth-primary { flex: 1 1 auto; margin-top: 0; }
 
 .cert-row { display: flex; flex-direction: column; gap: 10px; border: 1.5px dashed #cbd5e1; background: #fbfdff; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
 .cert-row .form-control { width: 100%; }
@@ -731,6 +738,7 @@
 
 .confirm-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; background: #f8fafc; font-size: 0.85rem; }
 .confirm-box p { margin: 4px 0; }
+.confirm-box hr { border: none; border-top: 1px solid #e2e8f0; margin: 12px 0; }
 
 .qr-panel { text-align: center; display: flex; flex-direction: column; align-items: center; }
 .qr-title { font-weight: 700; color: #334155; margin-bottom: 8px; }
@@ -741,5 +749,4 @@
 .qr-panel .pay-actions { width: 100%; }
 .order-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #eef2f7; }
 .order-row:last-child { border-bottom: none; }
-.pay-actions { display: flex; gap: 10px; margin-top: 12px; }
 .pay-note { font-size: 0.78rem; color: #64748b; margin: 8px 0; }

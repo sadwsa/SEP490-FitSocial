@@ -8,4 +8,5 @@ public interface ICoachUpgradeRepository : IRepository<CoachUpgrade>
     Task<int> CountAllAsync(CancellationToken cancellationToken = default);
     Task<int> CountByPriceIdAsync(Guid priceId, CancellationToken cancellationToken = default);
     Task<int> CountActiveByPriceIdAsync(Guid priceId, CancellationToken cancellationToken = default);
+    Task<CoachUpgrade?> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default);
 }

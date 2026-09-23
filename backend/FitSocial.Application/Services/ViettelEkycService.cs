@@ -134,7 +134,53 @@ public class ViettelEkycService : IEkycService
                     else if (DateOnly.TryParseExact(bday, "dd-MM-yyyy", out var d2)) dob = d2;
                     else if (DateOnly.TryParse(bday, out var d3)) dob = d3;
                 }
-                extract = new EkycExtract(id.Trim(), string.IsNullOrWhiteSpace(name) ? "UNKNOWN" : name.Trim(), dob, "Success", null);
+                // Extract all bóc tách fields for full storage
+                string GetStr(string key) => info.TryGetProperty(key, out var el) ? el.GetString() ?? "" : "";
+                var birthplace = GetStr("birthplace");
+                var sex = GetStr("sex");
+                var address = GetStr("address");
+                var province = GetStr("province");
+                var district = GetStr("district");
+                var ward = GetStr("ward");
+                var provinceCode = GetStr("province_code");
+                var districtCode = GetStr("district_code");
+                var wardCode = GetStr("ward_code");
+                var street = GetStr("street");
+                var nationality = GetStr("nationality");
+                var religion = GetStr("religion");
+                var ethnicity = GetStr("ethnicity");
+                var expiry = GetStr("expiry");
+                var feature = GetStr("feature");
+                var issueDate = GetStr("issue_date");
+                var issueBy = GetStr("issue_by");
+                var docType = GetStr("document");
+                if (string.IsNullOrWhiteSpace(docType)) docType = GetStr("type");
+
+                extract = new EkycExtract(
+                    IdCardNumber: id.Trim(),
+                    FullNameOnCard: string.IsNullOrWhiteSpace(name) ? "UNKNOWN" : name.Trim(),
+                    DateOfBirthOnCard: dob,
+                    VerificationStatus: "Success",
+                    FailureReason: null,
+                    Birthplace: string.IsNullOrWhiteSpace(birthplace) ? null : birthplace.Trim(),
+                    Sex: string.IsNullOrWhiteSpace(sex) ? null : sex.Trim(),
+                    Address: string.IsNullOrWhiteSpace(address) ? null : address.Trim(),
+                    Province: string.IsNullOrWhiteSpace(province) ? null : province.Trim(),
+                    District: string.IsNullOrWhiteSpace(district) ? null : district.Trim(),
+                    Ward: string.IsNullOrWhiteSpace(ward) ? null : ward.Trim(),
+                    ProvinceCode: string.IsNullOrWhiteSpace(provinceCode) ? null : provinceCode.Trim(),
+                    DistrictCode: string.IsNullOrWhiteSpace(districtCode) ? null : districtCode.Trim(),
+                    WardCode: string.IsNullOrWhiteSpace(wardCode) ? null : wardCode.Trim(),
+                    Street: string.IsNullOrWhiteSpace(street) ? null : street.Trim(),
+                    Nationality: string.IsNullOrWhiteSpace(nationality) ? null : nationality.Trim(),
+                    Religion: string.IsNullOrWhiteSpace(religion) ? null : religion.Trim(),
+                    Ethnicity: string.IsNullOrWhiteSpace(ethnicity) ? null : ethnicity.Trim(),
+                    Expiry: string.IsNullOrWhiteSpace(expiry) ? null : expiry.Trim(),
+                    Feature: string.IsNullOrWhiteSpace(feature) ? null : feature.Trim(),
+                    IssueDate: string.IsNullOrWhiteSpace(issueDate) ? null : issueDate.Trim(),
+                    IssueBy: string.IsNullOrWhiteSpace(issueBy) ? null : issueBy.Trim(),
+                    DocumentType: string.IsNullOrWhiteSpace(docType) ? null : docType.Trim(),
+                    RawInformationJson: infoStr);
             }
         }
         catch (Exception ex)
@@ -144,6 +190,9 @@ public class ViettelEkycService : IEkycService
         }
 
         if (extract == null) return (false, "ID verification failed.", null!);
+
+        decimal? faceMatchScore = null;
+        decimal? livenessScore = null;
 
         // 2) Đối sánh khuôn mặt (Front CCCD vs Live Portrait)
         try
@@ -188,6 +237,7 @@ public class ViettelEkycService : IEkycService
                 }
                 double score = 0;
                 if (root.TryGetProperty("score", out var sEl) && sEl.TryGetDouble(out var sd)) score = sd;
+                faceMatchScore = (decimal)score;
                 _logger.LogInformation("Face matching score {Score} ref {Ref} verify {Verify} raw {Raw}", score, refScore, verifyResult, verifyStr);
                 // Nới lỏng: nếu score rất cao (>=0.85) thì cho qua dù verify=false (Viettel gắt do ảnh thẻ chụp nghiêng/lóa, mặt 2021 vs live 2026)
                 if (!verifyResult && score < 0.85)
@@ -252,6 +302,7 @@ public class ViettelEkycService : IEkycService
                     else if (sEl.TryGetDouble(out var sd)) score = (float)sd;
                 }
                 _logger.LogInformation("Liveness {Pose} verify {Verify} score {Score}", pose, verifyStr, score);
+                if (pose == "Portrait") livenessScore = (decimal)score;
                 // Coi "Real" / "True" / score >= 0.5 là pass
                 bool isReal = verifyStr.Equals("Real", StringComparison.OrdinalIgnoreCase)
                     || verifyStr.Equals("True", StringComparison.OrdinalIgnoreCase)
@@ -269,6 +320,16 @@ public class ViettelEkycService : IEkycService
                 _logger.LogError(ex, "Viettel face_liveness {Pose} failed", pose);
                 return (false, $"Could not verify liveness for {pose}. Please try again.", null!);
             }
+        }
+
+        // Gắn scores vào extract để lưu DB
+        if (faceMatchScore.HasValue || livenessScore.HasValue)
+        {
+            extract = extract with
+            {
+                FaceMatchConfidence = faceMatchScore,
+                LivenessScore = livenessScore
+            };
         }
 
         return (true, null, extract);

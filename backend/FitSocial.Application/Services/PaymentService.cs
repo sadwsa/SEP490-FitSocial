@@ -16,6 +16,7 @@ public class PaymentService : IPaymentService
     private readonly IPriceRepository _prices;
     private readonly IOrderRepository _orders;
     private readonly IPaymentRepository _payments;
+    private readonly ICoachUpgradeRepository _coachUpgrades;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITokenService _tokenService;
     private readonly IPaymentGateway _paymentGateway;
@@ -26,6 +27,7 @@ public class PaymentService : IPaymentService
         IPriceRepository prices,
         IOrderRepository orders,
         IPaymentRepository payments,
+        ICoachUpgradeRepository coachUpgrades,
         IUnitOfWork unitOfWork,
         ITokenService tokenService,
         IPaymentGateway paymentGateway,
@@ -35,6 +37,7 @@ public class PaymentService : IPaymentService
         _prices = prices;
         _orders = orders;
         _payments = payments;
+        _coachUpgrades = coachUpgrades;
         _unitOfWork = unitOfWork;
         _tokenService = tokenService;
         _paymentGateway = paymentGateway;
@@ -43,6 +46,7 @@ public class PaymentService : IPaymentService
 
     /// <summary>
     /// Validates the coach draft BEFORE paying (model + email availability).
+    /// Uses selected PriceId if provided, otherwise the active Price.
     /// </summary>
     public async Task<ApiResponseDto<CoachActivationPreviewDto>> PrepareCoachActivationAsync(RegisterCoachRequestDto request)
     {
@@ -53,9 +57,19 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<CoachActivationPreviewDto>.Fail("This email is already in use.");
         }
 
-        var activePrice = await _prices.GetActiveAsync();
+        Price? selectedPrice = null;
+        if (request.PriceId.HasValue)
+        {
+            selectedPrice = await _prices.GetByIdAsync(request.PriceId.Value);
+            if (selectedPrice == null || selectedPrice.IsActive != true || selectedPrice.Amount == null)
+                return ApiResponseDto<CoachActivationPreviewDto>.Fail("Selected subscription plan is not available.");
+        }
+        else
+        {
+            selectedPrice = await _prices.GetActiveAsync();
+        }
 
-        if (activePrice == null || activePrice.Amount == null)
+        if (selectedPrice == null || selectedPrice.Amount == null)
         {
             return ApiResponseDto<CoachActivationPreviewDto>.Fail("Coach activation fee configuration not found.");
         }
@@ -64,7 +78,7 @@ public class PaymentService : IPaymentService
             new CoachActivationPreviewDto
             {
                 Email = normalizedEmail,
-                AmountVnd = activePrice.Amount.Value,
+                AmountVnd = selectedPrice.Amount.Value,
                 Currency = PaymentConstants.CurrencyVnd,
                 OrderType = PaymentConstants.OrderTypeCoachActivation
             },
@@ -92,12 +106,22 @@ public class PaymentService : IPaymentService
             stale.OrderStatus = PaymentConstants.OrderStatusCancelled;
         }
 
-        var activePrice = await _prices.GetActiveAsync();
-        if (activePrice == null || activePrice.Amount == null)
+        Price? selectedPrice = null;
+        if (request.PriceId.HasValue)
+        {
+            selectedPrice = await _prices.GetByIdAsync(request.PriceId.Value);
+            if (selectedPrice == null || selectedPrice.IsActive != true || selectedPrice.Amount == null)
+                return ApiResponseDto<ActivationLinkDto>.Fail("Selected subscription plan is not available.");
+        }
+        else
+        {
+            selectedPrice = await _prices.GetActiveAsync();
+        }
+        if (selectedPrice == null || selectedPrice.Amount == null)
         {
             return ApiResponseDto<ActivationLinkDto>.Fail("Coach activation fee configuration not found.");
         }
-        var fee = activePrice.Amount.Value;
+        var fee = selectedPrice.Amount.Value;
         var now = DateTime.UtcNow;
 
         var orderCode = long.Parse($"{DateTimeOffset.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}");
@@ -134,6 +158,18 @@ public class PaymentService : IPaymentService
             UpdatedAt = now
         });
         await _orders.AddAsync(order);
+
+        // Create CoachUpgrade linking the selected Price
+        var upgrade = new CoachUpgrade
+        {
+            UpgradeId = Guid.NewGuid(),
+            PriceId = selectedPrice.PriceId,
+            CoachId = user.UserId,
+            OrderId = order.OrderId,
+            Status = "PENDING",
+            CreatedAt = now
+        };
+        await _coachUpgrades.AddAsync(upgrade);
 
         try
         {
@@ -251,6 +287,9 @@ public class PaymentService : IPaymentService
         payment.GatewayResponseRaw = JsonSerializer.Serialize(new { status.IsPaid, status.Amount, status.Reference, verifiedAt = now });
         payment.ProcessedAt = now;
         payment.UpdatedAt = now;
+        // Mark CoachUpgrade as SUCCESS
+        var upgrade = await _coachUpgrades.GetByOrderIdAsync(order.OrderId);
+        if (upgrade != null) upgrade.Status = "SUCCESS";
         user.IsLocked = false;
         user.LastActiveAt = now;
         user.UpdatedAt = now;

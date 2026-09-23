@@ -19,6 +19,7 @@ public interface ISystemOperationsService
     Task<ApiResponse<CoachSubscriptionPlansResponseDto>> GetCoachSubscriptionPlansAsync(bool? isActive = null, string? search = null, int page = 1, int pageSize = 20);
     Task<ApiResponse<CoachSubscriptionPlanDto>> GetPlanByIdAsync(Guid priceId);
     Task<ApiResponse<CoachSubscriptionPlanDto>> CreatePlanAsync(CreatePlanRequest request);
+    Task<ApiResponse<List<CoachSubscriptionPlanDto>>> GetActivePlansAsync();
 }
 
 public class SystemOperationsService : ISystemOperationsService
@@ -81,6 +82,30 @@ public class SystemOperationsService : ISystemOperationsService
         catch (Exception ex)
         {
             return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<List<CoachSubscriptionPlanDto>>> GetActivePlansAsync()
+    {
+        try
+        {
+            var resp = await _http.GetAsync("system-operations/coach-subscription-plans/active");
+            var raw = await resp.Content.ReadAsStringAsync();
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            // Backend returns {success, data: List<Plan>}
+            var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.TryGetProperty("data", out var dataEl))
+            {
+                var list = JsonSerializer.Deserialize<List<CoachSubscriptionPlanDto>>(dataEl.GetRawText(), opts);
+                return new ApiResponse<List<CoachSubscriptionPlanDto>> { Success = true, Data = list ?? new() };
+            }
+            var wrapped = JsonSerializer.Deserialize<ApiResponse<List<CoachSubscriptionPlanDto>>>(raw, opts);
+            if (wrapped != null) return wrapped;
+            return new ApiResponse<List<CoachSubscriptionPlanDto>> { Success = false, Message = "Failed to parse response." };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<List<CoachSubscriptionPlanDto>> { Success = false, Message = ex.Message };
         }
     }
 }

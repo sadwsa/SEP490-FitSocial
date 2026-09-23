@@ -444,6 +444,20 @@ public partial class Home : ComponentBase, IDisposable
         StateHasChanged();
     }
 
+    private void NavigateToAuthorProfile(Guid authorId)
+    {
+        if (authorId == Guid.Empty) return;
+
+        if (currentUserId.HasValue && authorId == currentUserId.Value)
+        {
+            Navigation.NavigateTo("/profile");
+        }
+        else
+        {
+            Navigation.NavigateTo($"/profile/{authorId}");
+        }
+    }
+
     // Dispose
     public void Dispose()
     {

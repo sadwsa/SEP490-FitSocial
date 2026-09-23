@@ -91,6 +91,41 @@ public class OtpService : IOtpService
         return (true, "OTP verified successfully.");
     }
 
+    public async Task<(bool Success, string Message)> CheckOtpAsync(string email, string otpCode, string purpose)
+    {
+        var normalizedEmail = email.Trim().ToLower();
+
+        var activeOtp = await _otpLogs.FindLatestUnverifiedAsync(normalizedEmail, purpose);
+
+        if (activeOtp == null)
+        {
+            return (false, "No OTP request found or the code has already been verified. Please resend the code.");
+        }
+
+        if (DateTime.UtcNow > activeOtp.ExpiresAt)
+        {
+            return (false, "The OTP code has expired. Please request a new code.");
+        }
+
+        if ((activeOtp.AttemptCount ?? 0) >= OtpConstants.MaxAttempts)
+        {
+            return (false, "You have exceeded the maximum OTP attempts (5 times). Please request a new code.");
+        }
+
+        var inputHash = ComputeSha256Hash(otpCode);
+        if (inputHash != activeOtp.OtpHash)
+        {
+            activeOtp.AttemptCount = (activeOtp.AttemptCount ?? 0) + 1;
+            await _unitOfWork.SaveChangesAsync();
+
+            var remainingAttempts = OtpConstants.MaxAttempts - activeOtp.AttemptCount.Value;
+            return (false, $"Incorrect OTP code. You have {remainingAttempts} attempts left.");
+        }
+
+        // Check only - do not mark as verified, so the final step can still consume it
+        return (true, "OTP is valid.");
+    }
+
     private static string ComputeSha256Hash(string rawData)
     {
         using var sha256 = SHA256.Create();

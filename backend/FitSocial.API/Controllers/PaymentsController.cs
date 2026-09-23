@@ -65,7 +65,8 @@ public class PaymentsController : ControllerBase
                 FirstModelError() ?? "Invalid data"));
         }
 
-        var result = await _paymentService.CreateActivationLinkAsync(request, originUrl ?? string.Empty);
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _paymentService.CreateActivationLinkAsync(request, originUrl ?? string.Empty, ipAddress);
         if (!result.Success)
         {
             return BadRequest(result);

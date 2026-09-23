@@ -14,6 +14,7 @@ public interface IAuthService
     Task<ApiResponse<AuthResponse>> AdminLoginAsync(LoginRequest request);
     Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null);
     Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request);
+    Task<ApiResponse<bool>> VerifyOtpAsync(string email, string otpCode, string purpose);
     Task<ApiResponse<bool>> ForgotPasswordAsync(string email);
     Task<ApiResponse<bool>> ResetPasswordAsync(ResetPasswordRequest request);
     Task<ApiResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request);
@@ -113,6 +114,21 @@ public class AuthService : IAuthService
                 Success = false,
                 Message = $"Connection error: {ex.Message}"
             };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> VerifyOtpAsync(string email, string otpCode, string purpose)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/verify-otp", new { email, otpCode, purpose });
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (result != null) return result;
+            return new ApiResponse<bool> { Success = false, Message = $"Verification failed (Code: {response.StatusCode})" };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool> { Success = false, Message = $"Connection error: {ex.Message}" };
         }
     }
 

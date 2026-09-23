@@ -6,7 +6,9 @@ namespace FitSocial.Application.Interfaces;
 public interface IAuthService
 {
     Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request);
+    Task<ApiResponseDto<bool>> VerifyOtpAsync(VerifyOtpRequestDto request);
     Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request);
+    Task<ApiResponseDto<Domain.Entities.User>> RegisterCoachAsync(RegisterCoachRequestDto request, string? ipAddress = null);
     Task<ApiResponseDto<AuthResponseDto>> LoginAsync(LoginRequestDto request);
     Task<ApiResponseDto<AuthResponseDto>> AdminLoginAsync(LoginRequestDto request);
     Task<ApiResponseDto<bool>> LogoutAsync(string? jti, DateTime? expiresAtUtc, string? refreshToken = null);

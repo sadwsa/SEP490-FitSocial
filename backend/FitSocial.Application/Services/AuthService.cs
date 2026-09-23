@@ -14,7 +14,6 @@ namespace FitSocial.Application.Services;
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _users;
-    private readonly ISportRepository _sports;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IOtpService _otpService;
     private readonly IEmailService _emailService;
@@ -23,10 +22,15 @@ public class AuthService : IAuthService
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ITokenBlacklistService _tokenBlacklist;
+    private readonly ITermsAndPolicyRepository _terms;
+    private readonly IUserAgreementRepository _agreements;
+    private readonly ICoachEkycVerificationRepository _ekycs;
+    private readonly ICoachCertificateRepository _certificates;
+    private readonly ICoachProfileRepository _coachProfiles;
+    private readonly IEkycService _ekycService;
 
     public AuthService(
         IUserRepository users,
-        ISportRepository sports,
         IUnitOfWork unitOfWork,
         IOtpService otpService,
         IEmailService emailService,
@@ -34,10 +38,15 @@ public class AuthService : IAuthService
         ITokenService tokenService,
         IConfiguration configuration,
         IHttpClientFactory httpClientFactory,
-        ITokenBlacklistService tokenBlacklist)
+        ITokenBlacklistService tokenBlacklist,
+        ITermsAndPolicyRepository terms,
+        IUserAgreementRepository agreements,
+        ICoachEkycVerificationRepository ekycs,
+        ICoachCertificateRepository certificates,
+        ICoachProfileRepository coachProfiles,
+        IEkycService ekycService)
     {
         _users = users;
-        _sports = sports;
         _unitOfWork = unitOfWork;
         _otpService = otpService;
         _emailService = emailService;
@@ -46,6 +55,12 @@ public class AuthService : IAuthService
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
         _tokenBlacklist = tokenBlacklist;
+        _terms = terms;
+        _agreements = agreements;
+        _ekycs = ekycs;
+        _certificates = certificates;
+        _coachProfiles = coachProfiles;
+        _ekycService = ekycService;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
@@ -90,6 +105,15 @@ public class AuthService : IAuthService
         await _emailService.SendEmailAsync(normalizedEmail, subject, body);
 
         return ApiResponseDto<bool>.Ok(true, "The OTP verification code has been sent to your email.");
+    }
+
+    public async Task<ApiResponseDto<bool>> VerifyOtpAsync(VerifyOtpRequestDto request)
+    {
+        var normalizedEmail = request.Email.Trim().ToLower();
+        var purpose = string.IsNullOrWhiteSpace(request.Purpose) ? OtpConstants.PurposeRegisterTrainee : request.Purpose;
+        var (ok, msg) = await _otpService.CheckOtpAsync(normalizedEmail, request.OtpCode.Trim(), purpose);
+        if (!ok) return ApiResponseDto<bool>.Fail(msg);
+        return ApiResponseDto<bool>.Ok(true, "OTP verified.");
     }
 
     /// <summary>
@@ -137,7 +161,8 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
         }
 
-        if (!IsClientLoginAllowed(user.RoleCode))
+        if (!(string.Equals(user.RoleCode?.Trim(), RoleConstants.Trainee, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase)))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
         }
@@ -166,7 +191,6 @@ public class AuthService : IAuthService
 
         var user = await _users.FindByEmailAsync(normalizedEmail);
 
-        // Generic message: do not reveal whether the email exists.
         if (user == null || string.IsNullOrEmpty(user.PasswordHash) ||
             !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
@@ -178,7 +202,8 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
         }
 
-        if (!IsBackOfficeLoginAllowed(user.RoleCode))
+        if (!(string.Equals(user.RoleCode?.Trim(), RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(user.RoleCode?.Trim(), RoleConstants.Staff, StringComparison.OrdinalIgnoreCase)))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
         }
@@ -191,42 +216,11 @@ public class AuthService : IAuthService
         return ApiResponseDto<AuthResponseDto>.Ok(adminResponse, "Welcome to the Management Portal!");
     }
 
-    public async Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request)    {
-        return await RegisterAsync(
-            request.FullName,
-            request.Email,
-            request.Password,
-            request.ConfirmPassword,
-            request.OtpCode,
-            request.PhoneNumber,
-            request.Gender,
-            request.DateOfBirth,
-            request.FavoriteSportIds,
-            OtpConstants.PurposeRegisterTrainee,
-            RoleConstants.Trainee);
-    }
-
-    private async Task<ApiResponseDto<AuthResponseDto>> RegisterAsync(
-        string fullName,
-        string email,
-        string password,
-        string confirmPassword,
-        string otpCode,
-        string? phoneNumber,
-        string? gender,
-        DateOnly? dateOfBirth,
-        List<Guid>? favoriteSportIds,
-        string otpPurpose,
-        string roleCode,
-        int? experienceYears = null,
-        string? biography = null,
-        string? certificateUrl = null,
-        List<Guid>? specialtySportIds = null,
-        string? identityCardUrl = null)
+    public async Task<ApiResponseDto<AuthResponseDto>> RegisterTraineeAsync(RegisterTraineeRequestDto request)
     {
-        var normalizedEmail = email.Trim().ToLower();
+        var normalizedEmail = request.Email.Trim().ToLower();
 
-        if (password != confirmPassword)
+        if (request.Password != request.ConfirmPassword)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Passwords do not match.");
         }
@@ -238,7 +232,18 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("This email is already in use.");
         }
 
-        var normalizedPhone = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim();
+        if (request.TermId == null || request.TermId == Guid.Empty)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("You must agree to the Terms and Privacy Policy.");
+        }
+
+        var term = await _terms.GetByIdAsync(request.TermId.Value);
+        if (term == null)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Selected terms version is not valid.");
+        }
+
+        var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
         if (normalizedPhone != null &&
             await _users.ExistsByPhoneAsync(normalizedPhone))
         {
@@ -247,65 +252,41 @@ public class AuthService : IAuthService
 
         var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(
             normalizedEmail,
-            otpCode.Trim(),
-            otpPurpose);
+            request.OtpCode.Trim(),
+            OtpConstants.PurposeRegisterTrainee);
 
         if (!otpValid)
         {
             return ApiResponseDto<AuthResponseDto>.Fail(otpMessage);
         }
 
+        var now = DateTime.UtcNow;
         var newUser = new User
         {
             UserId = Guid.NewGuid(),
             Email = normalizedEmail,
-            FullName = fullName.Trim(),
-            PasswordHash = _passwordHasher.HashPassword(password),
-            PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim(),
-            Gender = string.IsNullOrWhiteSpace(gender) ? null : gender.Trim(),
-            DateOfBirth = dateOfBirth,
-            RoleCode = roleCode,
+            FullName = request.FullName.Trim(),
+            PasswordHash = _passwordHasher.HashPassword(request.Password),
+            PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
+            Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
+            DateOfBirth = request.DateOfBirth,
+            RoleCode = RoleConstants.Trainee,
             IsInternal = false,
             IsLocked = false,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
-        if (roleCode == RoleConstants.Coach)
-        {
-            newUser.CoachProfileCoach = new CoachProfile
-            {
-                CoachId = newUser.UserId,
-                ExperienceYears = experienceYears,
-                Bio = string.IsNullOrWhiteSpace(biography) ? null : biography.Trim(),
-                CertificateUrl = string.IsNullOrWhiteSpace(certificateUrl) ? null : certificateUrl.Trim(),
-                IdentityCardUrl = string.IsNullOrWhiteSpace(identityCardUrl) ? null : identityCardUrl.Trim(),
-                ApprovalStatus = "PENDING",
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            var specialtyIds = specialtySportIds?.Distinct().ToList() ?? new List<Guid>();
-            if (specialtyIds.Count > 0)
-            {
-                var specialties = await _sports.ListByIdsAsync(specialtyIds);
-                foreach (var specialty in specialties)
-                {
-                    newUser.CoachProfileCoach.Sports.Add(specialty);
-                }
-            }
-        }
-
-        var sportIds = favoriteSportIds?.Distinct().ToList() ?? new List<Guid>();
-        if (sportIds.Count > 0)
-        {
-            var sports = await _sports.ListByIdsAsync(sportIds);
-            foreach (var sport in sports)
-            {
-                newUser.Sports.Add(sport);
-            }
-        }
-
         await _users.AddAsync(newUser);
+
+        // Record agreement (same as Coach flow, without IP)
+        await _agreements.AddAsync(new UserAgreement
+        {
+            AgreementId = Guid.NewGuid(),
+            UserId = newUser.UserId,
+            TermId = term.TermId,
+            AcceptedAt = now
+        });
 
         try
         {
@@ -318,8 +299,193 @@ public class AuthService : IAuthService
 
         var responseData = await _tokenService.CreateSessionAsync(newUser);
 
-        var roleLabel = roleCode == RoleConstants.Coach ? "Coach" : "Trainee";
-        return ApiResponseDto<AuthResponseDto>.Ok(responseData, $"{roleLabel} account registered successfully!");
+        return ApiResponseDto<AuthResponseDto>.Ok(responseData, "Trainee account registered successfully!");
+    }
+
+    /// <summary>
+    /// Register a Coach account (pending, locked until payment). Creates User (locked), CoachProfile PENDING,
+    /// eKYC verification, certificates, and terms agreement. Used by the 5-step coach flow before payment.
+    /// </summary>
+    public async Task<ApiResponseDto<User>> RegisterCoachAsync(RegisterCoachRequestDto request, string? ipAddress = null)
+    {
+        var normalizedEmail = request.Email.Trim().ToLower();
+
+        if (request.Password != request.ConfirmPassword)
+            return ApiResponseDto<User>.Fail("Passwords do not match.");
+        if (string.IsNullOrWhiteSpace(request.FrontCardUrl) || string.IsNullOrWhiteSpace(request.BackCardUrl))
+            return ApiResponseDto<User>.Fail("Front and back ID card images are required.");
+        if (string.IsNullOrWhiteSpace(request.FaceImageUrl))
+            return ApiResponseDto<User>.Fail("Live face image is required.");
+        if (request.TermId == null || request.TermId == Guid.Empty)
+            return ApiResponseDto<User>.Fail("You must agree to the Terms and Privacy Policy.");
+
+        var term = await _terms.GetByIdAsync(request.TermId.Value);
+        if (term == null)
+            return ApiResponseDto<User>.Fail("Selected terms version is not valid.");
+
+        var existing = await _users.FindByEmailAsync(normalizedEmail);
+        if (existing != null && existing.IsLocked != true)
+            return ApiResponseDto<User>.Fail("This email is already in use.");
+
+        var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        if (normalizedPhone != null && await _users.ExistsByPhoneAsync(normalizedPhone, existing?.UserId))
+            return ApiResponseDto<User>.Fail("This phone number is already in use.");
+
+        var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(normalizedEmail, request.OtpCode.Trim(), OtpConstants.PurposeRegisterCoach);
+        if (!otpValid)
+            return ApiResponseDto<User>.Fail(otpMessage);
+
+        var ekycResult = await _ekycService.VerifyAsync(new FitSocial.Application.DTOs.Coach.EkycVerificationDto
+        {
+            FrontCardUrl = request.FrontCardUrl!,
+            BackCardUrl = request.BackCardUrl!,
+            FaceImageUrl = request.FaceImageUrl,
+            FaceImageLeftUrl = request.FaceImageLeftUrl,
+            FaceImageRightUrl = request.FaceImageRightUrl,
+            FaceImageTopUrl = request.FaceImageTopUrl,
+            FaceImageBottomUrl = request.FaceImageBottomUrl
+        });
+        if (!ekycResult.Success)
+            return ApiResponseDto<User>.Fail(ekycResult.Error ?? "ID verification failed.");
+
+        // 1 person = 1 CCCD: block if this IdCardNumber already belongs to another coach
+        if (await _ekycs.ExistsByIdCardNumberAsync(ekycResult.Result.IdCardNumber, existing?.UserId))
+            return ApiResponseDto<User>.Fail("This ID card has already been used for another coach.");
+
+        var now = DateTime.UtcNow;
+        User user;
+        CoachProfile? profile;
+        if (existing == null)
+        {
+            user = new User
+            {
+                UserId = Guid.NewGuid(),
+                Email = normalizedEmail,
+                FullName = request.FullName.Trim(),
+                PasswordHash = _passwordHasher.HashPassword(request.Password),
+                PhoneNumber = normalizedPhone,
+                Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
+                DateOfBirth = request.DateOfBirth,
+                RoleCode = RoleConstants.Coach,
+                IsInternal = false,
+                IsLocked = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+                CoachProfileCoach = new CoachProfile { ApprovalStatus = "PENDING", UpdatedAt = now }
+            };
+            user.CoachProfileCoach.CoachId = user.UserId;
+            await _users.AddAsync(user);
+            profile = user.CoachProfileCoach;
+        }
+        else
+        {
+            user = existing;
+            user.FullName = request.FullName.Trim();
+            user.PasswordHash = _passwordHasher.HashPassword(request.Password);
+            user.PhoneNumber = normalizedPhone;
+            user.Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim();
+            user.DateOfBirth = request.DateOfBirth;
+            user.UpdatedAt = now;
+            profile = await _coachProfiles.GetByIdAsync(user.UserId);
+            if (profile == null)
+            {
+                profile = new CoachProfile { CoachId = user.UserId };
+                await _coachProfiles.AddAsync(profile);
+            }
+        }
+
+        profile.ApprovalStatus = "PENDING";
+        profile.ExperienceYears = request.ExperienceYears;
+        profile.Bio = string.IsNullOrWhiteSpace(request.Biography) ? null : request.Biography.Trim();
+        var firstCertUrl = request.Certificates?.FirstOrDefault()?.CertificateUrl ?? request.CertificateUrl;
+        profile.CertificateUrl = string.IsNullOrWhiteSpace(firstCertUrl) ? null : firstCertUrl.Trim();
+        profile.IdentityCardUrl = request.FrontCardUrl!.Trim();
+        profile.UpdatedAt = now;
+
+        // Replace old eKYC/certificates on retry (each person has only 1 CCCD)
+        if (existing != null)
+        {
+            var oldEkycs = await _ekycs.ListByCoachIdAsync(user.UserId);
+            if (oldEkycs.Any()) _ekycs.RemoveRange(oldEkycs);
+            var oldCerts = await _certificates.ListByCoachIdAsync(user.UserId);
+            if (oldCerts.Any()) _certificates.RemoveRange(oldCerts);
+        }
+
+        await _ekycs.AddAsync(new CoachEkycVerification
+        {
+            EkycId = Guid.NewGuid(),
+            CoachId = user.UserId,
+            IdCardNumber = ekycResult.Result.IdCardNumber,
+            FullNameOnCard = ekycResult.Result.FullNameOnCard,
+            DateOfBirthOnCard = ekycResult.Result.DateOfBirthOnCard,
+            FrontCardUrl = request.FrontCardUrl!.Trim(),
+            BackCardUrl = request.BackCardUrl!.Trim(),
+            FaceImageUrl = request.FaceImageUrl?.Trim(),
+            VerificationStatus = ekycResult.Result.VerificationStatus,
+            FailureReason = ekycResult.Result.FailureReason,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+
+        if (request.Certificates != null)
+        {
+            foreach (var cert in request.Certificates.Where(c => !string.IsNullOrWhiteSpace(c.CertificateUrl)))
+            {
+                await _certificates.AddAsync(new CoachCertificate
+                {
+                    CertificateId = Guid.NewGuid(),
+                    CoachId = user.UserId,
+                    CertificateName = string.IsNullOrWhiteSpace(cert.CertificateName) ? null : cert.CertificateName.Trim(),
+                    CertificateUrl = cert.CertificateUrl.Trim(),
+                    IssuedDate = cert.IssuedDate,
+                    CreatedAt = now
+                });
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(request.CertificateUrl))
+        {
+            await _certificates.AddAsync(new CoachCertificate
+            {
+                CertificateId = Guid.NewGuid(),
+                CoachId = user.UserId,
+                CertificateName = "Primary Certificate",
+                CertificateUrl = request.CertificateUrl.Trim(),
+                CreatedAt = now
+            });
+        }
+
+        var existingAgreement = await _agreements.FindByUserAndTermAsync(user.UserId, term.TermId);
+        if (existingAgreement != null)
+        {
+            existingAgreement.IpAddress = ipAddress;
+            existingAgreement.AcceptedAt = now;
+        }
+        else
+        {
+            await _agreements.AddAsync(new UserAgreement
+            {
+                AgreementId = Guid.NewGuid(),
+                UserId = user.UserId,
+                TermId = term.TermId,
+                IpAddress = ipAddress,
+                AcceptedAt = now
+            });
+        }
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("IdCardNumber") == true)
+        {
+            return ApiResponseDto<User>.Fail("This ID card has already been used for another coach.");
+        }
+        catch (DbUpdateException)
+        {
+            return ApiResponseDto<User>.Fail("Could not save your information. The email or phone number may already be in use.");
+        }
+
+        return ApiResponseDto<User>.Ok(user);
     }
 
     /// <summary>
@@ -331,18 +497,19 @@ public class AuthService : IAuthService
     {
         var clientId = _configuration["Google:ClientId"];
         var clientSecret = _configuration["Google:ClientSecret"];
+
         if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Google sign-in is not configured on the server.");
         }
 
         string? idToken;
-        var redirectUri = string.IsNullOrWhiteSpace(request.RedirectUri)
-            ? "postmessage"
-            : request.RedirectUri.Trim();
+        var redirectUri = string.IsNullOrWhiteSpace(request.RedirectUri) ? "postmessage" : request.RedirectUri.Trim();
+
         try
         {
             var httpClient = _httpClientFactory.CreateClient();
+
             using var tokenRequest = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["code"] = request.Code,
@@ -350,9 +517,10 @@ public class AuthService : IAuthService
                 ["client_secret"] = clientSecret,
                 ["redirect_uri"] = redirectUri,
                 ["grant_type"] = "authorization_code"
-            });
-            using var tokenResponse = await httpClient.PostAsync(
-                "https://oauth2.googleapis.com/token", tokenRequest);
+            }); 
+
+            using var tokenResponse = await httpClient.PostAsync("https://oauth2.googleapis.com/token", tokenRequest);
+
             if (!tokenResponse.IsSuccessStatusCode)
             {
                 return ApiResponseDto<AuthResponseDto>.Fail("Google authorization failed. Please try again.");
@@ -360,10 +528,12 @@ public class AuthService : IAuthService
 
             using var tokenJson = await System.Text.Json.JsonDocument.ParseAsync(
                 await tokenResponse.Content.ReadAsStreamAsync());
+
             if (!tokenJson.RootElement.TryGetProperty("id_token", out var idTokenEl))
             {
                 return ApiResponseDto<AuthResponseDto>.Fail("Google authorization failed. Please try again.");
             }
+
             idToken = idTokenEl.GetString();
         }
         catch
@@ -377,10 +547,10 @@ public class AuthService : IAuthService
         }
 
         GoogleJsonWebSignature.Payload payload;
+
         try
         {
-            payload = await GoogleJsonWebSignature.ValidateAsync(
-                idToken,
+            payload = await GoogleJsonWebSignature.ValidateAsync(idToken,
                 new GoogleJsonWebSignature.ValidationSettings { Audience = new[] { clientId } });
         }
         catch (InvalidJwtException)
@@ -396,12 +566,7 @@ public class AuthService : IAuthService
         var googleSub = payload.Subject;
         var normalizedEmail = payload.Email.Trim().ToLower();
 
-        var user = await _users.FindByGoogleSubAsync(googleSub);
-
-        if (user == null)
-        {
-            user = await _users.FindByEmailAsync(normalizedEmail);
-        }
+        var user = await _users.FindByGoogleSubAsync(googleSub) ?? await _users.FindByEmailAsync(normalizedEmail);
 
         if (user == null)
         {
@@ -410,7 +575,21 @@ public class AuthService : IAuthService
                 return ApiResponseDto<AuthResponseDto>.Fail("Google sign-up is available for Trainee accounts only. To become a coach, please use the Coach application form.");
             }
 
-            user = BuildGoogleUser(payload, normalizedEmail, googleSub);
+            user = new User
+            {
+                UserId = Guid.NewGuid(),
+                Email = normalizedEmail,
+                FullName = string.IsNullOrWhiteSpace(payload.Name) ? normalizedEmail : payload.Name.Trim(),
+                PasswordHash = null,
+                GoogleProviderId = googleSub,
+                AvatarUrl = string.IsNullOrWhiteSpace(payload.Picture) ? null : payload.Picture,
+                RoleCode = RoleConstants.Trainee,
+                IsInternal = false,
+                IsLocked = false,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
             await _users.AddAsync(user);
         }
         else
@@ -420,7 +599,8 @@ public class AuthService : IAuthService
                 return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
             }
 
-            if (!IsClientLoginAllowed(user.RoleCode))
+            if (!(string.Equals(user.RoleCode?.Trim(), RoleConstants.Trainee, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase)))
             {
                 return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
             }
@@ -453,44 +633,6 @@ public class AuthService : IAuthService
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Could not sign you in. Please try again.");
         }
-    }
-
-    /// <summary>
-    /// The client login page serves Trainee/Coach only.
-    /// Admin/Staff sign in on a separate back-office page (built later).
-    /// </summary>
-    private static bool IsClientLoginAllowed(string? roleCode)
-    {
-        return string.Equals(roleCode?.Trim(), RoleConstants.Trainee, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(roleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// The Management Portal login serves Admin/Staff only (UC_28).
-    /// </summary>
-    private static bool IsBackOfficeLoginAllowed(string? roleCode)
-    {
-        return string.Equals(roleCode?.Trim(), RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(roleCode?.Trim(), RoleConstants.Staff, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static User BuildGoogleUser(
-        GoogleJsonWebSignature.Payload payload, string normalizedEmail, string googleSub)
-    {
-        return new User
-        {
-            UserId = Guid.NewGuid(),
-            Email = normalizedEmail,
-            FullName = string.IsNullOrWhiteSpace(payload.Name) ? normalizedEmail : payload.Name.Trim(),
-            PasswordHash = null,
-            GoogleProviderId = googleSub,
-            AvatarUrl = string.IsNullOrWhiteSpace(payload.Picture) ? null : payload.Picture,
-            RoleCode = RoleConstants.Trainee,
-            IsInternal = false,
-            IsLocked = false,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
     }
 
     /// <summary>
@@ -565,8 +707,6 @@ public class AuthService : IAuthService
             return ApiResponseDto<bool>.Fail("Invalid email or OTP code.");
         }
 
-        // New password must differ from the current one (skipped for
-        // passwordless accounts, e.g. created via Google, which have no hash yet)
         if (!string.IsNullOrEmpty(user.PasswordHash) &&
             _passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
         {
@@ -584,7 +724,7 @@ public class AuthService : IAuthService
         }
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
-        user.TokenVersion += 1; // Kill all existing sessions/tokens at once
+        user.TokenVersion += 1; 
         user.UpdatedAt = DateTime.UtcNow;
 
         try
@@ -631,7 +771,7 @@ public class AuthService : IAuthService
         }
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
-        user.TokenVersion += 1; // Kill all existing sessions/tokens at once
+        user.TokenVersion += 1;
         user.UpdatedAt = DateTime.UtcNow;
 
         try

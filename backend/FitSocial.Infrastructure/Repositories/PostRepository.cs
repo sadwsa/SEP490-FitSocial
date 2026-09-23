@@ -1,4 +1,4 @@
-using FitSocial.Domain.Entities;
+﻿using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +15,6 @@ public class PostRepository : Repository<Post>, IPostRepository
     {
         return await DbSet
             .Include(p => p.Author)
-            .Include(p => p.Sport)
             .Include(p => p.Location)
             .Include(p => p.PostMedia)
             .Include(p => p.PostInteractions)
@@ -29,7 +28,6 @@ public class PostRepository : Repository<Post>, IPostRepository
         return await DbSet
             .Include(p => p.PostMedia)
             .Include(p => p.Author)
-            .Include(p => p.Sport)
             .Include(p => p.Location)
             .Include(p => p.PostInteractions)
             .Include(p => p.Comments)
@@ -44,7 +42,6 @@ public class PostRepository : Repository<Post>, IPostRepository
 
     public async Task<(List<Post> Items, int TotalCount)> GetPagedPostsAsync(
         string? postType,
-        Guid? sportId,
         Guid? locationId,
         Guid? authorId,
         string? searchTerm,
@@ -60,11 +57,6 @@ public class PostRepository : Repository<Post>, IPostRepository
         {
             var normalizedType = postType.Trim().ToUpper();
             query = query.Where(p => p.PostType.ToUpper() == normalizedType);
-        }
-
-        if (sportId.HasValue && sportId.Value != Guid.Empty)
-        {
-            query = query.Where(p => p.SportId == sportId.Value);
         }
 
         if (locationId.HasValue && locationId.Value != Guid.Empty)
@@ -90,7 +82,6 @@ public class PostRepository : Repository<Post>, IPostRepository
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .Include(p => p.Author)
-            .Include(p => p.Sport)
             .Include(p => p.Location)
             .Include(p => p.PostMedia)
             .Include(p => p.PostInteractions)

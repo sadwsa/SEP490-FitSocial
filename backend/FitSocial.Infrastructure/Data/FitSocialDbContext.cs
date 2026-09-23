@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FitSocial.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -721,7 +721,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.PostType)
                 .HasMaxLength(50)
                 .HasColumnName("PostType");
-            entity.Property(e => e.SportId).HasColumnName("SportID");
+
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
@@ -734,9 +734,7 @@ public partial class FitSocialDbContext : DbContext
                 .HasForeignKey(d => d.LocationId)
                 .HasConstraintName("Posts_LocationID_fkey");
 
-            entity.HasOne(d => d.Sport).WithMany(p => p.Posts)
-                .HasForeignKey(d => d.SportId)
-                .HasConstraintName("Posts_SportID_fkey");
+
         });
 
         modelBuilder.Entity<PostInteraction>(entity =>

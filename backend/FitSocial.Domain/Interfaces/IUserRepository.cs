@@ -15,4 +15,5 @@ public interface IUserRepository : IRepository<User>
         int pageNumber = 1,
         int pageSize = 10,
         CancellationToken cancellationToken = default);
+    Task<User?> FindWithCoachProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default);
 }

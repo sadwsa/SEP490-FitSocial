@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Components.Web;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Posts;
-using FitSocial.Client.Models.Sports;
 using FitSocial.Client.Models.Locations;
+using FitSocial.Client.Models.Coaches;
 
 namespace FitSocial.Client.Pages;
 
@@ -26,6 +26,11 @@ public partial class Home : ComponentBase, IDisposable
     private string userName = "Me";
     private string userInitials = "Me";
     private string userRole = "Athlete";
+    private string? currentUserAvatarUrl;
+
+    // Top coaches state
+    private List<TopCoachDto> topCoaches = new();
+    private bool isLoadingTopCoaches = true;
 
     // Edit post state
     private bool showEditPostModal = false;
@@ -36,7 +41,6 @@ public partial class Home : ComponentBase, IDisposable
     private PostDto? postToDelete;
 
     // Dropdowns data
-    private List<SportDto> availableSports = new();
     private List<LocationDto> availableLocations = new();
 
     // Query & Filter state
@@ -44,12 +48,10 @@ public partial class Home : ComponentBase, IDisposable
     private CancellationTokenSource? searchCts;
 
     private string? selectedPostType;
-    private Guid? selectedFilterSportId;
     private Guid? selectedFilterLocationId;
 
     private bool HasActiveFilters =>
         !string.IsNullOrWhiteSpace(selectedPostType) ||
-        (selectedFilterSportId.HasValue && selectedFilterSportId != Guid.Empty) ||
         (selectedFilterLocationId.HasValue && selectedFilterLocationId != Guid.Empty);
 
     private int currentPage = 1;
@@ -68,7 +70,7 @@ public partial class Home : ComponentBase, IDisposable
     protected override async Task OnInitializedAsync()
     {
         await LoadUserInfoAsync();
-        await Task.WhenAll(LoadPostsAsync(), LoadSportsAndLocationsAsync());
+        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), LoadTopCoachesAsync());
     }
 
     private async Task LoadUserInfoAsync()
@@ -92,38 +94,62 @@ public partial class Home : ComponentBase, IDisposable
                           user.IsInRole("COACH") ||
                           string.Equals(user.FindFirst(ClaimTypes.Role)?.Value, AppRoles.Coach, StringComparison.OrdinalIgnoreCase);
                 userRole = isCoach ? "Coach" : "Trainee";
+                userInitials = AvatarHelper.GetInitials(userName);
 
-                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length > 0)
+                var meRes = await AuthService.GetCurrentUserAsync();
+                if (meRes.Success && meRes.Data != null)
                 {
-                    userInitials = parts.Length > 1
-                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
-                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                    currentUserAvatarUrl = meRes.Data.AvatarUrl;
+                    if (!string.IsNullOrWhiteSpace(meRes.Data.FullName))
+                    {
+                        userName = meRes.Data.FullName;
+                        userInitials = AvatarHelper.GetInitials(userName);
+                    }
+                    StateHasChanged();
+                }
+                else
+                {
+                    Console.WriteLine($"[Home] AuthService.GetCurrentUserAsync returned: Success={meRes.Success}, Message='{meRes.Message}'");
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[Home] Error loading user info: {ex.Message}");
             userInitials = "Me";
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
 
-    private async Task LoadSportsAndLocationsAsync()
+    private async Task LoadTopCoachesAsync()
     {
         try
         {
-            var sportsTask = SportService.GetPublicSportsAsync();
-            var locationsTask = LocationService.GetLocationsAsync();
-            await Task.WhenAll(sportsTask, locationsTask);
-
-            var sportsResponse = await sportsTask;
-            var locationsResponse = await locationsTask;
-
-            if (sportsResponse.Success && sportsResponse.Data != null)
+            isLoadingTopCoaches = true;
+            var response = await CoachService.GetTopCoachesAsync(5);
+            if (response.Success && response.Data != null)
             {
-                availableSports = sportsResponse.Data;
+                topCoaches = response.Data;
             }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading top coaches: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingTopCoaches = false;
+        }
+    }
 
+    private async Task LoadLocationsAsync()
+    {
+        try
+        {
+            var locationsResponse = await LocationService.GetLocationsAsync();
             if (locationsResponse.Success && locationsResponse.Data != null)
             {
                 availableLocations = locationsResponse.Data;
@@ -134,7 +160,6 @@ public partial class Home : ComponentBase, IDisposable
             // Graceful fallback
         }
     }
-
     private async Task LoadPostsAsync(bool append = false)
     {
         if (!append)
@@ -151,7 +176,6 @@ public partial class Home : ComponentBase, IDisposable
         currentQuery.PageSize = pageSize;
         currentQuery.SearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim();
         currentQuery.PostType = string.IsNullOrWhiteSpace(selectedPostType) ? null : selectedPostType;
-        currentQuery.SportId = selectedFilterSportId.HasValue && selectedFilterSportId != Guid.Empty ? selectedFilterSportId : null;
         currentQuery.LocationId = selectedFilterLocationId.HasValue && selectedFilterLocationId != Guid.Empty ? selectedFilterLocationId : null;
 
         try
@@ -289,21 +313,18 @@ public partial class Home : ComponentBase, IDisposable
     }
 
     // Filter Handlers
-    private async Task HandleApplyFilters((string? postType, Guid? sportId, Guid? locationId) filters)
+    private async Task HandleApplyFilters((string? postType, Guid? locationId) filters)
     {
         selectedPostType = filters.postType;
-        selectedFilterSportId = filters.sportId;
         selectedFilterLocationId = filters.locationId;
         currentPage = 1;
         await LoadPostsAsync();
     }
-
     private async Task ResetAllSearchAndFilters()
     {
         searchCts?.Cancel();
         searchTerm = string.Empty;
         selectedPostType = null;
-        selectedFilterSportId = null;
         selectedFilterLocationId = null;
         currentPage = 1;
         await LoadPostsAsync();

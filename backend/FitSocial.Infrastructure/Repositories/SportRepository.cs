@@ -1,4 +1,4 @@
-using FitSocial.Domain.Entities;
+﻿using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +27,6 @@ public class SportRepository : Repository<Sport>, ISportRepository
         return DbSet
             .Include(s => s.Coaches)
             .Include(s => s.Users)
-            .Include(s => s.Posts)
             .OrderBy(s => s.SportName)
             .ToListAsync(cancellationToken);
     }
@@ -47,7 +46,6 @@ public class SportRepository : Repository<Sport>, ISportRepository
         return DbSet
             .Include(s => s.Coaches)
             .Include(s => s.Users)
-            .Include(s => s.Posts)
             .FirstOrDefaultAsync(s => s.SportId == sportId, cancellationToken);
     }
 }

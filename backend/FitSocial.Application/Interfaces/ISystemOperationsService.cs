@@ -16,4 +16,9 @@ public interface ISystemOperationsService
         CancellationToken cancellationToken = default);
 
     Task<ApiResponseDto<CoachSubscriptionPlanDto>> GetPlanByIdAsync(Guid priceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_37.1: Staff/Admin Create Coach Subscription Plan
+    /// </summary>
+    Task<ApiResponseDto<CoachSubscriptionPlanDto>> CreatePlanAsync(CreateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken = default);
 }

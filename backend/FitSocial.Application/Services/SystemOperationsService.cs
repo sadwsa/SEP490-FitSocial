@@ -10,12 +10,14 @@ public class SystemOperationsService : ISystemOperationsService
 {
     private readonly IPriceRepository _prices;
     private readonly ICoachUpgradeRepository _upgrades;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SystemOperationsService> _logger;
 
-    public SystemOperationsService(IPriceRepository prices, ICoachUpgradeRepository upgrades, ILogger<SystemOperationsService> logger)
+    public SystemOperationsService(IPriceRepository prices, ICoachUpgradeRepository upgrades, IUnitOfWork unitOfWork, ILogger<SystemOperationsService> logger)
     {
         _prices = prices;
         _upgrades = upgrades;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -84,5 +86,44 @@ public class SystemOperationsService : ISystemOperationsService
             ActiveSubscriberCount = activeCount
         };
         return ApiResponseDto<CoachSubscriptionPlanDto>.Ok(dto);
+    }
+
+    public async Task<ApiResponseDto<CoachSubscriptionPlanDto>> CreatePlanAsync(CreateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var price = new FitSocial.Domain.Entities.Price
+            {
+                PriceId = Guid.NewGuid(),
+                Amount = dto.Amount,
+                Currency = string.IsNullOrWhiteSpace(dto.Currency) ? "VND" : dto.Currency.Trim().ToUpper(),
+                IsActive = dto.IsActive,
+                ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim(),
+                Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _prices.AddAsync(price, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var resultDto = new CoachSubscriptionPlanDto
+            {
+                PriceId = price.PriceId,
+                Amount = price.Amount ?? 0,
+                Currency = price.Currency ?? "VND",
+                IsActive = price.IsActive ?? false,
+                ImageUrl = price.ImageUrl,
+                Description = price.Description,
+                CreatedAt = price.CreatedAt ?? DateTime.UtcNow,
+                SubscriberCount = 0,
+                ActiveSubscriberCount = 0
+            };
+            return ApiResponseDto<CoachSubscriptionPlanDto>.Ok(resultDto, "Subscription plan created successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create coach subscription plan");
+            return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Could not create subscription plan.");
+        }
     }
 }

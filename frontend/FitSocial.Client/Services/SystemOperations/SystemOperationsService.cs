@@ -5,10 +5,20 @@ using FitSocial.Client.Models.SystemOperations;
 
 namespace FitSocial.Client.Services.SystemOperations;
 
+public class CreatePlanRequest
+{
+    public decimal Amount { get; set; }
+    public string Currency { get; set; } = "VND";
+    public bool IsActive { get; set; } = true;
+    public string? ImageUrl { get; set; }
+    public string? Description { get; set; }
+}
+
 public interface ISystemOperationsService
 {
     Task<ApiResponse<CoachSubscriptionPlansResponseDto>> GetCoachSubscriptionPlansAsync(bool? isActive = null, string? search = null, int page = 1, int pageSize = 20);
     Task<ApiResponse<CoachSubscriptionPlanDto>> GetPlanByIdAsync(Guid priceId);
+    Task<ApiResponse<CoachSubscriptionPlanDto>> CreatePlanAsync(CreatePlanRequest request);
 }
 
 public class SystemOperationsService : ISystemOperationsService
@@ -45,6 +55,23 @@ public class SystemOperationsService : ISystemOperationsService
         try
         {
             var resp = await _http.GetAsync($"system-operations/coach-subscription-plans/{priceId}");
+            var raw = await resp.Content.ReadAsStringAsync();
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var wrapped = JsonSerializer.Deserialize<ApiResponse<CoachSubscriptionPlanDto>>(raw, opts);
+            if (wrapped != null) return wrapped;
+            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = "Failed to parse response." };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<CoachSubscriptionPlanDto>> CreatePlanAsync(CreatePlanRequest request)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("system-operations/coach-subscription-plans", request);
             var raw = await resp.Content.ReadAsStringAsync();
             var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var wrapped = JsonSerializer.Deserialize<ApiResponse<CoachSubscriptionPlanDto>>(raw, opts);

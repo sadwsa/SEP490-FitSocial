@@ -1,3 +1,4 @@
+using FitSocial.Application.DTOs.SystemOperations;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -40,6 +41,22 @@ public class SystemOperationsController : ControllerBase
     {
         var result = await _systemOps.GetPlanByIdAsync(priceId, cancellationToken);
         if (!result.Success) return NotFound(result);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC_37.1: Staff/Admin Create Coach Subscription Plan
+    /// </summary>
+    [HttpPost("coach-subscription-plans")]
+    public async Task<IActionResult> CreatePlan([FromBody] CreateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(FitSocial.Application.DTOs.Common.ApiResponseDto<CoachSubscriptionPlanDto>.Fail(firstError ?? "Invalid data"));
+        }
+        var result = await _systemOps.CreatePlanAsync(dto, cancellationToken);
+        if (!result.Success) return BadRequest(result);
         return Ok(result);
     }
 }

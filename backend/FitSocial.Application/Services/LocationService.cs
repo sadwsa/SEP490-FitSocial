@@ -1,0 +1,102 @@
+using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.DTOs.Locations;
+using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Interfaces;
+
+namespace FitSocial.Application.Services;
+
+public class LocationService : ILocationService
+{
+    private readonly ILocationRepository _locationRepository;
+    private readonly IUnitOfWork _unitOfWork;
+
+    public LocationService(ILocationRepository locationRepository, IUnitOfWork unitOfWork)
+    {
+        _locationRepository = locationRepository;
+        _unitOfWork = unitOfWork;
+    }
+
+    public async Task<ApiResponseDto<PagedResultDto<LocationDto>>> GetLocationsAsync(
+        string? searchTerm,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var (items, totalCount) = await _locationRepository.ListLocationsAsync(
+                searchTerm,
+                pageNumber,
+                pageSize,
+                cancellationToken);
+
+            var dtos = items.Select(l => new LocationDto
+            {
+                LocationId = l.LocationId,
+                LocationName = l.LocationName,
+                Address = l.Address,
+                PostCount = l.Posts?.Count ?? 0
+            }).ToList();
+
+            var pagedResult = PagedResultDto<LocationDto>.Create(dtos, totalCount, pageNumber, pageSize);
+            return ApiResponseDto<PagedResultDto<LocationDto>>.Ok(pagedResult, "Locations list retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<PagedResultDto<LocationDto>>.Fail($"Error retrieving locations: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<List<LocationDto>>> GetPublicLocationsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var locations = await _locationRepository.ListAllAsync(cancellationToken);
+
+            var dtos = locations.Select(l => new LocationDto
+            {
+                LocationId = l.LocationId,
+                LocationName = l.LocationName,
+                Address = l.Address,
+                PostCount = l.Posts?.Count ?? 0
+            }).ToList();
+
+            return ApiResponseDto<List<LocationDto>>.Ok(dtos, "Locations list retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<List<LocationDto>>.Fail($"Error retrieving locations: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<bool>> DeleteLocationAsync(Guid locationId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var location = await _locationRepository.GetByIdWithDetailsAsync(locationId, cancellationToken);
+            if (location == null)
+            {
+                return ApiResponseDto<bool>.Fail("Location not found.");
+            }
+
+            if (location.Posts != null && location.Posts.Count > 0)
+            {
+                return ApiResponseDto<bool>.Fail("Cannot delete this location because it is currently used by posts.");
+            }
+
+            if (location.Coaches != null && location.Coaches.Count > 0)
+            {
+                return ApiResponseDto<bool>.Fail("Cannot delete this location because it is currently linked to coaches.");
+            }
+
+            _locationRepository.Remove(location);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return ApiResponseDto<bool>.Ok(true, "Location deleted successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<bool>.Fail($"Error deleting location: {ex.Message}");
+        }
+    }
+}

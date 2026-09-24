@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITermsService, TermsService>();
         services.AddScoped<IEkycService, ViettelEkycService>();
         services.AddScoped<ISystemOperationsService, SystemOperationsService>();
+        services.AddScoped<ILocationService, LocationService>();
         return services;
     }
 

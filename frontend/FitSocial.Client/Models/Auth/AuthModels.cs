@@ -49,6 +49,7 @@ public class RegisterRequest
     public string? FaceImageRightUrl { get; set; }
     public string? FaceImageTopUrl { get; set; }
     public string? FaceImageBottomUrl { get; set; }
+    public Guid? PriceId { get; set; }
     public List<CoachCertificateItem> Certificates { get; set; } = new();
 }
 

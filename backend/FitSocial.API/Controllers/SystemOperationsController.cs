@@ -19,6 +19,19 @@ public class SystemOperationsController : ControllerBase
     }
 
     /// <summary>
+    /// Public: list active Price plans for Coach registration (trainee can view to choose)
+    /// </summary>
+    [HttpGet("coach-subscription-plans/active")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetActivePlans(CancellationToken cancellationToken)
+    {
+        var result = await _systemOps.GetCoachSubscriptionPlansAsync(true, null, 1, 50, cancellationToken);
+        if (!result.Success) return BadRequest(result);
+        // Return only the Plans list for public consumption
+        return Ok(new { success = true, data = result.Data!.Plans });
+    }
+
+    /// <summary>
     /// UC_37: Staff/Admin View Coach Subscription Plans
     /// Query params: isActive, search, page, pageSize
     /// Returns Price plans with subscriber counts + recent CoachUpgrades

@@ -28,4 +28,7 @@ public class CoachUpgradeRepository : Repository<CoachUpgrade>, ICoachUpgradeRep
 
     public Task<int> CountActiveByPriceIdAsync(Guid priceId, CancellationToken cancellationToken = default)
         => DbSet.CountAsync(cu => cu.PriceId == priceId && (cu.Status == "ACTIVE" || cu.Status == "SUCCESS"), cancellationToken);
+
+    public Task<CoachUpgrade?> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default)
+        => DbSet.FirstOrDefaultAsync(cu => cu.OrderId == orderId, cancellationToken);
 }

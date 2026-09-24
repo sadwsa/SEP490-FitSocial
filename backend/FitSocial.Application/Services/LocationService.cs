@@ -133,4 +133,70 @@ public class LocationService : ILocationService
             return ApiResponseDto<LocationDto>.Fail($"Failed to create location: {ex.Message}");
         }
     }
+
+    public async Task<ApiResponseDto<LocationDto>> UpdateLocationAsync(
+        Guid locationId,
+        UpdateLocationDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        if (dto == null)
+        {
+            return ApiResponseDto<LocationDto>.Fail("Request payload cannot be null.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.LocationName))
+        {
+            return ApiResponseDto<LocationDto>.Fail("Location name cannot be empty.");
+        }
+
+        var trimmedName = dto.LocationName.Trim();
+        if (trimmedName.Length > 200)
+        {
+            return ApiResponseDto<LocationDto>.Fail("Location name cannot exceed 200 characters.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Address))
+        {
+            return ApiResponseDto<LocationDto>.Fail("Address cannot be empty.");
+        }
+
+        var trimmedAddress = dto.Address.Trim();
+        if (trimmedAddress.Length > 200)
+        {
+            return ApiResponseDto<LocationDto>.Fail("Address cannot exceed 200 characters.");
+        }
+
+        try
+        {
+            var location = await _locationRepository.GetByIdAsync(locationId, cancellationToken);
+            if (location == null)
+            {
+                return ApiResponseDto<LocationDto>.Fail("Location not found.");
+            }
+
+            var duplicate = await _locationRepository.GetByNameExcludingIdAsync(trimmedName, locationId, cancellationToken);
+            if (duplicate != null)
+            {
+                return ApiResponseDto<LocationDto>.Fail($"Location '{trimmedName}' already exists.");
+            }
+
+            location.LocationName = trimmedName;
+            location.Address = trimmedAddress;
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var resultDto = new LocationDto
+            {
+                LocationId = location.LocationId,
+                LocationName = location.LocationName,
+                Address = location.Address
+            };
+
+            return ApiResponseDto<LocationDto>.Ok(resultDto, "Location updated successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<LocationDto>.Fail($"Failed to update location: {ex.Message}");
+        }
+    }
 }

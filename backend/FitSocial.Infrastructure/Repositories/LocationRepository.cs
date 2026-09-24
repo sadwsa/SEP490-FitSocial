@@ -22,6 +22,12 @@ public class LocationRepository : Repository<Location>, ILocationRepository
         return DbSet.FirstOrDefaultAsync(l => EF.Functions.ILike(l.LocationName, trimmed), cancellationToken);
     }
 
+    public Task<Location?> GetByNameExcludingIdAsync(string locationName, Guid locationId, CancellationToken cancellationToken = default)
+    {
+        var trimmed = locationName.Trim();
+        return DbSet.FirstOrDefaultAsync(l => l.LocationId != locationId && EF.Functions.ILike(l.LocationName, trimmed), cancellationToken);
+    }
+
     public async Task<(List<Location> Items, int TotalCount)> ListLocationsAsync(
         string? searchTerm = null,
         int pageNumber = 1,

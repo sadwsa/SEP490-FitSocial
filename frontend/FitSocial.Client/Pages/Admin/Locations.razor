@@ -105,13 +105,14 @@
                                 <th class="col-id">LOCATION ID</th>
                                 <th class="col-name">LOCATION NAME (LOCATIONNAME)</th>
                                 <th class="col-address">ADDRESS (ADDRESS)</th>
+                                <th class="col-actions">ACTIONS</th>
                             </tr>
                         </thead>
                         <tbody>
                             @if (!isLoading && string.IsNullOrWhiteSpace(errorMessage) && !pagedResult.Items.Any())
                             {
                                 <tr>
-                                    <td colspan="4" class="empty-state-cell">
+                                    <td colspan="5" class="empty-state-cell">
                                         <div class="empty-state">
                                             <span class="empty-icon"><AppIcon Name="location" /></span>
                                             <p class="empty-title">
@@ -163,6 +164,11 @@
                                                 </span>
                                                 <span class="loc-address">@(string.IsNullOrWhiteSpace(item.Address) ? "No address specified" : item.Address)</span>
                                             </div>
+                                        </td>
+                                        <td class="col-actions">
+                                            <button type="button" class="btn-action-edit" @onclick="() => OpenEditModal(item)" title="Edit location">
+                                                <AppIcon Name="pencil" />
+                                            </button>
                                         </td>
                                     </tr>
                                 }
@@ -233,7 +239,7 @@
         @if (showCreateModal)
         {
             <div class="modal-backdrop" @onclick="CloseCreateModal">
-                <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+                <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
                     <!-- Modal Header -->
                     <div class="modal-header">
                         <div class="modal-title-group">
@@ -241,7 +247,7 @@
                                 <AppIcon Name="location-plus" />
                             </div>
                             <div class="modal-titles">
-                                <h2 id="modal-title" class="modal-title">Add New Location</h2>
+                                <h2 id="create-modal-title" class="modal-title">Add New Location</h2>
                                 <span class="modal-subtitle">Direct mapping to Locations DB schema</span>
                             </div>
                         </div>
@@ -325,6 +331,104 @@
                 </div>
             </div>
         }
+
+        <!-- ============================================== -->
+        <!-- Edit Location Modal (UC_35.2)                  -->
+        <!-- ============================================== -->
+        @if (showEditModal)
+        {
+            <div class="modal-backdrop" @onclick="CloseEditModal">
+                <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+                    <!-- Modal Header -->
+                    <div class="modal-header">
+                        <div class="modal-title-group">
+                            <div class="modal-icon-badge">
+                                <AppIcon Name="location" />
+                            </div>
+                            <div class="modal-titles">
+                                <h2 id="edit-modal-title" class="modal-title">Edit Location</h2>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close-modal" @onclick="CloseEditModal" title="Close" disabled="@isSavingEdit">
+                            ✕
+                        </button>
+                    </div>
+
+                    <!-- Modal Body / Form -->
+                    <form @onsubmit="HandleUpdateLocationAsync" @onsubmit:preventDefault="true" class="modal-form">
+                        @if (!string.IsNullOrWhiteSpace(editModalErrorMessage))
+                        {
+                            <div class="form-alert error" role="alert">
+                                <AppIcon Name="warning" />
+                                <span>@editModalErrorMessage</span>
+                            </div>
+                        }
+
+                        <!-- Field 1: Location Name -->
+                        <div class="form-group">
+                            <label class="form-label" for="editLocNameInput">
+                                Location Name <span class="required-star">*</span>
+                            </label>
+                            <input id="editLocNameInput"
+                                   type="text"
+                                   class="form-control @(!string.IsNullOrEmpty(editNameValidationError) ? "is-invalid" : "")"
+                                   placeholder="E.g., FitSocial Flagship Hub - District 1"
+                                   value="@editLocationModel.LocationName"
+                                   @oninput="OnEditLocationNameInput"
+                                   maxlength="200"
+                                   disabled="@isSavingEdit"
+                                   autofocus />
+                            @if (!string.IsNullOrEmpty(editNameValidationError))
+                            {
+                                <div class="validation-message">@editNameValidationError</div>
+                            }
+                        </div>
+
+                        <!-- Field 2: Address -->
+                        <div class="form-group">
+                            <label class="form-label" for="editLocAddressInput">
+                                Address <span class="required-star">*</span>
+                            </label>
+                            <textarea id="editLocAddressInput"
+                                      class="form-control form-textarea @(!string.IsNullOrEmpty(editAddressValidationError) ? "is-invalid" : "")"
+                                      placeholder="Building no., street, ward, district, city..."
+                                      rows="3"
+                                      value="@editLocationModel.Address"
+                                      @oninput="OnEditAddressInput"
+                                      maxlength="200"
+                                      disabled="@isSavingEdit"></textarea>
+                            @if (!string.IsNullOrEmpty(editAddressValidationError))
+                            {
+                                <div class="validation-message">@editAddressValidationError</div>
+                            }
+                        </div>
+
+                        <!-- Modal Actions / Footer -->
+                        <div class="modal-actions">
+                            <button type="button"
+                                    class="btn-modal-cancel"
+                                    @onclick="CloseEditModal"
+                                    disabled="@isSavingEdit">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="btn-modal-save"
+                                    disabled="@isSavingEdit">
+                                @if (isSavingEdit)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    <span>Updating...</span>
+                                }
+                                else
+                                {
+                                    <span>Update Location</span>
+                                }
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
     </Authorized>
     <NotAuthorized>
         <div class="auth-denied-container">
@@ -350,13 +454,22 @@
     private System.Timers.Timer? debounceTimer;
     private System.Threading.CancellationTokenSource? toastCts;
 
-    // Create Modal state
+    // Create Modal state (UC_35.1)
     private bool showCreateModal = false;
     private bool isSaving = false;
     private string? modalErrorMessage;
     private string? nameValidationError;
     private string? addressValidationError;
     private CreateLocationDto newLocationModel = new();
+
+    // Edit Modal state (UC_35.2)
+    private bool showEditModal = false;
+    private bool isSavingEdit = false;
+    private Guid editingLocationId;
+    private UpdateLocationDto editLocationModel = new();
+    private string? editModalErrorMessage;
+    private string? editNameValidationError;
+    private string? editAddressValidationError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -440,7 +553,7 @@
         await LoadLocationsAsync(page);
     }
 
-    // Modal Handlers
+    // Create Modal Handlers (UC_35.1)
     private void OpenCreateModal()
     {
         newLocationModel = new CreateLocationDto();
@@ -482,7 +595,6 @@
     {
         if (isSaving) return;
 
-        // Frontend validation
         bool hasError = false;
         nameValidationError = null;
         addressValidationError = null;
@@ -532,7 +644,6 @@
             {
                 showCreateModal = false;
                 ShowToast("Location created successfully.");
-                // Reload location list
                 currentPage = 1;
                 await LoadLocationsAsync(1);
             }
@@ -550,6 +661,122 @@
         finally
         {
             isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    // Edit Modal Handlers (UC_35.2)
+    private void OpenEditModal(LocationDto item)
+    {
+        editingLocationId = item.LocationId;
+        editLocationModel = new UpdateLocationDto
+        {
+            LocationName = item.LocationName,
+            Address = item.Address
+        };
+        editNameValidationError = null;
+        editAddressValidationError = null;
+        editModalErrorMessage = null;
+        showEditModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        if (isSavingEdit) return;
+        showEditModal = false;
+        editLocationModel = new UpdateLocationDto();
+        editNameValidationError = null;
+        editAddressValidationError = null;
+        editModalErrorMessage = null;
+    }
+
+    private void OnEditLocationNameInput(ChangeEventArgs e)
+    {
+        editLocationModel.LocationName = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(editLocationModel.LocationName))
+        {
+            editNameValidationError = null;
+        }
+    }
+
+    private void OnEditAddressInput(ChangeEventArgs e)
+    {
+        editLocationModel.Address = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(editLocationModel.Address))
+        {
+            editAddressValidationError = null;
+        }
+    }
+
+    private async Task HandleUpdateLocationAsync()
+    {
+        if (isSavingEdit) return;
+
+        bool hasError = false;
+        editNameValidationError = null;
+        editAddressValidationError = null;
+        editModalErrorMessage = null;
+
+        var trimmedName = editLocationModel.LocationName?.Trim() ?? "";
+        var trimmedAddress = editLocationModel.Address?.Trim() ?? "";
+
+        if (string.IsNullOrWhiteSpace(trimmedName))
+        {
+            editNameValidationError = "Tên địa điểm không được để trống.";
+            hasError = true;
+        }
+        else if (trimmedName.Length > 200)
+        {
+            editNameValidationError = "Tên địa điểm không được vượt quá 200 ký tự.";
+            hasError = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(trimmedAddress))
+        {
+            editAddressValidationError = "Địa chỉ không được để trống.";
+            hasError = true;
+        }
+        else if (trimmedAddress.Length > 200)
+        {
+            editAddressValidationError = "Địa chỉ không được vượt quá 200 ký tự.";
+            hasError = true;
+        }
+
+        if (hasError)
+        {
+            return;
+        }
+
+        try
+        {
+            isSavingEdit = true;
+            var requestDto = new UpdateLocationDto
+            {
+                LocationName = trimmedName,
+                Address = trimmedAddress
+            };
+
+            var res = await LocationService.UpdateLocationAsync(editingLocationId, requestDto);
+            if (res.Success)
+            {
+                showEditModal = false;
+                ShowToast("Location updated successfully.");
+                await LoadLocationsAsync(currentPage);
+            }
+            else
+            {
+                editModalErrorMessage = !string.IsNullOrWhiteSpace(res.Message)
+                    ? res.Message
+                    : "Unable to update location. Please check your input.";
+            }
+        }
+        catch (Exception ex)
+        {
+            editModalErrorMessage = $"Error updating location: {ex.Message}";
+        }
+        finally
+        {
+            isSavingEdit = false;
             StateHasChanged();
         }
     }

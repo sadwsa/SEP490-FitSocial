@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Notifications;
@@ -10,6 +11,8 @@ namespace FitSocial.Client.Services.Notifications;
 public class NotificationService : INotificationService
 {
     private readonly ApiClient _apiClient;
+
+    public event Action<Guid>? OnConversationRead;
 
     public NotificationService(ApiClient apiClient)
     {
@@ -29,5 +32,31 @@ public class NotificationService : INotificationService
     public async Task<ApiResponse<bool>> MarkAllAsReadAsync()
     {
         return await _apiClient.PutAsync<bool>("notifications/read-all");
+    }
+
+    public void NotifyConversationRead(Guid conversationId)
+    {
+        OnConversationRead?.Invoke(conversationId);
+    }
+
+    public async Task MarkConversationNotificationsAsReadAsync(Guid conversationId)
+    {
+        NotifyConversationRead(conversationId);
+        try
+        {
+            var response = await GetNotificationsAsync();
+            if (response.Success && response.Data != null)
+            {
+                var unreadForConv = response.Data
+                    .Where(n => n.ConversationId == conversationId && !n.IsRead)
+                    .ToList();
+
+                foreach (var notif in unreadForConv)
+                {
+                    await MarkAsReadAsync(notif.NotificationId);
+                }
+            }
+        }
+        catch { }
     }
 }

@@ -29,6 +29,7 @@ public class MessageDto
     public string? MessageType { get; set; }
     public DateTime? CreatedAt { get; set; }
     public bool IsMine { get; set; }
+    public MessageDto? AutoReply { get; set; }
 }
 
 public class ConversationDetailDto
@@ -41,6 +42,8 @@ public class ConversationDetailDto
     public string? OtherUserName { get; set; }
     public string? OtherUserAvatar { get; set; }
     public DateTime? CreatedAt { get; set; }
+    public bool IsBlockedByMe { get; set; }
+    public bool IsBlockedByOther { get; set; }
     public List<MessageDto> Messages { get; set; } = new();
 }
 

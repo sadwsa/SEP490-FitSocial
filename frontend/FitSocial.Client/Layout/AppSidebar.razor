@@ -68,6 +68,21 @@
             My Profile
         </a>
 
+        <AuthorizeView Roles="ADMIN,STAFF">
+            <Authorized>
+                <!-- Reports -->
+                <a href="reports"
+                   class="@GetItemClass("reports")">
+                    <svg class="w-5 h-5 @GetIconClass("reports")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9">
+                        </path>
+                    </svg>
+                    Reports
+                </a>
+            </Authorized>
+        </AuthorizeView>
+
         @if (ChildContent != null)
         {
             <div class="mt-2 pt-2 border-t border-gray-100 flex flex-col gap-1">
@@ -100,6 +115,7 @@
             "coaches" => rootSegment == "coaches",
             "messages" => rootSegment == "messages",
             "profile" => rootSegment == "profile",
+            "reports" => rootSegment == "reports" || (rootSegment == "admin" && relativePath.Contains("reports")),
             _ => false
         };
     }

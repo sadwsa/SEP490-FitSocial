@@ -1,4 +1,4 @@
-﻿using FitSocial.Client.Models.Common;
+using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Posts;
 using FitSocial.Client.Services.Http;
 
@@ -13,6 +13,8 @@ public interface IPostService
     Task<ApiResponse<PostDto>> EditPostAsync(Guid postId, EditPostRequest request);
     Task<ApiResponse<bool>> DeletePostAsync(Guid postId);
     Task<ApiResponse<bool>> ToggleLikeAsync(Guid postId);
+    Task<ApiResponse<PostReportResponse>> ReportPostAsync(Guid postId, CreatePostReportRequest request);
+    Task<ApiResponse<bool>> CheckPostReportedAsync(Guid postId);
 }
 
 public class PostService : IPostService
@@ -129,6 +131,16 @@ public class PostService : IPostService
     public async Task<ApiResponse<bool>> ToggleLikeAsync(Guid postId)
     {
         return await _apiClient.PostAsync<object, bool>($"posts/{postId}/like", new { });
+    }
+
+    public async Task<ApiResponse<PostReportResponse>> ReportPostAsync(Guid postId, CreatePostReportRequest request)
+    {
+        return await _apiClient.PostAsync<CreatePostReportRequest, PostReportResponse>($"posts/{postId}/reports", request);
+    }
+
+    public async Task<ApiResponse<bool>> CheckPostReportedAsync(Guid postId)
+    {
+        return await _apiClient.GetAsync<bool>($"posts/{postId}/reports/check");
     }
 
     private static List<PostDto> GetSamplePosts()

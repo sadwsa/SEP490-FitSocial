@@ -12,10 +12,12 @@ namespace FitSocial.API.Controllers;
 public class PostsController : ControllerBase
 {
     private readonly IPostService _postService;
+    private readonly IPostReportService _postReportService;
 
-    public PostsController(IPostService postService)
+    public PostsController(IPostService postService, IPostReportService postReportService)
     {
         _postService = postService;
+        _postReportService = postReportService;
     }
 
   
@@ -159,6 +161,55 @@ public class PostsController : ControllerBase
 
         var currentUserId = GetCurrentUserId();
         var result = await _postService.GetPostsAsync(query, currentUserId, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Reports a specific post for violating community rules.
+    /// Accessible by authenticated users.
+    /// Duplicate checking is scoped to ReporterId + PostId.
+    /// </summary>
+    [HttpPost("{postId:guid}/reports")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<PostReportResponseDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ReportPost(Guid postId, [FromBody] CreatePostReportRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            throw new FitSocial.Application.Exceptions.ValidationException(firstError ?? "Invalid report data.");
+        }
+
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+        {
+            return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
+        }
+
+        var result = await _postReportService.ReportPostAsync(postId, currentUserId.Value, request, HttpContext.RequestAborted);
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
+
+    /// <summary>
+    /// Checks whether the authenticated user has already submitted an active/pending report for this specific post.
+    /// </summary>
+    [HttpGet("{postId:guid}/reports/check")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> CheckPostReported(Guid postId)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+        {
+            return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
+        }
+
+        var result = await _postReportService.HasUserReportedPostAsync(postId, currentUserId.Value, HttpContext.RequestAborted);
         return Ok(result);
     }
 

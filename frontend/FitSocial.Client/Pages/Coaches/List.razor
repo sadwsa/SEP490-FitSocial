@@ -114,7 +114,8 @@
                                             <h5 class="font-bold text-gray-900 text-lg mb-0">@coach.FullName</h5>
                                             <p class="text-gray-500 text-xs font-medium">@("@coach_" + coach.CoachId.ToString().Substring(0, 6))</p>
                                         </div>
-                                        <button class="hidden sm:block bg-gray-50 hover:bg-orange-50 text-gray-800 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap">
+                                        <button @onclick="@(() => Navigation.NavigateTo($"/profile/{coach.CoachId}"))"
+                                                class="hidden sm:block bg-gray-50 hover:bg-orange-50 text-gray-800 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap">
                                             View Profile
                                         </button>
                                     </div>
@@ -140,7 +141,8 @@
                                         </div>
                                     </div>
 
-                                    <button class="mt-4 w-full block sm:hidden bg-gray-50 hover:bg-orange-50 text-gray-800 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 py-2 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer">
+                                    <button @onclick="@(() => Navigation.NavigateTo($"/profile/{coach.CoachId}"))"
+                                            class="mt-4 w-full block sm:hidden bg-gray-50 hover:bg-orange-50 text-gray-800 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 py-2 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer">
                                         View Profile
                                     </button>
                                 </div>

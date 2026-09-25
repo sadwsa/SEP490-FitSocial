@@ -104,7 +104,7 @@ public class PostsController : ControllerBase
 
     /// <summary>
     /// Search and filter posts feed with pagination.
-    /// Supports keyword search by Content, filter by sportId, locationId, postType, and authorId.
+    /// Supports keyword search by Content, filter by locationId, postType, and authorId.
     /// Accessible via:
     /// - GET /api/posts
     /// - GET /api/posts/search

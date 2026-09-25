@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using FitSocial.Domain.Constants;
 
 namespace FitSocial.Application.DTOs.Posts;
@@ -12,9 +12,6 @@ public class EditPostRequestDto
     [Required(ErrorMessage = "Content is required and cannot be null.")]
     [MaxLength(PostConstants.MaxContentLength, ErrorMessage = "Content must not exceed 5000 characters.")]
     public string Content { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Sport is required and cannot be empty.")]
-    public Guid SportId { get; set; }
 
     [Required(ErrorMessage = "Location is required and cannot be empty.")]
     public Guid LocationId { get; set; }

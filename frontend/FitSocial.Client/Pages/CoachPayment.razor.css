@@ -241,6 +241,9 @@
 /* VietQR panel */
 .qr-panel {
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .qr-title {
@@ -251,6 +254,8 @@
 }
 
 .qr-image {
+    display: block;
+    margin: 0 auto;
     width: 240px;
     height: 240px;
     border: 1px solid #e2e8f0;
@@ -268,10 +273,12 @@
 
 .qr-panel .order-box {
     text-align: left;
+    width: 100%;
 }
 
 .qr-panel .pay-actions {
     margin-top: 14px;
+    width: 100%;
 }
 
 /* Test buttons */

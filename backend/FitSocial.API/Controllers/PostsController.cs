@@ -80,10 +80,10 @@ public class PostsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Soft deletes an existing post.
-    /// User can only delete their own post, unless the user has Admin or Staff privileges.
-    /// </summary>
+    
+    // Soft deletes an existing post.
+    // User can only delete their own post, unless the user has Admin or Staff privileges.
+   
     [HttpDelete("{postId:guid}")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]

@@ -101,6 +101,7 @@
                             @if (!isLoading && string.IsNullOrWhiteSpace(errorMessage) && !pagedResult.Items.Any())
                             {
                                 <tr>
+                                    <td colspan="4" class="empty-state-cell">
                                     <td colspan="5" class="empty-state-cell">
                                         <div class="empty-state">
                                             <span class="empty-icon"><AppIcon Name="location" /></span>
@@ -109,6 +110,7 @@
                                             </p>
                                             @if (!string.IsNullOrWhiteSpace(searchTerm))
                                             {
+                                                <button type="button" class="btn-clear-filter" @onclick="ClearSearchAsync">Clear search filter</button>
                                                 <button type="button" class="btn-reset-search" @onclick="ClearSearchAsync">
                                                     Clear search filter
                                                 </button>
@@ -119,6 +121,19 @@
                             }
                             else
                             {
+                                @foreach (var item in pagedResult.Items)
+                                {
+                                    <tr class="location-row">
+                                        <td class="col-check">
+                                            <span class="table-checkbox" aria-hidden="true"></span>
+                                        </td>
+                                        <td class="col-id">
+                                            <span class="loc-id" title="@item.LocationId">#@FormatLocationId(item.LocationId)</span>
+                                        </td>
+                                        <td class="col-name">
+                                            <div class="loc-name-wrap">
+                                                <div class="loc-icon-badge">
+                                                    <svg class="facility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 var index = 0;
                                 @foreach (var item in pagedResult.Items)
                                 {
@@ -321,6 +336,11 @@
 @code {
     private string searchTerm = "";
     private int currentPage = 1;
+    private int pageSize = 6; // Matching screenshot 6 rows per page
+    private PagedResult<LocationDto> pagedResult = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+    private System.Timers.Timer? debounceTimer;
     private int pageSize = 6;
     private PagedResult<LocationDto> pagedResult = new();
     private bool isLoading = true;
@@ -354,6 +374,7 @@
             errorMessage = null;
             currentPage = page;
 
+            var res = await LocationService.GetPagedLocationsAsync(searchTerm, currentPage, pageSize);
             var res = await LocationService.GetLocationsAsync(searchTerm, currentPage, pageSize);
             if (res.Success && res.Data != null)
             {
@@ -562,11 +583,13 @@
         if (currentPage <= 4)
         {
             for (var i = 2; i <= Math.Min(5, total - 1); i++) list.Add(i);
+            if (total > 6) list.Add(-1); // ellipsis
             if (total > 6) list.Add(-1);
             list.Add(total);
         }
         else if (currentPage >= total - 3)
         {
+            list.Add(-1); // ellipsis
             list.Add(-1);
             for (var i = total - 4; i <= total; i++) list.Add(i);
         }

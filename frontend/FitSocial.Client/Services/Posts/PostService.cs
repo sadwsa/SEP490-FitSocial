@@ -12,7 +12,7 @@ public interface IPostService
     Task<ApiResponse<PostDto>> CreatePostAsync(CreatePostRequest request);
     Task<ApiResponse<PostDto>> EditPostAsync(Guid postId, EditPostRequest request);
     Task<ApiResponse<bool>> DeletePostAsync(Guid postId);
-    Task<ApiResponse<bool>> ToggleLikeAsync(Guid postId);
+    Task<ApiResponse<PostReactionResponse>> ToggleLikeAsync(Guid postId);
     Task<ApiResponse<PostReportResponse>> ReportPostAsync(Guid postId, CreatePostReportRequest request);
     Task<ApiResponse<bool>> CheckPostReportedAsync(Guid postId);
    
@@ -132,11 +132,6 @@ public class PostService : IPostService
     public async Task<ApiResponse<PostReactionResponse>> ToggleLikeAsync(Guid postId)
     {
         return await _apiClient.PostAsync<object, PostReactionResponse>($"posts/{postId}/reactions", new { });
-    }
-
-    public async Task<ApiResponse<PostReportResponse>> ReportPostAsync(Guid postId, CreatePostReportRequest request)
-    {
-        return await _apiClient.PostAsync<CreatePostReportRequest, PostReportResponse>($"posts/{postId}/reports", request);
     }
 
     public async Task<ApiResponse<PostReportResponse>> ReportPostAsync(Guid postId, CreatePostReportRequest request)

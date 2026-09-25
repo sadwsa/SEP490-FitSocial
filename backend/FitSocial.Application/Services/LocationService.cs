@@ -7,9 +7,6 @@ using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Locations;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Entities;
-using FitSocial.Application.DTOs.Common;
-using FitSocial.Application.DTOs.Locations;
-using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Interfaces;
 
 namespace FitSocial.Application.Services;
@@ -29,26 +26,17 @@ public class LocationService : ILocationService
         string? searchTerm = null,
         int pageNumber = 1,
         int pageSize = 10,
-    public async Task<ApiResponseDto<PagedResultDto<LocationDto>>> GetLocationsAsync(
-        string? searchTerm,
-        int pageNumber,
-        int pageSize,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var (items, totalCount) = await _locationRepository.ListLocationsAsync(
                 searchTerm, pageNumber, pageSize, cancellationToken);
-                searchTerm,
-                pageNumber,
-                pageSize,
-                cancellationToken);
 
             var dtos = items.Select(l => new LocationDto
             {
                 LocationId = l.LocationId,
                 LocationName = l.LocationName,
-                Address = l.Address
                 Address = l.Address,
                 PostCount = l.Posts?.Count ?? 0
             }).ToList();
@@ -59,8 +47,16 @@ public class LocationService : ILocationService
         catch (Exception ex)
         {
             return ApiResponseDto<PagedResultDto<LocationDto>>.Fail($"Failed to retrieve locations: {ex.Message}");
-            return ApiResponseDto<PagedResultDto<LocationDto>>.Fail($"Error retrieving locations: {ex.Message}");
         }
+    }
+
+    public Task<ApiResponseDto<PagedResultDto<LocationDto>>> GetLocationsAsync(
+        string? searchTerm,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        return GetPagedLocationsAsync(searchTerm, pageNumber, pageSize, cancellationToken);
     }
 
     public async Task<ApiResponseDto<List<LocationDto>>> GetPublicLocationsAsync(CancellationToken cancellationToken = default)
@@ -73,7 +69,6 @@ public class LocationService : ILocationService
             {
                 LocationId = l.LocationId,
                 LocationName = l.LocationName,
-                Address = l.Address
                 Address = l.Address,
                 PostCount = l.Posts?.Count ?? 0
             }).ToList();
@@ -213,7 +208,6 @@ public class LocationService : ILocationService
         catch (Exception ex)
         {
             return ApiResponseDto<LocationDto>.Fail($"Failed to update location: {ex.Message}");
-            return ApiResponseDto<List<LocationDto>>.Fail($"Error retrieving locations: {ex.Message}");
         }
     }
 

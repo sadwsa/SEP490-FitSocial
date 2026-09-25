@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,6 +15,12 @@ public interface ILocationService
         int pageSize = 10,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseDto<PagedResultDto<LocationDto>>> GetLocationsAsync(
+        string? searchTerm,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseDto<List<LocationDto>>> GetPublicLocationsAsync(
         CancellationToken cancellationToken = default);
 
@@ -25,13 +32,8 @@ public interface ILocationService
         Guid locationId,
         UpdateLocationDto dto,
         CancellationToken cancellationToken = default);
-    Task<ApiResponseDto<PagedResultDto<LocationDto>>> GetLocationsAsync(
-        string? searchTerm,
-        int pageNumber,
-        int pageSize,
+
+    Task<ApiResponseDto<bool>> DeleteLocationAsync(
+        Guid locationId,
         CancellationToken cancellationToken = default);
-
-    Task<ApiResponseDto<List<LocationDto>>> GetPublicLocationsAsync(CancellationToken cancellationToken = default);
-
-    Task<ApiResponseDto<bool>> DeleteLocationAsync(Guid locationId, CancellationToken cancellationToken = default);
 }

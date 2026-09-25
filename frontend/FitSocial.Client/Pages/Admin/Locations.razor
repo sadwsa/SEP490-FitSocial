@@ -131,7 +131,6 @@
                             @if (!isLoading && string.IsNullOrWhiteSpace(errorMessage) && !pagedResult.Items.Any())
                             {
                                 <tr>
-                                    <td colspan="4" class="empty-state-cell">
                                     <td colspan="5" class="empty-state-cell">
                                         <div class="empty-state">
                                             <span class="empty-icon"><AppIcon Name="location" /></span>
@@ -141,9 +140,6 @@
                                             @if (!string.IsNullOrWhiteSpace(searchTerm))
                                             {
                                                 <button type="button" class="btn-clear-filter" @onclick="ClearSearchAsync">Clear search filter</button>
-                                                <button type="button" class="btn-reset-search" @onclick="ClearSearchAsync">
-                                                    Clear search filter
-                                                </button>
                                             }
                                         </div>
                                     </td>
@@ -151,19 +147,6 @@
                             }
                             else
                             {
-                                @foreach (var item in pagedResult.Items)
-                                {
-                                    <tr class="location-row">
-                                        <td class="col-check">
-                                            <span class="table-checkbox" aria-hidden="true"></span>
-                                        </td>
-                                        <td class="col-id">
-                                            <span class="loc-id" title="@item.LocationId">#@FormatLocationId(item.LocationId)</span>
-                                        </td>
-                                        <td class="col-name">
-                                            <div class="loc-name-wrap">
-                                                <div class="loc-icon-badge">
-                                                    <svg class="facility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 var index = 0;
                                 @foreach (var item in pagedResult.Items)
                                 {
@@ -208,6 +191,7 @@
                                         <td class="col-actions">
                                             <button type="button" class="btn-action-edit" @onclick="() => OpenEditModal(item)" title="Edit location">
                                                 <AppIcon Name="pencil" />
+                                            </button>
                                             <button type="button"
                                                     class="btn-action-delete"
                                                     @onclick="() => OpenDeleteModal(item, displayIndexString)"
@@ -285,7 +269,6 @@
         {
             <div class="modal-backdrop" @onclick="CloseCreateModal">
                 <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
-                <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="modal-title">
                     <!-- Modal Header -->
                     <div class="modal-header">
                         <div class="modal-title-group">
@@ -294,7 +277,6 @@
                             </div>
                             <div class="modal-titles">
                                 <h2 id="create-modal-title" class="modal-title">Add New Location</h2>
-                                <h2 id="modal-title" class="modal-title">Add New Location</h2>
                                 <span class="modal-subtitle">Direct mapping to Locations DB schema</span>
                             </div>
                         </div>
@@ -375,6 +357,10 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        }
+
         <!-- Confirm Delete Location Modal (UC_35.3) -->
         @if (showDeleteModal && targetLocation != null)
         {
@@ -512,6 +498,10 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        }
+
         <!-- Warning Modal: Cannot delete location in use -->
         @if (showWarningModal)
         {
@@ -563,11 +553,6 @@
     private PagedResult<LocationDto> pagedResult = new();
     private bool isLoading = true;
     private string? errorMessage;
-    private System.Timers.Timer? debounceTimer;
-    private int pageSize = 6;
-    private PagedResult<LocationDto> pagedResult = new();
-    private bool isLoading = true;
-    private string? errorMessage;
     private string? toastMessage;
     private System.Timers.Timer? debounceTimer;
     private System.Threading.CancellationTokenSource? toastCts;
@@ -615,7 +600,6 @@
             currentPage = page;
 
             var res = await LocationService.GetPagedLocationsAsync(searchTerm, currentPage, pageSize);
-            var res = await LocationService.GetLocationsAsync(searchTerm, currentPage, pageSize);
             if (res.Success && res.Data != null)
             {
                 pagedResult = res.Data;
@@ -895,10 +879,24 @@
             {
                 showEditModal = false;
                 ShowToast("Location updated successfully.");
-    private string FormatLocationId(Guid id)
-    {
-        var str = id.ToString("N");
-        return str.Length >= 8 ? str[..8].ToUpperInvariant() : str.ToUpperInvariant();
+                await LoadLocationsAsync(currentPage);
+            }
+            else
+            {
+                editModalErrorMessage = !string.IsNullOrWhiteSpace(res.Message)
+                    ? res.Message
+                    : "Unable to update location. Please check your input.";
+            }
+        }
+        catch (Exception ex)
+        {
+            editModalErrorMessage = $"Error updating location: {ex.Message}";
+        }
+        finally
+        {
+            isSavingEdit = false;
+            StateHasChanged();
+        }
     }
 
     private void OpenDeleteModal(LocationDto item, string displayIndex)
@@ -960,9 +958,6 @@
             }
             else
             {
-                editModalErrorMessage = !string.IsNullOrWhiteSpace(res.Message)
-                    ? res.Message
-                    : "Unable to update location. Please check your input.";
                 // If location is used by posts or other records, show warning popup
                 if (res.Message?.Contains("post", StringComparison.OrdinalIgnoreCase) == true ||
                     res.Message?.Contains("used by", StringComparison.OrdinalIgnoreCase) == true ||
@@ -986,16 +981,6 @@
         }
         catch (Exception ex)
         {
-            editModalErrorMessage = $"Error updating location: {ex.Message}";
-        }
-        finally
-        {
-            isSavingEdit = false;
-            modalErrorMessage = $"Error creating location: {ex.Message}";
-        }
-        finally
-        {
-            isSaving = false;
             deleteErrorMessage = $"Error deleting location: {ex.Message}";
         }
         finally
@@ -1062,13 +1047,11 @@
         {
             for (var i = 2; i <= Math.Min(5, total - 1); i++) list.Add(i);
             if (total > 6) list.Add(-1); // ellipsis
-            if (total > 6) list.Add(-1);
             list.Add(total);
         }
         else if (currentPage >= total - 3)
         {
             list.Add(-1); // ellipsis
-            list.Add(-1);
             for (var i = total - 4; i <= total; i++) list.Add(i);
         }
         else

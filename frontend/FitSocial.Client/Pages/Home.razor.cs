@@ -417,12 +417,6 @@ public partial class Home : ComponentBase, IDisposable
 
     private void CloseReportModal()
     {
-        reportPostId = postId;
-        showReportModal = true;
-    }
-
-    private void CloseReportModal()
-    {
         showReportModal = false;
         reportPostId = null;
     }
@@ -430,8 +424,6 @@ public partial class Home : ComponentBase, IDisposable
     private void OnPostReported(Guid reportedTargetPostId)
     {
         reportedPostIds.Add(reportedTargetPostId);
-    private void OnPostReported()
-    {
         CloseReportModal();
         ShowSuccessToast("Report submitted successfully. Thank you for helping keep our community safe.");
     }
@@ -555,6 +547,8 @@ public partial class Home : ComponentBase, IDisposable
         warningToastCts?.Cancel();
         toastWarningMessage = null;
         StateHasChanged();
+    }
+
     private void NavigateToAuthorProfile(Guid authorId)
     {
         if (authorId == Guid.Empty) return;

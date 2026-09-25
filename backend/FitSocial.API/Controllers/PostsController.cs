@@ -14,10 +14,6 @@ public class PostsController : ControllerBase
     private readonly IPostService _postService;
     private readonly IPostReportService _postReportService;
 
-    public PostsController(IPostService postService, IPostReportService postReportService)
-    {
-        _postService = postService;
-        _postReportService = postReportService;
     private readonly IPostReactionService _postReactionService;
 
     public PostsController(
@@ -214,6 +210,18 @@ public class PostsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CheckPostReported(Guid postId)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+        {
+            return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
+        }
+
+        var result = await _postReportService.HasUserReportedPostAsync(postId, currentUserId.Value, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Toggles Like/Unlike on a post.
     /// Accessible only by Trainees and Coaches.
     /// </summary>
@@ -232,7 +240,6 @@ public class PostsController : ControllerBase
             return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
         }
 
-        var result = await _postReportService.HasUserReportedPostAsync(postId, currentUserId.Value, HttpContext.RequestAborted);
         var currentUserRole = GetCurrentUserRole();
         var result = await _postReactionService.ToggleReactionAsync(
             postId,

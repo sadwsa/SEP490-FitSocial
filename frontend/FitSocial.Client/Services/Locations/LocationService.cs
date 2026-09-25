@@ -19,6 +19,8 @@ public interface ILocationService
     Task<ApiResponse<List<LocationDto>>> GetLocationsAsync();
 
     Task<ApiResponse<LocationDto>> CreateLocationAsync(CreateLocationDto dto);
+
+    Task<ApiResponse<LocationDto>> UpdateLocationAsync(Guid locationId, UpdateLocationDto dto);
     Task<ApiResponse<bool>> DeleteLocationAsync(Guid locationId);
 }
 
@@ -188,6 +190,22 @@ public class LocationService : ILocationService
             {
                 Success = false,
                 Message = $"Error creating location: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<LocationDto>> UpdateLocationAsync(Guid locationId, UpdateLocationDto dto)
+    {
+        try
+        {
+            return await _apiClient.PutAsync<UpdateLocationDto, LocationDto>($"locations/{locationId}", dto);
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<LocationDto>
+            {
+                Success = false,
+                Message = $"Error updating location: {ex.Message}"
             };
         }
     }

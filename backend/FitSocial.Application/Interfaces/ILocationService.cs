@@ -20,6 +20,11 @@ public interface ILocationService
     Task<ApiResponseDto<LocationDto>> CreateLocationAsync(
         CreateLocationDto dto,
         CancellationToken cancellationToken = default);
+
+    Task<ApiResponseDto<LocationDto>> UpdateLocationAsync(
+        Guid locationId,
+        UpdateLocationDto dto,
+        CancellationToken cancellationToken = default);
     Task<ApiResponseDto<PagedResultDto<LocationDto>>> GetLocationsAsync(
         string? searchTerm,
         int pageNumber,

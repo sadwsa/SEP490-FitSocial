@@ -498,6 +498,38 @@
     line-height: 1.4;
 }
 
+/* Actions Column (UC_35.2) */
+.col-actions {
+    width: 90px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.btn-action-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-action-edit:hover {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #c2410c;
+}
+
+.btn-action-edit ::deep svg {
+    width: 15px;
+    height: 15px;
+}
+
 /* Empty State */
 .empty-state-cell {
     padding: 48px 16px !important;

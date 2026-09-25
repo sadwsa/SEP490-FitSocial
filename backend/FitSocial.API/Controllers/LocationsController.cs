@@ -136,6 +136,62 @@ public class LocationsController : ControllerBase
 
         var result = locations.Select(l => new LocationDto
         var result = await _locationService.GetPublicLocationsAsync(cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Create a new location (Admin / Staff only)
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CreateLocation(
+        [FromBody] CreateLocationDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _locationService.CreateLocationAsync(dto, cancellationToken);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(result);
+            }
+
+            return BadRequest(result);
+        }
+
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
+
+    /// <summary>
+    /// Update an existing location (Admin / Staff only)
+    /// </summary>
+    [HttpPut("{locationId:guid}")]
+    [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateLocation(
+        [FromRoute] Guid locationId,
+        [FromBody] UpdateLocationDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _locationService.UpdateLocationAsync(locationId, dto, cancellationToken);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(result);
+            }
+
+            if (result.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(result);
+            }
+
         if (!result.Success)
         {
             return BadRequest(result);

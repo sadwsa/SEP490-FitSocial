@@ -9,6 +9,8 @@ namespace FitSocial.Client.Services.TrainingPackages;
 public interface ITrainingPackageService
 {
     Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetMyPackagesAsync();
+ Task<ApiResponse<bool>> DeletePackageAsync(Guid id);
+
     Task<ApiResponse<TrainingPackageResponseDto>> GetPackageByIdAsync(Guid id);
     Task<ApiResponse<TrainingPackageResponseDto>> CreatePackageAsync(CreateTrainingPackageDto dto);
 }

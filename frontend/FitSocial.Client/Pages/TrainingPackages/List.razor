@@ -4,6 +4,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject IJSRuntime JS
 @using FitSocial.Client.Layout
 @using System.Security.Claims
 
@@ -183,7 +184,9 @@
                                         </td>
                                         <td class="p-4 text-sm text-center text-gray-400">
                                             <a href="/training-packages/edit/@pkg.PackageId" class="text-[#FF8C00] hover:text-[#FF5500] font-semibold hover:underline">Edit</a> |
-                                            <button class="text-red-500 hover:text-red-600 font-semibold hover:underline cursor-pointer">Delete</button>
+                                        <button @onclick="() => PromptDelete(pkg.PackageId)" class="text-red-500 hover:text-red-600 font-semibold hover:underline cursor-pointer">Delete</button>
+
+
                                         </td>
                                     </tr>
                                 }
@@ -197,6 +200,21 @@
         <!-- Right Sidebar (Empty) -->
         <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
     </div>
+
+    <!-- Custom Delete Modal -->
+    @if (showDeleteModal)
+    {
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl shadow-lg p-6 max-w-sm w-full mx-4">
+                <h3 class="text-lg font-bold text-gray-800 mb-2">Confirm Deletion</h3>
+                <p class="text-sm text-gray-600 mb-6">Are you sure you want to remove this package?</p>
+                <div class="flex justify-end gap-3">
+                    <button @onclick="CancelDelete" class="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+                    <button @onclick="ConfirmDelete" class="px-4 py-2 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -204,6 +222,10 @@
     private bool isLoading = true;
     private string? errorMessage;
     
+    // Custom Delete Modal state
+    private bool showDeleteModal = false;
+    private Guid? packageToDelete = null;
+
     // Create form state
     private bool showCreateForm = false;
     private CreateTrainingPackageDto createDto = new();
@@ -251,6 +273,37 @@
 
         isSubmitting = false;
     }
+    private void PromptDelete(Guid packageId)
+    {
+        packageToDelete = packageId;
+        showDeleteModal = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteModal = false;
+        packageToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (packageToDelete == null) return;
+        
+        var response = await PackageService.DeletePackageAsync(packageToDelete.Value);
+
+        if (response.Success)
+        {
+            await LoadPackages();
+        }
+        else
+        {
+            errorMessage = response.Message ?? "Đã xảy ra lỗi khi xóa gói tập.";
+        }
+        
+        showDeleteModal = false;
+        packageToDelete = null;
+    }
+
 
     private async Task LoadPackages()
     {

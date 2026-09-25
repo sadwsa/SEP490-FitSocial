@@ -1,4 +1,4 @@
-﻿using FitSocial.Application.DTOs.TrainingPackage;
+using FitSocial.Application.DTOs.TrainingPackage;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
@@ -23,7 +23,7 @@ namespace FitSocial.Application.Services
         public async Task<IEnumerable<TrainingPackageResponseDto>> GetMyPackagesAsync(Guid currentUserId)
         {
             var packages = await _repository.GetPackagesByCoachIdAsync(currentUserId);
-            return packages.Select(MapToDto);
+            return packages.Where(p => p.IsActive == true).Select(MapToDto);
         }
 
         public async Task<TrainingPackageResponseDto?> GetPackageByIdAsync(Guid id)
@@ -70,6 +70,32 @@ namespace FitSocial.Application.Services
                 CreatedAt = entity.CreatedAt
             };
         }
+        public async Task<bool> SoftDeletePackageAsync(Guid id, Guid currentUserId)
+{
+    // Tìm package theo ID
+    var package = await _repository.GetByIdAsync(id);
+    
+    // Nếu không tìm thấy
+    if (package == null)
+    {
+        return false;
+    }
+
+    // Kiểm tra xem package này có phải do user hiện tại (Coach) tạo không
+    if (package.CoachId != currentUserId)
+    {
+        return false;
+    }
+
+    // Thay đổi trạng thái thành không hoạt động (Soft delete)
+    package.IsActive = false;
+    
+    // Cập nhật Database
+    await _unitOfWork.SaveChangesAsync();
+
+    return true;
+}
+
 
         public Task<IEnumerable<TrainingPackageResponseDto>> GetAllPackagesAsync()
         {

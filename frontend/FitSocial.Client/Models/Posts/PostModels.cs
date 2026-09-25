@@ -111,6 +111,13 @@ public class SelectedMediaItem
     public bool IsVideo { get; set; }
 }
 
+public class PostReactionResponse
+{
+    public Guid PostId { get; set; }
+    public bool IsLiked { get; set; }
+    public int LikeCount { get; set; }
+}
+
 public class CreatePostReportRequest
 {
     public string Reason { get; set; } = string.Empty;

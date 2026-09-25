@@ -7,11 +7,13 @@ namespace FitSocial.Domain.Interfaces;
 
 public interface IPostReportRepository : IRepository<Report>
 {
-    /// <summary>
-    /// Checks whether an active/pending report exists specifically for the given post and reporter.
-    /// Scoped strictly to postId + reporterId, ensuring reports on other posts from the same author do NOT conflict.
+    
+    /// Checks if a reporter has already submitted an active/pending report for the specified post.
     /// </summary>
     Task<bool> HasActiveReportAsync(Guid postId, Guid reporterId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Retrieves an active/pending report by post and reporter.
+    /// </summary>
     Task<Report?> GetActiveReportAsync(Guid postId, Guid reporterId, CancellationToken cancellationToken = default);
 }

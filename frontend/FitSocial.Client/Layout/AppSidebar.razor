@@ -4,18 +4,17 @@
 <aside class="home-left-sidebar hidden lg:block w-72 flex-shrink-0 sticky top-24 @Class">
     <nav class="flex flex-col gap-1">
         <!-- News Feed -->
-        <a href="home"
-           class="@GetItemClass("home")">
+        <a href="home" class="@GetItemClass("home")">
             <svg class="w-5 h-5 @GetIconClass("home")" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z">
+                <path
+                    d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z">
                 </path>
             </svg>
             News Feed
         </a>
 
         <!-- Friends / Community -->
-        <a href="community"
-           class="@GetItemClass("community")">
+        <a href="community" class="@GetItemClass("community")">
             <svg class="w-5 h-5 @GetIconClass("community")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
@@ -25,8 +24,7 @@
         </a>
 
         <!-- My Packages / Training Packages -->
-        <a href="training-packages"
-           class="@GetItemClass("packages")">
+        <a href="training-packages" class="@GetItemClass("packages")">
             <svg class="w-5 h-5 @GetIconClass("packages")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
@@ -36,8 +34,7 @@
         </a>
 
         <!-- Coaches List -->
-        <a href="coaches"
-           class="@GetItemClass("coaches")">
+        <a href="coaches" class="@GetItemClass("coaches")">
             <svg class="w-5 h-5 @GetIconClass("coaches")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
@@ -46,27 +43,7 @@
             Coaches List
         </a>
 
-        <!-- Messages -->
-        <a href="messages"
-           class="@GetItemClass("messages")">
-            <svg class="w-5 h-5 @GetIconClass("messages")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
-                </path>
-            </svg>
-            Messages
-        </a>
-
-        <!-- My Profile -->
-        <a href="profile"
-           class="@GetItemClass("profile")">
-            <svg class="w-5 h-5 @GetIconClass("profile")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z">
-                </path>
-            </svg>
-            My Profile
-        </a>
+      
 
         <AuthorizeView Roles="ADMIN,STAFF">
             <Authorized>
@@ -105,7 +82,9 @@
         }
 
         var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri).ToLowerInvariant();
-        var rootSegment = relativePath.Split('?', '/')[0];
+        var pathWithoutQuery = relativePath.Split('?')[0].Trim('/');
+        var segments = pathWithoutQuery.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var rootSegment = segments.Length > 0 ? segments[0] : string.Empty;
 
         return name switch
         {
@@ -116,6 +95,7 @@
             "messages" => rootSegment == "messages",
             "profile" => rootSegment == "profile",
             "reports" => rootSegment == "reports" || (rootSegment == "admin" && relativePath.Contains("reports")),
+           
             _ => false
         };
     }

@@ -187,6 +187,70 @@ public class ApiClient
         }
     }
 
+    public async Task<ApiResponse<TResult>> PostAsync<TResult>(string endpoint)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _http.PostAsync(endpoint, null);
+            if (response.StatusCode == HttpStatusCode.Unauthorized &&
+                await TryRefreshOnceAsync(endpoint, response.StatusCode))
+            {
+                await AttachBearerTokenAsync();
+                response = await _http.PostAsync(endpoint, null);
+            }
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                try
+                {
+                    var apiResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(json, options);
+                    if (apiResponse != null)
+                    {
+                        return apiResponse;
+                    }
+                }
+                catch
+                {
+                    try
+                    {
+                        var data = JsonSerializer.Deserialize<TResult>(json, options);
+                        return new ApiResponse<TResult> { Success = true, Data = data };
+                    }
+                    catch { }
+                }
+
+                return new ApiResponse<TResult> { Success = true };
+            }
+
+            try
+            {
+                var errorJson = await response.Content.ReadAsStringAsync();
+                var errorResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
+                {
+                    return errorResponse;
+                }
+            }
+            catch { }
+
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"API Error: {response.StatusCode}"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"Network Error: {ex.Message}"
+            };
+        }
+    }
+
     public async Task<ApiResponse<TResult>> PutAsync<TRequest, TResult>(string endpoint, TRequest payload)
     {
         try

@@ -21,6 +21,9 @@ public partial class Report
             Reason = reason.Trim(),
             Status = ReportStatus.Pending.ToString().ToUpperInvariant(),
             CreatedAt = now
+            Status = ReportStatus.Pending.ToString(),
+            CreatedAt = now,
+            UpdatedAt = now
         };
     }
 

@@ -173,4 +173,84 @@ public class ConversationsController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Block other participant in direct conversation
+    /// </summary>
+    [HttpPost("{conversationId:guid}/block")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> BlockUser(Guid conversationId)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<bool>.Fail("Invalid authentication session. Please log in again."));
+        }
+
+        var result = await _conversationService.BlockUserAsync(conversationId, currentUserId);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(result);
+            }
+
+            if (result.Message.Contains("Forbidden", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("authorized", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("participant", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, result);
+            }
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Unblock other participant in direct conversation
+    /// </summary>
+    [HttpPost("{conversationId:guid}/unblock")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UnblockUser(Guid conversationId)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<bool>.Fail("Invalid authentication session. Please log in again."));
+        }
+
+        var result = await _conversationService.UnblockUserAsync(conversationId, currentUserId);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(result);
+            }
+
+            if (result.Message.Contains("Forbidden", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("authorized", StringComparison.OrdinalIgnoreCase) ||
+                result.Message.Contains("participant", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, result);
+            }
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
 }

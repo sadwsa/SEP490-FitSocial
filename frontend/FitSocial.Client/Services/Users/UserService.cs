@@ -20,6 +20,7 @@ public interface IUserService
         int pageSize = 10);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
     Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
+    Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
 }
 
 public class UserService : IUserService
@@ -39,6 +40,11 @@ public class UserService : IUserService
     public async Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync()
     {
         return await _apiClient.GetAsync<UserProfileModel>("users/me/profile");
+    }
+
+    public async Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId)
+    {
+        return await _apiClient.GetAsync<OtherUserProfileModel>($"users/{userId}/profile");
     }
 
     private async Task AttachBearerTokenAsync()

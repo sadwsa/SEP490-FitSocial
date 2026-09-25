@@ -1,328 +1,588 @@
 @page "/messages"
 @page "/messages/{conversationId:guid}"
+@layout EmptyLayout
 @attribute [Authorize]
 @inject IConversationService ConversationService
 @inject IChatHubClient ChatHubClient
+@inject INotificationService NotificationService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
+@inject IAuthService AuthService
 @inject IJSRuntime JSRuntime
 @using System.Security.Claims
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Conversations
+@using FitSocial.Client.Models.Auth
+@using FitSocial.Client.Services.Notifications
 @implements IAsyncDisposable
 
-<PageTitle>Messages | FitSocial</PageTitle>
+<PageTitle>Messages - FitSocial</PageTitle>
 
-<div class="ig-messages-container @(ConversationId.HasValue ? "has-selected-conversation" : "")">
-    <!-- Left Sidebar: Conversation List (UC-16 Scope) -->
-    <div class="ig-sidebar">
-        <!-- Header -->
-        <div class="ig-sidebar-header">
-            <h1 class="ig-sidebar-title">Messages</h1>
-            <button class="btn btn-sm btn-light rounded-circle p-2" title="Reload list" @onclick="() => LoadConversationsAsync(true)">
-                <span>🔄</span>
-            </button>
-        </div>
+<div class="min-h-screen bg-gray-100 text-gray-800 flex flex-col">
+    <!-- Header matching Home -->
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
 
-        <!-- Search Bar (local filter) -->
-        <div class="ig-search-box">
-            <input type="text" 
-                   class="ig-search-input" 
-                   placeholder="Search conversations..." 
-                   @bind="_searchTerm" 
-                   @bind:event="oninput" />
-        </div>
+    <!-- Main Content Layout (Sidebar + Messages Container) matching Home -->
+    <div class="w-full pt-4 lg:pt-6 px-3 sm:px-4 lg:px-6 flex items-start gap-6 max-w-[1600px] mx-auto flex-1 pb-4">
+        <!-- Left Sidebar: Menu Navigation -->
+        <AppSidebar ActiveItem="messages" />
 
-        <!-- List Area handling 4 UI States -->
-        <div class="ig-conversation-list">
-            @if (_isLoading)
-            {
-                <!-- 1. Loading State (Skeletons) -->
-                @for (int i = 0; i < 5; i++)
-                {
-                    <div class="ig-loading-skeleton">
-                        <div class="skeleton-avatar"></div>
-                        <div class="skeleton-text-group">
-                            <div class="skeleton-line short"></div>
-                            <div class="skeleton-line long"></div>
-                        </div>
-                    </div>
-                }
-            }
-            else if (!string.IsNullOrEmpty(_errorMessage))
-            {
-                <!-- 4. Error State -->
-                <div class="ig-state-container">
-                    <div class="fs-1 mb-2">⚠️</div>
-                    <p class="text-danger fw-medium mb-3">@_errorMessage</p>
-                    <button class="btn btn-sm btn-fit-primary px-3" @onclick="() => LoadConversationsAsync(true)">
-                        Retry
-                    </button>
-                </div>
-            }
-            else if (FilteredConversations == null || !FilteredConversations.Any())
-            {
-                <!-- 3. Empty State -->
-                <div class="ig-state-container">
-                    <div class="fs-1 text-muted mb-2">💬</div>
-                    <p class="fw-semibold text-secondary mb-1">
-                        @(string.IsNullOrWhiteSpace(_searchTerm) ? "No conversations yet" : "No matching conversations found")
-                    </p>
-                    <small class="text-muted d-block">
-                        @(string.IsNullOrWhiteSpace(_searchTerm) 
-                            ? "When you connect with coaches or friends, your messages will appear here." 
-                            : "Try searching with a different keyword.")
-                    </small>
-                </div>
-            }
-            else
-            {
-                <!-- 2. Has Data State -->
-                @foreach (var item in FilteredConversations)
-                {
-                    var isSelected = _selectedConversationId == item.ConversationId;
-                    var isUnread = item.UnreadCount > 0;
+        <!-- Messages Workspace Card -->
+        <div class="flex-1 min-w-0 bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden flex flex-col md:flex-row h-[calc(100vh-5.5rem)]">
 
-                    <div class="ig-conv-item @(isSelected ? "active" : "") @(isUnread ? "unread" : "")" 
-                         @onclick="() => SelectConversation(item.ConversationId)">
-                        <!-- Avatar -->
-                        <div class="ig-avatar-wrapper">
-                            @if (!string.IsNullOrWhiteSpace(item.DisplayAvatar))
-                            {
-                                <img src="@item.DisplayAvatar" alt="@item.Title" class="ig-avatar" />
-                            }
-                            else
-                            {
-                                <div class="ig-avatar-placeholder">
-                                    @GetInitials(item.Title)
-                                </div>
-                            }
-                        </div>
-
-                        <!-- Conversation Information -->
-                        <div class="ig-conv-info">
-                            <div class="ig-conv-header">
-                                <span class="ig-user-name">@item.Title</span>
-                                @if (item.LastMessageAt.HasValue)
-                                {
-                                    <span class="ig-msg-time">@FormatTime(item.LastMessageAt.Value)</span>
-                                }
-                            </div>
-                            <div class="ig-conv-preview">
-                                <p class="ig-msg-text">
-                                    @(string.IsNullOrWhiteSpace(item.LastMessage) ? "Started a conversation" : item.LastMessage)
-                                </p>
-                                @if (item.UnreadCount > 0)
-                                {
-                                    <span class="ig-unread-badge">@item.UnreadCount</span>
-                                }
-                            </div>
-                        </div>
-
-                        <!-- Delete conversation action (UC-16.5) -->
-                        <button type="button" 
-                                class="ig-conv-delete-btn" 
-                                title="Delete conversation" 
-                                @onclick="() => PromptDeleteConversation(item.ConversationId, item.Title)" 
-                                @onclick:stopPropagation="true">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
-                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
-                            </svg>
-                        </button>
-                    </div>
-                }
-            }
-        </div>
-    </div>
-
-    <!-- Right Main Area: Placeholder when unselected OR Conversation Detail (UC-16.1 Scope) -->
-    @if (!ConversationId.HasValue)
-    {
-        <!-- Right Main Area: Instagram Inspired Direct Messaging Placeholder (UC-16 Scope) -->
-        <div class="ig-main-placeholder">
-            <div class="ig-placeholder-icon-circle">
-                <span>✉️</span>
-            </div>
-            <h2 class="ig-placeholder-title">Your Messages</h2>
-            <p class="ig-placeholder-sub">
-                Send private messages, schedule workouts, or ask questions to your sports coach.
-            </p>
-        </div>
-    }
-    else
-    {
-        <!-- Right Main Area: Conversation Detail (UC-16.1 Scope) -->
-        <div class="ig-detail-container">
-            @if (_isDetailLoading)
-            {
-                <!-- Loading State -->
-                <div class="ig-detail-header-skeleton">
-                    <div class="skeleton-avatar small"></div>
-                    <div class="skeleton-text-group">
-                        <div class="skeleton-line short"></div>
-                    </div>
-                </div>
-                <div class="ig-detail-loading-body">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading messages...</span>
-                    </div>
-                    <p class="text-muted mt-3 mb-0">Đang tải cuộc trò chuyện...</p>
-                </div>
-            }
-            else if (!string.IsNullOrEmpty(_detailErrorMessage))
-            {
-                <!-- Error State -->
-                <div class="ig-detail-state-container">
-                    <div class="fs-1 mb-2">⚠️</div>
-                    <h5 class="fw-semibold text-danger mb-2">Không thể tải cuộc trò chuyện</h5>
-                    <p class="text-muted mb-3">@_detailErrorMessage</p>
-                    <button class="btn btn-sm btn-outline-primary px-3" @onclick="() => LoadConversationDetailAsync(ConversationId.Value)">
-                        Thử lại
-                    </button>
-                </div>
-            }
-            else if (_conversationDetail != null)
-            {
-                <!-- Conversation Header -->
-                <div class="ig-detail-header">
-                    <button class="ig-back-btn d-md-none" title="Quay lại danh sách" @onclick="BackToConversationList">
-                        <span>←</span>
-                    </button>
-                    <div class="ig-avatar-wrapper">
-                        @if (!string.IsNullOrWhiteSpace(_conversationDetail.DisplayAvatar))
+            <!-- 1. Left Column: Conversation List -->
+            <div class="w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-gray-100 flex flex-col bg-white h-full @(ConversationId.HasValue ? "hidden md:flex" : "flex")">
+                
+                <!-- Conversation List Header -->
+                <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-xl font-bold text-gray-900 tracking-tight">Messages</h1>
+                        @if (_conversations != null && _conversations.Any(c => c.UnreadCount > 0))
                         {
-                            <img src="@_conversationDetail.DisplayAvatar" alt="@_conversationDetail.Title" class="ig-avatar detail-avatar" />
-                        }
-                        else
-                        {
-                            <div class="ig-avatar-placeholder detail-avatar">
-                                @GetInitials(_conversationDetail.Title)
-                            </div>
+                            var totalUnread = _conversations.Sum(c => c.UnreadCount);
+                            <span class="bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
+                                @totalUnread
+                            </span>
                         }
                     </div>
-                    <div class="ig-detail-header-info">
-                        <h2 class="ig-detail-title">@_conversationDetail.Title</h2>
-                        <span class="ig-detail-subtitle">
-                            @(string.Equals(_conversationDetail.Type, "GROUP", StringComparison.OrdinalIgnoreCase) ? "Group conversation" : "Active conversation")
-                        </span>
+                    <button type="button"
+                            class="p-2 text-gray-400 hover:text-[#FF5500] hover:bg-orange-50 rounded-xl transition cursor-pointer"
+                            title="Reload list"
+                            @onclick="() => LoadConversationsAsync(true)">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="p-3 border-b border-gray-100">
+                    <div class="relative">
+                        <input type="text"
+                               class="w-full bg-gray-100 rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:bg-white text-sm text-gray-800 placeholder-gray-400 transition"
+                               placeholder="Search conversations..."
+                               @bind="_searchTerm"
+                               @bind:event="oninput" />
+                        <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
                     </div>
                 </div>
 
-                <!-- Message History Area -->
-                <div class="ig-messages-history">
-                    @if (_conversationDetail.Messages == null || !_conversationDetail.Messages.Any())
+                <!-- Conversation Items List Area -->
+                <div class="flex-1 overflow-y-auto divide-y divide-gray-50">
+                    @if (_isLoading)
                     {
-                        <div class="ig-empty-messages">
-                            <div class="ig-empty-messages-icon">💬</div>
-                            <p class="fw-medium text-secondary mb-0">Chưa có tin nhắn nào.</p>
+                        <!-- Loading Skeletons -->
+                        @for (int i = 0; i < 5; i++)
+                        {
+                            <div class="p-4 flex items-center gap-3 animate-pulse">
+                                <div class="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0"></div>
+                                <div class="flex-1 space-y-2">
+                                    <div class="h-3.5 bg-gray-200 rounded w-1/3"></div>
+                                    <div class="h-2.5 bg-gray-100 rounded w-3/4"></div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <!-- Error State -->
+                        <div class="p-8 text-center flex flex-col items-center justify-center h-full">
+                            <div class="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-3">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            </div>
+                            <p class="text-sm font-medium text-red-600 mb-3">@_errorMessage</p>
+                            <button class="px-4 py-2 bg-orange-50 text-[#FF5500] hover:bg-orange-100 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                    @onclick="() => LoadConversationsAsync(true)">
+                                Retry
+                            </button>
+                        </div>
+                    }
+                    else if (FilteredConversations == null || !FilteredConversations.Any())
+                    {
+                        <!-- Empty State -->
+                        <div class="p-8 text-center flex flex-col items-center justify-center h-full text-gray-400">
+                            <div class="w-14 h-14 rounded-2xl bg-orange-50 text-orange-400 flex items-center justify-center mb-3">
+                                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                </svg>
+                            </div>
+                            <p class="text-sm font-semibold text-gray-700 mb-1">
+                                @(string.IsNullOrWhiteSpace(_searchTerm) ? "No conversations yet" : "No matching conversations")
+                            </p>
+                            <p class="text-xs text-gray-400 max-w-xs">
+                                @(string.IsNullOrWhiteSpace(_searchTerm) 
+                                    ? "When you connect with coaches or friends, your messages will appear here." 
+                                    : "Try searching with a different keyword.")
+                            </p>
                         </div>
                     }
                     else
                     {
-                        @foreach (var msg in _conversationDetail.Messages)
+                        <!-- Conversations List -->
+                        @foreach (var item in FilteredConversations)
                         {
-                            <div class="ig-msg-row @(msg.IsMine ? "mine" : "theirs")">
-                                @if (!msg.IsMine)
-                                {
-                                    <div class="ig-msg-sender-avatar-wrap">
-                                        @if (!string.IsNullOrWhiteSpace(msg.SenderAvatar))
+                            var isSelected = _selectedConversationId == item.ConversationId;
+                            var isUnread = item.UnreadCount > 0;
+                            <div class="group relative flex items-center gap-3 px-4 py-3.5 cursor-pointer transition @(isSelected ? "bg-orange-50/80 border-l-4 border-[#FF5500]" : "hover:bg-gray-50/80")"
+                                 @onclick="() => SelectConversation(item.ConversationId)">
+                                <!-- Avatar -->
+                                <div class="relative flex-shrink-0">
+                                    @if (!string.IsNullOrWhiteSpace(item.DisplayAvatar))
+                                    {
+                                        <img src="@item.DisplayAvatar" alt="@item.Title" class="w-12 h-12 rounded-full object-cover ring-2 ring-gray-100" />
+                                    }
+                                    else
+                                    {
+                                        <div class="w-12 h-12 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                                            @GetInitials(item.Title)
+                                        </div>
+                                    }
+                                    @if (isUnread)
+                                    {
+                                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-[#FF5500] border-2 border-white rounded-full"></span>
+                                    }
+                                </div>
+
+                                <!-- Info -->
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-1 mb-1">
+                                        <span class="font-semibold text-sm truncate @(isUnread ? "text-gray-900" : "text-gray-800")">@item.Title</span>
+                                        @if (item.LastMessageAt.HasValue)
                                         {
-                                            <img src="@msg.SenderAvatar" alt="@msg.SenderName" class="ig-msg-sender-avatar" />
-                                        }
-                                        else
-                                        {
-                                            <div class="ig-msg-sender-avatar-placeholder">
-                                                @GetInitials(msg.SenderName)
-                                            </div>
+                                            <span class="text-[11px] text-gray-400 flex-shrink-0">@FormatTime(item.LastMessageAt.Value)</span>
                                         }
                                     </div>
-                                }
-                                <div class="ig-msg-bubble-wrap">
-                                    @if (!msg.IsMine && string.Equals(_conversationDetail.Type, "GROUP", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        <span class="ig-msg-sender-name">@msg.SenderName</span>
-                                    }
-                                    <div class="ig-msg-bubble">
-                                        <p class="ig-msg-content">@msg.Content</p>
-                                        @if (msg.CreatedAt.HasValue)
+                                    <div class="flex items-center justify-between gap-2">
+                                        <p class="text-xs truncate @(isUnread ? "font-semibold text-gray-900" : "text-gray-500")">
+                                            @(string.IsNullOrWhiteSpace(item.LastMessage) ? "Started a conversation" : item.LastMessage)
+                                        </p>
+                                        @if (item.UnreadCount > 0)
                                         {
-                                            <span class="ig-msg-time-badge">@FormatMessageTime(msg.CreatedAt.Value)</span>
+                                            <span class="bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-[11px] font-bold px-1.5 py-0.5 rounded-full shadow-xs flex-shrink-0">
+                                                @item.UnreadCount
+                                            </span>
                                         }
                                     </div>
                                 </div>
+
+                                <!-- Delete Conversation Action -->
+                                <button type="button"
+                                        class="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition ml-1 cursor-pointer flex-shrink-0"
+                                        title="Delete conversation"
+                                        @onclick="() => PromptDeleteConversation(item.ConversationId, item.Title)"
+                                        @onclick:stopPropagation="true">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
                             </div>
                         }
                     }
                 </div>
+            </div>
 
-                <!-- Message Composer Area (UC-16.1.1 Scope) -->
-                <div class="ig-composer-wrapper">
-                    <div class="ig-composer-box">
-                        <textarea class="ig-composer-input"
-                                  placeholder="Type a message..."
-                                  rows="1"
-                                  maxlength="300"
-                                  @bind="_messageText"
-                                  @bind:event="oninput"
-                                  @onkeydown="HandleKeyDown"
-                                  disabled="@_isSending"></textarea>
-                        <button class="ig-send-btn"
-                                disabled="@(_isSending || string.IsNullOrWhiteSpace(_messageText))"
-                                title="Send message"
-                                @onclick="SendMessageAsync">
-                            @if (_isSending)
+            <!-- 2. Right Column: Conversation Detail or Empty State -->
+            <div class="flex-1 flex flex-col bg-white h-full min-w-0 @(ConversationId.HasValue ? "flex" : "hidden md:flex")">
+                @if (!ConversationId.HasValue)
+                {
+                    <!-- Placeholder when no conversation is selected -->
+                    <div class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-50/30">
+                        <div class="w-20 h-20 rounded-2xl bg-orange-50 text-[#FF5500] flex items-center justify-center mb-4 shadow-xs">
+                            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                            </svg>
+                        </div>
+                        <h2 class="text-xl font-bold text-gray-900 mb-2">Your Messages</h2>
+                        <p class="text-sm text-gray-500 max-w-sm mb-6">
+                            Send private messages, schedule workouts, or ask questions to your sports coach.
+                        </p>
+                        <a href="coaches"
+                           class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white font-semibold text-sm shadow-sm hover:shadow hover:opacity-95 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            <span>Find Coaches</span>
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    <!-- Conversation Detail View -->
+                    @if (_isDetailLoading)
+                    {
+                        <!-- Detail Loading Skeleton -->
+                        <div class="px-5 py-4 border-b border-gray-100 flex items-center gap-3 animate-pulse">
+                            <div class="w-10 h-10 rounded-full bg-gray-200"></div>
+                            <div class="space-y-1.5 flex-1">
+                                <div class="h-4 bg-gray-200 rounded w-1/4"></div>
+                                <div class="h-3 bg-gray-100 rounded w-1/6"></div>
+                            </div>
+                        </div>
+                        <div class="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400">
+                            <div class="w-8 h-8 border-3 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-3"></div>
+                            <p class="text-sm font-medium text-gray-600">Loading conversation...</p>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(_detailErrorMessage))
+                    {
+                        <!-- Detail Error State -->
+                        <div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                            <div class="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-3">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-base font-bold text-gray-900 mb-1">Cannot load conversation</h3>
+                            <p class="text-xs text-red-500 mb-4">@_detailErrorMessage</p>
+                            <button class="px-4 py-2 bg-orange-50 text-[#FF5500] hover:bg-orange-100 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                    @onclick="() => LoadConversationDetailAsync(ConversationId.Value)">
+                                Try again
+                            </button>
+                        </div>
+                    }
+                    else if (_conversationDetail != null)
+                    {
+                        <!-- Detail Header -->
+                        <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white z-10">
+                            <div class="flex items-center gap-3">
+                                <button class="md:hidden p-2 -ml-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                                        title="Back to conversations"
+                                        @onclick="BackToConversationList">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                    </svg>
+                                </button>
+                                <div class="relative flex-shrink-0">
+                                    @if (!string.IsNullOrWhiteSpace(_conversationDetail.DisplayAvatar))
+                                    {
+                                        <img src="@_conversationDetail.DisplayAvatar" alt="@_conversationDetail.Title" class="w-10 h-10 rounded-full object-cover ring-2 ring-gray-100" />
+                                    }
+                                    else
+                                    {
+                                        <div class="w-10 h-10 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                                            @GetInitials(_conversationDetail.Title)
+                                        </div>
+                                    }
+                                </div>
+                                <div>
+                                    <h2 class="font-bold text-gray-900 text-base leading-tight">@_conversationDetail.Title</h2>
+                                    @if (_conversationDetail.IsBlockedByMe)
+                                    {
+                                        <span class="text-xs text-red-500 flex items-center gap-1 font-medium">
+                                            <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+                                            Blocked
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-xs text-emerald-600 flex items-center gap-1 font-medium">
+                                            <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                                            @(string.Equals(_conversationDetail.Type, "GROUP", StringComparison.OrdinalIgnoreCase) ? "Group conversation" : "Active conversation")
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-1.5">
+                                @if (!string.Equals(_conversationDetail.Type, "GROUP", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    @if (_conversationDetail.IsBlockedByMe)
+                                    {
+                                        <button type="button"
+                                                class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                                                title="Unblock this user"
+                                                disabled="@_isBlockingAction"
+                                                @onclick="UnblockUserAsync">
+                                            <svg class="w-3.5 h-3.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path>
+                                            </svg>
+                                            <span>Unblock</span>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="px-3 py-1.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                                                title="Block this user"
+                                                @onclick="PromptBlockUser">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                            </svg>
+                                            <span>Block</span>
+                                        </button>
+                                    }
+                                }
+
+                                <button type="button"
+                                        class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                                        title="Delete conversation"
+                                        @onclick="() => PromptDeleteConversation(_conversationDetail.ConversationId, _conversationDetail.Title)">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Blocked Status Warning Banner -->
+                        @if (_conversationDetail.IsBlockedByMe)
+                        {
+                            <div class="px-5 py-2.5 bg-red-50/90 border-b border-red-100 flex items-center justify-between text-xs text-red-700">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                    </svg>
+                                    <span>You have blocked this user. You will not receive messages or notifications from them.</span>
+                                </div>
+                                <button type="button"
+                                        class="font-semibold text-red-800 hover:underline cursor-pointer flex-shrink-0 ml-2"
+                                        disabled="@_isBlockingAction"
+                                        @onclick="UnblockUserAsync">
+                                    Unblock
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Message History Area -->
+                        <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 bg-gray-50/40 messages-history-scroll">
+                            @if (_conversationDetail.Messages == null || !_conversationDetail.Messages.Any())
                             {
-                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                <div class="h-full flex flex-col items-center justify-center text-center text-gray-400 my-auto">
+                                    <div class="w-12 h-12 rounded-full bg-orange-50 text-orange-400 flex items-center justify-center mb-2">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                        </svg>
+                                    </div>
+                                    <p class="text-sm font-medium text-gray-600">No messages yet</p>
+                                    <p class="text-xs text-gray-400">Say hello to begin your conversation!</p>
+                                </div>
                             }
                             else
                             {
-                                <span>Send</span>
+                                @foreach (var msg in _conversationDetail.Messages)
+                                {
+                                    <div class="flex @(msg.IsMine ? "justify-end" : "justify-start items-end gap-2")">
+                                        @if (!msg.IsMine)
+                                        {
+                                            <div class="w-7 h-7 rounded-full flex-shrink-0 mb-1 overflow-hidden">
+                                                @if (!string.IsNullOrWhiteSpace(msg.SenderAvatar))
+                                                {
+                                                    <img src="@msg.SenderAvatar" alt="@msg.SenderName" class="w-full h-full object-cover" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="w-full h-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-[10px]">
+                                                        @GetInitials(msg.SenderName)
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+
+                                        <div class="flex flex-col @(msg.IsMine ? "items-end" : "items-start") max-w-[80%] sm:max-w-md">
+                                            @if (!msg.IsMine && string.Equals(_conversationDetail.Type, "GROUP", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="text-[11px] font-medium text-gray-500 mb-1 px-1">@msg.SenderName</span>
+                                            }
+                                            @if (string.Equals(msg.MessageType, "AUTO", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO_REPLY", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full flex items-center gap-1 mb-1 shadow-2xs">
+                                                    <svg class="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                                    </svg>
+                                                    Automated Reply
+                                                </span>
+                                            }
+                                            <div class="px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-xs @(msg.IsMine
+                                                    ? "bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white rounded-tr-xs"
+                                                    : (string.Equals(msg.MessageType, "AUTO", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO_REPLY", StringComparison.OrdinalIgnoreCase)
+                                                        ? "bg-amber-50/70 text-gray-800 border border-amber-200 rounded-tl-xs"
+                                                        : "bg-white text-gray-800 border border-gray-100 rounded-tl-xs"))">
+                                                @msg.Content
+                                            </div>
+                                            @if (msg.CreatedAt.HasValue)
+                                            {
+                                                <span class="text-[10px] text-gray-400 mt-1 px-1">
+                                                    @FormatMessageTime(msg.CreatedAt.Value)
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
                             }
-                        </button>
-                    </div>
-                    @if (!string.IsNullOrEmpty(_sendErrorMessage))
-                    {
-                        <div class="ig-composer-error">@_sendErrorMessage</div>
+                        </div>
+
+                        <!-- Message Composer Area -->
+                        <div class="p-4 bg-white border-t border-gray-100">
+                            @if (_conversationDetail.IsBlockedByMe)
+                            {
+                                <div class="flex items-center justify-between bg-gray-50 rounded-xl p-3 text-xs text-gray-600 border border-gray-200">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m0 0v2m0-2h2m-2 0H10m11-3.5a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        <span>You have blocked this user. Unblock them to send a message.</span>
+                                    </div>
+                                    <button type="button"
+                                            class="px-3 py-1.5 bg-[#FF5500] hover:bg-[#e04c00] text-white font-semibold rounded-lg text-xs transition cursor-pointer"
+                                            disabled="@_isBlockingAction"
+                                            @onclick="UnblockUserAsync">
+                                        Unblock
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="flex items-center gap-2">
+                                    <textarea class="flex-1 bg-gray-100 rounded-xl px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:bg-white transition resize-none leading-relaxed"
+                                              placeholder="Type a message..."
+                                              rows="1"
+                                              maxlength="300"
+                                              @bind="_messageText"
+                                              @bind:event="oninput"
+                                              @onkeydown="HandleKeyDown"
+                                              disabled="@_isSending"></textarea>
+                                    <button type="button"
+                                            class="p-2.5 rounded-xl bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white hover:opacity-95 shadow-xs disabled:opacity-40 transition flex items-center justify-center flex-shrink-0 cursor-pointer"
+                                            disabled="@(_isSending || string.IsNullOrWhiteSpace(_messageText))"
+                                            title="Send message"
+                                            @onclick="SendMessageAsync">
+                                        @if (_isSending)
+                                        {
+                                            <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        }
+                                        else
+                                        {
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                            </svg>
+                                        }
+                                    </button>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(_sendErrorMessage))
+                            {
+                                <p class="text-xs text-red-500 mt-2">@_sendErrorMessage</p>
+                            }
+                        </div>
                     }
-                </div>
-            }
+                }
+            </div>
         </div>
-    }
+    </div>
 </div>
 
+<!-- Delete Conversation Modal Dialog -->
 @if (_showDeleteModal)
 {
-    <div class="ig-modal-backdrop" @onclick="CancelDelete">
-        <div class="ig-modal-dialog" @onclick:stopPropagation="true">
-            <div class="ig-modal-content">
-                <div class="ig-modal-icon-wrap">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                </div>
-                <h3 class="ig-modal-title">Delete conversation?</h3>
-                <p class="ig-modal-text">
-                    Delete this conversation? You can no longer see the previous messages in this chat.
-                </p>
-                @if (!string.IsNullOrEmpty(_deleteErrorMessage))
-                {
-                    <div class="ig-modal-error">@_deleteErrorMessage</div>
-                }
-                <div class="ig-modal-actions">
-                    <button type="button" class="ig-modal-btn ig-modal-btn-cancel" disabled="@_isDeleting" @onclick="CancelDelete">
-                        Cancel
-                    </button>
-                    <button type="button" class="ig-modal-btn ig-modal-btn-delete" disabled="@_isDeleting" @onclick="ConfirmDeleteConversationAsync">
-                        @if (_isDeleting)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                            <span>Deleting...</span>
-                        }
-                        else
-                        {
-                            <span>Delete</span>
-                        }
-                    </button>
-                </div>
+    <div class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+         @onclick="CancelDelete">
+        <div class="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-sm w-full p-6 text-center animate-in zoom-in-95"
+             @onclick:stopPropagation="true">
+            <div class="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mb-2">Delete conversation?</h3>
+            <p class="text-xs text-gray-500 mb-6">
+                Are you sure you want to delete this conversation with <strong class="text-gray-700">@_conversationTitleToDelete</strong>? You can no longer see previous messages in this chat.
+            </p>
+            @if (!string.IsNullOrEmpty(_deleteErrorMessage))
+            {
+                <p class="text-xs text-red-500 mb-4 font-medium">@_deleteErrorMessage</p>
+            }
+            <div class="flex items-center gap-3">
+                <button type="button"
+                        class="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-semibold text-xs hover:bg-gray-50 transition cursor-pointer"
+                        disabled="@_isDeleting"
+                        @onclick="CancelDelete">
+                    Cancel
+                </button>
+                <button type="button"
+                        class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                        disabled="@_isDeleting"
+                        @onclick="ConfirmDeleteConversationAsync">
+                    @if (_isDeleting)
+                    {
+                        <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <span>Delete</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Block User Modal Dialog -->
+@if (_showBlockModal)
+{
+    <div class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+         @onclick="CancelBlock">
+        <div class="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-sm w-full p-6 text-center animate-in zoom-in-95"
+             @onclick:stopPropagation="true">
+            <div class="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mb-2">Block @_conversationDetail?.Title?</h3>
+            <p class="text-xs text-gray-500 mb-6">
+                Are you sure you want to block this user? They will not be able to send you messages, and you will not receive any notifications from them.
+            </p>
+            @if (!string.IsNullOrEmpty(_blockErrorMessage))
+            {
+                <p class="text-xs text-red-500 mb-4 font-medium">@_blockErrorMessage</p>
+            }
+            <div class="flex items-center gap-3">
+                <button type="button"
+                        class="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-semibold text-xs hover:bg-gray-50 transition cursor-pointer"
+                        disabled="@_isBlockingAction"
+                        @onclick="CancelBlock">
+                    Cancel
+                </button>
+                <button type="button"
+                        class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                        disabled="@_isBlockingAction"
+                        @onclick="ConfirmBlockUserAsync">
+                    @if (_isBlockingAction)
+                    {
+                        <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Blocking...</span>
+                    }
+                    else
+                    {
+                        <span>Block User</span>
+                    }
+                </button>
             </div>
         </div>
     </div>
@@ -338,38 +598,103 @@
     private string _searchTerm = "";
     private Guid? _selectedConversationId;
 
-    // UC-16.1 Conversation Detail states
+    // Conversation Detail states
     private ConversationDetailDto? _conversationDetail;
     private bool _isDetailLoading = false;
     private string? _detailErrorMessage;
     private Guid? _loadedConversationId;
     private bool _shouldScrollToBottom = false;
 
-    // UC-16.1.1 Send Message states
+    // Send Message states
     private string _messageText = "";
     private bool _isSending = false;
     private string? _sendErrorMessage;
     private Guid _currentUserId = Guid.Empty;
 
+    // Header & User states to match Home
+    private string userName = "Athlete";
+    private string userInitials = "A";
+    private string userRole = "Athlete";
+    private string headerSearchTerm = "";
+
     protected override async Task OnInitializedAsync()
     {
+        await LoadUserInfoAsync();
+
         try
         {
-            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-            var user = authState.User;
-            var userIdStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                         ?? user.FindFirst("sub")?.Value;
-            if (Guid.TryParse(userIdStr, out var parsedId))
-            {
-                _currentUserId = parsedId;
-            }
-
             ChatHubClient.OnMessageReceived += HandleReceiveMessage;
             await ChatHubClient.StartAsync();
         }
         catch { }
 
         await LoadConversationsAsync();
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var idClaim = user.FindFirst("sub")?.Value
+                              ?? user.FindFirst("nameid")?.Value
+                              ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (Guid.TryParse(idClaim, out var parsedId))
+                {
+                    _currentUserId = parsedId;
+                }
+
+                userName = user.Identity.Name ?? "Athlete";
+                var isCoach = user.IsInRole(AppRoles.Coach) ||
+                              user.IsInRole("COACH") ||
+                              string.Equals(user.FindFirst(ClaimTypes.Role)?.Value, AppRoles.Coach, StringComparison.OrdinalIgnoreCase);
+                userRole = isCoach ? "Coach" : "Trainee";
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            userInitials = "Me";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e)
+    {
+        headerSearchTerm = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") ExecuteHeaderSearch();
+    }
+
+    private void ExecuteHeaderSearch()
+    {
+        if (!string.IsNullOrWhiteSpace(headerSearchTerm))
+        {
+            Navigation.NavigateTo($"home?search={Uri.EscapeDataString(headerSearchTerm)}");
+        }
+    }
+
+    private void ClearHeaderSearch()
+    {
+        headerSearchTerm = string.Empty;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -395,7 +720,7 @@
             _shouldScrollToBottom = false;
             try
             {
-                await JSRuntime.InvokeVoidAsync("eval", "var el = document.querySelector('.ig-messages-history'); if (el) el.scrollTop = el.scrollHeight;");
+                await JSRuntime.InvokeVoidAsync("eval", "var el = document.querySelector('.messages-history-scroll'); if (el) el.scrollTop = el.scrollHeight;");
             }
             catch { }
         }
@@ -470,19 +795,23 @@
                 {
                     convItem.UnreadCount = 0;
                 }
+
+                // Mark notifications for this conversation as read so AppHeader badge updates immediately
+                _ = NotificationService.MarkConversationNotificationsAsReadAsync(convId);
             }
             else
             {
-                _detailErrorMessage = response.Message ?? "Không thể tải chi tiết cuộc trò chuyện.";
+                _detailErrorMessage = response.Message ?? "Cannot load conversation detail.";
             }
         }
         catch (Exception ex)
         {
-            _detailErrorMessage = $"Lỗi kết nối: {ex.Message}";
+            _detailErrorMessage = $"Connection error: {ex.Message}";
         }
         finally
         {
             _isDetailLoading = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -596,15 +925,30 @@
                 var sentMsg = response.Data;
                 sentMsg.IsMine = true;
 
-                // Deduplicate check
                 if (_conversationDetail != null && !_conversationDetail.Messages.Any(m => m.Id == sentMsg.Id))
                 {
                     _conversationDetail.Messages.Add(sentMsg);
                     _shouldScrollToBottom = true;
                 }
 
-                // Update Conversation List (UC-16 realtime)
-                await UpdateConversationListItemAsync(sentMsg, isFromMe: true);
+                if (sentMsg.AutoReply != null && _conversationDetail != null && !_conversationDetail.Messages.Any(m => m.Id == sentMsg.AutoReply.Id))
+                {
+                    sentMsg.AutoReply.IsMine = false;
+                    _conversationDetail.Messages.Add(sentMsg.AutoReply);
+                    _shouldScrollToBottom = true;
+                    await UpdateConversationListItemAsync(sentMsg.AutoReply, isFromMe: false);
+                }
+                else
+                {
+                    await UpdateConversationListItemAsync(sentMsg, isFromMe: true);
+                }
+
+                if (_conversationDetail != null)
+                {
+                    _conversationDetail.Messages = _conversationDetail.Messages
+                        .OrderBy(m => m.CreatedAt ?? DateTime.MinValue)
+                        .ToList();
+                }
             }
             else
             {
@@ -625,24 +969,39 @@
     {
         await InvokeAsync(async () =>
         {
-            // 1. If currently viewing the conversation of this message
             if (_selectedConversationId.HasValue && _selectedConversationId.Value == msg.ConversationId)
             {
                 if (_conversationDetail != null)
                 {
-                    // Deduplicate check: do not add if already rendered
+                    // If current user is blocking this conversation, ignore blocked messages and auto-replies
+                    if (_conversationDetail.IsBlockedByMe && (string.Equals(msg.MessageType, "BLOCK", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "BLOCKED", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO_REPLY", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return;
+                    }
+
                     if (!_conversationDetail.Messages.Any(m => m.Id == msg.Id))
                     {
                         msg.IsMine = (msg.SenderId == _currentUserId);
                         _conversationDetail.Messages.Add(msg);
+                        _conversationDetail.Messages = _conversationDetail.Messages
+                            .OrderBy(m => m.CreatedAt ?? DateTime.MinValue)
+                            .ToList();
                         _shouldScrollToBottom = true;
                     }
                 }
+
+                _ = NotificationService.MarkConversationNotificationsAsReadAsync(msg.ConversationId);
             }
 
-            // 2. Update Conversation List (UC-16 realtime)
-            await UpdateConversationListItemAsync(msg, isFromMe: (msg.SenderId == _currentUserId));
-
+            var conv = _conversations?.FirstOrDefault(c => c.ConversationId == msg.ConversationId);
+            if (_conversationDetail != null && _conversationDetail.IsBlockedByMe && (string.Equals(msg.MessageType, "BLOCK", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "BLOCKED", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO_REPLY", StringComparison.OrdinalIgnoreCase)))
+            {
+                // Ignore updating preview for blocker
+            }
+            else
+            {
+                await UpdateConversationListItemAsync(msg, isFromMe: (msg.SenderId == _currentUserId));
+            }
             StateHasChanged();
         });
     }
@@ -662,31 +1021,22 @@
             conv.LastMessageAt = msg.CreatedAt ?? DateTime.UtcNow;
             conv.LastMessageSenderId = msg.SenderId;
 
-            // Increment unread count if message is from someone else and not viewing this conversation
             if (!isFromMe && (!_selectedConversationId.HasValue || _selectedConversationId.Value != msg.ConversationId))
             {
                 conv.UnreadCount++;
             }
 
-            // Sort conversations: newest message at top
             _conversations = _conversations
                 .OrderByDescending(c => c.LastMessageAt ?? c.UpdatedAt ?? DateTime.MinValue)
                 .ToList();
         }
         else
         {
-            // New conversation not yet in list (e.g. was previously deleted and reappears): reload list in background
             await LoadConversationsAsync(showLoading: false);
         }
     }
 
-    public ValueTask DisposeAsync()
-    {
-        ChatHubClient.OnMessageReceived -= HandleReceiveMessage;
-        return ValueTask.CompletedTask;
-    }
-
-    // UC-16.5 Delete Conversation states & methods
+    // Delete Conversation Modal states & methods
     private bool _showDeleteModal = false;
     private Guid? _conversationIdToDelete;
     private string? _conversationTitleToDelete;
@@ -724,13 +1074,11 @@
 
             if (response.Success)
             {
-                // Remove conversation from local list immediately
                 if (_conversations != null)
                 {
                     _conversations.RemoveAll(c => c.ConversationId == targetId);
                 }
 
-                // If currently open conversation was deleted, navigate back to empty selection
                 if (_selectedConversationId.HasValue && _selectedConversationId.Value == targetId)
                 {
                     BackToConversationList();
@@ -753,5 +1101,88 @@
         {
             _isDeleting = false;
         }
+    }
+
+    // Block / Unblock Modal states & methods
+    private bool _showBlockModal = false;
+    private bool _isBlockingAction = false;
+    private string? _blockErrorMessage;
+
+    private void PromptBlockUser()
+    {
+        _blockErrorMessage = null;
+        _showBlockModal = true;
+    }
+
+    private void CancelBlock()
+    {
+        if (_isBlockingAction) return;
+        _showBlockModal = false;
+        _blockErrorMessage = null;
+    }
+
+    private async Task ConfirmBlockUserAsync()
+    {
+        if (!ConversationId.HasValue || _isBlockingAction) return;
+
+        _isBlockingAction = true;
+        _blockErrorMessage = null;
+
+        try
+        {
+            var response = await ConversationService.BlockUserAsync(ConversationId.Value);
+            if (response.Success)
+            {
+                if (_conversationDetail != null)
+                {
+                    _conversationDetail.IsBlockedByMe = true;
+                }
+                _showBlockModal = false;
+            }
+            else
+            {
+                _blockErrorMessage = response.Message ?? "Failed to block user.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _blockErrorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isBlockingAction = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UnblockUserAsync()
+    {
+        if (!ConversationId.HasValue || _isBlockingAction) return;
+
+        _isBlockingAction = true;
+
+        try
+        {
+            var response = await ConversationService.UnblockUserAsync(ConversationId.Value);
+            if (response.Success)
+            {
+                if (_conversationDetail != null)
+                {
+                    _conversationDetail.IsBlockedByMe = false;
+                }
+            }
+        }
+        catch { }
+        finally
+        {
+            _isBlockingAction = false;
+            StateHasChanged();
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        ChatHubClient.OnMessageReceived -= HandleReceiveMessage;
+        return ValueTask.CompletedTask;
     }
 }

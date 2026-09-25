@@ -338,13 +338,39 @@ public partial class Home : ComponentBase, IDisposable
     }
 
     // Post Interactions
-    private void ToggleLike(PostDto post)
-    {
-        post.IsLikedByCurrentUser = !post.IsLikedByCurrentUser;
-        post.LikeCount += post.IsLikedByCurrentUser ? 1 : -1;
-        if (post.LikeCount < 0) post.LikeCount = 0;
+    private readonly HashSet<Guid> _pendingReactionPostIds = new();
 
-        _ = PostService.ToggleLikeAsync(post.Id);
+    private async Task ToggleLike(PostDto post)
+    {
+        if (post == null || _pendingReactionPostIds.Contains(post.Id))
+        {
+            return;
+        }
+
+        _pendingReactionPostIds.Add(post.Id);
+
+        try
+        {
+            var response = await PostService.ToggleLikeAsync(post.Id);
+            if (response.Success && response.Data != null)
+            {
+                post.IsLikedByCurrentUser = response.Data.IsLiked;
+                post.LikeCount = response.Data.LikeCount;
+                StateHasChanged();
+            }
+            else if (!response.Success && !string.IsNullOrWhiteSpace(response.Message))
+            {
+                Console.WriteLine($"[Home] Failed to react to post {post.Id}: {response.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Home] Exception toggling like for post {post.Id}: {ex.Message}");
+        }
+        finally
+        {
+            _pendingReactionPostIds.Remove(post.Id);
+        }
     }
 
     private void ToggleProfileMenu()
@@ -391,6 +417,12 @@ public partial class Home : ComponentBase, IDisposable
 
     private void CloseReportModal()
     {
+        reportPostId = postId;
+        showReportModal = true;
+    }
+
+    private void CloseReportModal()
+    {
         showReportModal = false;
         reportPostId = null;
     }
@@ -398,6 +430,8 @@ public partial class Home : ComponentBase, IDisposable
     private void OnPostReported(Guid reportedTargetPostId)
     {
         reportedPostIds.Add(reportedTargetPostId);
+    private void OnPostReported()
+    {
         CloseReportModal();
         ShowSuccessToast("Report submitted successfully. Thank you for helping keep our community safe.");
     }
@@ -521,6 +555,18 @@ public partial class Home : ComponentBase, IDisposable
         warningToastCts?.Cancel();
         toastWarningMessage = null;
         StateHasChanged();
+    private void NavigateToAuthorProfile(Guid authorId)
+    {
+        if (authorId == Guid.Empty) return;
+
+        if (currentUserId.HasValue && authorId == currentUserId.Value)
+        {
+            Navigation.NavigateTo("/profile");
+        }
+        else
+        {
+            Navigation.NavigateTo($"/profile/{authorId}");
+        }
     }
 
     // Dispose

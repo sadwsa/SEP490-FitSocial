@@ -835,6 +835,10 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.ReporterId).HasColumnName("ReporterID");
             entity.Property(e => e.ResolvedAt).HasColumnType("timestamp without time zone");
             entity.Property(e => e.Status).HasMaxLength(30);
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp without time zone");
+
+            entity.HasIndex(e => new { e.ReportedPostId, e.ReporterId, e.Status }, "IX_Reports_ReportedPostId_ReporterId_Status");
 
             entity.HasOne(d => d.ReportedPost).WithMany(p => p.Reports)
                 .HasForeignKey(d => d.ReportedPostId)

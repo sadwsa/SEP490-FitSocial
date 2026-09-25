@@ -3,6 +3,7 @@ using System;
 using FitSocial.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FitSocial.Infrastructure.Migrations
 {
     [DbContext(typeof(FitSocialDbContext))]
-    partial class FitSocialDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925010155_AddPostReportsAndReactions")]
+    partial class AddPostReportsAndReactions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1099,6 +1102,8 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("LocationId");
 
+                    b.HasIndex("SportId");
+
                     b.ToTable("Posts");
                 });
 
@@ -1116,6 +1121,16 @@ namespace FitSocial.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("ReactionType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Like");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("PostId", "UserId")
                         .HasName("PostInteractions_pkey");
@@ -1179,14 +1194,6 @@ namespace FitSocial.Infrastructure.Migrations
                     b.Property<string>("Currency")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
-
-                    b.Property<string>("ImageUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<bool?>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -2167,9 +2174,16 @@ namespace FitSocial.Infrastructure.Migrations
                         .HasForeignKey("LocationId")
                         .HasConstraintName("Posts_LocationID_fkey");
 
+                    b.HasOne("FitSocial.Domain.Entities.Sport", "Sport")
+                        .WithMany("Posts")
+                        .HasForeignKey("SportId")
+                        .HasConstraintName("Posts_SportID_fkey");
+
                     b.Navigation("Author");
 
                     b.Navigation("Location");
+
+                    b.Navigation("Sport");
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.PostInteraction", b =>
@@ -2506,6 +2520,11 @@ namespace FitSocial.Infrastructure.Migrations
             modelBuilder.Entity("FitSocial.Domain.Entities.Price", b =>
                 {
                     b.Navigation("CoachUpgrades");
+                });
+
+            modelBuilder.Entity("FitSocial.Domain.Entities.Sport", b =>
+                {
+                    b.Navigation("Posts");
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.TrainingPackage", b =>

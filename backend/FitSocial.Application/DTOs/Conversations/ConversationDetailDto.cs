@@ -13,5 +13,7 @@ public class ConversationDetailDto
     public string? OtherUserName { get; set; }
     public string? OtherUserAvatar { get; set; }
     public DateTime? CreatedAt { get; set; }
+    public bool IsBlockedByMe { get; set; }
+    public bool IsBlockedByOther { get; set; }
     public List<MessageDto> Messages { get; set; } = new();
 }

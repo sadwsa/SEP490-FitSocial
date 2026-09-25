@@ -5,4 +5,7 @@ public enum ReportStatus
     Pending,
     Resolved,
     Dismissed
+    Reviewed,
+    Rejected,
+    Resolved
 }

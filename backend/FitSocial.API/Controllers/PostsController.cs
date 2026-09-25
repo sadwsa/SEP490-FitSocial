@@ -18,6 +18,16 @@ public class PostsController : ControllerBase
     {
         _postService = postService;
         _postReportService = postReportService;
+    private readonly IPostReactionService _postReactionService;
+
+    public PostsController(
+        IPostService postService,
+        IPostReportService postReportService,
+        IPostReactionService postReactionService)
+    {
+        _postService = postService;
+        _postReportService = postReportService;
+        _postReactionService = postReactionService;
     }
 
   
@@ -75,10 +85,10 @@ public class PostsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Soft deletes an existing post.
-    /// User can only delete their own post, unless the user has Admin or Staff privileges.
-    /// </summary>
+    
+    // Soft deletes an existing post.
+    // User can only delete their own post, unless the user has Admin or Staff privileges.
+   
     [HttpDelete("{postId:guid}")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
@@ -168,6 +178,8 @@ public class PostsController : ControllerBase
     /// Reports a specific post for violating community rules.
     /// Accessible by authenticated users.
     /// Duplicate checking is scoped to ReporterId + PostId.
+    /// Reports a post for violating community rules.
+    /// Accessible by authenticated users.
     /// </summary>
     [HttpPost("{postId:guid}/reports")]
     [Authorize]
@@ -202,6 +214,17 @@ public class PostsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CheckPostReported(Guid postId)
+    /// Toggles Like/Unlike on a post.
+    /// Accessible only by Trainees and Coaches.
+    /// </summary>
+    [HttpPost("{postId:guid}/reactions")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<PostReactionResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ToggleReaction(Guid postId)
     {
         var currentUserId = GetCurrentUserId();
         if (!currentUserId.HasValue)
@@ -210,6 +233,13 @@ public class PostsController : ControllerBase
         }
 
         var result = await _postReportService.HasUserReportedPostAsync(postId, currentUserId.Value, HttpContext.RequestAborted);
+        var currentUserRole = GetCurrentUserRole();
+        var result = await _postReactionService.ToggleReactionAsync(
+            postId,
+            currentUserId.Value,
+            currentUserRole,
+            HttpContext.RequestAborted);
+
         return Ok(result);
     }
 

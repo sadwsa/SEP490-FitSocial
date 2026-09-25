@@ -1,22 +1,25 @@
 @namespace FitSocial.Client.Components.Posts
 @inject IPostService PostService
 
-@if (IsVisible)
+@if (IsVisible && PostId.HasValue)
 {
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150"
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-all animate-in fade-in"
          @onclick="CloseModal">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative animate-in zoom-in-95 duration-150"
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 animate-in zoom-in-95 duration-150"
              @onclick:stopPropagation="true">
             <!-- Modal Header -->
             <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
-                <div class="flex items-center gap-2 text-gray-900">
-                    <div class="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center flex-shrink-0">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                         </svg>
                     </div>
-                    <h3 class="font-bold text-gray-900 text-base">Report Post</h3>
+                    <div>
+                        <h3 class="font-bold text-gray-900 text-base">Report Post</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Help us understand what's wrong with this post.</p>
+                    </div>
                 </div>
                 <button type="button" @onclick="CloseModal" disabled="@isSubmitting"
                         class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition cursor-pointer disabled:opacity-50">
@@ -26,12 +29,7 @@
                 </button>
             </div>
 
-            <!-- Description -->
-            <p class="text-xs text-gray-500 mb-3">
-                Please select the reason that best describes why this post violates community guidelines:
-            </p>
-
-            <!-- API Error Alert -->
+            <!-- Error Banner -->
             @if (!string.IsNullOrWhiteSpace(apiErrorMessage))
             {
                 <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2 animate-in fade-in">

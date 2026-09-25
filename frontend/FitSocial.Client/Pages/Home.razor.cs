@@ -35,6 +35,10 @@ public partial class Home : ComponentBase, IDisposable
     private bool showDeleteModal = false;
     private PostDto? postToDelete;
 
+    // Report post state
+    private bool showReportModal = false;
+    private Guid? reportPostId;
+
     // Dropdowns data
     private List<SportDto> availableSports = new();
     private List<LocationDto> availableLocations = new();
@@ -359,7 +363,20 @@ public partial class Home : ComponentBase, IDisposable
 
     private void HandleReportPost(Guid postId)
     {
-        ShowSuccessToast("Thank you. Post reported to moderators for review.");
+        reportPostId = postId;
+        showReportModal = true;
+    }
+
+    private void CloseReportModal()
+    {
+        showReportModal = false;
+        reportPostId = null;
+    }
+
+    private void OnPostReported()
+    {
+        CloseReportModal();
+        ShowSuccessToast("Report submitted successfully. Thank you for helping keep our community safe.");
     }
 
     // Delete post methods

@@ -122,3 +122,18 @@ public class PostReactionResponse
     public bool IsLiked { get; set; }
     public int LikeCount { get; set; }
 }
+
+public class CreatePostReportRequest
+{
+    public string Reason { get; set; } = string.Empty;
+}
+
+public class PostReportResponse
+{
+    public Guid ReportId { get; set; }
+    public Guid PostId { get; set; }
+    public Guid ReporterId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime? CreatedAt { get; set; }
+}

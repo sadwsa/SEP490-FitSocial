@@ -13,6 +13,11 @@ public class PostsController : ControllerBase
 {
     private readonly IPostService _postService;
     private readonly IPostReportService _postReportService;
+
+    public PostsController(IPostService postService, IPostReportService postReportService)
+    {
+        _postService = postService;
+        _postReportService = postReportService;
     private readonly IPostReactionService _postReactionService;
 
     public PostsController(
@@ -170,6 +175,9 @@ public class PostsController : ControllerBase
     }
 
     /// <summary>
+    /// Reports a specific post for violating community rules.
+    /// Accessible by authenticated users.
+    /// Duplicate checking is scoped to ReporterId + PostId.
     /// Reports a post for violating community rules.
     /// Accessible by authenticated users.
     /// </summary>
@@ -199,6 +207,13 @@ public class PostsController : ControllerBase
     }
 
     /// <summary>
+    /// Checks whether the authenticated user has already submitted an active/pending report for this specific post.
+    /// </summary>
+    [HttpGet("{postId:guid}/reports/check")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> CheckPostReported(Guid postId)
     /// Toggles Like/Unlike on a post.
     /// Accessible only by Trainees and Coaches.
     /// </summary>
@@ -217,6 +232,7 @@ public class PostsController : ControllerBase
             return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
         }
 
+        var result = await _postReportService.HasUserReportedPostAsync(postId, currentUserId.Value, HttpContext.RequestAborted);
         var currentUserRole = GetCurrentUserRole();
         var result = await _postReactionService.ToggleReactionAsync(
             postId,

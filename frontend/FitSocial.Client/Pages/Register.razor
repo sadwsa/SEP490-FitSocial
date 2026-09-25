@@ -10,6 +10,7 @@
 @inject ITermsService TermsService
 @inject IEkycService EkycService
 @inject IPaymentService PaymentService
+@inject FitSocial.Client.Services.SystemOperations.ISystemOperationsService SystemOps
 @inject NavigationManager Navigation
 
 <PageTitle>Join the FitSocial Community</PageTitle>
@@ -222,18 +223,18 @@
             <div class="field">
                 <label>Live Face Verification (Biometric) <span class="req">*</span></label>
                 <div class="liveness-instruct alert alert-info" style="font-size:13px; margin-bottom:8px; padding:8px 10px; border-radius:8px; background:#e8f4fd; border:1px solid #b6e0ff;">
-                    <strong>Hướng dẫn sống:</strong> Nhìn thẳng (Portrait) - đưa mặt lại gần/ra xa 20cm để rõ nét - sau đó quay trái 30° và phải 30° nếu muốn tăng độ chính xác. Ánh sáng đủ, không đeo kính râm.
+                    <strong>Guide:</strong> Look straight (Portrait) — move face 20cm closer/farther for clarity — then turn left 30° and right 30° if you want higher accuracy. Good lighting, no sunglasses.
                 </div>
                 <LiveFaceCapture @bind-Value="registerModel.FaceImageUrl" />
-                <small class="muted">Bắt buộc: Portrait chính diện (dùng cho đối sánh + liveness Portrait)</small>
+                <small class="muted">Required: Portrait front-facing (used for face matching + liveness Portrait)</small>
             </div>
             <details class="field" open>
-                <summary style="cursor:pointer; font-weight:600; margin:6px 0;">Nâng cao: Thêm pose trái/phải (khuyến nghị - tăng tỉ lệ pass liveness)</summary>
+                <summary style="cursor:pointer; font-weight:600; margin:6px 0;">Advanced: Add left/right poses (recommended - improves liveness pass rate)</summary>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px;">
-                    <div><label>Left pose - Quay trái 30° <small class="muted">(optional)</small></label><LiveFaceCapture @bind-Value="registerModel.FaceImageLeftUrl" /></div>
-                    <div><label>Right pose - Quay phải 30° <small class="muted">(optional)</small></label><LiveFaceCapture @bind-Value="registerModel.FaceImageRightUrl" /></div>
+                    <div><label>Left pose - Turn left 30° <small class="muted">(optional)</small></label><LiveFaceCapture @bind-Value="registerModel.FaceImageLeftUrl" /></div>
+                    <div><label>Right pose - Turn right 30° <small class="muted">(optional)</small></label><LiveFaceCapture @bind-Value="registerModel.FaceImageRightUrl" /></div>
                 </div>
-                <small class="muted">Nếu có Left/Right, backend sẽ gọi <code>face_liveness</code> với <code>label_pose=Left/Right</code> thêm ngoài <code>Portrait</code>. Gần/xa thực hiện trong lúc capture Portrait (tiến/lùi 20cm).</small>
+                <small class="muted">Adding Left/Right poses can improve accuracy.</small>
             </details>
             @if (!string.IsNullOrEmpty(ekycError)) { <div class="field-error">@ekycError</div> }
             @if (ekycResult != null) { <div class="auth-alert success"><AppIcon Name="check" /><span>CCCD verified: @ekycResult.FullNameOnCard (@ekycResult.IdCardNumber)</span></div> }
@@ -265,6 +266,42 @@
                 <small class="muted">Accepted: NASM, CSCS, ACE. PDF, PNG, JPG (max 10MB). Pending manual verification within 3 days after payment.</small>
             </div>
             <div class="field"><label>Biography</label><InputTextArea @bind-Value="registerModel.Biography" class="form-control" rows="3" placeholder="Coaching background and data-driven approach..." /></div>
+            <div class="field">
+                <label>Choose Subscription Plan <span class="req">*</span></label>
+                @if (isLoadingPlans)
+                {
+                    <div class="py-2 text-center muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading plans...</div>
+                }
+                else if (availablePlans.Count == 0)
+                {
+                    <div class="auth-alert error"><AppIcon Name="warning" /><span>No active subscription plans available. Please contact support.</span></div>
+                }
+                else
+                {
+                    <div style="display:grid; grid-template-columns:1fr; gap:10px;">
+                        @foreach (var plan in availablePlans)
+                        {
+                            var isSelected = registerModel.PriceId == plan.PriceId;
+                            <label style="display:flex; gap:12px; align-items:center; border:2px solid @(isSelected ? "#FF5500" : "#e5e7eb"); background:@(isSelected ? "#fff7f3" : "#fff"); border-radius:12px; padding:12px; cursor:pointer;">
+                                <input type="radio" name="plan" checked="@isSelected" @onchange="() => SelectPlan(plan.PriceId)" style="accent-color:#FF5500;" />
+                                @if (!string.IsNullOrEmpty(plan.ImageUrl))
+                                {
+                                    <img src="@plan.ImageUrl" alt="Plan" style="width:56px; height:56px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb;" />
+                                }
+                                else
+                                {
+                                    <div style="width:56px; height:56px; border-radius:8px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; border:1px solid #e5e7eb;"><AppIcon Name="trophy" /></div>
+                                }
+                                <div style="flex:1;">
+                                    <div style="font-weight:700; color:#1e293b;">@plan.Amount.ToString("N0") @plan.Currency <span style="font-weight:400; color:#64748b; font-size:0.85em;">@(!string.IsNullOrWhiteSpace(plan.Description) ? $"• {plan.Description}" : "")</span></div>
+                                </div>
+                                @if (isSelected) { <span class="status-badge active">Selected</span> }
+                            </label>
+                        }
+                    </div>
+                }
+                @if (showCoachErrors && registerModel.PriceId == null) { <div class="field-error">Please select a subscription plan.</div> }
+            </div>
             <label class="terms"><input type="checkbox" @bind="agreedTerms" /><span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> (@latestTerm?.Version) </span></label>
             @if (latestTerm != null) { <details class="terms-box"><summary>@latestTerm.Title</summary><div class="terms-content">@latestTerm.Content</div></details> }
             @if (showTermsError && !agreedTerms) { <div class="field-error">Please agree to the terms.</div> }
@@ -285,7 +322,26 @@
                 <p><strong>Bio:</strong> @registerModel.Biography</p>
                 <p><strong>Certificates:</strong> @registerModel.Certificates.Count file(s)</p>
                 <p><strong>CCCD:</strong> @(ekycResult?.IdCardNumber ?? "Verified")</p>
-                @if (latestTerm != null) { <p><strong>Terms:</strong> @latestTerm.Version - @latestTerm.Title (Agreed)</p> }
+                @{
+                    var selectedPlan = availablePlans.FirstOrDefault(p => p.PriceId == registerModel.PriceId);
+                }
+                @if (selectedPlan != null)
+                {
+                    <div style="display:flex; gap:10px; align-items:center; margin-top:8px; padding:10px; background:#fff7f3; border:1px solid #ffd9c7; border-radius:8px;">
+                        @if (!string.IsNullOrEmpty(selectedPlan.ImageUrl))
+                        {
+                            <img src="@selectedPlan.ImageUrl" alt="Plan" style="width:48px; height:48px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb;" />
+                        }
+                        <div>
+                            <div style="font-weight:700; color:#1e293b;">@selectedPlan.Amount.ToString("N0") @selectedPlan.Currency</div>
+                            <small class="muted">@selectedPlan.Description</small>
+                        </div>
+                    </div>
+                }
+                else if (registerModel.PriceId != null)
+                {
+                    <p><strong>Plan:</strong> @registerModel.PriceId</p>
+                }
                 <hr />
                 <p class="fw-bold">Total: @previewAmount VND</p>
             </div>
@@ -361,6 +417,9 @@
     private bool isPollingPayment = false;
     private int pollAttempts = 0;
 
+    private List<FitSocial.Client.Models.SystemOperations.CoachSubscriptionPlanDto> availablePlans = new();
+    private bool isLoadingPlans = false;
+
     private string QrImageUrl
     {
         get
@@ -389,12 +448,33 @@
     protected override async Task OnInitializedAsync()
     {
         try { latestTerm = await TermsService.GetLatestAsync(); } catch { }
-        // Fetch price for preview (no sports)
+        await LoadActivePlansAsync();
+        // Fetch price for preview (based on selected plan or first active)
         try {
-            var draft = new RegisterRequest { Email = "preview@fitsocial.vn", FullName = "Preview", Password = "123456", ConfirmPassword = "123456", PhoneNumber = "0900000000", ExperienceYears = 1 };
+            var firstPlanId = availablePlans.FirstOrDefault()?.PriceId ?? registerModel.PriceId;
+            var draft = new RegisterRequest { Email = "preview@fitsocial.vn", FullName = "Preview", Password = "123456", ConfirmPassword = "123456", PhoneNumber = "0900000000", ExperienceYears = 1, PriceId = firstPlanId };
             var prep = await PaymentService.PrepareCoachActivationAsync(draft);
             if (prep.Success && prep.Data != null) previewAmount = prep.Data.AmountVnd.ToString("N0");
         } catch { }
+    }
+
+    private async Task LoadActivePlansAsync()
+    {
+        isLoadingPlans = true;
+        try
+        {
+            var res = await SystemOps.GetActivePlansAsync();
+            if (res.Success && res.Data != null) availablePlans = res.Data;
+        }
+        catch { }
+        finally { isLoadingPlans = false; }
+    }
+
+    private void SelectPlan(Guid priceId)
+    {
+        registerModel.PriceId = priceId;
+        var selected = availablePlans.FirstOrDefault(p => p.PriceId == priceId);
+        if (selected != null) previewAmount = selected.Amount.ToString("N0");
     }
 
     private async Task HandleGoogleButtonAsync()
@@ -513,6 +593,7 @@
         errorMessage = null;
         if (!(registerModel.ExperienceYears >= 0 && registerModel.ExperienceYears <= 60)) { errorMessage = "Please enter years of experience (0-60)."; return; }
         if (!registerModel.Certificates.Any(c => !string.IsNullOrWhiteSpace(c.CertificateUrl))) { errorMessage = "Please upload at least one certificate."; return; }
+        if (registerModel.PriceId == null || registerModel.PriceId == Guid.Empty) { errorMessage = "Please select a subscription plan."; return; }
         if (!agreedTerms) { errorMessage = "Please agree to the terms."; return; }
         // Store term
         registerModel.TermId = latestTerm?.TermId;

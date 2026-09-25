@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Posts;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Services;
@@ -62,8 +65,95 @@ public class PostReportServiceTests
         Assert.Equal("Spam or misleading content", result.Data.Reason);
         Assert.Equal(ReportStatus.Pending.ToString(), result.Data.Status);
 
-        _reportRepoMock.Verify(r => r.AddAsync(It.IsAny<Report>(), It.IsAny<CancellationToken>()), Times.Once);
+        _reportRepoMock.Verify(r => r.AddAsync(It.Is<Report>(rep =>
+            rep.ReportedPostId == postId &&
+            rep.ReporterId == reporterId &&
+            rep.ReportedUserId == authorId &&
+            rep.Reason == "Spam or misleading content"), It.IsAny<CancellationToken>()), Times.Once);
+        
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReportPost_DuplicateReport_ThrowsConflictException()
+    {
+        // Arrange
+        var postId = Guid.NewGuid();
+        var reporterId = Guid.NewGuid();
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(reporterId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { UserId = reporterId, IsLocked = false });
+        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Post { Id = postId, AuthorId = Guid.NewGuid(), IsDeleted = false });
+        
+        // Setup existing active report
+        _reportRepoMock.Setup(r => r.HasActiveReportAsync(postId, reporterId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var request = new CreatePostReportRequestDto { Reason = "Spam post again" };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
+            _service.ReportPostAsync(postId, reporterId, request));
+            
+        Assert.Equal("You have already submitted a pending report for this post.", ex.Message);
+        _reportRepoMock.Verify(r => r.AddAsync(It.IsAny<Report>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReportPost_DifferentPostSameAuthor_NotBlockedByPreviousReport()
+    {
+        // Arrange
+        var reporterId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        var post2Id = Guid.NewGuid();
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(reporterId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { UserId = reporterId, IsLocked = false });
+        _postRepoMock.Setup(r => r.GetByIdAsync(post2Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Post { Id = post2Id, AuthorId = authorId, IsDeleted = false });
+            
+        // Post 2 is NOT reported yet by User A
+        _reportRepoMock.Setup(r => r.HasActiveReportAsync(post2Id, reporterId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var request = new CreatePostReportRequestDto { Reason = "Harassment or bullying" };
+        
+        // Act
+        var result = await _service.ReportPostAsync(post2Id, reporterId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal(post2Id, result.Data.PostId);
+        Assert.Equal(reporterId, result.Data.ReporterId);
+
+        _reportRepoMock.Verify(r => r.AddAsync(It.Is<Report>(rep =>
+            rep.ReportedPostId == post2Id &&
+            rep.ReporterId == reporterId &&
+            rep.ReportedUserId == authorId), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReportPost_OwnPost_ThrowsBusinessException()
+    {
+        // Arrange
+        var postId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { UserId = userId, IsLocked = false });
+        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Post { Id = postId, AuthorId = userId, IsDeleted = false });
+
+        var request = new CreatePostReportRequestDto { Reason = "Reporting my own post" };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.ReportPostAsync(postId, userId, request));
+            
+        Assert.Equal("You cannot report your own post.", ex.Message);
+        _reportRepoMock.Verify(r => r.AddAsync(It.IsAny<Report>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -103,48 +193,6 @@ public class PostReportServiceTests
         var ex = await Assert.ThrowsAsync<BusinessException>(() =>
             _service.ReportPostAsync(postId, reporterId, request));
         Assert.Equal("Cannot report a post that has been deleted.", ex.Message);
-    }
-
-    [Fact]
-    public async Task ReportPost_OwnPost_ThrowsBusinessException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new User { UserId = userId, IsLocked = false });
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Post { Id = postId, AuthorId = userId, IsDeleted = false });
-
-        var request = new CreatePostReportRequestDto { Reason = "Reporting my own post" };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
-            _service.ReportPostAsync(postId, userId, request));
-        Assert.Equal("You cannot report your own post.", ex.Message);
-    }
-
-    [Fact]
-    public async Task ReportPost_DuplicateReport_ThrowsConflictException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var reporterId = Guid.NewGuid();
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(reporterId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new User { UserId = reporterId, IsLocked = false });
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Post { Id = postId, AuthorId = Guid.NewGuid(), IsDeleted = false });
-        _reportRepoMock.Setup(r => r.HasActiveReportAsync(postId, reporterId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-
-        var request = new CreatePostReportRequestDto { Reason = "Spam post again" };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
-            _service.ReportPostAsync(postId, reporterId, request));
-        Assert.Equal("You have already submitted a pending report for this post.", ex.Message);
     }
 
     [Theory]
@@ -189,5 +237,20 @@ public class PostReportServiceTests
         // Act & Assert
         await Assert.ThrowsAsync<ForbiddenException>(() =>
             _service.ReportPostAsync(postId, reporterId, request));
+    }
+
+    [Fact]
+    public async Task HasUserReportedPost_ReturnsCorrectStatus_ScopedToPost()
+    {
+        var reporterId = Guid.NewGuid();
+        var postId = Guid.NewGuid();
+
+        _reportRepoMock.Setup(r => r.HasActiveReportAsync(postId, reporterId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var result = await _service.HasUserReportedPostAsync(postId, reporterId);
+
+        Assert.True(result.Success);
+        Assert.True(result.Data);
     }
 }

@@ -792,6 +792,8 @@ public partial class FitSocialDbContext : DbContext
                 .HasColumnType("timestamp without time zone");
             entity.Property(e => e.Currency).HasMaxLength(10);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.ImageUrl).HasMaxLength(2048);
+            entity.Property(e => e.Description).HasMaxLength(500);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>
@@ -1152,6 +1154,27 @@ public partial class FitSocialDbContext : DbContext
             entity.HasIndex(e => e.IdCardNumber).IsUnique();
             entity.Property(e => e.IdCardNumber).HasMaxLength(20);
             entity.Property(e => e.FullNameOnCard).HasMaxLength(100);
+            entity.Property(e => e.Birthplace).HasMaxLength(255);
+            entity.Property(e => e.Sex).HasMaxLength(20);
+            entity.Property(e => e.Address).HasMaxLength(500);
+            entity.Property(e => e.Province).HasMaxLength(100);
+            entity.Property(e => e.District).HasMaxLength(100);
+            entity.Property(e => e.Ward).HasMaxLength(100);
+            entity.Property(e => e.ProvinceCode).HasMaxLength(10);
+            entity.Property(e => e.DistrictCode).HasMaxLength(10);
+            entity.Property(e => e.WardCode).HasMaxLength(10);
+            entity.Property(e => e.Street).HasMaxLength(255);
+            entity.Property(e => e.Nationality).HasMaxLength(50);
+            entity.Property(e => e.Religion).HasMaxLength(50);
+            entity.Property(e => e.Ethnicity).HasMaxLength(50);
+            entity.Property(e => e.Expiry).HasMaxLength(20);
+            entity.Property(e => e.Feature).HasMaxLength(500);
+            entity.Property(e => e.IssueDate).HasMaxLength(20);
+            entity.Property(e => e.IssueBy).HasMaxLength(255);
+            entity.Property(e => e.DocumentType).HasMaxLength(50);
+            entity.Property(e => e.LivenessScore).HasPrecision(5, 2);
+            entity.Property(e => e.FaceMatchConfidence).HasPrecision(5, 2);
+            entity.Property(e => e.RawInformationJson).HasColumnType("jsonb");
             entity.Property(e => e.FrontCardUrl).HasMaxLength(2048);
             entity.Property(e => e.BackCardUrl).HasMaxLength(2048);
             entity.Property(e => e.FaceImageUrl).HasMaxLength(2048);

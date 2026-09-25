@@ -5,4 +5,14 @@ namespace FitSocial.Domain.Interfaces;
 public interface ILocationRepository : IRepository<Location>
 {
     Task<List<Location>> ListAllAsync(CancellationToken cancellationToken = default);
+    Task<Location?> GetByNameAsync(string locationName, CancellationToken cancellationToken = default);
+    Task<Location?> GetByNameExcludingIdAsync(string locationName, Guid locationId, CancellationToken cancellationToken = default);
+
+    Task<(List<Location> Items, int TotalCount)> ListLocationsAsync(
+        string? searchTerm = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default);
+
+    Task<Location?> GetByIdWithDetailsAsync(Guid locationId, CancellationToken cancellationToken = default);
 }

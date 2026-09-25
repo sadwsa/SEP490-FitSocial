@@ -7,24 +7,32 @@
          @onclick="CloseModal">
         <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 animate-in zoom-in-95 duration-150"
              @onclick:stopPropagation="true">
-            <!-- Header -->
-            <div class="flex items-center gap-3.5 mb-4">
-                <div class="w-11 h-11 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-900 text-base">Report Post</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Help us understand what's wrong with this post.</p>
+                    </div>
+                </div>
+                <button type="button" @onclick="CloseModal" disabled="@isSubmitting"
+                        class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition cursor-pointer disabled:opacity-50">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
-                </div>
-                <div>
-                    <h3 class="font-bold text-gray-900 text-base">Report Post</h3>
-                    <p class="text-xs text-gray-500 mt-0.5">Help us understand what's wrong with this post.</p>
-                </div>
+                </button>
             </div>
 
             <!-- Error Banner -->
             @if (!string.IsNullOrWhiteSpace(apiErrorMessage))
             {
-                <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2 animate-in fade-in">
                     <svg class="w-4 h-4 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                     </svg>
@@ -85,7 +93,7 @@
             }
 
             <!-- Actions -->
-            <div class="flex items-center justify-end gap-3 pt-2">
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
                 <button type="button" @onclick="CloseModal" disabled="@isSubmitting"
                         class="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-100 rounded-xl transition disabled:opacity-50 cursor-pointer">
                     Cancel
@@ -118,7 +126,7 @@
     public EventCallback OnClose { get; set; }
 
     [Parameter]
-    public EventCallback OnReportSubmitted { get; set; }
+    public EventCallback<Guid> OnReportSubmitted { get; set; }
 
     private static readonly string[] ReportReasons = new[]
     {
@@ -216,8 +224,9 @@
 
         try
         {
+            var reportedTargetPostId = PostId.Value;
             var request = new CreatePostReportRequest { Reason = finalReason };
-            var res = await PostService.ReportPostAsync(PostId.Value, request);
+            var res = await PostService.ReportPostAsync(reportedTargetPostId, request);
 
             if (res.Success)
             {
@@ -225,7 +234,7 @@
                 ResetState();
                 if (OnReportSubmitted.HasDelegate)
                 {
-                    await OnReportSubmitted.InvokeAsync();
+                    await OnReportSubmitted.InvokeAsync(reportedTargetPostId);
                 }
             }
             else

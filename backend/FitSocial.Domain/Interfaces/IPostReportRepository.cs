@@ -1,10 +1,13 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using FitSocial.Domain.Entities;
 
 namespace FitSocial.Domain.Interfaces;
 
 public interface IPostReportRepository : IRepository<Report>
 {
-    /// <summary>
+    
     /// Checks if a reporter has already submitted an active/pending report for the specified post.
     /// </summary>
     Task<bool> HasActiveReportAsync(Guid postId, Guid reporterId, CancellationToken cancellationToken = default);

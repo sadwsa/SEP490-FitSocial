@@ -1,0 +1,119 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@inject IAuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="console">
+    <aside class="console-side">
+        <div class="side-brand">
+            <img src="Logo_FitSocial.jpg" alt="FitSocial" />
+            <div>
+                <strong>FitSocial</strong>
+                <small>@(isAdmin ? "Admin Console" : isStaff ? "Staff Console" : "Console")</small>
+            </div>
+        </div>
+
+        <nav class="side-nav">
+            <button type="button" class="side-item @(IsActive("/admin", true) ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin")'>
+                <AppIcon Name="chart" /><span>Dashboard</span>
+            </button>
+            <button type="button" class="side-item @(IsActive("/admin/users") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/users")'>
+                <AppIcon Name="person" /><span>User Accounts</span>
+            </button>
+            <button type="button" class="side-item @(IsActive("/admin/sports") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/sports")'>
+                <AppIcon Name="dumbbell" /><span>Sport Categories</span>
+            </button>
+            <button type="button" class="side-item @(IsActive("/admin/coach-subscription-plans") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-subscription-plans")'>
+                <AppIcon Name="trophy" /><span>Coach Plans</span>
+            </button>
+            <button type="button" class="side-item @(IsActive("/admin/locations") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/locations")'>
+                <AppIcon Name="location" /><span>Locations & Facilities</span>
+            <button type="button" class="side-item @(IsActive("/admin/reports") || IsActive("/reports") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/reports")'>
+                <AppIcon Name="flag" /><span>Reports</span>
+            </button>
+
+            <AuthorizeView Roles="ADMIN">
+                <Authorized>
+                    <button type="button" class="side-item @(IsActive("/admin/content") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/content")'>
+                        <AppIcon Name="shield" /><span>Content Moderation</span>
+                    </button>
+                </Authorized>
+            </AuthorizeView>
+
+            <button type="button" class="side-item @(IsActive("/admin/logs") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/logs")'>
+                <AppIcon Name="doc" /><span>Activity Logs</span>
+            </button>
+
+            <AuthorizeView Roles="ADMIN">
+                <Authorized>
+                    <button type="button" class="side-item @(IsActive("/admin/settings") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/settings")'>
+                        <AppIcon Name="gear" /><span>System Settings</span>
+                    </button>
+                </Authorized>
+            </AuthorizeView>
+
+            <AuthorizeView Roles="STAFF">
+                <Authorized>
+                    @if (!isAdmin)
+                    {
+                        <div style="margin-top:8px; padding:8px 10px; background:rgba(255,255,255,0.06); border-radius:8px; font-size:0.72rem; color:#94a3b8;">
+                            Staff view — limited to user & sport management. System Settings restricted to Admin.
+                        </div>
+                    }
+                </Authorized>
+            </AuthorizeView>
+        </nav>
+
+        <div class="side-foot">
+            <AuthorizeView Roles="ADMIN,STAFF">
+                <Authorized>
+                    <div class="side-user">
+                        <strong>@context.User.Identity?.Name</strong>
+                        <small>@string.Join(", ", AppRoles.All.Where(r => context.User.IsInRole(r))) • @(isAdmin ? "ADMIN" : "STAFF")</small>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+            <button type="button" class="side-logout" @onclick="HandleLogout">Sign out</button>
+        </div>
+    </aside>
+
+    <main class="console-main">
+        @Body
+    </main>
+</div>
+
+@code {
+    private bool isAdmin;
+    private bool isStaff;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+        isAdmin = user.IsInRole("ADMIN");
+        isStaff = user.IsInRole("STAFF");
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+        isAdmin = user.IsInRole("ADMIN");
+        isStaff = user.IsInRole("STAFF");
+    }
+
+    private bool IsActive(string href, bool exact = false)
+    {
+        var rel = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).TrimEnd('/').ToLowerInvariant();
+        href = href.ToLowerInvariant();
+        if (exact) return rel == href || rel == href + "/";
+        return rel.StartsWith(href);
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/admin/login");
+    }
+}

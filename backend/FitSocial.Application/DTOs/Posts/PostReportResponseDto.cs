@@ -1,3 +1,5 @@
+using System;
+
 namespace FitSocial.Application.DTOs.Posts;
 
 public class PostReportResponseDto

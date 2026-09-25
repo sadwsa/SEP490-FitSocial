@@ -1,3 +1,4 @@
+using System;
 using FitSocial.Domain.Enums;
 
 namespace FitSocial.Domain.Entities;
@@ -6,6 +7,7 @@ public partial class Report
 {
     /// <summary>
     /// Factory method to create a new pending post report.
+    /// Scoped specifically to the given post (postId) and reported author (reportedAuthorId).
     /// </summary>
     public static Report CreatePostReport(Guid reporterId, Guid postId, Guid reportedAuthorId, string reason)
     {
@@ -17,6 +19,8 @@ public partial class Report
             ReportedPostId = postId,
             ReportedUserId = reportedAuthorId,
             Reason = reason.Trim(),
+            Status = ReportStatus.Pending.ToString().ToUpperInvariant(),
+            CreatedAt = now
             Status = ReportStatus.Pending.ToString(),
             CreatedAt = now,
             UpdatedAt = now

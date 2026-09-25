@@ -1,4 +1,4 @@
-﻿namespace FitSocial.Client.Models.Posts;
+namespace FitSocial.Client.Models.Posts;
 
 public class PostDto
 {
@@ -132,3 +132,4 @@ public class PostReportResponse
     public string Status { get; set; } = string.Empty;
     public DateTime? CreatedAt { get; set; }
 }
+

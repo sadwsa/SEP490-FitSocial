@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Posts;
 using FitSocial.Application.Exceptions;
@@ -30,12 +33,31 @@ public class PostReportService : IPostReportService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Checks whether the user has already submitted a pending report for this specific post.
+    /// Check is scoped strictly to (postId, reporterId).
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> HasUserReportedPostAsync(
+        Guid postId,
+        Guid reporterId,
+        CancellationToken cancellationToken = default)
+    {
+        if (postId == Guid.Empty || reporterId == Guid.Empty)
+        {
+            return ApiResponseDto<bool>.Ok(false);
+        }
+
+        var hasReported = await _reportRepository.HasActiveReportAsync(postId, reporterId, cancellationToken);
+        return ApiResponseDto<bool>.Ok(hasReported);
+    }
+
     public async Task<ApiResponseDto<PostReportResponseDto>> ReportPostAsync(
         Guid postId,
         Guid reporterId,
         CreatePostReportRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        // 1. Authentication check
         // BR-01: Authentication check
         if (reporterId == Guid.Empty)
         {
@@ -47,6 +69,7 @@ public class PostReportService : IPostReportService
             throw new ValidationException("Post ID is required.");
         }
 
+        // 2. Validation on Reason
         // BR-08: Validation on Reason
         if (request == null || string.IsNullOrWhiteSpace(request.Reason))
         {
@@ -59,6 +82,7 @@ public class PostReportService : IPostReportService
             throw new ValidationException("Report reason cannot exceed 500 characters.");
         }
 
+        // 3. Check reporter account status
         // Check reporter account status
         var reporter = await _userRepository.GetByIdAsync(reporterId, cancellationToken);
         if (reporter == null)
@@ -71,6 +95,7 @@ public class PostReportService : IPostReportService
             throw new ForbiddenException("Your account is locked and cannot report posts.");
         }
 
+        // 4. Check post exists and not deleted
         // BR-02: Check post exists
         var post = await _postRepository.GetByIdAsync(postId, cancellationToken);
         if (post == null)
@@ -84,12 +109,16 @@ public class PostReportService : IPostReportService
             throw new BusinessException("Cannot report a post that has been deleted.");
         }
 
+        // 5. Cannot report own post
         // BR-04: Cannot report own post
         if (post.AuthorId == reporterId)
         {
             throw new BusinessException("You cannot report your own post.");
         }
 
+        // 6. Duplicate-report check: Scoped strictly to ReporterId + PostId.
+        // It does NOT use ReporterId + PostOwnerId.
+        // A report on Post 1 from Author B does NOT prevent reporting Post 2 from Author B.
         // BR-05: Can report the same post only once while pending/active
         var hasActiveReport = await _reportRepository.HasActiveReportAsync(postId, reporterId, cancellationToken);
         if (hasActiveReport)
@@ -97,6 +126,7 @@ public class PostReportService : IPostReportService
             throw new ConflictException("You have already submitted a pending report for this post.");
         }
 
+        // 7. Create and persist Report
         // BR-06, BR-07, BR-08, BR-09: Create and persist Report
         var report = Report.CreatePostReport(reporterId, postId, post.AuthorId, trimmedReason);
 

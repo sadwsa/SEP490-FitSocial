@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Enums;
 using FitSocial.Domain.Interfaces;
@@ -12,6 +15,11 @@ public class PostReportRepository : Repository<Report>, IPostReportRepository
     {
     }
 
+    /// <summary>
+    /// Checks whether an active/pending report exists specifically for the given post and reporter.
+    /// Scoped strictly to ReportedPostId == postId and ReporterId == reporterId.
+    /// This ensures reports of different posts from the same user are NOT treated as duplicates.
+    /// </summary>
     public async Task<bool> HasActiveReportAsync(Guid postId, Guid reporterId, CancellationToken cancellationToken = default)
     {
         var pendingStatus = ReportStatus.Pending.ToString();

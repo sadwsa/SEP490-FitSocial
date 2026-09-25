@@ -1,0 +1,678 @@
+@page "/admin/reports"
+@page "/reports"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@implements IDisposable
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.Reports
+@using FitSocial.Client.Services.Reports
+@inject IReportService ReportService
+@inject NavigationManager Navigation
+
+<PageTitle>Reports - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert @toastType" role="alert">
+                <AppIcon Name="@(toastType == "error" ? "warning" : "info")" />
+                <span class="flex-1">@toastMessage</span>
+                <button type="button" class="ml-2 font-bold cursor-pointer opacity-70 hover:opacity-100" @onclick="() => toastMessage = null">✕</button>
+            </div>
+        }
+
+        <h2 class="view-title">Reports</h2>
+        <p class="view-sub">Manage and review reports submitted by users</p>
+
+        <!-- Status Filter Tabs -->
+        <div class="cat-tabs mb-3">
+            <button type="button" class="cat-tab @(statusFilter == "" ? "active" : "")" @onclick='() => SetStatusFilterAsync("")'>
+                All
+            </button>
+            <button type="button" class="cat-tab @(statusFilter == "PENDING" ? "active" : "")" @onclick='() => SetStatusFilterAsync("PENDING")'>
+                <span class="status-dot dot-locked" style="background:#f59e0b;"></span> Pending
+            </button>
+            <button type="button" class="cat-tab @(statusFilter == "RESOLVED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("RESOLVED")'>
+                <span class="status-dot dot-active"></span> Resolved
+            </button>
+            <button type="button" class="cat-tab @(statusFilter == "REJECTED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("REJECTED")'>
+                <span class="status-dot dot-locked"></span> Rejected
+            </button>
+        </div>
+
+        <!-- Toolbar: Search & Target Type Filter -->
+        <div class="toolbar wrap">
+            <div class="search-wrap grow">
+                <span class="search-icon"><AppIcon Name="search" /></span>
+                <input value="@searchTerm"
+                       @oninput="OnSearchInput"
+                       @onkeydown="HandleSearchKeyDown"
+                       class="toolbar-input"
+                       placeholder="Search reason, reporter, or reported user..." />
+            </div>
+
+            <select value="@targetTypeFilter" @onchange="OnTargetTypeFilterChangedAsync" class="toolbar-select">
+                <option value="">All target types</option>
+                <option value="POST">Post</option>
+                <option value="USER">User</option>
+            </select>
+
+            <button type="button" class="row-btn" @onclick="LoadReportsAsync" disabled="@isLoadingReports">
+                <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
+            </button>
+        </div>
+
+        <!-- Loading Indicator -->
+        @if (isLoadingReports)
+        {
+            <div class="py-4 text-center muted flex items-center justify-center gap-2">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Loading reports...</span>
+            </div>
+        }
+
+        <!-- Reports Table -->
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Report</th>
+                        <th>Reporter</th>
+                        <th>Target</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th>Created At</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in pagedReports.Items)
+                    {
+                        <tr>
+                            <td>
+                                <code>#@ShortId(r.ReportId)</code>
+                            </td>
+                            <td>
+                                <div class="flex items-center gap-2">
+                                    <img src="@GetAvatar(r.ReporterAvatarUrl, r.ReporterName, r.ReporterEmail)"
+                                         alt="@r.ReporterName"
+                                         class="user-avatar-sm" />
+                                    <div>
+                                        <strong>@(r.ReporterName ?? "Anonymous")</strong>
+                                        <br />
+                                        <small class="muted">@(r.ReporterEmail ?? "No email")</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                @if (string.Equals(r.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <div>
+                                        <span class="target-badge post">Post</span>
+                                        <div class="target-preview mt-1" title="@r.ReportedPostContent">
+                                            "@(Truncate(r.ReportedPostContent, 45) ?? "Post content")"
+                                        </div>
+                                        <small class="muted">by @(r.ReportedPostAuthorName ?? "Unknown")</small>
+                                    </div>
+                                }
+                                else if (string.Equals(r.TargetType, "USER", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <div class="flex items-center gap-2">
+                                        <img src="@GetAvatar(r.ReportedUserAvatarUrl, r.ReportedUserName, r.ReportedUserEmail)"
+                                             alt="@r.ReportedUserName"
+                                             class="user-avatar-sm" />
+                                        <div>
+                                            <span class="target-badge user">User</span>
+                                            <br />
+                                            <strong>@(r.ReportedUserName ?? "Unknown")</strong>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div>
+                                        <span class="target-badge unknown">@(r.TargetType)</span>
+                                        <br />
+                                        <small class="muted"><code>@ShortId(r.TargetId)</code></small>
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                <div class="reason-cell" title="@r.Reason">
+                                    @(r.Reason ?? "No reason specified")
+                                </div>
+                            </td>
+                            <td>
+                                @if (string.Equals(r.Status, "RESOLVED", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="status-badge active">Resolved</span>
+                                }
+                                else if (string.Equals(r.Status, "REJECTED", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="status-badge locked">Rejected</span>
+                                }
+                                else
+                                {
+                                    <span class="status-badge pending">Pending</span>
+                                }
+                            </td>
+                            <td>
+                                <small class="muted">
+                                    @(r.CreatedAt?.ToLocalTime().ToString("MMM dd, yyyy HH:mm") ?? "N/A")
+                                </small>
+                            </td>
+                            <td class="text-end whitespace-nowrap">
+                                <button type="button" class="row-btn view" @onclick="() => OpenReportDetails(r)" title="View report details">
+                                    <span class="btn-ic"><AppIcon Name="eye" /></span> View
+                                </button>
+                            </td>
+                        </tr>
+                    }
+
+                    @if (!isLoadingReports && !pagedReports.Items.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-8">
+                                <div class="flex flex-col items-center justify-center text-gray-400">
+                                    <svg class="w-12 h-12 mb-2 stroke-current opacity-40" fill="none" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <p class="font-semibold text-gray-700">No reports found</p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        @(string.IsNullOrWhiteSpace(searchTerm) && string.IsNullOrWhiteSpace(statusFilter) && string.IsNullOrWhiteSpace(targetTypeFilter)
+                                            ? "No user reports have been submitted yet."
+                                            : "No reports match your current search or filter criteria.")
+                                    </p>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="pagination-container">
+            <div class="pagination-info">
+                @if (pagedReports.TotalCount > 0)
+                {
+                    var start = (currentPage - 1) * pageSize + 1;
+                    var end = Math.Min(currentPage * pageSize, pagedReports.TotalCount);
+                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedReports.TotalCount</strong> reports</span>
+                }
+                else
+                {
+                    <span>0 reports</span>
+                }
+            </div>
+
+            @if (pagedReports.TotalPages > 1)
+            {
+                <div class="pagination-controls">
+                    <button type="button" class="page-btn" disabled="@(!pagedReports.HasPreviousPage)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Previous</button>
+                    @foreach (var p in GetVisiblePageNumbers())
+                    {
+                        if (p == -1)
+                        {
+                            <span class="page-dots">…</span>
+                        }
+                        else
+                        {
+                            var pageNum = p;
+                            <button type="button" class="page-btn @(pageNum == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pageNum)">@pageNum</button>
+                        }
+                    }
+                    <button type="button" class="page-btn" disabled="@(!pagedReports.HasNextPage)" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
+                </div>
+            }
+
+            <div class="page-size-selector">
+                <span>Per page:</span>
+                <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
+                    <option value="10">10 / page</option>
+                    <option value="20">20 / page</option>
+                    <option value="50">50 / page</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Report Details Modal -->
+        @if (showDetailsModal && selectedReport != null)
+        {
+            <div class="modal-overlay" @onclick="CloseDetailsModal">
+                <div class="modal-card" @onclick:stopPropagation="true">
+                    <!-- Modal Header -->
+                    <div class="modal-header">
+                        <div>
+                            <h3>Report Details</h3>
+                            <small>ID: @selectedReport.ReportId</small>
+                        </div>
+                        <button type="button" class="modal-close-btn" @onclick="CloseDetailsModal" title="Close">✕</button>
+                    </div>
+
+                    <!-- Modal Body -->
+                    <div class="modal-body">
+                        <!-- Reporter Information -->
+                        <div class="info-card">
+                            <div class="info-card-title">
+                                <AppIcon Name="person" />
+                                <span>Reporter</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <img src="@GetAvatar(selectedReport.ReporterAvatarUrl, selectedReport.ReporterName, selectedReport.ReporterEmail)"
+                                     alt="@selectedReport.ReporterName"
+                                     class="user-avatar-md" />
+                                <div>
+                                    <div class="font-bold text-gray-900">@(selectedReport.ReporterName ?? "Anonymous")</div>
+                                    <div class="text-xs text-gray-600">@(selectedReport.ReporterEmail ?? "No email")</div>
+                                    <div class="text-xs text-gray-400 mt-0.5"><code>Reporter ID: @(selectedReport.ReporterId?.ToString() ?? "N/A")</code></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reported Target Information -->
+                        <div class="info-card">
+                            <div class="info-card-title">
+                                @if (string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <AppIcon Name="doc" />
+                                    <span>Reported Target (Post)</span>
+                                }
+                                else
+                                {
+                                    <AppIcon Name="person" />
+                                    <span>Reported Target (User)</span>
+                                }
+                            </div>
+
+                            @if (string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <span class="text-gray-500">Post ID: <code>@(selectedReport.ReportedPostId?.ToString() ?? "N/A")</code></span>
+                                        <span class="font-medium text-gray-700">Author: <strong>@(selectedReport.ReportedPostAuthorName ?? "Unknown")</strong></span>
+                                    </div>
+                                    <div class="content-quote">
+                                        @(string.IsNullOrWhiteSpace(selectedReport.ReportedPostContent) ? "No text content in post." : selectedReport.ReportedPostContent)
+                                    </div>
+                                </div>
+                            }
+                            else if (string.Equals(selectedReport.TargetType, "USER", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="flex items-center gap-3">
+                                    <img src="@GetAvatar(selectedReport.ReportedUserAvatarUrl, selectedReport.ReportedUserName, selectedReport.ReportedUserEmail)"
+                                         alt="@selectedReport.ReportedUserName"
+                                         class="user-avatar-md" />
+                                    <div>
+                                        <div class="font-bold text-gray-900">@(selectedReport.ReportedUserName ?? "Unknown")</div>
+                                        <div class="text-xs text-gray-600">@(selectedReport.ReportedUserEmail ?? "No email")</div>
+                                        <div class="text-xs text-gray-400 mt-0.5"><code>User ID: @(selectedReport.ReportedUserId?.ToString() ?? "N/A")</code></div>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-xs text-gray-600">
+                                    Target ID: <code>@(selectedReport.TargetId?.ToString() ?? "N/A")</code>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Report Submission & Reason Details -->
+                        <div class="info-card">
+                            <div class="info-card-title">
+                                <AppIcon Name="info" />
+                                <span>Report Information</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                <div>
+                                    <span class="text-gray-500 block mb-0.5">Status:</span>
+                                    @if (string.Equals(selectedReport.Status, "RESOLVED", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="status-badge active">Resolved</span>
+                                    }
+                                    else if (string.Equals(selectedReport.Status, "REJECTED", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="status-badge locked">Rejected</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-badge pending">Pending</span>
+                                    }
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 block mb-0.5">Submitted On:</span>
+                                    <strong class="text-gray-800">@(selectedReport.CreatedAt?.ToLocalTime().ToString("f") ?? "N/A")</strong>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <span class="text-gray-500 block mb-0.5">Reason:</span>
+                                    <div class="p-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 font-medium leading-relaxed">
+                                        @(selectedReport.Reason ?? "No reason provided")
+                                    </div>
+                                </div>
+
+                                @if (selectedReport.ResolvedBy.HasValue || selectedReport.ResolvedAt.HasValue)
+                                {
+                                    <div>
+                                        <span class="text-gray-500 block mb-0.5">Resolved By:</span>
+                                        <strong class="text-gray-800">@(selectedReport.ResolverName ?? selectedReport.ResolvedBy.ToString())</strong>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500 block mb-0.5">Resolved Date:</span>
+                                        <strong class="text-gray-800">@(selectedReport.ResolvedAt?.ToLocalTime().ToString("f") ?? "N/A")</strong>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Actions Section (UI ONLY) -->
+                        <div class="modal-actions-box">
+                            <div class="flex items-center gap-2">
+                                <AppIcon Name="shield" />
+                                <strong class="text-sm text-gray-900">Actions</strong>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-1">
+                                Moderation options for this reported @(string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase) ? "post and its author" : "user").
+                            </p>
+
+                            <div class="actions-btn-group">
+                                @if (string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <button type="button" class="btn-warning-action" @onclick='() => HandleWarningAsync("post author")'>
+                                        Warning User
+                                    </button>
+                                    <button type="button" class="btn-danger-action" @onclick='() => RequestConfirmAction("Lock Account", "lock the author account")'>
+                                        Lock Account
+                                    </button>
+                                    <button type="button" class="btn-danger-action" @onclick='() => RequestConfirmAction("Block User", "block this user")'>
+                                        Block User
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn-warning-action" @onclick='() => HandleWarningAsync("user")'>
+                                        Warning
+                                    </button>
+                                    <button type="button" class="btn-danger-action" @onclick='() => RequestConfirmAction("Lock Account", "lock this account")'>
+                                        Lock Account
+                                    </button>
+                                    <button type="button" class="btn-danger-action" @onclick='() => RequestConfirmAction("Block", "block this account")'>
+                                        Block
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal-cancel" @onclick="CloseDetailsModal">Close</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Confirmation Modal for Destructive Actions -->
+        @if (showConfirmModal)
+        {
+            <div class="modal-overlay" style="z-index:1100;" @onclick="CancelConfirm">
+                <div class="modal-card confirm" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h3>@confirmTitle</h3>
+                        <button type="button" class="modal-close-btn" @onclick="CancelConfirm" title="Close">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <AppIcon Name="warning" />
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">@confirmMessage</p>
+                                <p class="text-xs text-gray-500 mt-1">Please confirm if you want to proceed with this moderation action.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal-cancel" @onclick="CancelConfirm">Cancel</button>
+                        <button type="button" class="btn-modal-confirm" @onclick="ExecuteConfirmedAction">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </Authorized>
+
+    <NotAuthorized>
+        <div class="auth-alert error" role="alert">
+            <AppIcon Name="warning" />
+            <span>You do not have permission to access the Reports console.</span>
+        </div>
+        <button type="button" class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/login")'>
+            Go to portal sign in
+        </button>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string? toastMessage;
+    private string toastType = "info";
+    private string searchTerm = "";
+    private string statusFilter = "";
+    private string targetTypeFilter = "";
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private PagedResult<ReportListItemDto> pagedReports = new();
+    private System.Timers.Timer? searchDebounceTimer;
+    private bool isLoadingReports = false;
+
+    // Details Modal State
+    private bool showDetailsModal = false;
+    private ReportListItemDto? selectedReport;
+
+    // Confirmation Modal State
+    private bool showConfirmModal = false;
+    private string confirmTitle = "";
+    private string confirmMessage = "";
+    private string pendingActionName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportsAsync();
+    }
+
+    private async Task LoadReportsAsync()
+    {
+        isLoadingReports = true;
+        try
+        {
+            var res = await ReportService.GetReportsAsync(
+                searchTerm: searchTerm,
+                status: string.IsNullOrWhiteSpace(statusFilter) ? null : statusFilter,
+                targetType: string.IsNullOrWhiteSpace(targetTypeFilter) ? null : targetTypeFilter,
+                pageNumber: currentPage,
+                pageSize: pageSize);
+
+            if (res.Success && res.Data != null)
+            {
+                pagedReports = res.Data;
+                if (pagedReports.TotalPages > 0 && currentPage > pagedReports.TotalPages)
+                {
+                    currentPage = pagedReports.TotalPages;
+                    await LoadReportsAsync();
+                    return;
+                }
+            }
+            else if (!string.IsNullOrEmpty(res.Message))
+            {
+                toastMessage = res.Message;
+                toastType = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Unable to load reports. Please try again. ({ex.Message})";
+            toastType = "error";
+        }
+        finally
+        {
+            isLoadingReports = false;
+        }
+    }
+
+    private async Task SetStatusFilterAsync(string status)
+    {
+        if (statusFilter == status) return;
+        statusFilter = status;
+        currentPage = 1;
+        await LoadReportsAsync();
+    }
+
+    private async Task OnTargetTypeFilterChangedAsync(ChangeEventArgs e)
+    {
+        targetTypeFilter = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await LoadReportsAsync();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+        searchDebounceTimer = new System.Timers.Timer(400) { AutoReset = false };
+        searchDebounceTimer.Elapsed += async (_, _) =>
+        {
+            currentPage = 1;
+            await InvokeAsync(LoadReportsAsync);
+            await InvokeAsync(StateHasChanged);
+        };
+        searchDebounceTimer.Start();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            searchDebounceTimer?.Stop();
+            currentPage = 1;
+            await LoadReportsAsync();
+        }
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        if (page < 1 || (pagedReports.TotalPages > 0 && page > pagedReports.TotalPages) || page == currentPage)
+            return;
+
+        currentPage = page;
+        await LoadReportsAsync();
+    }
+
+    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var newSize) && newSize > 0)
+        {
+            pageSize = newSize;
+            currentPage = 1;
+            await LoadReportsAsync();
+        }
+    }
+
+    private IEnumerable<int> GetVisiblePageNumbers()
+    {
+        var total = pagedReports.TotalPages;
+        if (total <= 1) yield break;
+
+        var current = currentPage;
+        var delta = 2;
+        var left = Math.Max(1, current - delta);
+        var right = Math.Min(total, current + delta);
+
+        if (left > 1)
+        {
+            yield return 1;
+            if (left > 2) yield return -1;
+        }
+
+        for (var i = left; i <= right; i++)
+        {
+            yield return i;
+        }
+
+        if (right < total)
+        {
+            if (right < total - 1) yield return -1;
+            yield return total;
+        }
+    }
+
+    private void OpenReportDetails(ReportListItemDto report)
+    {
+        selectedReport = report;
+        showDetailsModal = true;
+    }
+
+    private void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedReport = null;
+    }
+
+    // UI-ONLY Handlers (no backend API call as requested)
+    private Task HandleWarningAsync(string target)
+    {
+        toastMessage = "This action is not available yet. Backend API is not implemented.";
+        toastType = "info";
+        return Task.CompletedTask;
+    }
+
+    private void RequestConfirmAction(string actionName, string actionTargetDescription)
+    {
+        pendingActionName = actionName;
+        confirmTitle = actionName;
+        confirmMessage = $"Are you sure you want to {actionTargetDescription}?";
+        showConfirmModal = true;
+    }
+
+    private void CancelConfirm()
+    {
+        showConfirmModal = false;
+    }
+
+    private void ExecuteConfirmedAction()
+    {
+        showConfirmModal = false;
+        toastMessage = $"The {pendingActionName} action is currently unavailable because the backend API has not been implemented yet.";
+        toastType = "info";
+    }
+
+    private static string ShortId(Guid? id)
+    {
+        if (!id.HasValue || id == Guid.Empty) return "N/A";
+        var str = id.Value.ToString();
+        return str.Length > 8 ? str.Substring(0, 8) : str;
+    }
+
+    private static string? Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        return value.Length <= maxLength ? value : value.Substring(0, maxLength) + "…";
+    }
+
+    private static string GetAvatar(string? avatarUrl, string? name, string? email)
+    {
+        if (AvatarHelper.HasValidAvatarUrl(avatarUrl))
+        {
+            return avatarUrl!;
+        }
+
+        var label = !string.IsNullOrWhiteSpace(name) ? name : (!string.IsNullOrWhiteSpace(email) ? email : "User");
+        return $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(label)}&background=FF8C00&color=fff";
+    }
+
+    public void Dispose()
+    {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+    }
+}

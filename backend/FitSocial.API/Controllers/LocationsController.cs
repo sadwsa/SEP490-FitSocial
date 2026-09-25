@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Locations;
 using FitSocial.Domain.Constants;
@@ -5,6 +9,7 @@ using FitSocial.Domain.Interfaces;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FitSocial.API.Controllers;
@@ -34,15 +39,51 @@ public class LocationsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var effectiveSearch = !string.IsNullOrWhiteSpace(searchTerm) ? searchTerm : search;
+        var result = await _locationService.GetPagedLocationsAsync(effectiveSearch, pageNumber, pageSize, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get full location list for public selection dropdowns (e.g. creating posts, coach filter).
+    /// </summary>
+    [HttpGet("public")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponseDto<List<LocationDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPublicLocations(CancellationToken cancellationToken = default)
+    {
+        var result = await _locationService.GetPublicLocationsAsync(cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Create a new location (Admin / Staff only)
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<LocationDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CreateLocation(
+        [FromBody] CreateLocationDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _locationService.CreateLocationAsync(dto, cancellationToken);
+        if (!result.Success)
+    {
+        var effectiveSearch = !string.IsNullOrWhiteSpace(searchTerm) ? searchTerm : search;
         var (items, totalCount) = await _locations.ListLocationsAsync(effectiveSearch, pageNumber, pageSize, cancellationToken);
 
         var dtos = items.Select(l => new LocationDto
         {
-            LocationId = l.LocationId,
-            LocationName = l.LocationName,
-            Address = l.Address
-        }).ToList();
+            if (result.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(result);
+            }
 
+            return BadRequest(result);
+        }
+
+        return StatusCode(StatusCodes.Status201Created, result);
         var pagedResult = PagedResultDto<LocationDto>.Create(dtos, totalCount, pageNumber, pageSize);
         return Ok(ApiResponseDto<PagedResultDto<LocationDto>>.Ok(pagedResult, "Locations list retrieved successfully."));
         var result = await _locationService.GetLocationsAsync(effectiveSearch, pageNumber, pageSize, cancellationToken);

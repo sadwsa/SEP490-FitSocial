@@ -13,6 +13,36 @@
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
         <div class="locations-page">
+            <!-- Toast notification for success -->
+            @if (!string.IsNullOrEmpty(toastMessage))
+            {
+                <div class="toast-alert success" role="alert">
+                    <AppIcon Name="check" />
+                    <span>@toastMessage</span>
+                    <button type="button" class="btn-close-toast" @onclick="DismissToast">✕</button>
+                </div>
+            }
+
+            <!-- Header section matching reference image -->
+            <div class="page-top-bar">
+                <div class="header-left">
+                    <div class="breadcrumb-trail">
+                        <span class="bc-admin">ADMIN PORTAL</span>
+                        <span class="bc-sep">&gt;</span>
+                        <span class="bc-dest">LOCATIONS &amp; FACILITIES</span>
+                    </div>
+                    <h1 class="page-heading">Location List Management</h1>
+                </div>
+
+                <!-- Add New Location button (UC_35.1) -->
+                <div class="header-right">
+                    <button type="button" class="btn-add-location" @onclick="OpenCreateModal">
+                        <span class="btn-add-icon"><AppIcon Name="location-plus" /></span>
+                        <span>+ Add New Location</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Header section matching reference image -->
             <div class="page-top-bar">
                 <div class="breadcrumb-trail">
@@ -246,6 +276,101 @@
             </div>
         </div>
 
+        <!-- ============================================== -->
+        <!-- Add New Location Modal (UC_35.1)               -->
+        <!-- ============================================== -->
+        @if (showCreateModal)
+        {
+            <div class="modal-backdrop" @onclick="CloseCreateModal">
+                <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+                    <!-- Modal Header -->
+                    <div class="modal-header">
+                        <div class="modal-title-group">
+                            <div class="modal-icon-badge">
+                                <AppIcon Name="location-plus" />
+                            </div>
+                            <div class="modal-titles">
+                                <h2 id="modal-title" class="modal-title">Add New Location</h2>
+                                <span class="modal-subtitle">Direct mapping to Locations DB schema</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close-modal" @onclick="CloseCreateModal" title="Close" disabled="@isSaving">
+                            ✕
+                        </button>
+                    </div>
+
+                    <!-- Modal Body / Form -->
+                    <form @onsubmit="HandleCreateLocationAsync" @onsubmit:preventDefault="true" class="modal-form">
+                        @if (!string.IsNullOrWhiteSpace(modalErrorMessage))
+                        {
+                            <div class="form-alert error" role="alert">
+                                <AppIcon Name="warning" />
+                                <span>@modalErrorMessage</span>
+                            </div>
+                        }
+
+                        <!-- Field 1: Location Name -->
+                        <div class="form-group">
+                            <label class="form-label" for="locNameInput">
+                                Location Name (LocationName - NVARCHAR) <span class="required-star">*</span>
+                            </label>
+                            <input id="locNameInput"
+                                   type="text"
+                                   class="form-control @(!string.IsNullOrEmpty(nameValidationError) ? "is-invalid" : "")"
+                                   placeholder="E.g., FitSocial Gym & Studio South District"
+                                   value="@newLocationModel.LocationName"
+                                   @oninput="OnLocationNameInput"
+                                   maxlength="200"
+                                   disabled="@isSaving"
+                                   autofocus />
+                            @if (!string.IsNullOrEmpty(nameValidationError))
+                            {
+                                <div class="validation-message">@nameValidationError</div>
+                            }
+                        </div>
+
+                        <!-- Field 2: Address -->
+                        <div class="form-group">
+                            <label class="form-label" for="locAddressInput">
+                                Address (Address - NVARCHAR) <span class="required-star">*</span>
+                            </label>
+                            <textarea id="locAddressInput"
+                                      class="form-control form-textarea @(!string.IsNullOrEmpty(addressValidationError) ? "is-invalid" : "")"
+                                      placeholder="Building no., street, ward, district, city..."
+                                      rows="3"
+                                      value="@newLocationModel.Address"
+                                      @oninput="OnAddressInput"
+                                      maxlength="200"
+                                      disabled="@isSaving"></textarea>
+                            @if (!string.IsNullOrEmpty(addressValidationError))
+                            {
+                                <div class="validation-message">@addressValidationError</div>
+                            }
+                        </div>
+
+                        <!-- Modal Actions / Footer -->
+                        <div class="modal-actions">
+                            <button type="button"
+                                    class="btn-modal-cancel"
+                                    @onclick="CloseCreateModal"
+                                    disabled="@isSaving">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="btn-modal-save"
+                                    disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    <span>Saving...</span>
+                                }
+                                else
+                                {
+                                    <span>Save Location</span>
+                                }
+                            </button>
+                        </div>
+                    </form>
         <!-- Confirm Delete Location Modal (UC_35.3) -->
         @if (showDeleteModal && targetLocation != null)
         {
@@ -349,6 +474,13 @@
     private System.Timers.Timer? debounceTimer;
     private System.Threading.CancellationTokenSource? toastCts;
 
+    // Create Modal state
+    private bool showCreateModal = false;
+    private bool isSaving = false;
+    private string? modalErrorMessage;
+    private string? nameValidationError;
+    private string? addressValidationError;
+    private CreateLocationDto newLocationModel = new();
     // Delete Modal State (UC_35.3)
     private bool showDeleteModal = false;
     private bool isDeleting = false;
@@ -444,6 +576,107 @@
         await LoadLocationsAsync(page);
     }
 
+    // Modal Handlers
+    private void OpenCreateModal()
+    {
+        newLocationModel = new CreateLocationDto();
+        nameValidationError = null;
+        addressValidationError = null;
+        modalErrorMessage = null;
+        showCreateModal = true;
+    }
+
+    private void CloseCreateModal()
+    {
+        if (isSaving) return;
+        showCreateModal = false;
+        newLocationModel = new CreateLocationDto();
+        nameValidationError = null;
+        addressValidationError = null;
+        modalErrorMessage = null;
+    }
+
+    private void OnLocationNameInput(ChangeEventArgs e)
+    {
+        newLocationModel.LocationName = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(newLocationModel.LocationName))
+        {
+            nameValidationError = null;
+        }
+    }
+
+    private void OnAddressInput(ChangeEventArgs e)
+    {
+        newLocationModel.Address = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(newLocationModel.Address))
+        {
+            addressValidationError = null;
+        }
+    }
+
+    private async Task HandleCreateLocationAsync()
+    {
+        if (isSaving) return;
+
+        // Frontend validation
+        bool hasError = false;
+        nameValidationError = null;
+        addressValidationError = null;
+        modalErrorMessage = null;
+
+        var trimmedName = newLocationModel.LocationName?.Trim() ?? "";
+        var trimmedAddress = newLocationModel.Address?.Trim() ?? "";
+
+        if (string.IsNullOrWhiteSpace(trimmedName))
+        {
+            nameValidationError = "Tên địa điểm không được để trống.";
+            hasError = true;
+        }
+        else if (trimmedName.Length > 200)
+        {
+            nameValidationError = "Tên địa điểm không được vượt quá 200 ký tự.";
+            hasError = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(trimmedAddress))
+        {
+            addressValidationError = "Địa chỉ không được để trống.";
+            hasError = true;
+        }
+        else if (trimmedAddress.Length > 200)
+        {
+            addressValidationError = "Địa chỉ không được vượt quá 200 ký tự.";
+            hasError = true;
+        }
+
+        if (hasError)
+        {
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+            var requestDto = new CreateLocationDto
+            {
+                LocationName = trimmedName,
+                Address = trimmedAddress
+            };
+
+            var res = await LocationService.CreateLocationAsync(requestDto);
+            if (res.Success)
+            {
+                showCreateModal = false;
+                ShowToast("Location created successfully.");
+                // Reload location list
+                currentPage = 1;
+                await LoadLocationsAsync(1);
+            }
+            else
+            {
+                modalErrorMessage = !string.IsNullOrWhiteSpace(res.Message)
+                    ? res.Message
+                    : "Unable to create location. Please check your input.";
     private string FormatLocationId(Guid id)
     {
         var str = id.ToString("N");
@@ -532,6 +765,11 @@
         }
         catch (Exception ex)
         {
+            modalErrorMessage = $"Error creating location: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
             deleteErrorMessage = $"Error deleting location: {ex.Message}";
         }
         finally
@@ -545,6 +783,7 @@
     {
         toastMessage = message;
         toastCts?.Cancel();
+        toastCts?.Dispose();
         toastCts = new System.Threading.CancellationTokenSource();
         var token = toastCts.Token;
 
@@ -552,6 +791,7 @@
         {
             try
             {
+                await Task.Delay(4000, token);
                 await Task.Delay(3500, token);
                 if (!token.IsCancellationRequested)
                 {
@@ -564,6 +804,18 @@
             }
             catch (TaskCanceledException) { }
         });
+    }
+
+    private void DismissToast()
+    {
+        toastMessage = null;
+        toastCts?.Cancel();
+    }
+
+    private string FormatLocationId(Guid id)
+    {
+        var str = id.ToString("N");
+        return str.Length >= 8 ? str[..8].ToUpperInvariant() : str.ToUpperInvariant();
     }
 
     private List<int> GetVisiblePageNumbers()

@@ -7,3 +7,9 @@ public class LocationDto
     public string? Address { get; set; }
     public int PostCount { get; set; }
 }
+
+public class CreateLocationDto
+{
+    public string LocationName { get; set; } = string.Empty;
+    public string? Address { get; set; }
+}

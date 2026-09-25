@@ -16,6 +16,12 @@ public class LocationRepository : Repository<Location>, ILocationRepository
         return DbSet.OrderBy(l => l.LocationName).ToListAsync(cancellationToken);
     }
 
+    public Task<Location?> GetByNameAsync(string locationName, CancellationToken cancellationToken = default)
+    {
+        var trimmed = locationName.Trim();
+        return DbSet.FirstOrDefaultAsync(l => EF.Functions.ILike(l.LocationName, trimmed), cancellationToken);
+    }
+
     public async Task<(List<Location> Items, int TotalCount)> ListLocationsAsync(
         string? searchTerm = null,
         int pageNumber = 1,

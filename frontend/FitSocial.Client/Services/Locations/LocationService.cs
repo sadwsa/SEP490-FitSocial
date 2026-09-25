@@ -18,6 +18,7 @@ public interface ILocationService
 
     Task<ApiResponse<List<LocationDto>>> GetLocationsAsync();
 
+    Task<ApiResponse<LocationDto>> CreateLocationAsync(CreateLocationDto dto);
     Task<ApiResponse<bool>> DeleteLocationAsync(Guid locationId);
 }
 
@@ -30,6 +31,42 @@ public class LocationService : ILocationService
     {
         _httpClient = httpClient;
         _apiClient = apiClient;
+    }
+
+    public async Task<ApiResponse<PagedResult<LocationDto>>> GetPagedLocationsAsync(
+        string? searchTerm = null,
+        int pageNumber = 1,
+        int pageSize = 10)
+    {
+        try
+        {
+            var query = new List<string>
+            {
+                $"pageNumber={pageNumber}",
+                $"pageSize={pageSize}"
+            };
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                query.Add($"searchTerm={Uri.EscapeDataString(searchTerm.Trim())}");
+            }
+
+            var endpoint = "locations?" + string.Join("&", query);
+            var result = await _apiClient.GetAsync<PagedResult<LocationDto>>(endpoint);
+            if (result.Success && result.Data != null)
+            {
+                result.Data.Items ??= new List<LocationDto>();
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<PagedResult<LocationDto>>
+            {
+                Success = false,
+                Message = $"Unable to load locations: {ex.Message}"
+            };
+        }
     }
 
     public async Task<ApiResponse<PagedResult<LocationDto>>> GetPagedLocationsAsync(
@@ -135,6 +172,22 @@ public class LocationService : ILocationService
             {
                 Success = false,
                 Message = $"Error deleting location: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<LocationDto>> CreateLocationAsync(CreateLocationDto dto)
+    {
+        try
+        {
+            return await _apiClient.PostAsync<CreateLocationDto, LocationDto>("locations", dto);
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<LocationDto>
+            {
+                Success = false,
+                Message = $"Error creating location: {ex.Message}"
             };
         }
     }

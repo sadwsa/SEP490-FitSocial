@@ -45,6 +45,12 @@ public class ConversationService : IConversationService
             var conversationIds = userParticipants.Select(p => p.ConversationId).Distinct().ToList();
             var participantMap = userParticipants.ToDictionary(p => p.ConversationId);
 
+            var blockedUserIds = await _context.UserBlocks
+                .AsNoTracking()
+                .Where(b => b.BlockerId == userId)
+                .Select(b => b.BlockedId)
+                .ToListAsync();
+
             // 2. Fetch conversations with participants (and user info) and messages
             var conversations = await _context.Conversations
                 .AsNoTracking()
@@ -70,9 +76,13 @@ public class ConversationService : IConversationService
                     UpdatedAt = conv.UpdatedAt ?? conv.CreatedAt
                 };
 
-                // Filter messages based on history deletion
+                var otherParticipantForList = conv.Participants.FirstOrDefault(mp => mp.UserId != userId);
+                bool isOtherBlocked = otherParticipantForList != null && blockedUserIds.Contains(otherParticipantForList.UserId);
+
+                // Filter messages based on history deletion and block status
                 var validMessages = conv.Messages
                     .Where(m => p.HistoryDeletedAt == null || (m.CreatedAt.HasValue && m.CreatedAt > p.HistoryDeletedAt))
+                    .Where(m => !isOtherBlocked || (m.MessageType != "BLOCK" && m.MessageType != "AUTO" && m.MessageType != "BLOCKED" && m.MessageType != "AUTO_REPLY"))
                     .OrderByDescending(m => m.CreatedAt)
                     .ToList();
 
@@ -202,11 +212,20 @@ public class ConversationService : IConversationService
 
                 dto.Title = dto.OtherUserName;
                 dto.DisplayAvatar = dto.OtherUserAvatar;
+
+                if (otherUser != null)
+                {
+                    dto.IsBlockedByMe = await _context.UserBlocks
+                        .AnyAsync(b => b.BlockerId == currentUserId && b.BlockedId == otherUser.UserId);
+                    dto.IsBlockedByOther = await _context.UserBlocks
+                        .AnyAsync(b => b.BlockerId == otherUser.UserId && b.BlockedId == currentUserId);
+                }
             }
 
-            // 4. Filter messages based on history deletion date
+            // 4. Filter messages based on history deletion date and block status
             var validMessages = conv.Messages
                 .Where(m => currentParticipant.HistoryDeletedAt == null || (m.CreatedAt.HasValue && m.CreatedAt > currentParticipant.HistoryDeletedAt))
+                .Where(m => !dto.IsBlockedByMe || (m.MessageType != "BLOCK" && m.MessageType != "AUTO" && m.MessageType != "BLOCKED" && m.MessageType != "AUTO_REPLY"))
                 .OrderBy(m => m.CreatedAt ?? DateTime.MinValue)
                 .ToList();
 
@@ -235,6 +254,34 @@ public class ConversationService : IConversationService
                     participantEntity.LastReadMessageId = latestMessage.Id;
                     await _context.SaveChangesAsync();
                 }
+            }
+
+            // 7. Mark unread message notifications for this conversation as read
+            try
+            {
+                var messageIdsInConv = validMessages.Select(m => m.Id).ToList();
+                if (messageIdsInConv.Any())
+                {
+                    var unreadConvNotifications = await _context.Notifications
+                        .Where(n => n.UserId == currentUserId 
+                                 && (n.IsRead == false || n.IsRead == null) 
+                                 && n.ReferenceId.HasValue 
+                                 && messageIdsInConv.Contains(n.ReferenceId.Value))
+                        .ToListAsync();
+
+                    if (unreadConvNotifications.Any())
+                    {
+                        foreach (var notif in unreadConvNotifications)
+                        {
+                            notif.IsRead = true;
+                        }
+                        await _context.SaveChangesAsync();
+                    }
+                }
+            }
+            catch
+            {
+                // Silently ignore notification mark error to not fail conversation detail
             }
 
             return ApiResponseDto<ConversationDetailDto>.Ok(dto, "Conversation detail retrieved successfully.");
@@ -278,7 +325,102 @@ public class ConversationService : IConversationService
                 return ApiResponseDto<MessageDto>.Fail("Forbidden: You are not a participant in this conversation.");
             }
 
-            // 4. Persistence: Create and save Message to database
+            // Check blocking for DIRECT conversations
+            if (!string.Equals(conv.Type, "GROUP", StringComparison.OrdinalIgnoreCase))
+            {
+                var otherParticipant = conv.Participants.FirstOrDefault(p => p.UserId != currentUserId);
+                if (otherParticipant != null)
+                {
+                    var otherUserId = otherParticipant.UserId;
+
+                    // If sender has blocked recipient, sender cannot send until unblocking
+                    var isBlockedByMe = await _context.UserBlocks
+                        .AnyAsync(b => b.BlockerId == currentUserId && b.BlockedId == otherUserId);
+                    if (isBlockedByMe)
+                    {
+                        return ApiResponseDto<MessageDto>.Fail("You have blocked this user. Please unblock them before sending messages.");
+                    }
+
+                    // If recipient has blocked sender:
+                    var isBlockedByOther = await _context.UserBlocks
+                        .AnyAsync(b => b.BlockerId == otherUserId && b.BlockedId == currentUserId);
+
+                    if (isBlockedByOther)
+                    {
+                        var now = DateTime.UtcNow;
+
+                        // Save sender's message as BLOCK (VARCHAR(5))
+                        var blockedMessage = new Message
+                        {
+                            Id = Guid.NewGuid(),
+                            ConversationId = conversationId,
+                            SenderId = currentUserId,
+                            Content = trimmedContent,
+                            MessageType = "BLOCK",
+                            CreatedAt = now
+                        };
+                        _context.Messages.Add(blockedMessage);
+
+                        // Generate automated response from recipient as AUTO (VARCHAR(5)), strictly after blockedMessage
+                        var autoReplyMessage = new Message
+                        {
+                            Id = Guid.NewGuid(),
+                            ConversationId = conversationId,
+                            SenderId = otherUserId,
+                            Content = "Sorry, I do not want to receive messages from you at the moment.",
+                            MessageType = "AUTO",
+                            CreatedAt = now.AddSeconds(1)
+                        };
+                        _context.Messages.Add(autoReplyMessage);
+
+                        var senderPart = conv.Participants.FirstOrDefault(p => p.UserId == currentUserId);
+                        if (senderPart != null)
+                        {
+                            senderPart.LastReadMessageId = autoReplyMessage.Id;
+                        }
+                        conv.UpdatedAt = now.AddSeconds(1);
+
+                        await _context.SaveChangesAsync();
+
+                        // Fetch sender and recipient profiles
+                        var senderUser = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == currentUserId);
+                        var recipientUser = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == otherUserId);
+
+                        var autoReplyDto = new MessageDto
+                        {
+                            Id = autoReplyMessage.Id,
+                            ConversationId = conversationId,
+                            SenderId = otherUserId,
+                            SenderName = recipientUser?.FullName ?? recipientUser?.Email ?? "FitSocial User",
+                            SenderAvatar = recipientUser?.AvatarUrl,
+                            Content = autoReplyMessage.Content,
+                            MessageType = autoReplyMessage.MessageType,
+                            CreatedAt = autoReplyMessage.CreatedAt,
+                            IsMine = false
+                        };
+
+                        var senderMsgDto = new MessageDto
+                        {
+                            Id = blockedMessage.Id,
+                            ConversationId = conversationId,
+                            SenderId = currentUserId,
+                            SenderName = senderUser?.FullName ?? senderUser?.Email ?? "FitSocial User",
+                            SenderAvatar = senderUser?.AvatarUrl,
+                            Content = blockedMessage.Content,
+                            MessageType = blockedMessage.MessageType,
+                            CreatedAt = blockedMessage.CreatedAt,
+                            IsMine = true,
+                            AutoReply = autoReplyDto
+                        };
+
+                        // Recipient has blocked sender: Recipient does not receive any message, broadcast, or notification.
+                        // AutoReply is returned directly in senderMsgDto to ensure correct display order without WebSocket race conditions.
+                        return ApiResponseDto<MessageDto>.Ok(senderMsgDto, "Message sent.");
+                    }
+                }
+            }
+
+            // 4. Normal Persistence: Create and save Message to database
             var message = new Message
             {
                 Id = Guid.NewGuid(),
@@ -315,7 +457,7 @@ public class ConversationService : IConversationService
                 Content = message.Content,
                 MessageType = message.MessageType,
                 CreatedAt = message.CreatedAt,
-                IsMine = false // Will be determined by each client based on their authenticated userId
+                IsMine = false // Determined by each client based on their authenticated userId
             };
 
             // 6. Broadcast message realtime through SignalR to all participants
@@ -358,7 +500,8 @@ public class ConversationService : IConversationService
         }
         catch (Exception ex)
         {
-            return ApiResponseDto<MessageDto>.Fail($"System error sending message: {ex.Message}");
+            var detail = ex.InnerException != null ? $"{ex.Message} -> {ex.InnerException.Message}" : ex.Message;
+            return ApiResponseDto<MessageDto>.Fail($"System error sending message: {detail}");
         }
     }
 
@@ -394,6 +537,104 @@ public class ConversationService : IConversationService
         catch (Exception ex)
         {
             return ApiResponseDto<bool>.Fail($"System error deleting conversation: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<bool>> BlockUserAsync(Guid conversationId, Guid currentUserId)
+    {
+        try
+        {
+            var conv = await _context.Conversations
+                .Include(c => c.Participants)
+                .FirstOrDefaultAsync(c => c.Id == conversationId && c.IsDeleted != true);
+
+            if (conv == null)
+            {
+                return ApiResponseDto<bool>.Fail("Conversation not found.");
+            }
+
+            var isParticipant = conv.Participants.Any(p => p.UserId == currentUserId);
+            if (!isParticipant)
+            {
+                return ApiResponseDto<bool>.Fail("Forbidden: You are not a participant in this conversation.");
+            }
+
+            if (string.Equals(conv.Type, "GROUP", StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiResponseDto<bool>.Fail("Blocking is only available for direct conversations.");
+            }
+
+            var otherParticipant = conv.Participants.FirstOrDefault(p => p.UserId != currentUserId);
+            if (otherParticipant == null)
+            {
+                return ApiResponseDto<bool>.Fail("Other participant not found in conversation.");
+            }
+
+            var targetUserId = otherParticipant.UserId;
+            var existingBlock = await _context.UserBlocks
+                .FirstOrDefaultAsync(b => b.BlockerId == currentUserId && b.BlockedId == targetUserId);
+
+            if (existingBlock == null)
+            {
+                var userBlock = new UserBlock
+                {
+                    Id = Guid.NewGuid(),
+                    BlockerId = currentUserId,
+                    BlockedId = targetUserId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.UserBlocks.Add(userBlock);
+                await _context.SaveChangesAsync();
+            }
+
+            return ApiResponseDto<bool>.Ok(true, "User blocked successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<bool>.Fail($"System error blocking user: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<bool>> UnblockUserAsync(Guid conversationId, Guid currentUserId)
+    {
+        try
+        {
+            var conv = await _context.Conversations
+                .Include(c => c.Participants)
+                .FirstOrDefaultAsync(c => c.Id == conversationId && c.IsDeleted != true);
+
+            if (conv == null)
+            {
+                return ApiResponseDto<bool>.Fail("Conversation not found.");
+            }
+
+            var isParticipant = conv.Participants.Any(p => p.UserId == currentUserId);
+            if (!isParticipant)
+            {
+                return ApiResponseDto<bool>.Fail("Forbidden: You are not a participant in this conversation.");
+            }
+
+            var otherParticipant = conv.Participants.FirstOrDefault(p => p.UserId != currentUserId);
+            if (otherParticipant == null)
+            {
+                return ApiResponseDto<bool>.Fail("Other participant not found in conversation.");
+            }
+
+            var targetUserId = otherParticipant.UserId;
+            var existingBlock = await _context.UserBlocks
+                .FirstOrDefaultAsync(b => b.BlockerId == currentUserId && b.BlockedId == targetUserId);
+
+            if (existingBlock != null)
+            {
+                _context.UserBlocks.Remove(existingBlock);
+                await _context.SaveChangesAsync();
+            }
+
+            return ApiResponseDto<bool>.Ok(true, "User unblocked successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<bool>.Fail($"System error unblocking user: {ex.Message}");
         }
     }
 }

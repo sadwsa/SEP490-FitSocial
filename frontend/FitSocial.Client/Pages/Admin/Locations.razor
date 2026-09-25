@@ -1,0 +1,593 @@
+@page "/admin/locations"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@implements IDisposable
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.Locations
+@using FitSocial.Client.Services.Locations
+@inject ILocationService LocationService
+@inject NavigationManager Navigation
+
+<PageTitle>Location List Management - FitSocial Admin Portal</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        <div class="locations-page">
+            <!-- Header section matching reference image -->
+            <div class="page-top-bar">
+                <div class="breadcrumb-trail">
+                    <span class="bc-admin">ADMIN PORTAL</span>
+                    <span class="bc-sep">&gt;</span>
+                    <span class="bc-dest">LOCATIONS &amp; FACILITIES</span>
+                </div>
+                <h1 class="page-heading">Location List Management</h1>
+            </div>
+
+            <!-- Toast notification -->
+            @if (!string.IsNullOrEmpty(toastMessage))
+            {
+                <div class="toast-notification" role="status">
+                    <AppIcon Name="check" />
+                    <span>@toastMessage</span>
+                </div>
+            }
+
+            <!-- Main card container -->
+            <div class="locations-card">
+                <!-- Search and Stats toolbar -->
+                <div class="search-and-stats-bar">
+                    <div class="search-input-box">
+                        <span class="search-icon"><AppIcon Name="search" /></span>
+                        <input type="text"
+                               value="@searchTerm"
+                               @oninput="OnSearchInput"
+                               @onkeydown="OnSearchKeyDown"
+                               placeholder="Search by ID, location name, district..."
+                               class="search-input" />
+                        @if (!string.IsNullOrWhiteSpace(searchTerm))
+                        {
+                            <button type="button" class="btn-clear-search" @onclick="ClearSearchAsync" title="Clear search">✕</button>
+                        }
+                    </div>
+
+                    <div class="stats-and-actions">
+                        <div class="count-badge" title="Total locations">
+                            All (@(pagedResult.TotalCount))
+                        </div>
+                        <button type="button" class="btn-refresh" @onclick="() => LoadLocationsAsync(currentPage)" disabled="@isLoading" title="Refresh">
+                            <AppIcon Name="refresh" Class="@(isLoading ? "icon-spin" : "")" />
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error State -->
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="state-card error-state">
+                        <div class="state-content">
+                            <span class="state-icon"><AppIcon Name="warning" /></span>
+                            <span class="state-message">@errorMessage</span>
+                            <button type="button" class="btn-retry" @onclick="() => LoadLocationsAsync(currentPage)">
+                                <AppIcon Name="refresh" /> Retry
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                <!-- Loading State overlay / indicator -->
+                @if (isLoading)
+                {
+                    <div class="loading-state">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        <span>Loading locations...</span>
+                    </div>
+                }
+
+                <!-- Table -->
+                <div class="table-responsive">
+                    <table class="locations-table">
+                        <thead>
+                            <tr>
+                                <th class="col-check">
+                                    <span class="table-checkbox" aria-hidden="true"></span>
+                                </th>
+                                <th class="col-id">LOCATION ID</th>
+                                <th class="col-name">LOCATION NAME (LOCATIONNAME)</th>
+                                <th class="col-address">ADDRESS (ADDRESS)</th>
+                                <th class="col-actions">ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!isLoading && string.IsNullOrWhiteSpace(errorMessage) && !pagedResult.Items.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" class="empty-state-cell">
+                                        <div class="empty-state">
+                                            <span class="empty-icon"><AppIcon Name="location" /></span>
+                                            <p class="empty-title">
+                                                @(string.IsNullOrWhiteSpace(searchTerm) ? "No locations found." : "No locations match your search.")
+                                            </p>
+                                            @if (!string.IsNullOrWhiteSpace(searchTerm))
+                                            {
+                                                <button type="button" class="btn-reset-search" @onclick="ClearSearchAsync">
+                                                    Clear search filter
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                var index = 0;
+                                @foreach (var item in pagedResult.Items)
+                                {
+                                    index++;
+                                    var displayIndex = (currentPage - 1) * pageSize + index;
+                                    var displayIndexString = (100 + displayIndex).ToString();
+                                    <tr>
+                                        <td class="col-check">
+                                            <input type="checkbox" class="row-checkbox" aria-label="Select row" />
+                                        </td>
+                                        <td class="col-id">
+                                            <span class="id-badge">#@FormatLocationId(item.LocationId)</span>
+                                        </td>
+                                        <td class="col-name">
+                                            <div class="loc-name-wrap">
+                                                <div class="loc-icon-bubble">
+                                                    <svg class="loc-hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                                                        <path d="M9 22v-4h6v4"></path>
+                                                        <path d="M8 6h.01"></path>
+                                                        <path d="M16 6h.01"></path>
+                                                        <path d="M12 6h.01"></path>
+                                                        <path d="M12 10h.01"></path>
+                                                        <path d="M12 14h.01"></path>
+                                                        <path d="M16 10h.01"></path>
+                                                        <path d="M16 14h.01"></path>
+                                                        <path d="M8 10h.01"></path>
+                                                        <path d="M8 14h.01"></path>
+                                                    </svg>
+                                                </div>
+                                                <span class="loc-name">@item.LocationName</span>
+                                            </div>
+                                        </td>
+                                        <td class="col-address">
+                                            <div class="loc-address-wrap">
+                                                <span class="loc-pin-icon">
+                                                    <AppIcon Name="location" />
+                                                </span>
+                                                <span class="loc-address">@(string.IsNullOrWhiteSpace(item.Address) ? "No address specified" : item.Address)</span>
+                                            </div>
+                                        </td>
+                                        <td class="col-actions">
+                                            <button type="button"
+                                                    class="btn-action-delete"
+                                                    @onclick="() => OpenDeleteModal(item, displayIndexString)"
+                                                    title="Delete Location">
+                                                <AppIcon Name="trash" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination footer matching reference image -->
+                <div class="pagination-footer">
+                    <div class="pagination-info">
+                        @if (pagedResult.TotalCount > 0)
+                        {
+                            var start = (currentPage - 1) * pageSize + 1;
+                            var end = Math.Min(currentPage * pageSize, pagedResult.TotalCount);
+                            <span>Showing <strong>@start - @end</strong> of <strong>@pagedResult.TotalCount</strong> locations</span>
+                        }
+                        else
+                        {
+                            <span>Showing <strong>0</strong> locations</span>
+                        }
+                    </div>
+
+                    @if (pagedResult.TotalPages > 1)
+                    {
+                        <div class="pagination-controls">
+                            <button type="button"
+                                    class="page-nav-btn prev-btn"
+                                    disabled="@(!pagedResult.HasPreviousPage)"
+                                    @onclick="() => GoToPageAsync(currentPage - 1)"
+                                    title="Previous page">
+                                &lt;
+                            </button>
+
+                            @foreach (var p in GetVisiblePageNumbers())
+                            {
+                                if (p == -1)
+                                {
+                                    <span class="page-ellipsis">...</span>
+                                }
+                                else
+                                {
+                                    var pageNumber = p;
+                                    <button type="button"
+                                            class="page-num-btn @(pageNumber == currentPage ? "active" : "")"
+                                            @onclick="() => GoToPageAsync(pageNumber)">
+                                        @pageNumber
+                                    </button>
+                                }
+                            }
+
+                            <button type="button"
+                                    class="page-nav-btn next-btn"
+                                    disabled="@(!pagedResult.HasNextPage)"
+                                    @onclick="() => GoToPageAsync(currentPage + 1)"
+                                    title="Next page">
+                                &gt;
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirm Delete Location Modal (UC_35.3) -->
+        @if (showDeleteModal && targetLocation != null)
+        {
+            <div class="modal-backdrop-custom" @onclick="CloseDeleteModal">
+                <div class="delete-modal-dialog" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+                    <div class="delete-icon-badge">
+                        <AppIcon Name="trash" />
+                    </div>
+
+                    <h3 class="delete-modal-title" id="deleteModalTitle">Confirm Delete Location</h3>
+
+                    <div class="delete-prompt-box">
+                        Are you sure you want to delete <strong>@targetLocation.LocationName</strong> (ID #@targetIndexString)?
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(deleteErrorMessage))
+                    {
+                        <div class="delete-error-alert" role="alert">
+                            <AppIcon Name="warning" />
+                            <span>@deleteErrorMessage</span>
+                        </div>
+                    }
+
+                    <div class="delete-modal-actions">
+                        <button type="button" class="btn-modal-cancel" @onclick="CloseDeleteModal" disabled="@isDeleting">
+                            Cancel
+                        </button>
+                        <button type="button" class="btn-modal-delete" @onclick="ConfirmDeleteAsync" disabled="@isDeleting">
+                            @if (isDeleting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Deleting...</span>
+                            }
+                            else
+                            {
+                                <span>Delete</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Warning Modal: Cannot delete location in use -->
+        @if (showWarningModal)
+        {
+            <div class="modal-backdrop-custom" @onclick="CloseWarningModal">
+                <div class="warning-modal-dialog" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="warningModalTitle">
+                    <div class="warning-icon-badge">
+                        <AppIcon Name="warning" />
+                    </div>
+
+                    <h3 class="warning-modal-title" id="warningModalTitle">Cannot Delete Location</h3>
+
+                    <div class="warning-prompt-box">
+                        <p class="warning-main-text">
+                            @(string.IsNullOrWhiteSpace(warningMessage)
+                                ? $"Location \"{warningLocationName}\" is currently being used by posts and cannot be deleted."
+                                : warningMessage)
+                        </p>
+                        <p class="warning-sub-text">
+                            Please remove or update this location from associated posts before deleting.
+                        </p>
+                    </div>
+
+                    <div class="warning-modal-actions">
+                        <button type="button" class="btn-modal-understand" @onclick="CloseWarningModal">
+                            Understood
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <div class="auth-denied-container">
+            <div class="auth-alert error" role="alert">
+                <AppIcon Name="warning" />
+                <span>You do not have permission to access the Location List Management console. Staff or Admin authorization is required.</span>
+            </div>
+            <button type="button" class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/login")'>
+                Go to portal sign in
+            </button>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string searchTerm = "";
+    private int currentPage = 1;
+    private int pageSize = 6;
+    private PagedResult<LocationDto> pagedResult = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? toastMessage;
+    private System.Timers.Timer? debounceTimer;
+    private System.Threading.CancellationTokenSource? toastCts;
+
+    // Delete Modal State (UC_35.3)
+    private bool showDeleteModal = false;
+    private bool isDeleting = false;
+    private LocationDto? targetLocation;
+    private string targetIndexString = "";
+    private string? deleteErrorMessage;
+
+    // Warning Modal State (Cannot delete when location is used by posts)
+    private bool showWarningModal = false;
+    private string warningLocationName = "";
+    private string warningMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLocationsAsync(1);
+    }
+
+    private async Task LoadLocationsAsync(int page)
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            currentPage = page;
+
+            var res = await LocationService.GetLocationsAsync(searchTerm, currentPage, pageSize);
+            if (res.Success && res.Data != null)
+            {
+                pagedResult = res.Data;
+            }
+            else
+            {
+                errorMessage = !string.IsNullOrWhiteSpace(res.Message)
+                    ? res.Message
+                    : "Unable to load locations.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unable to load locations: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+        debounceTimer = new System.Timers.Timer(350);
+        debounceTimer.AutoReset = false;
+        debounceTimer.Elapsed += async (_, _) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                currentPage = 1;
+                await LoadLocationsAsync(1);
+            });
+        };
+        debounceTimer.Start();
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            debounceTimer?.Stop();
+            currentPage = 1;
+            await LoadLocationsAsync(1);
+        }
+    }
+
+    private async Task ClearSearchAsync()
+    {
+        searchTerm = "";
+        debounceTimer?.Stop();
+        currentPage = 1;
+        await LoadLocationsAsync(1);
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        if (page < 1 || (pagedResult.TotalPages > 0 && page > pagedResult.TotalPages) || page == currentPage)
+        {
+            return;
+        }
+
+        await LoadLocationsAsync(page);
+    }
+
+    private string FormatLocationId(Guid id)
+    {
+        var str = id.ToString("N");
+        return str.Length >= 8 ? str[..8].ToUpperInvariant() : str.ToUpperInvariant();
+    }
+
+    private void OpenDeleteModal(LocationDto item, string displayIndex)
+    {
+        // If location is currently used by posts, show warning popup
+        if (item.PostCount > 0)
+        {
+            warningLocationName = item.LocationName;
+            warningMessage = $"Location \"{item.LocationName}\" is currently being used by {item.PostCount} post(s) and cannot be deleted.";
+            showWarningModal = true;
+            return;
+        }
+
+        targetLocation = item;
+        targetIndexString = displayIndex;
+        deleteErrorMessage = null;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        if (isDeleting) return;
+        showDeleteModal = false;
+        targetLocation = null;
+        targetIndexString = "";
+        deleteErrorMessage = null;
+    }
+
+    private void CloseWarningModal()
+    {
+        showWarningModal = false;
+        warningLocationName = "";
+        warningMessage = "";
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (isDeleting || targetLocation == null) return;
+
+        try
+        {
+            isDeleting = true;
+            deleteErrorMessage = null;
+
+            var res = await LocationService.DeleteLocationAsync(targetLocation.LocationId);
+            if (res.Success)
+            {
+                showDeleteModal = false;
+                targetLocation = null;
+                ShowToast("Location deleted successfully.");
+
+                // If this was the last item on the page and page > 1, go back one page
+                if (pagedResult.Items.Count == 1 && currentPage > 1)
+                {
+                    currentPage--;
+                }
+
+                await LoadLocationsAsync(currentPage);
+            }
+            else
+            {
+                // If location is used by posts or other records, show warning popup
+                if (res.Message?.Contains("post", StringComparison.OrdinalIgnoreCase) == true ||
+                    res.Message?.Contains("used by", StringComparison.OrdinalIgnoreCase) == true ||
+                    res.Message?.Contains("in use", StringComparison.OrdinalIgnoreCase) == true ||
+                    res.Message?.Contains("linked", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    var locName = targetLocation.LocationName;
+                    showDeleteModal = false;
+                    targetLocation = null;
+                    warningLocationName = locName;
+                    warningMessage = res.Message;
+                    showWarningModal = true;
+                }
+                else
+                {
+                    deleteErrorMessage = !string.IsNullOrWhiteSpace(res.Message)
+                        ? res.Message
+                        : "Unable to delete location. It may be in use by existing records.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            deleteErrorMessage = $"Error deleting location: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowToast(string message)
+    {
+        toastMessage = message;
+        toastCts?.Cancel();
+        toastCts = new System.Threading.CancellationTokenSource();
+        var token = toastCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(3500, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        toastMessage = null;
+                        StateHasChanged();
+                    });
+                }
+            }
+            catch (TaskCanceledException) { }
+        });
+    }
+
+    private List<int> GetVisiblePageNumbers()
+    {
+        var list = new List<int>();
+        var total = pagedResult.TotalPages;
+        if (total <= 1) return list;
+
+        if (total <= 7)
+        {
+            for (var i = 1; i <= total; i++) list.Add(i);
+            return list;
+        }
+
+        list.Add(1);
+
+        if (currentPage <= 4)
+        {
+            for (var i = 2; i <= Math.Min(5, total - 1); i++) list.Add(i);
+            if (total > 6) list.Add(-1);
+            list.Add(total);
+        }
+        else if (currentPage >= total - 3)
+        {
+            list.Add(-1);
+            for (var i = total - 4; i <= total; i++) list.Add(i);
+        }
+        else
+        {
+            list.Add(-1);
+            list.Add(currentPage - 1);
+            list.Add(currentPage);
+            list.Add(currentPage + 1);
+            list.Add(-1);
+            list.Add(total);
+        }
+
+        return list;
+    }
+
+    public void Dispose()
+    {
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+        toastCts?.Cancel();
+        toastCts?.Dispose();
+    }
+}

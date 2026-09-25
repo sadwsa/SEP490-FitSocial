@@ -1,4 +1,4 @@
-using FitSocial.Application.Interfaces;
+﻿using FitSocial.Application.Interfaces;
 using FitSocial.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
@@ -159,6 +159,10 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All);
+    })
     .ConfigureApiBehaviorOptions(options =>
     {
         // Tắt auto-400 ProblemDetails của [ApiController] để mọi lỗi validation

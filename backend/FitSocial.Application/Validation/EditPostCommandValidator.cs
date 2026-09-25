@@ -1,4 +1,4 @@
-using FitSocial.Application.DTOs.Posts;
+﻿using FitSocial.Application.DTOs.Posts;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Policies;
 
@@ -42,12 +42,7 @@ public static class EditPostRequestValidator
             return (false, $"Content must not exceed {PostConstants.MaxContentLength} characters.");
         }
 
-        // 5. SportId & LocationId: không empty
-        if (request.SportId == Guid.Empty)
-        {
-            return (false, "SportId is required and cannot be empty.");
-        }
-
+        // 5. LocationId: không empty
         if (request.LocationId == Guid.Empty)
         {
             return (false, "LocationId is required and cannot be empty.");
@@ -103,4 +98,3 @@ public static class EditPostCommandValidator
     public static (bool IsValid, string? ErrorMessage) Validate(Guid postId, Guid currentUserId, EditPostRequestDto request)
         => EditPostRequestValidator.Validate(postId, currentUserId, request);
 }
-

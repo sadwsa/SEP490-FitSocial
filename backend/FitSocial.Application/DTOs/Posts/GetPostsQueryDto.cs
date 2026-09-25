@@ -1,11 +1,10 @@
-namespace FitSocial.Application.DTOs.Posts;
+﻿namespace FitSocial.Application.DTOs.Posts;
 
 public class GetPostsQueryDto
 {
     public int PageNumber { get; set; } = 1;
     public int PageSize { get; set; } = 10;
     public string? PostType { get; set; }
-    public Guid? SportId { get; set; }
     public Guid? LocationId { get; set; }
     public Guid? AuthorId { get; set; }
 

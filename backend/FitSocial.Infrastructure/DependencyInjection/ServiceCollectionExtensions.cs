@@ -27,6 +27,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
         services.AddScoped<ISportService, SportService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<ITermsService, TermsService>();
+        services.AddScoped<IEkycService, ViettelEkycService>();
         return services;
     }
 
@@ -63,6 +66,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<ICoachProfileRepository, CoachProfileRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<ITermsAndPolicyRepository, TermsAndPolicyRepository>();
+        services.AddScoped<IUserAgreementRepository, UserAgreementRepository>();
+        services.AddScoped<ICoachEkycVerificationRepository, CoachEkycVerificationRepository>();
+        services.AddScoped<ICoachCertificateRepository, CoachCertificateRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
         services.AddScoped<IPostReportRepository, PostReportRepository>();
         services.AddScoped<IPostReactionRepository, PostReactionRepository>();

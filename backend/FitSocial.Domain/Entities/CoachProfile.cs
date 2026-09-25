@@ -27,6 +27,10 @@ public partial class CoachProfile
 
     public virtual ICollection<CoachBankAccount> CoachBankAccounts { get; set; } = new List<CoachBankAccount>();
 
+    public virtual ICollection<CoachCertificate> CoachCertificates { get; set; } = new List<CoachCertificate>();
+
+    public virtual ICollection<CoachEkycVerification> CoachEkycVerifications { get; set; } = new List<CoachEkycVerification>();
+
     public virtual ICollection<CoachUpgrade> CoachUpgrades { get; set; } = new List<CoachUpgrade>();
 
     public virtual ICollection<MealPlan> MealPlans { get; set; } = new List<MealPlan>();

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace FitSocial.Domain.Entities;
@@ -12,8 +12,6 @@ public partial class Post
     public string? Content { get; set; }
 
     public string PostType { get; set; } = null!;
-
-    public Guid? SportId { get; set; }
 
     public Guid? LocationId { get; set; }
 
@@ -34,6 +32,4 @@ public partial class Post
     public virtual ICollection<PostMedium> PostMedia { get; set; } = new List<PostMedium>();
 
     public virtual ICollection<Report> Reports { get; set; } = new List<Report>();
-
-    public virtual Sport? Sport { get; set; }
 }

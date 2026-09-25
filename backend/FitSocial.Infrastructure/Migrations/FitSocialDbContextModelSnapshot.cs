@@ -1099,8 +1099,6 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("LocationId");
 
-                    b.HasIndex("SportId");
-
                     b.ToTable("Posts");
                 });
 
@@ -2161,16 +2159,9 @@ namespace FitSocial.Infrastructure.Migrations
                         .HasForeignKey("LocationId")
                         .HasConstraintName("Posts_LocationID_fkey");
 
-                    b.HasOne("FitSocial.Domain.Entities.Sport", "Sport")
-                        .WithMany("Posts")
-                        .HasForeignKey("SportId")
-                        .HasConstraintName("Posts_SportID_fkey");
-
                     b.Navigation("Author");
 
                     b.Navigation("Location");
-
-                    b.Navigation("Sport");
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.PostInteraction", b =>
@@ -2507,11 +2498,6 @@ namespace FitSocial.Infrastructure.Migrations
             modelBuilder.Entity("FitSocial.Domain.Entities.Price", b =>
                 {
                     b.Navigation("CoachUpgrades");
-                });
-
-            modelBuilder.Entity("FitSocial.Domain.Entities.Sport", b =>
-                {
-                    b.Navigation("Posts");
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.TrainingPackage", b =>

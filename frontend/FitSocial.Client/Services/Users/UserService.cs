@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Users;
 using FitSocial.Client.Services.Auth;
+using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.Users;
 
@@ -18,18 +19,32 @@ public interface IUserService
         int pageNumber = 1,
         int pageSize = 10);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
+    Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
+    Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
 }
 
 public class UserService : IUserService
 {
     private readonly HttpClient _httpClient;
     private readonly ITokenStorage _tokenStorage;
+    private readonly ApiClient _apiClient;
     private const string AuthTokenKey = "authToken";
 
-    public UserService(HttpClient httpClient, ITokenStorage tokenStorage)
+    public UserService(HttpClient httpClient, ITokenStorage tokenStorage, ApiClient apiClient)
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
+        _apiClient = apiClient;
+    }
+
+    public async Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync()
+    {
+        return await _apiClient.GetAsync<UserProfileModel>("users/me/profile");
+    }
+
+    public async Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId)
+    {
+        return await _apiClient.GetAsync<OtherUserProfileModel>($"users/{userId}/profile");
     }
 
     private async Task AttachBearerTokenAsync()

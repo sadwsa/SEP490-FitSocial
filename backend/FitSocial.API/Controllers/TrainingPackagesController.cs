@@ -34,6 +34,26 @@ namespace FitSocial.API.Controllers
             var result = await _service.GetMyPackagesAsync(currentUserId);
             return Ok(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Ok(result));
         }
+        [HttpDelete("{id}")]
+[Authorize(Roles = "COACH")]
+public async Task<IActionResult> DeletePackage(Guid id)
+{
+    var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (!Guid.TryParse(userIdString, out var currentUserId))
+    {
+        return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
+    }
+
+    var success = await _service.SoftDeletePackageAsync(id, currentUserId);
+    
+    if (!success)
+    {
+        return BadRequest(ApiResponseDto<bool>.Fail("Cannot delete package or package not found/unauthorized."));
+    }
+
+    return Ok(ApiResponseDto<bool>.Ok(true, "Package soft deleted successfully"));
+}
+
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetPackageById(Guid id)

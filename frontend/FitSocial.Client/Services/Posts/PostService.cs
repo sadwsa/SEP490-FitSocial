@@ -1,4 +1,4 @@
-using FitSocial.Client.Models.Common;
+﻿using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Posts;
 using FitSocial.Client.Services.Http;
 
@@ -45,11 +45,6 @@ public class PostService : IPostService
             queryParams.Add($"postType={Uri.EscapeDataString(query.PostType.Trim())}");
         }
 
-        if (query.SportId.HasValue && query.SportId != Guid.Empty)
-        {
-            queryParams.Add($"sportId={query.SportId.Value}");
-        }
-
         if (query.LocationId.HasValue && query.LocationId != Guid.Empty)
         {
             queryParams.Add($"locationId={query.LocationId.Value}");
@@ -72,8 +67,7 @@ public class PostService : IPostService
                 var term = query.SearchTerm.Trim().ToLowerInvariant();
                 sampleItems = sampleItems.Where(p => 
                     (p.Content?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (p.AuthorName?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (p.SportName?.ToLowerInvariant().Contains(term) ?? false)
+                    (p.AuthorName?.ToLowerInvariant().Contains(term) ?? false)
                 ).ToList();
             }
 
@@ -153,7 +147,6 @@ public class PostService : IPostService
                 AuthorName = "Coach Alex",
                 AuthorAvatarUrl = "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=120&auto=format&fit=crop",
                 Content = "Had an amazing chest workout session with my clients today. Everyone, keep pushing hard and stay consistent! 💪🔥",
-                SportName = "Bodybuilding",
                 LocationName = "Downtown Fitness Center, District 1",
                 LikeCount = 124,
                 CommentCount = 12,
@@ -186,8 +179,7 @@ public class PostService : IPostService
                 Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
                 AuthorName = "Minh Thu Fitness",
                 AuthorAvatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop",
-                Content = "Morning 5k sunrise run around West Lake 🏃‍♀️ Fresh morning air gives the best positive energy for the entire productive day!",
-                SportName = "Running",
+                Content = "Morning 5k sunrise run around West Lake 🌅✨ Fresh morning air gives the best positive energy for the entire productive day!",
                 LocationName = "West Lake Trail, Hanoi",
                 LikeCount = 98,
                 CommentCount = 15,
@@ -209,7 +201,6 @@ public class PostService : IPostService
                 AuthorName = "Coach Dat",
                 AuthorAvatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop",
                 Content = "Completed the high-volume calisthenics routine today! Mastered strict muscle-ups and human flag progression. Discipline over motivation any day. 🔥",
-                SportName = "Calisthenics",
                 LocationName = "FitSocial Training Hub, District 7",
                 LikeCount = 67,
                 CommentCount = 8,

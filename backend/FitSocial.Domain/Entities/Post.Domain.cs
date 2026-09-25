@@ -1,4 +1,4 @@
-using FitSocial.Domain.Constants;
+﻿using FitSocial.Domain.Constants;
 using FitSocial.Domain.Enums;
 
 namespace FitSocial.Domain.Entities;
@@ -16,11 +16,10 @@ public partial class Post
     /// <summary>
     /// Updates the main attributes of the post.
     /// </summary>
-    public void UpdateDetails(string content, PostType postType, Guid sportId, Guid locationId)
+    public void UpdateDetails(string content, PostType postType, Guid locationId)
     {
         Content = content.Trim();
         PostType = postType.ToString();
-        SportId = sportId;
         LocationId = locationId;
         UpdatedAt = DateTime.UtcNow;
     }

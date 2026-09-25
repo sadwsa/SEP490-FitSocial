@@ -31,4 +31,9 @@ public class TrainingPackageService : ITrainingPackageService
     {
         return await _apiClient.PostAsync<CreateTrainingPackageDto, TrainingPackageResponseDto>(BaseEndpoint, dto);
     }
+    public async Task<ApiResponse<bool>> DeletePackageAsync(Guid id)
+{
+    return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/{id}");
+}
+
 }

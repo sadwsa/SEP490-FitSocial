@@ -2,8 +2,14 @@
 @inject IAuthService AuthService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
+@inject INotificationService NotificationService
+@inject IChatHubClient ChatHubClient
 @using System.Security.Claims
 @using FitSocial.Client.Models.Auth
+@using FitSocial.Client.Services.Notifications
+@using FitSocial.Client.Services.Realtime
+@using FitSocial.Client.Models.Notifications
+@implements IAsyncDisposable
 
 <header class="sticky top-0 z-50 bg-white shadow-sm h-16 flex items-center justify-between px-4 lg:px-10 @Class"
         style="display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important;">
@@ -76,22 +82,123 @@
                 }
             </a>
 
-            <!-- Messages -->
-            <a href="messages" class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition block" title="Messages">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
-                    </path>
-                </svg>
-                @if (MessageCount > 0)
-                {
-                    <span class="absolute top-1 right-1 bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                        @MessageCount
-                    </span>
-                }
-            </a>
+            <!-- Messages Notification Dropdown -->
+            <div class="relative">
+                <button type="button"
+                        @onclick="ToggleMessageMenu"
+                        class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition block cursor-pointer @(showMessageMenu ? "bg-orange-50 text-[#FF5500]" : "")"
+                        title="Messages">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
+                        </path>
+                    </svg>
+                    @if (EffectiveMessageCount > 0)
+                    {
+                        <span class="absolute top-1 right-1 bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-[10px] font-bold min-w-4 h-4 px-1 flex items-center justify-center rounded-full shadow-xs">
+                            @(EffectiveMessageCount > 99 ? "99+" : EffectiveMessageCount)
+                        </span>
+                    }
+                </button>
 
-            <!-- Notifications -->
+                @if (showMessageMenu)
+                {
+                    <div class="fixed inset-0 z-40" @onclick="CloseMessageMenu"></div>
+                    <div class="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-gray-100 py-3 z-50 animate-in fade-in slide-in-from-top-2">
+                        <!-- Dropdown Header -->
+                        <div class="px-4 pb-2.5 border-b border-gray-100 flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-gray-900 text-base">Messages</span>
+                                @if (EffectiveMessageCount > 0)
+                                {
+                                    <span class="bg-orange-100 text-[#FF5500] text-xs font-semibold px-2 py-0.5 rounded-full">
+                                        @EffectiveMessageCount new
+                                    </span>
+                                }
+                            </div>
+                            @if (EffectiveMessageCount > 0)
+                            {
+                                <button type="button" @onclick="HandleMarkAllMessagesRead"
+                                        class="text-xs text-[#FF5500] hover:text-[#e04c00] font-medium transition cursor-pointer">
+                                    Mark all as read
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Dropdown Message List -->
+                        <div class="max-h-80 overflow-y-auto divide-y divide-gray-50">
+                            @if (_isLoadingMessages)
+                            {
+                                <div class="py-8 text-center text-gray-400 text-xs">
+                                    <div class="w-5 h-5 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                                    Loading messages...
+                                </div>
+                            }
+                            else if (_messageNotifications == null || !_messageNotifications.Any())
+                            {
+                                <div class="py-8 text-center text-gray-400">
+                                    <div class="w-12 h-12 rounded-full bg-orange-50 text-orange-400 flex items-center justify-center mx-auto mb-2">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                        </svg>
+                                    </div>
+                                    <p class="text-xs font-medium text-gray-600 mb-0.5">No new messages</p>
+                                    <p class="text-[11px] text-gray-400">Your new messages will appear here</p>
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var item in _messageNotifications)
+                                {
+                                    <div @onclick="() => HandleMessageNotificationClick(item)"
+                                         class="flex items-center gap-3 px-4 py-3 hover:bg-orange-50/50 cursor-pointer transition @(!item.IsRead ? "bg-orange-50/30" : "")">
+                                        <!-- Avatar -->
+                                        <div class="relative flex-shrink-0">
+                                            @if (!string.IsNullOrEmpty(item.SenderAvatar))
+                                            {
+                                                <img src="@item.SenderAvatar" alt="@item.SenderName" class="w-10 h-10 rounded-full object-cover" />
+                                            }
+                                            else
+                                            {
+                                                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                                                    @GetInitials(item.SenderName)
+                                                </div>
+                                            }
+                                            @if (!item.IsRead)
+                                            {
+                                                <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#FF5500] border-2 border-white rounded-full"></span>
+                                            }
+                                        </div>
+                                        <!-- Content -->
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between gap-1 mb-0.5">
+                                                <p class="text-xs font-semibold text-gray-900 truncate">@(item.SenderName ?? "FitSocial User")</p>
+                                                <span class="text-[10px] text-gray-400 flex-shrink-0">@FormatNotificationTime(item.CreatedAt)</span>
+                                            </div>
+                                            <p class="text-xs text-gray-500 truncate @(!item.IsRead ? "font-semibold text-gray-800" : "")">
+                                                @(item.MessagePreview ?? "Sent a new message...")
+                                            </p>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+
+                        <!-- Dropdown Footer -->
+                        <div class="pt-2 px-3 border-t border-gray-100 text-center">
+                            <a href="messages" @onclick="CloseMessageMenu"
+                               class="inline-flex items-center justify-center gap-1.5 w-full py-2 bg-gray-50 hover:bg-orange-50 text-[#FF5500] rounded-xl text-xs font-semibold transition">
+                                <span>See all in Messages</span>
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Notifications (System notifications only, messages belong in the message icon) -->
             <button class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition cursor-pointer" title="Notifications">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -110,17 +217,52 @@
         <!-- Profile Avatar & Dropdown -->
         <div class="relative">
             <button @onclick="ToggleProfileMenu"
-                    class="w-9 h-9 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold ml-2 shadow-sm hover:opacity-90 transition cursor-pointer"
-                    title="User Profile">
-                @EffectiveUserInitials
+                    class="ml-2 w-9 h-9 rounded-full focus:outline-none focus:ring-2 focus:ring-[#FF5500] cursor-pointer shadow-sm hover:opacity-90 transition relative flex items-center justify-center overflow-hidden"
+                    title="@EffectiveUserName">
+                @if (AvatarHelper.HasValidAvatarUrl(EffectiveUserAvatarUrl))
+                {
+                    <img src="@EffectiveUserAvatarUrl" alt="@EffectiveUserName"
+                         class="w-full h-full rounded-full object-cover border border-gray-200"
+                         referrerpolicy="no-referrer" loading="lazy"
+                         onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                    <div class="w-full h-full rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white items-center justify-center font-bold text-xs"
+                         style="display: none;">
+                        @EffectiveUserInitials
+                    </div>
+                }
+                else
+                {
+                    <div class="w-full h-full rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-xs">
+                        @EffectiveUserInitials
+                    </div>
+                }
             </button>
 
             @if (showProfileMenu)
             {
-                <div class="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in">
-                    <div class="px-4 py-2 border-b border-gray-100">
-                        <p class="text-sm font-semibold text-gray-900 truncate">@EffectiveUserName</p>
-                        <p class="text-xs text-[#FF5500] font-medium uppercase tracking-wider mt-0.5">@EffectiveUserRole</p>
+                <div class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in">
+                    <div class="px-4 py-2 border-b border-gray-100 flex items-center gap-3">
+                        @if (AvatarHelper.HasValidAvatarUrl(EffectiveUserAvatarUrl))
+                        {
+                            <img src="@EffectiveUserAvatarUrl" alt="@EffectiveUserName"
+                                 class="w-9 h-9 rounded-full object-cover border border-gray-100 flex-shrink-0"
+                                 referrerpolicy="no-referrer" loading="lazy"
+                                 onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                            <div class="w-9 h-9 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white items-center justify-center font-bold text-xs flex-shrink-0"
+                                 style="display: none;">
+                                @EffectiveUserInitials
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="w-9 h-9 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                @EffectiveUserInitials
+                            </div>
+                        }
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-semibold text-gray-900 truncate">@EffectiveUserName</p>
+                            <p class="text-xs text-[#FF5500] font-medium uppercase tracking-wider mt-0.5">@EffectiveUserRole</p>
+                        </div>
                     </div>
 
                     <a href="profile"
@@ -157,6 +299,44 @@
             }
         </div>
     </div>
+
+    <!-- Real-time Message Notification Floating Toast Banner -->
+    @if (_activeToast != null)
+    {
+        <div class="fixed top-20 right-4 sm:right-8 z-[100] max-w-sm w-full bg-white rounded-2xl shadow-xl border border-orange-100 p-4 animate-in fade-in slide-in-from-top-4 cursor-pointer hover:shadow-2xl transition"
+             @onclick="() => HandleToastClick(_activeToast)">
+            <div class="flex items-start gap-3">
+                <div class="relative flex-shrink-0">
+                    @if (!string.IsNullOrEmpty(_activeToast.SenderAvatar))
+                    {
+                        <img src="@_activeToast.SenderAvatar" alt="@_activeToast.SenderName" class="w-10 h-10 rounded-full object-cover" />
+                    }
+                    else
+                    {
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                            @GetInitials(_activeToast.SenderName)
+                        </div>
+                    }
+                    <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#FF5500] border-2 border-white rounded-full"></span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-bold text-gray-900 truncate">@(_activeToast.SenderName ?? "FitSocial User")</p>
+                        <span class="text-[10px] text-gray-400">Just now</span>
+                    </div>
+                    <p class="text-xs text-gray-600 line-clamp-2 mt-0.5">
+                        @(_activeToast.MessagePreview ?? "Sent you a new message.")
+                    </p>
+                </div>
+                <button type="button" class="text-gray-400 hover:text-gray-600 p-1 rounded-full cursor-pointer"
+                        @onclick:stopPropagation="true" @onclick="DismissToast" title="Close">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    }
 </header>
 
 @code {
@@ -173,30 +353,215 @@
     [Parameter] public string? UserName { get; set; }
     [Parameter] public string? UserInitials { get; set; }
     [Parameter] public string? UserRole { get; set; }
+    [Parameter] public string? UserAvatarUrl { get; set; }
 
-    [Parameter] public int CartCount { get; set; } = 2;
-    [Parameter] public int MessageCount { get; set; } = 5;
-    [Parameter] public int NotificationCount { get; set; } = 9;
+    [Parameter] public int CartCount { get; set; } = 0;
+    [Parameter] public int? MessageCount { get; set; }
+    [Parameter] public int NotificationCount { get; set; } = 0;
 
     [Parameter] public EventCallback OnLogout { get; set; }
     [Parameter] public RenderFragment? CenterContent { get; set; }
     [Parameter] public RenderFragment? RightContent { get; set; }
 
     private bool showProfileMenu = false;
+    private bool showMessageMenu = false;
+    private bool _isLoadingMessages = false;
+    private int _unreadMessageCount = 0;
+    private List<NotificationDto> _messageNotifications = new();
+    private NotificationDto? _activeToast = null;
+    private System.Threading.Timer? _toastTimer;
+
     private string loadedUserName = "User";
     private string loadedUserInitials = "U";
     private string loadedUserRole = "Athlete";
+    private string? loadedUserAvatarUrl;
 
     private string EffectiveUserName => !string.IsNullOrWhiteSpace(UserName) ? UserName : loadedUserName;
     private string EffectiveUserInitials => !string.IsNullOrWhiteSpace(UserInitials) ? UserInitials : loadedUserInitials;
     private string EffectiveUserRole => !string.IsNullOrWhiteSpace(UserRole) ? UserRole : loadedUserRole;
+    private string? EffectiveUserAvatarUrl => !string.IsNullOrWhiteSpace(UserAvatarUrl) ? UserAvatarUrl : loadedUserAvatarUrl;
+    private int EffectiveMessageCount => MessageCount.HasValue ? MessageCount.Value : _unreadMessageCount;
+
+    protected override void OnParametersSet()
+    {
+        StateHasChanged();
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        if (string.IsNullOrWhiteSpace(UserName) || string.IsNullOrWhiteSpace(UserInitials))
+        try
         {
-            await LoadCurrentUserAsync();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                // Tải thông tin user & avatar nếu chưa được truyền từ ngoài vào
+                if (string.IsNullOrWhiteSpace(UserName) || string.IsNullOrWhiteSpace(UserInitials) || string.IsNullOrWhiteSpace(UserAvatarUrl))
+                {
+                    await LoadCurrentUserAsync();
+                }
+
+                // Tải danh sách thông báo tin nhắn và kết nối SignalR Hub
+                await LoadMessageNotificationsAsync();
+
+                NotificationService.OnConversationRead += HandleConversationReadLocally;
+                ChatHubClient.OnNotificationReceived += HandleRealtimeNotification;
+                await ChatHubClient.StartAsync();
+            }
         }
+        catch { }
+    }
+
+    private async Task LoadMessageNotificationsAsync()
+    {
+        _isLoadingMessages = true;
+        try
+        {
+            var response = await NotificationService.GetNotificationsAsync();
+            if (response.Success && response.Data != null)
+            {
+                _messageNotifications = response.Data;
+                _unreadMessageCount = _messageNotifications.Count(n => !n.IsRead);
+            }
+        }
+        catch { }
+        finally
+        {
+            _isLoadingMessages = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ToggleMessageMenu()
+    {
+        showMessageMenu = !showMessageMenu;
+        if (showMessageMenu)
+        {
+            showProfileMenu = false;
+        }
+    }
+
+    private void CloseMessageMenu()
+    {
+        showMessageMenu = false;
+    }
+
+    private async Task HandleMessageNotificationClick(NotificationDto item)
+    {
+        CloseMessageMenu();
+
+        if (!item.IsRead)
+        {
+            item.IsRead = true;
+            _unreadMessageCount = Math.Max(0, _unreadMessageCount - 1);
+            StateHasChanged();
+            await NotificationService.MarkAsReadAsync(item.NotificationId);
+        }
+
+        Navigation.NavigateTo($"messages/{item.ConversationId}");
+    }
+
+    private async Task HandleMarkAllMessagesRead()
+    {
+        foreach (var n in _messageNotifications)
+        {
+            n.IsRead = true;
+        }
+        _unreadMessageCount = 0;
+        StateHasChanged();
+
+        await NotificationService.MarkAllAsReadAsync();
+    }
+
+
+    private async void HandleRealtimeNotification(NotificationDto notification)
+    {
+        await InvokeAsync(async () =>
+        {
+            var currentUri = Navigation.Uri;
+            bool isCurrentlyInConversation = currentUri.Contains(notification.ConversationId.ToString(), StringComparison.OrdinalIgnoreCase);
+
+            if (isCurrentlyInConversation)
+            {
+                await NotificationService.MarkAsReadAsync(notification.NotificationId);
+                return;
+            }
+
+            if (!_messageNotifications.Any(n => n.NotificationId == notification.NotificationId))
+            {
+                _messageNotifications.Insert(0, notification);
+                _unreadMessageCount++;
+            }
+
+            _activeToast = notification;
+            ResetToastTimer();
+
+            StateHasChanged();
+        });
+    }
+
+    private async void HandleConversationReadLocally(Guid conversationId)
+    {
+        await InvokeAsync(() =>
+        {
+            var matched = _messageNotifications
+                .Where(n => n.ConversationId == conversationId && !n.IsRead)
+                .ToList();
+
+            if (matched.Any())
+            {
+                foreach (var m in matched)
+                {
+                    m.IsRead = true;
+                    _unreadMessageCount = Math.Max(0, _unreadMessageCount - 1);
+                }
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void ResetToastTimer()
+    {
+        _toastTimer?.Dispose();
+        _toastTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                _activeToast = null;
+                StateHasChanged();
+            });
+        }, null, 5000, Timeout.Infinite);
+    }
+
+    private void DismissToast()
+    {
+        _activeToast = null;
+        _toastTimer?.Dispose();
+    }
+
+    private async Task HandleToastClick(NotificationDto toast)
+    {
+        DismissToast();
+        await HandleMessageNotificationClick(toast);
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+        return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
+    }
+
+    private string FormatNotificationTime(DateTime? dt)
+    {
+        if (!dt.HasValue) return "";
+        var span = DateTime.UtcNow - dt.Value.ToUniversalTime();
+        if (span.TotalMinutes < 1) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
+        return dt.Value.ToString("dd/MM/yyyy");
     }
 
     private async Task LoadCurrentUserAsync()
@@ -212,13 +577,18 @@
                               user.IsInRole("COACH") ||
                               string.Equals(user.FindFirst(ClaimTypes.Role)?.Value, AppRoles.Coach, StringComparison.OrdinalIgnoreCase);
                 loadedUserRole = isCoach ? "Coach" : "Trainee";
+                loadedUserInitials = AvatarHelper.GetInitials(loadedUserName);
 
-                var parts = loadedUserName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length > 0)
+                var meResponse = await AuthService.GetCurrentUserAsync();
+                if (meResponse.Success && meResponse.Data != null)
                 {
-                    loadedUserInitials = parts.Length > 1
-                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
-                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                    loadedUserAvatarUrl = meResponse.Data.AvatarUrl;
+                    if (!string.IsNullOrWhiteSpace(meResponse.Data.FullName))
+                    {
+                        loadedUserName = meResponse.Data.FullName;
+                        loadedUserInitials = AvatarHelper.GetInitials(loadedUserName);
+                    }
+                    StateHasChanged();
                 }
             }
         }
@@ -228,11 +598,19 @@
             loadedUserInitials = "U";
             loadedUserRole = "Athlete";
         }
+        finally
+        {
+            StateHasChanged();
+        }
     }
 
     private void ToggleProfileMenu()
     {
         showProfileMenu = !showProfileMenu;
+        if (showProfileMenu)
+        {
+            showMessageMenu = false;
+        }
     }
 
     private async Task HandleInput(ChangeEventArgs e)
@@ -296,4 +674,13 @@
             Navigation.NavigateTo("login");
         }
     }
+
+    public ValueTask DisposeAsync()
+    {
+        NotificationService.OnConversationRead -= HandleConversationReadLocally;
+        ChatHubClient.OnNotificationReceived -= HandleRealtimeNotification;
+        _toastTimer?.Dispose();
+        return ValueTask.CompletedTask;
+    }
 }
+

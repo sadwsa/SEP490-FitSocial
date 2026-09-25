@@ -11,4 +11,9 @@ public interface INotificationService
     Task<ApiResponse<List<NotificationDto>>> GetNotificationsAsync();
     Task<ApiResponse<bool>> MarkAsReadAsync(Guid notificationId);
     Task<ApiResponse<bool>> MarkAllAsReadAsync();
+
+    event Action<Guid>? OnConversationRead;
+    void NotifyConversationRead(Guid conversationId);
+    Task MarkConversationNotificationsAsReadAsync(Guid conversationId);
 }
+

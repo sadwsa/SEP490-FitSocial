@@ -32,4 +32,14 @@ public class ConversationService : IConversationService
     {
         return await _apiClient.DeleteAsync($"conversations/{conversationId}");
     }
+
+    public async Task<ApiResponse<bool>> BlockUserAsync(Guid conversationId)
+    {
+        return await _apiClient.PostAsync<bool>($"conversations/{conversationId}/block");
+    }
+
+    public async Task<ApiResponse<bool>> UnblockUserAsync(Guid conversationId)
+    {
+        return await _apiClient.PostAsync<bool>($"conversations/{conversationId}/unblock");
+    }
 }

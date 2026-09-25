@@ -27,6 +27,9 @@
             <button type="button" class="side-item @(IsActive("/admin/coach-subscription-plans") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-subscription-plans")'>
                 <AppIcon Name="trophy" /><span>Coach Plans</span>
             </button>
+            <button type="button" class="side-item @(IsActive("/admin/reports") || IsActive("/reports") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/reports")'>
+                <AppIcon Name="flag" /><span>Reports</span>
+            </button>
 
             <AuthorizeView Roles="ADMIN">
                 <Authorized>

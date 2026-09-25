@@ -40,6 +40,13 @@ public partial class Home : ComponentBase, IDisposable
     private bool showDeleteModal = false;
     private PostDto? postToDelete;
 
+    // Report post state
+    private bool showReportModal = false;
+    private Guid? reportPostId;
+    private readonly HashSet<Guid> reportedPostIds = new();
+    private string? toastWarningMessage;
+    private CancellationTokenSource? warningToastCts;
+
     // Dropdowns data
     private List<LocationDto> availableLocations = new();
 
@@ -352,9 +359,47 @@ public partial class Home : ComponentBase, IDisposable
         Navigation.NavigateTo("login");
     }
 
-    private void HandleReportPost(Guid postId)
+    private async Task HandleReportPost(Guid postId)
     {
-        ShowSuccessToast("Thank you. Post reported to moderators for review.");
+        // 1. Check client-side cache for this specific post
+        if (reportedPostIds.Contains(postId))
+        {
+            ShowWarningToast("You have already submitted a pending report for this post.");
+            return;
+        }
+
+        // 2. Query backend duplicate check scoped strictly to (postId, reporterId)
+        try
+        {
+            var checkRes = await PostService.CheckPostReportedAsync(postId);
+            if (checkRes.Success && checkRes.Data)
+            {
+                reportedPostIds.Add(postId);
+                ShowWarningToast("You have already submitted a pending report for this post.");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Home] Error checking report status for post {postId}: {ex.Message}");
+        }
+
+        // 3. Not reported yet: display the report form modal
+        reportPostId = postId;
+        showReportModal = true;
+    }
+
+    private void CloseReportModal()
+    {
+        showReportModal = false;
+        reportPostId = null;
+    }
+
+    private void OnPostReported(Guid reportedTargetPostId)
+    {
+        reportedPostIds.Add(reportedTargetPostId);
+        CloseReportModal();
+        ShowSuccessToast("Report submitted successfully. Thank you for helping keep our community safe.");
     }
 
     // Delete post methods
@@ -444,6 +489,40 @@ public partial class Home : ComponentBase, IDisposable
         StateHasChanged();
     }
 
+    private void ShowWarningToast(string message)
+    {
+        warningToastCts?.Cancel();
+        warningToastCts?.Dispose();
+        warningToastCts = new CancellationTokenSource();
+        toastWarningMessage = message;
+        StateHasChanged();
+
+        var token = warningToastCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(3500, token);
+                if (!token.IsCancellationRequested)
+                {
+                    toastWarningMessage = null;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Ignored
+            }
+        });
+    }
+
+    private void DismissWarningToast()
+    {
+        warningToastCts?.Cancel();
+        toastWarningMessage = null;
+        StateHasChanged();
+    }
+
     // Dispose
     public void Dispose()
     {
@@ -451,5 +530,7 @@ public partial class Home : ComponentBase, IDisposable
         searchCts?.Dispose();
         toastCts?.Cancel();
         toastCts?.Dispose();
+        warningToastCts?.Cancel();
+        warningToastCts?.Dispose();
     }
 }

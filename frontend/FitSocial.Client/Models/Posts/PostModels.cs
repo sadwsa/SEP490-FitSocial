@@ -110,3 +110,25 @@ public class SelectedMediaItem
     public long Size => Data.Length;
     public bool IsVideo { get; set; }
 }
+
+public class PostReactionResponse
+{
+    public Guid PostId { get; set; }
+    public bool IsLiked { get; set; }
+    public int LikeCount { get; set; }
+}
+
+public class CreatePostReportRequest
+{
+    public string Reason { get; set; } = string.Empty;
+}
+
+public class PostReportResponse
+{
+    public Guid ReportId { get; set; }
+    public Guid PostId { get; set; }
+    public Guid ReporterId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime? CreatedAt { get; set; }
+}

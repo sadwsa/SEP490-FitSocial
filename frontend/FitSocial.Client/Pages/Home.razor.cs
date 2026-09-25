@@ -40,6 +40,10 @@ public partial class Home : ComponentBase, IDisposable
     private bool showDeleteModal = false;
     private PostDto? postToDelete;
 
+    // Report post state
+    private bool showReportModal = false;
+    private Guid? reportPostId;
+
     // Dropdowns data
     private List<LocationDto> availableLocations = new();
 
@@ -331,13 +335,39 @@ public partial class Home : ComponentBase, IDisposable
     }
 
     // Post Interactions
-    private void ToggleLike(PostDto post)
-    {
-        post.IsLikedByCurrentUser = !post.IsLikedByCurrentUser;
-        post.LikeCount += post.IsLikedByCurrentUser ? 1 : -1;
-        if (post.LikeCount < 0) post.LikeCount = 0;
+    private readonly HashSet<Guid> _pendingReactionPostIds = new();
 
-        _ = PostService.ToggleLikeAsync(post.Id);
+    private async Task ToggleLike(PostDto post)
+    {
+        if (post == null || _pendingReactionPostIds.Contains(post.Id))
+        {
+            return;
+        }
+
+        _pendingReactionPostIds.Add(post.Id);
+
+        try
+        {
+            var response = await PostService.ToggleLikeAsync(post.Id);
+            if (response.Success && response.Data != null)
+            {
+                post.IsLikedByCurrentUser = response.Data.IsLiked;
+                post.LikeCount = response.Data.LikeCount;
+                StateHasChanged();
+            }
+            else if (!response.Success && !string.IsNullOrWhiteSpace(response.Message))
+            {
+                Console.WriteLine($"[Home] Failed to react to post {post.Id}: {response.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Home] Exception toggling like for post {post.Id}: {ex.Message}");
+        }
+        finally
+        {
+            _pendingReactionPostIds.Remove(post.Id);
+        }
     }
 
     private void ToggleProfileMenu()
@@ -354,7 +384,20 @@ public partial class Home : ComponentBase, IDisposable
 
     private void HandleReportPost(Guid postId)
     {
-        ShowSuccessToast("Thank you. Post reported to moderators for review.");
+        reportPostId = postId;
+        showReportModal = true;
+    }
+
+    private void CloseReportModal()
+    {
+        showReportModal = false;
+        reportPostId = null;
+    }
+
+    private void OnPostReported()
+    {
+        CloseReportModal();
+        ShowSuccessToast("Report submitted successfully. Thank you for helping keep our community safe.");
     }
 
     // Delete post methods

@@ -12,10 +12,17 @@ namespace FitSocial.API.Controllers;
 public class PostsController : ControllerBase
 {
     private readonly IPostService _postService;
+    private readonly IPostReportService _postReportService;
+    private readonly IPostReactionService _postReactionService;
 
-    public PostsController(IPostService postService)
+    public PostsController(
+        IPostService postService,
+        IPostReportService postReportService,
+        IPostReactionService postReactionService)
     {
         _postService = postService;
+        _postReportService = postReportService;
+        _postReactionService = postReactionService;
     }
 
   
@@ -73,10 +80,10 @@ public class PostsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Soft deletes an existing post.
-    /// User can only delete their own post, unless the user has Admin or Staff privileges.
-    /// </summary>
+    
+    // Soft deletes an existing post.
+    // User can only delete their own post, unless the user has Admin or Staff privileges.
+   
     [HttpDelete("{postId:guid}")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
@@ -159,6 +166,64 @@ public class PostsController : ControllerBase
 
         var currentUserId = GetCurrentUserId();
         var result = await _postService.GetPostsAsync(query, currentUserId, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Reports a post for violating community rules.
+    /// Accessible by authenticated users.
+    /// </summary>
+    [HttpPost("{postId:guid}/reports")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<PostReportResponseDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ReportPost(Guid postId, [FromBody] CreatePostReportRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            throw new FitSocial.Application.Exceptions.ValidationException(firstError ?? "Invalid report data.");
+        }
+
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+        {
+            return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
+        }
+
+        var result = await _postReportService.ReportPostAsync(postId, currentUserId.Value, request, HttpContext.RequestAborted);
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
+
+    /// <summary>
+    /// Toggles Like/Unlike on a post.
+    /// Accessible only by Trainees and Coaches.
+    /// </summary>
+    [HttpPost("{postId:guid}/reactions")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<PostReactionResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ToggleReaction(Guid postId)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+        {
+            return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
+        }
+
+        var currentUserRole = GetCurrentUserRole();
+        var result = await _postReactionService.ToggleReactionAsync(
+            postId,
+            currentUserId.Value,
+            currentUserRole,
+            HttpContext.RequestAborted);
+
         return Ok(result);
     }
 

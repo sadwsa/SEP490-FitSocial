@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace FitSocial.Domain.Entities;
@@ -22,6 +22,8 @@ public partial class Report
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? ResolvedAt { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
 
     public virtual Post? ReportedPost { get; set; }
 

@@ -12,7 +12,7 @@ public interface IPostService
     Task<ApiResponse<PostDto>> CreatePostAsync(CreatePostRequest request);
     Task<ApiResponse<PostDto>> EditPostAsync(Guid postId, EditPostRequest request);
     Task<ApiResponse<bool>> DeletePostAsync(Guid postId);
-    Task<ApiResponse<bool>> ToggleLikeAsync(Guid postId);
+    Task<ApiResponse<PostReactionResponse>> ToggleLikeAsync(Guid postId);
 }
 
 public class PostService : IPostService
@@ -132,9 +132,9 @@ public class PostService : IPostService
         return await _apiClient.DeleteAsync<bool>($"posts/{postId}");
     }
 
-    public async Task<ApiResponse<bool>> ToggleLikeAsync(Guid postId)
+    public async Task<ApiResponse<PostReactionResponse>> ToggleLikeAsync(Guid postId)
     {
-        return await _apiClient.PostAsync<object, bool>($"posts/{postId}/like", new { });
+        return await _apiClient.PostAsync<object, PostReactionResponse>($"posts/{postId}/reactions", new { });
     }
 
     private static List<PostDto> GetSamplePosts()

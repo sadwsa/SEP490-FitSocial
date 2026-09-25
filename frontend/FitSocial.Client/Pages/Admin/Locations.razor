@@ -131,6 +131,7 @@
                             @if (!isLoading && string.IsNullOrWhiteSpace(errorMessage) && !pagedResult.Items.Any())
                             {
                                 <tr>
+                                    <td colspan="4" class="empty-state-cell">
                                     <td colspan="5" class="empty-state-cell">
                                         <div class="empty-state">
                                             <span class="empty-icon"><AppIcon Name="location" /></span>
@@ -284,6 +285,7 @@
         {
             <div class="modal-backdrop" @onclick="CloseCreateModal">
                 <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
+                <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="modal-title">
                     <!-- Modal Header -->
                     <div class="modal-header">
                         <div class="modal-title-group">
@@ -292,6 +294,7 @@
                             </div>
                             <div class="modal-titles">
                                 <h2 id="create-modal-title" class="modal-title">Add New Location</h2>
+                                <h2 id="modal-title" class="modal-title">Add New Location</h2>
                                 <span class="modal-subtitle">Direct mapping to Locations DB schema</span>
                             </div>
                         </div>
@@ -556,6 +559,11 @@
 @code {
     private string searchTerm = "";
     private int currentPage = 1;
+    private int pageSize = 6; // Matching screenshot 6 rows per page
+    private PagedResult<LocationDto> pagedResult = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+    private System.Timers.Timer? debounceTimer;
     private int pageSize = 6;
     private PagedResult<LocationDto> pagedResult = new();
     private bool isLoading = true;
@@ -565,6 +573,7 @@
     private System.Threading.CancellationTokenSource? toastCts;
 
     // Create Modal state (UC_35.1)
+    // Create Modal state
     private bool showCreateModal = false;
     private bool isSaving = false;
     private string? modalErrorMessage;
@@ -676,6 +685,7 @@
     }
 
     // Create Modal Handlers (UC_35.1)
+    // Modal Handlers
     private void OpenCreateModal()
     {
         newLocationModel = new CreateLocationDto();
@@ -717,6 +727,7 @@
     {
         if (isSaving) return;
 
+        // Frontend validation
         bool hasError = false;
         nameValidationError = null;
         addressValidationError = null;
@@ -766,6 +777,7 @@
             {
                 showCreateModal = false;
                 ShowToast("Location created successfully.");
+                // Reload location list
                 currentPage = 1;
                 await LoadLocationsAsync(1);
             }
@@ -979,6 +991,11 @@
         finally
         {
             isSavingEdit = false;
+            modalErrorMessage = $"Error creating location: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
             deleteErrorMessage = $"Error deleting location: {ex.Message}";
         }
         finally
@@ -1044,11 +1061,13 @@
         if (currentPage <= 4)
         {
             for (var i = 2; i <= Math.Min(5, total - 1); i++) list.Add(i);
+            if (total > 6) list.Add(-1); // ellipsis
             if (total > 6) list.Add(-1);
             list.Add(total);
         }
         else if (currentPage >= total - 3)
         {
+            list.Add(-1); // ellipsis
             list.Add(-1);
             for (var i = total - 4; i <= total; i++) list.Add(i);
         }

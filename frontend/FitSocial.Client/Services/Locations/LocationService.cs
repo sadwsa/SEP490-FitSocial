@@ -69,6 +69,42 @@ public class LocationService : ILocationService
                 Message = $"Unable to load locations: {ex.Message}"
             };
         }
+    }
+
+    public async Task<ApiResponse<PagedResult<LocationDto>>> GetPagedLocationsAsync(
+        string? searchTerm = null,
+        int pageNumber = 1,
+        int pageSize = 10)
+    {
+        try
+        {
+            var query = new List<string>
+            {
+                $"pageNumber={pageNumber}",
+                $"pageSize={pageSize}"
+            };
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                query.Add($"searchTerm={Uri.EscapeDataString(searchTerm.Trim())}");
+            }
+
+            var endpoint = "locations?" + string.Join("&", query);
+            var result = await _apiClient.GetAsync<PagedResult<LocationDto>>(endpoint);
+            if (result.Success && result.Data != null)
+            {
+                result.Data.Items ??= new List<LocationDto>();
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<PagedResult<LocationDto>>
+            {
+                Success = false,
+                Message = $"Unable to load locations: {ex.Message}"
+            };
+        }
     private readonly ApiClient _apiClient;
 
     public LocationService(ApiClient apiClient)

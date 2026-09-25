@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEkycService, ViettelEkycService>();
         services.AddScoped<ISystemOperationsService, SystemOperationsService>();
         services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IPostReportService, PostReportService>();
         return services;
     }
 
@@ -75,6 +76,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
+        services.AddScoped<IPostReportRepository, PostReportRepository>();
 
         return services;
     }

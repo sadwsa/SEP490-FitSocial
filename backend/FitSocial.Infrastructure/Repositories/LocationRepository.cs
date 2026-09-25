@@ -60,11 +60,20 @@ public class LocationRepository : Repository<Location>, ILocationRepository
         if (pageSize < 1) pageSize = 10;
 
         var items = await query
+            .Include(l => l.Posts)
             .OrderBy(l => l.LocationName)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);
+    }
+
+    public async Task<Location?> GetByIdWithDetailsAsync(Guid locationId, CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .Include(l => l.Posts)
+            .Include(l => l.Coaches)
+            .FirstOrDefaultAsync(l => l.LocationId == locationId, cancellationToken);
     }
 }

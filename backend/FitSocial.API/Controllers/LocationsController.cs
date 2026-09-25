@@ -38,6 +38,41 @@ public class LocationsController : ControllerBase
     {
         var effectiveSearch = !string.IsNullOrWhiteSpace(searchTerm) ? searchTerm : search;
         var result = await _locationService.GetPagedLocationsAsync(effectiveSearch, pageNumber, pageSize, cancellationToken);
+        var result = await _locationService.GetLocationsAsync(effectiveSearch, pageNumber, pageSize, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Delete an existing location (Admin / Staff only)
+    /// </summary>
+    [HttpDelete("{locationId:guid}")]
+    [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteLocation([FromRoute] Guid locationId, CancellationToken cancellationToken = default)
+    {
+        var result = await _locationService.DeleteLocationAsync(locationId, cancellationToken);
+        if (!result.Success)
+        {
+            if (result.Message?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return NotFound(result);
+            }
+
+            if (result.Message?.Contains("used by", StringComparison.OrdinalIgnoreCase) == true ||
+                result.Message?.Contains("in use", StringComparison.OrdinalIgnoreCase) == true ||
+                result.Message?.Contains("linked", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return Conflict(result);
+            }
+
+            return BadRequest(result);
+        }
+
         return Ok(result);
     }
 
@@ -106,6 +141,8 @@ public class LocationsController : ControllerBase
                 return Conflict(result);
             }
 
+        if (!result.Success)
+        {
             return BadRequest(result);
         }
 

@@ -25,4 +25,13 @@ public interface ILocationService
         Guid locationId,
         UpdateLocationDto dto,
         CancellationToken cancellationToken = default);
+    Task<ApiResponseDto<PagedResultDto<LocationDto>>> GetLocationsAsync(
+        string? searchTerm,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseDto<List<LocationDto>>> GetPublicLocationsAsync(CancellationToken cancellationToken = default);
+
+    Task<ApiResponseDto<bool>> DeleteLocationAsync(Guid locationId, CancellationToken cancellationToken = default);
 }

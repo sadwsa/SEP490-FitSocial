@@ -43,6 +43,25 @@
                 </div>
             </div>
 
+            <!-- Header section matching reference image -->
+            <div class="page-top-bar">
+                <div class="breadcrumb-trail">
+                    <span class="bc-admin">ADMIN PORTAL</span>
+                    <span class="bc-sep">&gt;</span>
+                    <span class="bc-dest">LOCATIONS &amp; FACILITIES</span>
+                </div>
+                <h1 class="page-heading">Location List Management</h1>
+            </div>
+
+            <!-- Toast notification -->
+            @if (!string.IsNullOrEmpty(toastMessage))
+            {
+                <div class="toast-notification" role="status">
+                    <AppIcon Name="check" />
+                    <span>@toastMessage</span>
+                </div>
+            }
+
             <!-- Main card container -->
             <div class="locations-card">
                 <!-- Search and Stats toolbar -->
@@ -121,6 +140,9 @@
                                             @if (!string.IsNullOrWhiteSpace(searchTerm))
                                             {
                                                 <button type="button" class="btn-clear-filter" @onclick="ClearSearchAsync">Clear search filter</button>
+                                                <button type="button" class="btn-reset-search" @onclick="ClearSearchAsync">
+                                                    Clear search filter
+                                                </button>
                                             }
                                         </div>
                                     </td>
@@ -141,6 +163,23 @@
                                             <div class="loc-name-wrap">
                                                 <div class="loc-icon-badge">
                                                     <svg class="facility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                var index = 0;
+                                @foreach (var item in pagedResult.Items)
+                                {
+                                    index++;
+                                    var displayIndex = (currentPage - 1) * pageSize + index;
+                                    var displayIndexString = (100 + displayIndex).ToString();
+                                    <tr>
+                                        <td class="col-check">
+                                            <input type="checkbox" class="row-checkbox" aria-label="Select row" />
+                                        </td>
+                                        <td class="col-id">
+                                            <span class="id-badge">#@FormatLocationId(item.LocationId)</span>
+                                        </td>
+                                        <td class="col-name">
+                                            <div class="loc-name-wrap">
+                                                <div class="loc-icon-bubble">
+                                                    <svg class="loc-hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                         <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
                                                         <path d="M9 22v-4h6v4"></path>
                                                         <path d="M8 6h.01"></path>
@@ -168,6 +207,11 @@
                                         <td class="col-actions">
                                             <button type="button" class="btn-action-edit" @onclick="() => OpenEditModal(item)" title="Edit location">
                                                 <AppIcon Name="pencil" />
+                                            <button type="button"
+                                                    class="btn-action-delete"
+                                                    @onclick="() => OpenDeleteModal(item, displayIndexString)"
+                                                    title="Delete Location">
+                                                <AppIcon Name="trash" />
                                             </button>
                                         </td>
                                     </tr>
@@ -328,6 +372,45 @@
                             </button>
                         </div>
                     </form>
+        <!-- Confirm Delete Location Modal (UC_35.3) -->
+        @if (showDeleteModal && targetLocation != null)
+        {
+            <div class="modal-backdrop-custom" @onclick="CloseDeleteModal">
+                <div class="delete-modal-dialog" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+                    <div class="delete-icon-badge">
+                        <AppIcon Name="trash" />
+                    </div>
+
+                    <h3 class="delete-modal-title" id="deleteModalTitle">Confirm Delete Location</h3>
+
+                    <div class="delete-prompt-box">
+                        Are you sure you want to delete <strong>@targetLocation.LocationName</strong> (ID #@targetIndexString)?
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(deleteErrorMessage))
+                    {
+                        <div class="delete-error-alert" role="alert">
+                            <AppIcon Name="warning" />
+                            <span>@deleteErrorMessage</span>
+                        </div>
+                    }
+
+                    <div class="delete-modal-actions">
+                        <button type="button" class="btn-modal-cancel" @onclick="CloseDeleteModal" disabled="@isDeleting">
+                            Cancel
+                        </button>
+                        <button type="button" class="btn-modal-delete" @onclick="ConfirmDeleteAsync" disabled="@isDeleting">
+                            @if (isDeleting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Deleting...</span>
+                            }
+                            else
+                            {
+                                <span>Delete</span>
+                            }
+                        </button>
+                    </div>
                 </div>
             </div>
         }
@@ -426,6 +509,33 @@
                             </button>
                         </div>
                     </form>
+        <!-- Warning Modal: Cannot delete location in use -->
+        @if (showWarningModal)
+        {
+            <div class="modal-backdrop-custom" @onclick="CloseWarningModal">
+                <div class="warning-modal-dialog" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="warningModalTitle">
+                    <div class="warning-icon-badge">
+                        <AppIcon Name="warning" />
+                    </div>
+
+                    <h3 class="warning-modal-title" id="warningModalTitle">Cannot Delete Location</h3>
+
+                    <div class="warning-prompt-box">
+                        <p class="warning-main-text">
+                            @(string.IsNullOrWhiteSpace(warningMessage)
+                                ? $"Location \"{warningLocationName}\" is currently being used by posts and cannot be deleted."
+                                : warningMessage)
+                        </p>
+                        <p class="warning-sub-text">
+                            Please remove or update this location from associated posts before deleting.
+                        </p>
+                    </div>
+
+                    <div class="warning-modal-actions">
+                        <button type="button" class="btn-modal-understand" @onclick="CloseWarningModal">
+                            Understood
+                        </button>
+                    </div>
                 </div>
             </div>
         }
@@ -470,6 +580,17 @@
     private string? editModalErrorMessage;
     private string? editNameValidationError;
     private string? editAddressValidationError;
+    // Delete Modal State (UC_35.3)
+    private bool showDeleteModal = false;
+    private bool isDeleting = false;
+    private LocationDto? targetLocation;
+    private string targetIndexString = "";
+    private string? deleteErrorMessage;
+
+    // Warning Modal State (Cannot delete when location is used by posts)
+    private bool showWarningModal = false;
+    private string warningLocationName = "";
+    private string warningMessage = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -485,6 +606,7 @@
             currentPage = page;
 
             var res = await LocationService.GetPagedLocationsAsync(searchTerm, currentPage, pageSize);
+            var res = await LocationService.GetLocationsAsync(searchTerm, currentPage, pageSize);
             if (res.Success && res.Data != null)
             {
                 pagedResult = res.Data;
@@ -761,6 +883,67 @@
             {
                 showEditModal = false;
                 ShowToast("Location updated successfully.");
+    private string FormatLocationId(Guid id)
+    {
+        var str = id.ToString("N");
+        return str.Length >= 8 ? str[..8].ToUpperInvariant() : str.ToUpperInvariant();
+    }
+
+    private void OpenDeleteModal(LocationDto item, string displayIndex)
+    {
+        // If location is currently used by posts, show warning popup
+        if (item.PostCount > 0)
+        {
+            warningLocationName = item.LocationName;
+            warningMessage = $"Location \"{item.LocationName}\" is currently being used by {item.PostCount} post(s) and cannot be deleted.";
+            showWarningModal = true;
+            return;
+        }
+
+        targetLocation = item;
+        targetIndexString = displayIndex;
+        deleteErrorMessage = null;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        if (isDeleting) return;
+        showDeleteModal = false;
+        targetLocation = null;
+        targetIndexString = "";
+        deleteErrorMessage = null;
+    }
+
+    private void CloseWarningModal()
+    {
+        showWarningModal = false;
+        warningLocationName = "";
+        warningMessage = "";
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (isDeleting || targetLocation == null) return;
+
+        try
+        {
+            isDeleting = true;
+            deleteErrorMessage = null;
+
+            var res = await LocationService.DeleteLocationAsync(targetLocation.LocationId);
+            if (res.Success)
+            {
+                showDeleteModal = false;
+                targetLocation = null;
+                ShowToast("Location deleted successfully.");
+
+                // If this was the last item on the page and page > 1, go back one page
+                if (pagedResult.Items.Count == 1 && currentPage > 1)
+                {
+                    currentPage--;
+                }
+
                 await LoadLocationsAsync(currentPage);
             }
             else
@@ -768,6 +951,25 @@
                 editModalErrorMessage = !string.IsNullOrWhiteSpace(res.Message)
                     ? res.Message
                     : "Unable to update location. Please check your input.";
+                // If location is used by posts or other records, show warning popup
+                if (res.Message?.Contains("post", StringComparison.OrdinalIgnoreCase) == true ||
+                    res.Message?.Contains("used by", StringComparison.OrdinalIgnoreCase) == true ||
+                    res.Message?.Contains("in use", StringComparison.OrdinalIgnoreCase) == true ||
+                    res.Message?.Contains("linked", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    var locName = targetLocation.LocationName;
+                    showDeleteModal = false;
+                    targetLocation = null;
+                    warningLocationName = locName;
+                    warningMessage = res.Message;
+                    showWarningModal = true;
+                }
+                else
+                {
+                    deleteErrorMessage = !string.IsNullOrWhiteSpace(res.Message)
+                        ? res.Message
+                        : "Unable to delete location. It may be in use by existing records.";
+                }
             }
         }
         catch (Exception ex)
@@ -777,6 +979,11 @@
         finally
         {
             isSavingEdit = false;
+            deleteErrorMessage = $"Error deleting location: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
             StateHasChanged();
         }
     }
@@ -794,6 +1001,7 @@
             try
             {
                 await Task.Delay(4000, token);
+                await Task.Delay(3500, token);
                 if (!token.IsCancellationRequested)
                 {
                     await InvokeAsync(() =>

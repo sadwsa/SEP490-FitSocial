@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -127,10 +127,10 @@ public class SportService : ISportService
             }
 
             if ((sport.Coaches != null && sport.Coaches.Count > 0) ||
-                (sport.Users != null && sport.Users.Count > 0) ||
-                (sport.Posts != null && sport.Posts.Count > 0))
+                (sport.Users != null && sport.Users.Count > 0))
+
             {
-                return ApiResponseDto<bool>.Fail("Cannot delete this sport because it is currently linked to coaches, users, or posts.");
+                return ApiResponseDto<bool>.Fail("Cannot delete this sport because it is currently linked to coaches or users.");
             }
 
             _sportRepository.Remove(sport);
@@ -157,7 +157,7 @@ public class SportService : ISportService
             Icon = DetermineIcon(s.SportName),
             CoachCount = s.Coaches?.Count ?? 0,
             UserCount = s.Users?.Count ?? 0,
-            PostCount = s.Posts?.Count ?? 0,
+            PostCount = 0,
             Visible = true
         };
     }
@@ -167,11 +167,11 @@ public class SportService : ISportService
         if (string.IsNullOrWhiteSpace(sportName)) return "Gym & Strength";
 
         var name = sportName.ToLowerInvariant();
-        if (name.Contains("run") || name.Contains("marathon") || name.Contains("cardio") || name.Contains("swim") || name.Contains("cycle") || name.Contains("bơi") || name.Contains("chạy") || name.Contains("đạp"))
+        if (name.Contains("run") || name.Contains("marathon") || name.Contains("cardio") || name.Contains("swim") || name.Contains("cycle") || name.Contains("bÆ¡i") || name.Contains("cháº¡y") || name.Contains("Ä‘áº¡p"))
             return "Cardio & Athletics";
-        if (name.Contains("box") || name.Contains("mma") || name.Contains("karate") || name.Contains("judo") || name.Contains("võ") || name.Contains("muay") || name.Contains("kick"))
+        if (name.Contains("box") || name.Contains("mma") || name.Contains("karate") || name.Contains("judo") || name.Contains("vÃµ") || name.Contains("muay") || name.Contains("kick"))
             return "Combat Sports";
-        if (name.Contains("foot") || name.Contains("basket") || name.Contains("volley") || name.Contains("soccer") || name.Contains("bóng") || name.Contains("tennis") || name.Contains("cầu"))
+        if (name.Contains("foot") || name.Contains("basket") || name.Contains("volley") || name.Contains("soccer") || name.Contains("bÃ³ng") || name.Contains("tennis") || name.Contains("cáº§u"))
             return "Team Sports";
 
         return "Gym & Strength";
@@ -180,13 +180,13 @@ public class SportService : ISportService
     private static string DetermineMetrics(string sportName)
     {
         var name = sportName.ToLowerInvariant();
-        if (name.Contains("run") || name.Contains("marathon") || name.Contains("chạy") || name.Contains("đạp"))
+        if (name.Contains("run") || name.Contains("marathon") || name.Contains("cháº¡y") || name.Contains("Ä‘áº¡p"))
             return "GPS Route, Pace, Km";
-        if (name.Contains("swim") || name.Contains("bơi"))
+        if (name.Contains("swim") || name.Contains("bÆ¡i"))
             return "Laps, Pace, Distance";
-        if (name.Contains("box") || name.Contains("mma") || name.Contains("võ"))
+        if (name.Contains("box") || name.Contains("mma") || name.Contains("vÃµ"))
             return "Rounds, Heart rate";
-        if (name.Contains("foot") || name.Contains("basket") || name.Contains("bóng"))
+        if (name.Contains("foot") || name.Contains("basket") || name.Contains("bÃ³ng"))
             return "Goals, Points, Assists";
 
         return "Weight/Kg, Reps/Sets";
@@ -195,13 +195,13 @@ public class SportService : ISportService
     private static string DetermineIcon(string sportName)
     {
         var name = sportName.ToLowerInvariant();
-        if (name.Contains("run") || name.Contains("chạy") || name.Contains("cardio") || name.Contains("yoga"))
+        if (name.Contains("run") || name.Contains("cháº¡y") || name.Contains("cardio") || name.Contains("yoga"))
             return "activity";
-        if (name.Contains("swim") || name.Contains("bơi"))
+        if (name.Contains("swim") || name.Contains("bÆ¡i"))
             return "waves";
-        if (name.Contains("box") || name.Contains("mma") || name.Contains("võ"))
+        if (name.Contains("box") || name.Contains("mma") || name.Contains("vÃµ"))
             return "fire";
-        if (name.Contains("foot") || name.Contains("basket") || name.Contains("bóng") || name.Contains("tennis"))
+        if (name.Contains("foot") || name.Contains("basket") || name.Contains("bÃ³ng") || name.Contains("tennis"))
             return "ball";
 
         return "dumbbell";

@@ -1,9 +1,8 @@
-@namespace FitSocial.Client.Components.Posts
+﻿@namespace FitSocial.Client.Components.Posts
 <div class="flex flex-col gap-2 py-1 border-b border-gray-200">
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
             <h2 class="font-semibold text-gray-700 text-sm">Latest Posts</h2>
-          
         </div>
         <div class="relative">
             <button @onclick="ToggleFilterDropdown"
@@ -39,66 +38,6 @@
                     </div>
 
                     <div class="py-3 space-y-3.5 max-h-[70vh] overflow-y-auto">
-                        <!-- Sport Filter -->
-                        <div class="relative">
-                            <div class="flex items-center justify-between mb-1.5">
-                                <label class="font-semibold text-gray-700">Sport</label>
-                                @if (draftSportId.HasValue && draftSportId != Guid.Empty)
-                                {
-                                    <button type="button"
-                                            class="text-[10px] text-[#FF5500] font-normal hover:underline cursor-pointer"
-                                            @onclick="() => { draftSportId = null; isSportDropdownOpen = false; }">Reset</button>
-                                }
-                            </div>
-                            <button type="button" @onclick="ToggleSportDropdown"
-                                    class="w-full flex items-center justify-between text-xs bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-gray-800 hover:bg-gray-100/70 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition cursor-pointer">
-                                <span
-                                    class="truncate font-medium @(draftSportId.HasValue && draftSportId != Guid.Empty ? "text-gray-900 font-semibold" : "text-gray-600")">
-                                    @GetDraftSportName()
-                                </span>
-                                <svg class="w-4 h-4 text-gray-400 transition-transform duration-200 @(isSportDropdownOpen ? "rotate-180 text-[#FF5500]" : "")"
-                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                          d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </button>
-
-                            @if (isSportDropdownOpen)
-                            {
-                                <div
-                                    class="mt-1.5 w-full bg-white border border-gray-100 rounded-xl shadow-lg max-h-44 overflow-y-auto p-1 z-30 text-xs space-y-0.5">
-                                    <button type="button" @onclick="() => SelectDraftSport(null)"
-                                            class="w-full text-left px-3 py-2 rounded-lg flex items-center justify-between transition cursor-pointer @(!draftSportId.HasValue || draftSportId == Guid.Empty ? "bg-orange-50 text-[#FF5500] font-bold" : "text-gray-700 hover:bg-gray-50")">
-                                        <span>All Sports</span>
-                                        @if (!draftSportId.HasValue || draftSportId == Guid.Empty)
-                                        {
-                                            <svg class="w-3.5 h-3.5 text-[#FF5500]" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd"
-                                                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                                      clip-rule="evenodd"></path>
-                                            </svg>
-                                        }
-                                    </button>
-                                    @foreach (var s in AvailableSports)
-                                    {
-                                        var isSelected = draftSportId == s.SportId;
-                                        <button type="button" @onclick="() => SelectDraftSport(s.SportId)"
-                                                class="w-full text-left px-3 py-2 rounded-lg flex items-center justify-between transition cursor-pointer @(isSelected ? "bg-orange-50 text-[#FF5500] font-bold" : "text-gray-700 hover:bg-gray-50")">
-                                            <span>@s.SportName</span>
-                                            @if (isSelected)
-                                            {
-                                                <svg class="w-3.5 h-3.5 text-[#FF5500]" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd"
-                                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                                          clip-rule="evenodd"></path>
-                                                </svg>
-                                            }
-                                        </button>
-                                    }
-                                </div>
-                            }
-                        </div>
-
                         <!-- Post Type Filter -->
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
@@ -107,27 +46,27 @@
                                 {
                                     <button type="button"
                                             class="text-[10px] text-[#FF5500] font-normal hover:underline cursor-pointer"
-                                            @onclick="() => { draftPostType = null; isSportDropdownOpen = false; isLocationDropdownOpen = false; }">Reset</button>
+                                            @onclick="() => { draftPostType = null; isLocationDropdownOpen = false; }">Reset</button>
                                 }
                             </div>
                             <div class="grid grid-cols-2 gap-1.5">
                                 <button type="button"
-                                        @onclick="() => { draftPostType = null; isSportDropdownOpen = false; isLocationDropdownOpen = false; }"
+                                        @onclick="() => { draftPostType = null; isLocationDropdownOpen = false; }"
                                         class="px-2.5 py-1.5 rounded-lg border text-center transition font-medium cursor-pointer @(string.IsNullOrEmpty(draftPostType) ? "border-[#FF5500] bg-orange-50 text-[#FF5500] font-bold" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50")">
                                     All
                                 </button>
                                 <button type="button"
-                                        @onclick='() => { draftPostType = "Normal"; isSportDropdownOpen = false; isLocationDropdownOpen = false; }'
+                                        @onclick='() => { draftPostType = "Normal"; isLocationDropdownOpen = false; }'
                                         class="px-2.5 py-1.5 rounded-lg border text-center transition font-medium cursor-pointer @(draftPostType == "Normal" ? "border-[#FF5500] bg-orange-50 text-[#FF5500] font-bold" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50")">
                                     Normal
                                 </button>
                                 <button type="button"
-                                        @onclick='() => { draftPostType = "Find Coach"; isSportDropdownOpen = false; isLocationDropdownOpen = false; }'
+                                        @onclick='() => { draftPostType = "Find Coach"; isLocationDropdownOpen = false; }'
                                         class="px-2.5 py-1.5 rounded-lg border text-center transition font-medium cursor-pointer @(draftPostType == "Find Coach" ? "border-amber-500 bg-amber-50 text-amber-800 font-bold" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50")">
                                     Find Coach
                                 </button>
                                 <button type="button"
-                                        @onclick='() => { draftPostType = "Find Trainee"; isSportDropdownOpen = false; isLocationDropdownOpen = false; }'
+                                        @onclick='() => { draftPostType = "Find Trainee"; isLocationDropdownOpen = false; }'
                                         class="px-2.5 py-1.5 rounded-lg border text-center transition font-medium cursor-pointer @(draftPostType == "Find Trainee" ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50")">
                                     Find Trainee
                                 </button>
@@ -220,7 +159,7 @@
                 <span class="text-xs bg-orange-100 text-[#FF5500] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                     Query: "@SearchTerm"
                     <button @onclick="ClearSearch" class="hover:text-red-600 font-bold ml-0.5 cursor-pointer"
-                            title="Remove keyword">×</button>
+                            title="Remove keyword">✕</button>
                 </span>
             }
             @if (!string.IsNullOrWhiteSpace(SelectedPostType))
@@ -228,15 +167,7 @@
                 <span class="text-xs bg-orange-100 text-[#FF5500] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                     Type: @SelectedPostType
                     <button @onclick="RemoveFilterPostType" class="hover:text-red-600 font-bold ml-0.5 cursor-pointer"
-                            title="Remove post type filter">×</button>
-                </span>
-            }
-            @if (SelectedSportId.HasValue && SelectedSportId != Guid.Empty)
-            {
-                <span class="text-xs bg-orange-100 text-[#FF5500] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                    Sport: @GetSportName(SelectedSportId.Value)
-                    <button @onclick="RemoveFilterSport" class="hover:text-red-600 font-bold ml-0.5 cursor-pointer"
-                            title="Remove sport filter">×</button>
+                            title="Remove post type filter">✕</button>
                 </span>
             }
             @if (SelectedLocationId.HasValue && SelectedLocationId != Guid.Empty)
@@ -244,7 +175,7 @@
                 <span class="text-xs bg-orange-100 text-[#FF5500] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                     Location: @GetLocationName(SelectedLocationId.Value)
                     <button @onclick="RemoveFilterLocation" class="hover:text-red-600 font-bold ml-0.5 cursor-pointer"
-                            title="Remove location filter">×</button>
+                            title="Remove location filter">✕</button>
                 </span>
             }
             <button @onclick="ResetAll"
@@ -266,19 +197,13 @@
     public string? SelectedPostType { get; set; }
 
     [Parameter]
-    public Guid? SelectedSportId { get; set; }
-
-    [Parameter]
     public Guid? SelectedLocationId { get; set; }
-
-    [Parameter]
-    public List<SportDto> AvailableSports { get; set; } = new();
 
     [Parameter]
     public List<LocationDto> AvailableLocations { get; set; } = new();
 
     [Parameter]
-    public EventCallback<(string? postType, Guid? sportId, Guid? locationId)> OnApplyFilters { get; set; }
+    public EventCallback<(string? postType, Guid? locationId)> OnApplyFilters { get; set; }
 
     [Parameter]
     public EventCallback OnClearSearch { get; set; }
@@ -287,18 +212,9 @@
     public EventCallback OnResetAll { get; set; }
 
     private bool showFilterDropdown = false;
-    private bool isSportDropdownOpen = false;
     private bool isLocationDropdownOpen = false;
     private string? draftPostType;
-    private Guid? draftSportId;
     private Guid? draftLocationId;
-
-    private string GetDraftSportName()
-    {
-        if (!draftSportId.HasValue || draftSportId.Value == Guid.Empty)
-            return "All Sports";
-        return AvailableSports.FirstOrDefault(s => s.SportId == draftSportId.Value)?.SportName ?? "All Sports";
-    }
 
     private string GetDraftLocationName()
     {
@@ -307,22 +223,9 @@
         return AvailableLocations.FirstOrDefault(l => l.LocationId == draftLocationId.Value)?.LocationName ?? "All Locations";
     }
 
-    private void ToggleSportDropdown()
-    {
-        isSportDropdownOpen = !isSportDropdownOpen;
-        isLocationDropdownOpen = false;
-    }
-
     private void ToggleLocationDropdown()
     {
         isLocationDropdownOpen = !isLocationDropdownOpen;
-        isSportDropdownOpen = false;
-    }
-
-    private void SelectDraftSport(Guid? sportId)
-    {
-        draftSportId = (sportId == Guid.Empty) ? null : sportId;
-        isSportDropdownOpen = false;
     }
 
     private void SelectDraftLocation(Guid? locationId)
@@ -333,7 +236,6 @@
 
     private bool HasActiveFilters =>
         !string.IsNullOrWhiteSpace(SelectedPostType) ||
-        (SelectedSportId.HasValue && SelectedSportId != Guid.Empty) ||
         (SelectedLocationId.HasValue && SelectedLocationId != Guid.Empty);
 
     private int ActiveFilterCount
@@ -342,14 +244,10 @@
         {
             int count = 0;
             if (!string.IsNullOrWhiteSpace(SelectedPostType)) count++;
-            if (SelectedSportId.HasValue && SelectedSportId != Guid.Empty) count++;
             if (SelectedLocationId.HasValue && SelectedLocationId != Guid.Empty) count++;
             return count;
         }
     }
-
-    private string GetSportName(Guid sportId) =>
-        AvailableSports.FirstOrDefault(s => s.SportId == sportId)?.SportName ?? "Sport";
 
     private string GetLocationName(Guid locationId) =>
         AvailableLocations.FirstOrDefault(l => l.LocationId == locationId)?.LocationName ?? "Location";
@@ -360,9 +258,7 @@
         if (showFilterDropdown)
         {
             draftPostType = SelectedPostType;
-            draftSportId = SelectedSportId;
             draftLocationId = SelectedLocationId;
-            isSportDropdownOpen = false;
             isLocationDropdownOpen = false;
         }
     }
@@ -370,35 +266,30 @@
     private void CloseFilterDropdown()
     {
         showFilterDropdown = false;
-        isSportDropdownOpen = false;
         isLocationDropdownOpen = false;
     }
 
     private async Task ApplyFilters()
     {
         showFilterDropdown = false;
-        isSportDropdownOpen = false;
         isLocationDropdownOpen = false;
         var postType = string.IsNullOrWhiteSpace(draftPostType) ? null : draftPostType;
-        var sportId = draftSportId.HasValue && draftSportId.Value != Guid.Empty ? draftSportId : null;
         var locationId = draftLocationId.HasValue && draftLocationId.Value != Guid.Empty ? draftLocationId : null;
         if (OnApplyFilters.HasDelegate)
         {
-            await OnApplyFilters.InvokeAsync((postType, sportId, locationId));
+            await OnApplyFilters.InvokeAsync((postType, locationId));
         }
     }
 
     private async Task ClearFilters()
     {
         draftPostType = null;
-        draftSportId = null;
         draftLocationId = null;
-        isSportDropdownOpen = false;
         isLocationDropdownOpen = false;
         showFilterDropdown = false;
         if (OnApplyFilters.HasDelegate)
         {
-            await OnApplyFilters.InvokeAsync((null, null, null));
+            await OnApplyFilters.InvokeAsync((null, null));
         }
     }
 
@@ -407,16 +298,7 @@
         draftPostType = null;
         if (OnApplyFilters.HasDelegate)
         {
-            await OnApplyFilters.InvokeAsync((null, SelectedSportId, SelectedLocationId));
-        }
-    }
-
-    private async Task RemoveFilterSport()
-    {
-        draftSportId = null;
-        if (OnApplyFilters.HasDelegate)
-        {
-            await OnApplyFilters.InvokeAsync((SelectedPostType, null, SelectedLocationId));
+            await OnApplyFilters.InvokeAsync((null, SelectedLocationId));
         }
     }
 
@@ -425,7 +307,7 @@
         draftLocationId = null;
         if (OnApplyFilters.HasDelegate)
         {
-            await OnApplyFilters.InvokeAsync((SelectedPostType, SelectedSportId, null));
+            await OnApplyFilters.InvokeAsync((SelectedPostType, null));
         }
     }
 
@@ -440,9 +322,7 @@
     private async Task ResetAll()
     {
         draftPostType = null;
-        draftSportId = null;
         draftLocationId = null;
-        isSportDropdownOpen = false;
         isLocationDropdownOpen = false;
         showFilterDropdown = false;
         if (OnResetAll.HasDelegate)

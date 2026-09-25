@@ -1,4 +1,4 @@
-﻿using FitSocial.Client.Models.Common;
+using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Coaches;
 using FitSocial.Client.Services.Http;
 using System.Collections.Generic;
@@ -31,5 +31,10 @@ public class CoachService : ICoachService
 
         var queryString = queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "";
         return await _apiClient.GetAsync<IEnumerable<CoachListDto>>($"{BaseEndpoint}{queryString}");
+    }
+
+    public async Task<ApiResponse<List<TopCoachDto>>> GetTopCoachesAsync(int count = 5)
+    {
+        return await _apiClient.GetAsync<List<TopCoachDto>>($"{BaseEndpoint}/top?count={count}");
     }
 }

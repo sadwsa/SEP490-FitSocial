@@ -287,4 +287,8 @@
                                     <!-- Delete Confirmation Modal Dialog -->
                                     <DeletePostModal IsVisible="@showDeleteModal" Post="@postToDelete" OnClose="CloseDeleteModal"
                                                      OnPostDeleted="OnPostDeleted" />
+
+                                    <!-- Report Post Modal Dialog -->
+                                    <ReportPostModal IsVisible="@showReportModal" PostId="@reportPostId" OnClose="CloseReportModal"
+                                                     OnReportSubmitted="OnPostReported" />
                                 </div>

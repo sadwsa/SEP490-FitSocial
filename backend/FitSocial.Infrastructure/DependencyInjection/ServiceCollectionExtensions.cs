@@ -21,6 +21,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IPostService, PostService>();
+        services.AddScoped<IPostReportService, PostReportService>();
+        services.AddScoped<IPostReactionService, PostReactionService>();
         services.AddScoped<ICoachService, CoachService>();
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
         services.AddScoped<ISportService, SportService>();
@@ -62,6 +64,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICoachProfileRepository, CoachProfileRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
+        services.AddScoped<IPostReportRepository, PostReportRepository>();
+        services.AddScoped<IPostReactionRepository, PostReactionRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
 

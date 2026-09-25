@@ -36,6 +36,7 @@ public class ExceptionHandlingMiddleware
             BusinessException businessEx => (StatusCodes.Status400BadRequest, businessEx.Message),
             ForbiddenException forbiddenEx => (StatusCodes.Status403Forbidden, forbiddenEx.Message),
             NotFoundException notFoundEx => (StatusCodes.Status404NotFound, notFoundEx.Message),
+            ConflictException conflictEx => (StatusCodes.Status409Conflict, conflictEx.Message),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred. Please try again later.")
         };
 

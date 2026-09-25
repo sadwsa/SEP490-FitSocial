@@ -19,7 +19,7 @@
                 <div class="toast-alert success" role="alert">
                     <AppIcon Name="check" />
                     <span>@toastMessage</span>
-                    <button type="button" class="btn-close-toast" @onclick="DismissToast">✕</button>
+                    <button type="button" class="btn-close-toast" @onclick="DismissToast" aria-label="Close notification">✕</button>
                 </div>
             }
 
@@ -42,25 +42,6 @@
                     </button>
                 </div>
             </div>
-
-            <!-- Header section matching reference image -->
-            <div class="page-top-bar">
-                <div class="breadcrumb-trail">
-                    <span class="bc-admin">ADMIN PORTAL</span>
-                    <span class="bc-sep">&gt;</span>
-                    <span class="bc-dest">LOCATIONS &amp; FACILITIES</span>
-                </div>
-                <h1 class="page-heading">Location List Management</h1>
-            </div>
-
-            <!-- Toast notification -->
-            @if (!string.IsNullOrEmpty(toastMessage))
-            {
-                <div class="toast-notification" role="status">
-                    <AppIcon Name="check" />
-                    <span>@toastMessage</span>
-                </div>
-            }
 
             <!-- Main card container -->
             <div class="locations-card">
@@ -119,11 +100,15 @@
                         <thead>
                             <tr>
                                 <th class="col-check">
-                                    <span class="table-checkbox" aria-hidden="true"></span>
+                                    <input type="checkbox"
+                                           class="table-checkbox"
+                                           checked="@isAllSelected"
+                                           @onchange="ToggleSelectAll"
+                                           aria-label="Select all rows" />
                                 </th>
                                 <th class="col-id">LOCATION ID</th>
-                                <th class="col-name">LOCATION NAME (LOCATIONNAME)</th>
-                                <th class="col-address">ADDRESS (ADDRESS)</th>
+                                <th class="col-name">LOCATION NAME</th>
+                                <th class="col-address">ADDRESS</th>
                                 <th class="col-actions">ACTIONS</th>
                             </tr>
                         </thead>
@@ -153,32 +138,20 @@
                                     index++;
                                     var displayIndex = (currentPage - 1) * pageSize + index;
                                     var displayIndexString = (100 + displayIndex).ToString();
-                                    <tr>
+                                    var isRowSelected = selectedLocationIds.Contains(item.LocationId);
+                                    <tr class="location-row @(isRowSelected ? "row-selected" : "")">
                                         <td class="col-check">
-                                            <input type="checkbox" class="row-checkbox" aria-label="Select row" />
+                                            <input type="checkbox"
+                                                   class="row-checkbox"
+                                                   checked="@isRowSelected"
+                                                   @onchange="(e) => ToggleSelectRow(item.LocationId, e)"
+                                                   aria-label="Select row" />
                                         </td>
                                         <td class="col-id">
-                                            <span class="id-badge">#@FormatLocationId(item.LocationId)</span>
+                                            <span class="loc-id">#@displayIndexString</span>
                                         </td>
                                         <td class="col-name">
-                                            <div class="loc-name-wrap">
-                                                <div class="loc-icon-bubble">
-                                                    <svg class="loc-hub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-                                                        <path d="M9 22v-4h6v4"></path>
-                                                        <path d="M8 6h.01"></path>
-                                                        <path d="M16 6h.01"></path>
-                                                        <path d="M12 6h.01"></path>
-                                                        <path d="M12 10h.01"></path>
-                                                        <path d="M12 14h.01"></path>
-                                                        <path d="M16 10h.01"></path>
-                                                        <path d="M16 14h.01"></path>
-                                                        <path d="M8 10h.01"></path>
-                                                        <path d="M8 14h.01"></path>
-                                                    </svg>
-                                                </div>
-                                                <span class="loc-name">@item.LocationName</span>
-                                            </div>
+                                            <span class="loc-name">@item.LocationName</span>
                                         </td>
                                         <td class="col-address">
                                             <div class="loc-address-wrap">
@@ -221,17 +194,22 @@
                         }
                     </div>
 
-                    @if (pagedResult.TotalPages > 1)
-                    {
-                        <div class="pagination-controls">
-                            <button type="button"
-                                    class="page-nav-btn prev-btn"
-                                    disabled="@(!pagedResult.HasPreviousPage)"
-                                    @onclick="() => GoToPageAsync(currentPage - 1)"
-                                    title="Previous page">
-                                &lt;
-                            </button>
+                    <!-- Pagination Controls: Always visible -->
+                    <div class="pagination-controls">
+                        <button type="button"
+                                class="page-nav-btn prev-btn"
+                                disabled="@(!pagedResult.HasPreviousPage || currentPage <= 1)"
+                                @onclick="() => GoToPageAsync(currentPage - 1)"
+                                title="Previous page">
+                            &lt;
+                        </button>
 
+                        @if (pagedResult.TotalPages <= 1)
+                        {
+                            <button type="button" class="page-num-btn active">1</button>
+                        }
+                        else
+                        {
                             @foreach (var p in GetVisiblePageNumbers())
                             {
                                 if (p == -1)
@@ -248,16 +226,27 @@
                                     </button>
                                 }
                             }
+                        }
 
-                            <button type="button"
-                                    class="page-nav-btn next-btn"
-                                    disabled="@(!pagedResult.HasNextPage)"
-                                    @onclick="() => GoToPageAsync(currentPage + 1)"
-                                    title="Next page">
-                                &gt;
-                            </button>
-                        </div>
-                    }
+                        <button type="button"
+                                class="page-nav-btn next-btn"
+                                disabled="@(!pagedResult.HasNextPage || currentPage >= pagedResult.TotalPages)"
+                                @onclick="() => GoToPageAsync(currentPage + 1)"
+                                title="Next page">
+                            &gt;
+                        </button>
+                    </div>
+
+                    <!-- Page Size Selector -->
+                    <div class="page-size-selector">
+                        <span>Per page:</span>
+                        <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
+                            <option value="5">5 / page</option>
+                            <option value="6">6 / page</option>
+                            <option value="10">10 / page</option>
+                            <option value="20">20 / page</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
@@ -275,10 +264,7 @@
                             <div class="modal-icon-badge">
                                 <AppIcon Name="location-plus" />
                             </div>
-                            <div class="modal-titles">
-                                <h2 id="create-modal-title" class="modal-title">Add New Location</h2>
-                                <span class="modal-subtitle">Direct mapping to Locations DB schema</span>
-                            </div>
+                            <h2 id="create-modal-title" class="modal-title">Add New Location</h2>
                         </div>
                         <button type="button" class="btn-close-modal" @onclick="CloseCreateModal" title="Close" disabled="@isSaving">
                             ✕
@@ -298,12 +284,12 @@
                         <!-- Field 1: Location Name -->
                         <div class="form-group">
                             <label class="form-label" for="locNameInput">
-                                Location Name (LocationName - NVARCHAR) <span class="required-star">*</span>
+                                Location Name <span class="required-star">*</span>
                             </label>
                             <input id="locNameInput"
                                    type="text"
                                    class="form-control @(!string.IsNullOrEmpty(nameValidationError) ? "is-invalid" : "")"
-                                   placeholder="E.g., FitSocial Gym & Studio South District"
+                                   placeholder="E.g., FitSocial Flagship Hub - District 1"
                                    value="@newLocationModel.LocationName"
                                    @oninput="OnLocationNameInput"
                                    maxlength="200"
@@ -318,7 +304,7 @@
                         <!-- Field 2: Address -->
                         <div class="form-group">
                             <label class="form-label" for="locAddressInput">
-                                Address (Address - NVARCHAR) <span class="required-star">*</span>
+                                Address <span class="required-star">*</span>
                             </label>
                             <textarea id="locAddressInput"
                                       class="form-control form-textarea @(!string.IsNullOrEmpty(addressValidationError) ? "is-invalid" : "")"
@@ -352,7 +338,7 @@
                                 }
                                 else
                                 {
-                                    <span>Save Location</span>
+                                    <span>Create Location</span>
                                 }
                             </button>
                         </div>
@@ -361,51 +347,8 @@
             </div>
         }
 
-        <!-- Confirm Delete Location Modal (UC_35.3) -->
-        @if (showDeleteModal && targetLocation != null)
-        {
-            <div class="modal-backdrop-custom" @onclick="CloseDeleteModal">
-                <div class="delete-modal-dialog" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
-                    <div class="delete-icon-badge">
-                        <AppIcon Name="trash" />
-                    </div>
-
-                    <h3 class="delete-modal-title" id="deleteModalTitle">Confirm Delete Location</h3>
-
-                    <div class="delete-prompt-box">
-                        Are you sure you want to delete <strong>@targetLocation.LocationName</strong> (ID #@targetIndexString)?
-                    </div>
-
-                    @if (!string.IsNullOrWhiteSpace(deleteErrorMessage))
-                    {
-                        <div class="delete-error-alert" role="alert">
-                            <AppIcon Name="warning" />
-                            <span>@deleteErrorMessage</span>
-                        </div>
-                    }
-
-                    <div class="delete-modal-actions">
-                        <button type="button" class="btn-modal-cancel" @onclick="CloseDeleteModal" disabled="@isDeleting">
-                            Cancel
-                        </button>
-                        <button type="button" class="btn-modal-delete" @onclick="ConfirmDeleteAsync" disabled="@isDeleting">
-                            @if (isDeleting)
-                            {
-                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                <span>Deleting...</span>
-                            }
-                            else
-                            {
-                                <span>Delete</span>
-                            }
-                        </button>
-                    </div>
-                </div>
-            </div>
-        }
-
         <!-- ============================================== -->
-        <!-- Edit Location Modal (UC_35.2)                  -->
+        <!-- Edit Location Modal (UC_35.2 - Matching Image 2) -->
         <!-- ============================================== -->
         @if (showEditModal)
         {
@@ -417,9 +360,7 @@
                             <div class="modal-icon-badge">
                                 <AppIcon Name="location" />
                             </div>
-                            <div class="modal-titles">
-                                <h2 id="edit-modal-title" class="modal-title">Edit Location</h2>
-                            </div>
+                            <h2 id="edit-modal-title" class="modal-title">Edit Location</h2>
                         </div>
                         <button type="button" class="btn-close-modal" @onclick="CloseEditModal" title="Close" disabled="@isSavingEdit">
                             ✕
@@ -502,6 +443,51 @@
             </div>
         }
 
+        <!-- ============================================== -->
+        <!-- Confirm Delete Location Modal (UC_35.3 - Image 3) -->
+        <!-- ============================================== -->
+        @if (showDeleteModal && targetLocation != null)
+        {
+            <div class="modal-backdrop-custom" @onclick="CloseDeleteModal">
+                <div class="delete-modal-dialog" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+                    <div class="delete-icon-badge">
+                        <AppIcon Name="trash" />
+                    </div>
+
+                    <h3 class="delete-modal-title" id="deleteModalTitle">Confirm Delete Location</h3>
+
+                    <div class="delete-prompt-box">
+                        Are you sure you want to delete <strong>@targetLocation.LocationName</strong> (ID #@targetIndexString)?
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(deleteErrorMessage))
+                    {
+                        <div class="delete-error-alert" role="alert">
+                            <AppIcon Name="warning" />
+                            <span>@deleteErrorMessage</span>
+                        </div>
+                    }
+
+                    <div class="delete-modal-actions">
+                        <button type="button" class="btn-modal-cancel" @onclick="CloseDeleteModal" disabled="@isDeleting">
+                            Cancel
+                        </button>
+                        <button type="button" class="btn-modal-delete" @onclick="ConfirmDeleteAsync" disabled="@isDeleting">
+                            @if (isDeleting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Deleting...</span>
+                            }
+                            else
+                            {
+                                <span>Delete</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
         <!-- Warning Modal: Cannot delete location in use -->
         @if (showWarningModal)
         {
@@ -549,16 +535,16 @@
 @code {
     private string searchTerm = "";
     private int currentPage = 1;
-    private int pageSize = 6; // Matching screenshot 6 rows per page
+    private int pageSize = 5; // Default 5 per page so pagination is immediately useful
     private PagedResult<LocationDto> pagedResult = new();
     private bool isLoading = true;
     private string? errorMessage;
     private string? toastMessage;
     private System.Timers.Timer? debounceTimer;
     private System.Threading.CancellationTokenSource? toastCts;
+    private HashSet<Guid> selectedLocationIds = new();
 
     // Create Modal state (UC_35.1)
-    // Create Modal state
     private bool showCreateModal = false;
     private bool isSaving = false;
     private string? modalErrorMessage;
@@ -574,6 +560,7 @@
     private string? editModalErrorMessage;
     private string? editNameValidationError;
     private string? editAddressValidationError;
+
     // Delete Modal State (UC_35.3)
     private bool showDeleteModal = false;
     private bool isDeleting = false;
@@ -585,6 +572,8 @@
     private bool showWarningModal = false;
     private string warningLocationName = "";
     private string warningMessage = "";
+
+    private bool isAllSelected => pagedResult.Items.Any() && pagedResult.Items.All(i => selectedLocationIds.Contains(i.LocationId));
 
     protected override async Task OnInitializedAsync()
     {
@@ -619,6 +608,48 @@
         {
             isLoading = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var newSize) && newSize > 0)
+        {
+            pageSize = newSize;
+            currentPage = 1;
+            await LoadLocationsAsync(1);
+        }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        if (isChecked)
+        {
+            foreach (var item in pagedResult.Items)
+            {
+                selectedLocationIds.Add(item.LocationId);
+            }
+        }
+        else
+        {
+            foreach (var item in pagedResult.Items)
+            {
+                selectedLocationIds.Remove(item.LocationId);
+            }
+        }
+    }
+
+    private void ToggleSelectRow(Guid id, ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        if (isChecked)
+        {
+            selectedLocationIds.Add(id);
+        }
+        else
+        {
+            selectedLocationIds.Remove(id);
         }
     }
 
@@ -669,7 +700,6 @@
     }
 
     // Create Modal Handlers (UC_35.1)
-    // Modal Handlers
     private void OpenCreateModal()
     {
         newLocationModel = new CreateLocationDto();
@@ -722,23 +752,23 @@
 
         if (string.IsNullOrWhiteSpace(trimmedName))
         {
-            nameValidationError = "Tên địa điểm không được để trống.";
+            nameValidationError = "Location name is required.";
             hasError = true;
         }
         else if (trimmedName.Length > 200)
         {
-            nameValidationError = "Tên địa điểm không được vượt quá 200 ký tự.";
+            nameValidationError = "Location name cannot exceed 200 characters.";
             hasError = true;
         }
 
         if (string.IsNullOrWhiteSpace(trimmedAddress))
         {
-            addressValidationError = "Địa chỉ không được để trống.";
+            addressValidationError = "Address is required.";
             hasError = true;
         }
         else if (trimmedAddress.Length > 200)
         {
-            addressValidationError = "Địa chỉ không được vượt quá 200 ký tự.";
+            addressValidationError = "Address cannot exceed 200 characters.";
             hasError = true;
         }
 
@@ -761,7 +791,6 @@
             {
                 showCreateModal = false;
                 ShowToast("Location created successfully.");
-                // Reload location list
                 currentPage = 1;
                 await LoadLocationsAsync(1);
             }
@@ -840,23 +869,23 @@
 
         if (string.IsNullOrWhiteSpace(trimmedName))
         {
-            editNameValidationError = "Tên địa điểm không được để trống.";
+            editNameValidationError = "Location name is required.";
             hasError = true;
         }
         else if (trimmedName.Length > 200)
         {
-            editNameValidationError = "Tên địa điểm không được vượt quá 200 ký tự.";
+            editNameValidationError = "Location name cannot exceed 200 characters.";
             hasError = true;
         }
 
         if (string.IsNullOrWhiteSpace(trimmedAddress))
         {
-            editAddressValidationError = "Địa chỉ không được để trống.";
+            editAddressValidationError = "Address is required.";
             hasError = true;
         }
         else if (trimmedAddress.Length > 200)
         {
-            editAddressValidationError = "Địa chỉ không được vượt quá 200 ký tự.";
+            editAddressValidationError = "Address cannot exceed 200 characters.";
             hasError = true;
         }
 
@@ -899,9 +928,9 @@
         }
     }
 
+    // Delete Modal Handlers (UC_35.3)
     private void OpenDeleteModal(LocationDto item, string displayIndex)
     {
-        // If location is currently used by posts, show warning popup
         if (item.PostCount > 0)
         {
             warningLocationName = item.LocationName;
@@ -948,7 +977,6 @@
                 targetLocation = null;
                 ShowToast("Location deleted successfully.");
 
-                // If this was the last item on the page and page > 1, go back one page
                 if (pagedResult.Items.Count == 1 && currentPage > 1)
                 {
                     currentPage--;
@@ -958,7 +986,6 @@
             }
             else
             {
-                // If location is used by posts or other records, show warning popup
                 if (res.Message?.Contains("post", StringComparison.OrdinalIgnoreCase) == true ||
                     res.Message?.Contains("used by", StringComparison.OrdinalIgnoreCase) == true ||
                     res.Message?.Contains("in use", StringComparison.OrdinalIgnoreCase) == true ||
@@ -1002,7 +1029,6 @@
         {
             try
             {
-                await Task.Delay(4000, token);
                 await Task.Delay(3500, token);
                 if (!token.IsCancellationRequested)
                 {
@@ -1023,12 +1049,6 @@
         toastCts?.Cancel();
     }
 
-    private string FormatLocationId(Guid id)
-    {
-        var str = id.ToString("N");
-        return str.Length >= 8 ? str[..8].ToUpperInvariant() : str.ToUpperInvariant();
-    }
-
     private List<int> GetVisiblePageNumbers()
     {
         var list = new List<int>();
@@ -1046,12 +1066,12 @@
         if (currentPage <= 4)
         {
             for (var i = 2; i <= Math.Min(5, total - 1); i++) list.Add(i);
-            if (total > 6) list.Add(-1); // ellipsis
+            if (total > 6) list.Add(-1);
             list.Add(total);
         }
         else if (currentPage >= total - 3)
         {
-            list.Add(-1); // ellipsis
+            list.Add(-1);
             for (var i = total - 4; i <= total; i++) list.Add(i);
         }
         else

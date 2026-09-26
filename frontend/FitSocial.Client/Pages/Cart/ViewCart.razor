@@ -1,0 +1,669 @@
+@page "/cart"
+@layout EmptyLayout
+@inject ICartService CartService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject IJSRuntime JS
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Cart
+@using System.Security.Claims
+
+<PageTitle>Your Cart - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .cart-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 68rem) minmax(0, 1fr) !important;
+                align-items: start !important;
+            }
+            .cart-left-sidebar { justify-self: start !important; }
+            .cart-main-content { justify-self: center !important; width: 100% !important; max-width: 68rem !important; }
+        }
+    </style>
+
+    <div class="cart-3col-layout w-full pt-6 px-4 lg:px-8 flex flex-col items-start pb-16">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="cart" Class="cart-left-sidebar" />
+
+        <!-- Main Cart Section -->
+        <main class="cart-main-content w-full flex flex-col gap-6 min-w-0">
+            @if (isLoading)
+            {
+                <div class="bg-white rounded-2xl p-16 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+                    <div class="w-12 h-12 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-500 font-medium text-base">Loading your cart...</p>
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="bg-red-50 border border-red-200 text-red-700 p-6 rounded-2xl shadow-sm text-center">
+                    <svg class="w-10 h-10 text-red-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 class="font-bold text-lg mb-1">Failed to Load Cart</h3>
+                    <p class="text-sm text-red-600 mb-4">@errorMessage</p>
+                    <button @onclick="LoadCartData" class="px-5 py-2 bg-red-600 text-white rounded-xl font-semibold text-sm hover:bg-red-700 transition">
+                        Try Again
+                    </button>
+                </div>
+            }
+            else if (summary.TotalItems == 0)
+            {
+                <!-- Empty Cart State -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center flex flex-col items-center">
+                    <div class="w-24 h-24 mb-5 rounded-full bg-orange-50 flex items-center justify-center text-[#FF5500]">
+                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                                  d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-black text-gray-800 mb-2">Your Cart is Empty</h3>
+                    <p class="text-gray-500 max-w-md text-sm mb-6 leading-relaxed">
+                        Looks like you haven't added any coaching packages yet. Browse our certified professional coaches and discover tailored workout plans for your goals!
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <a href="training-packages" class="bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                            Browse Training Packages
+                        </a>
+                        <a href="coaches" class="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-bold text-sm hover:bg-gray-200 transition">
+                            Find a Coach
+                        </a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- Header Card (Matching Reference UI) -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-orange-100/70 text-[#EA580C] flex items-center justify-center flex-shrink-0">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2.5">
+                                <h1 class="text-2xl font-black text-gray-900 tracking-tight">Your Cart</h1>
+                                <span class="bg-orange-100 text-[#C2410C] text-xs font-bold px-3 py-1 rounded-full">
+                                    @summary.TotalItems @(summary.TotalItems > 1 ? "packages" : "package")
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-0.5">
+                                Review your training regimen and service guarantees before proceeding to checkout
+                            </p>
+                        </div>
+                    </div>
+
+                    <button @onclick="PromptClearCart" class="flex items-center gap-1.5 text-gray-500 hover:text-red-600 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-red-50 transition cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span>Clear all</span>
+                    </button>
+                </div>
+
+                @if (summary.IsCoach)
+                {
+                    <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl text-sm flex items-center gap-2.5">
+                        <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                        </svg>
+                        <span>You are viewing your cart as a Coach. You can only subscribe to training packages created by other Coaches.</span>
+                    </div>
+                }
+
+                @if (summary.HasUnavailableItems)
+                {
+                    <div class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                            <span>One or more items in your cart are currently unavailable. They have been excluded from the total payment.</span>
+                        </div>
+                    </div>
+                }
+
+                <!-- Two-Column Layout (Matching Reference UI) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    <!-- Left Column: Cart Items List (7 cols) -->
+                    <div class="lg:col-span-8 flex flex-col gap-5">
+                        @foreach (var item in summary.Items)
+                        {
+                            <div class="bg-white rounded-2xl shadow-sm border @(item.IsAvailable ? "border-gray-100" : "border-amber-200 bg-amber-50/20") overflow-hidden transition-all duration-200 hover:shadow-md relative">
+                                <!-- Top Accent Bar -->
+                                <div class="h-1.5 w-full bg-gradient-to-r from-[#FF8C00] via-[#FF5500] to-[#3B82F6]"></div>
+
+                                <div class="p-6">
+                                    <!-- Coach Header Row -->
+                                    <div class="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="relative">
+                                                @if (!string.IsNullOrEmpty(item.CoachAvatarUrl))
+                                                {
+                                                    <img src="@item.CoachAvatarUrl" alt="@item.CoachName" class="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="w-11 h-11 rounded-full bg-gradient-to-br from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                                                        @(item.CoachName.Length >= 2 ? item.CoachName.Substring(0, 2).ToUpper() : "C")
+                                                    </div>
+                                                }
+                                                <div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white"></div>
+                                            </div>
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <h4 class="font-bold text-gray-900 text-sm">@item.CoachName</h4>
+                                                    <span class="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                                                        @(string.IsNullOrWhiteSpace(item.SportName) ? "Gym & Strength" : item.SportName)
+                                                    </span>
+                                                </div>
+                                                <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                                                    <span>@item.ExperienceYears years experience</span>
+                                                    <span>•</span>
+                                                    <span class="text-amber-500 font-semibold flex items-center gap-0.5">
+                                                        ★ @item.AverageRating.ToString("0.0")
+                                                        <span class="text-gray-400 font-normal">(@item.ReviewCount reviews)</span>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <a href="messages" class="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 hover:underline">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                            </svg>
+                                            <span>Contact Coach</span>
+                                        </a>
+                                    </div>
+
+                                    <!-- Package Badges & Title -->
+                                    <div class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                                                <span class="bg-blue-50 text-blue-600 border border-blue-100 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                    @item.DurationLabel
+                                                </span>
+                                                <span class="bg-orange-50 text-[#EA580C] border border-orange-100 text-xs font-bold px-3 py-1 rounded-full">
+                                                    Elite 1-on-1
+                                                </span>
+                                            </div>
+                                            <h3 class="text-xl font-black text-gray-900 leading-snug">
+                                                @item.Title
+                                            </h3>
+                                        </div>
+
+                                        <!-- Right Price Block (Matching Reference UI) -->
+                                        <div class="text-right flex-shrink-0">
+                                            <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">FULL PACKAGE FEE</span>
+                                            <div class="text-2xl font-black text-[#EA580C] tracking-tight">
+                                                @item.Price.ToString("N0") <span class="text-base font-bold">VND</span>
+                                            </div>
+                                            <span class="text-xs text-blue-600 font-semibold flex items-center justify-end gap-1 mt-0.5">
+                                                <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+                                                </svg>
+                                                Flexible start date booking
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    @if (!item.IsAvailable)
+                                    {
+                                        <div class="bg-red-50 border border-red-200 text-red-700 text-xs font-semibold p-2.5 rounded-lg mb-4 flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span>@item.UnavailableReason</span>
+                                        </div>
+                                    }
+
+                                    <!-- Inclusions Checklist (Matching Reference UI) -->
+                                    <div class="space-y-2 mb-6">
+                                        <div class="flex items-center gap-2.5 text-xs text-gray-700">
+                                            <div class="w-4 h-4 rounded-full bg-orange-100 text-[#EA580C] flex items-center justify-center flex-shrink-0">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </div>
+                                            <span>Personalized training plan tailored to trainee InBody metrics</span>
+                                        </div>
+                                        <div class="flex items-center gap-2.5 text-xs text-gray-700">
+                                            <div class="w-4 h-4 rounded-full bg-orange-100 text-[#EA580C] flex items-center justify-center flex-shrink-0">
+                                                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 00.586 1.414l3.707 3.707a1 1 0 001.414-1.414L5 11.268V4zM14 4a1 1 0 00-2 0v7.268a2 2 0 00.586 1.414l3.707 3.707a1 1 0 001.414-1.414L14 11.268V4z" />
+                                                </svg>
+                                            </div>
+                                            <span>Weekly customized MealPlan nutrition guide by specialists</span>
+                                        </div>
+                                        <div class="flex items-center gap-2.5 text-xs text-gray-700">
+                                            <div class="w-4 h-4 rounded-full bg-orange-100 text-[#EA580C] flex items-center justify-center flex-shrink-0">
+                                                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                </svg>
+                                            </div>
+                                            <span>1-on-1 direct chat and scheduled video check-in 2x/week</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Bottom Action Row (Stepper, Lock & Syllabus Link) -->
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-gray-100">
+                                        <div class="flex items-center gap-2 text-xs font-semibold text-blue-600">
+                                            <span class="w-2 h-2 rounded-full bg-blue-600 inline-block animate-pulse"></span>
+                                            <span>Ready to connect after payment</span>
+                                        </div>
+
+                                        <div class="flex items-center gap-4">
+                                            <!-- Locked Stepper & Delete Button -->
+                                            <div class="flex flex-col items-end">
+                                                <div class="inline-flex items-center gap-2 bg-gray-100/90 px-3 py-1.5 rounded-xl border border-gray-200">
+                                                    <svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                                    </svg>
+                                                    <span class="text-xs font-bold text-gray-800">1 Package</span>
+                                                    <svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                                    </svg>
+
+                                                    <button @onclick="() => PromptRemoveItem(item)" class="ml-1 text-gray-400 hover:text-red-600 p-0.5 transition cursor-pointer" title="Remove package">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <span class="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    1-on-1 coaching package applies to a single trainee
+                                                </span>
+                                            </div>
+
+                                            <a href="/training-packages/@item.PackageId" class="text-xs font-bold text-gray-700 hover:text-[#EA580C] flex items-center gap-1 transition">
+                                                <span>View syllabus details</span>
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                </svg>
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <!-- Collapsible Accordion (▼ Details) -->
+                                    <div class="mt-4 pt-3 border-t border-gray-50">
+                                        <button @onclick="() => ToggleDetails(item.CartId)" class="text-xs font-bold text-gray-500 hover:text-gray-800 flex items-center gap-1 transition cursor-pointer">
+                                            <span>@(expandedItemIds.Contains(item.CartId) ? "▲ Hide Details" : "▼ Details")</span>
+                                        </button>
+
+                                        @if (expandedItemIds.Contains(item.CartId))
+                                        {
+                                            <div class="mt-3 p-4 bg-gray-50 rounded-xl text-xs text-gray-600 space-y-1.5 animate-in fade-in">
+                                                <p><strong class="text-gray-700">Package ID:</strong> @item.PackageId</p>
+                                                <p><strong class="text-gray-700">Duration:</strong> @item.DurationDays Days (Full course commitment)</p>
+                                                <p><strong class="text-gray-700">Added to Cart:</strong> @(item.CreatedAt?.ToString("dd/MM/yyyy HH:mm") ?? "Recently")</p>
+                                                <p><strong class="text-gray-700">Contract Guarantee:</strong> Standard electronic fitness contract applies upon payment.</p>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Right Column: Order Summary Card (5 cols - Matching Reference UI) -->
+                    <aside class="lg:col-span-4 sticky top-24">
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-5">
+                            <!-- Card Header with Order ID -->
+                            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+                                <h3 class="text-xl font-black text-gray-900 tracking-tight">Order Summary</h3>
+                                <div class="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-bold border border-blue-100">
+                                    <svg class="w-3.5 h-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span>Order ID: @summary.TemporaryOrderCode</span>
+                                </div>
+                            </div>
+
+                            <!-- Line Items -->
+                            <div class="space-y-3 text-sm">
+                                <div class="flex items-center justify-between text-gray-600">
+                                    <span>Subtotal (@summary.ValidItemsCount valid @(summary.ValidItemsCount > 1 ? "packages" : "package"))</span>
+                                    <span class="font-bold text-gray-900">@summary.Subtotal.ToString("N0") VND</span>
+                                </div>
+
+                                <div class="flex items-center justify-between text-gray-600">
+                                    <span class="flex items-center gap-1">
+                                        Platform Service Fee
+                                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </span>
+                                    <span class="font-bold text-green-600">Free (0 VND)</span>
+                                </div>
+
+                                <div class="flex items-center justify-between text-gray-600">
+                                    <span>Trainee Protection Guarantee</span>
+                                    <span class="bg-blue-50 text-blue-600 font-bold text-xs px-2.5 py-0.5 rounded-full border border-blue-100">
+                                        Included
+                                    </span>
+                                </div>
+                            </div>
+
+                            <hr class="border-gray-100" />
+
+                            <!-- Total Section -->
+                            <div>
+                                <div class="flex items-baseline justify-between mb-1">
+                                    <div>
+                                        <span class="block text-sm font-bold text-gray-800">Total Amount</span>
+                                        <span class="text-[11px] text-gray-400">(Includes VAT & Protection fee)</span>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-3xl font-black text-[#EA580C] tracking-tight block">
+                                            @summary.TotalPrice.ToString("N0") <span class="text-lg">VND</span>
+                                        </span>
+                                        <span class="text-xs text-gray-400 font-medium">Approx ~@summary.ApproxUsd.ToString("0.00") USD</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Primary Checkout CTA (Matching Reference UI) -->
+                            <button @onclick="ProceedToCheckout"
+                                    disabled="@(summary.ValidItemsCount == 0 || isCheckingOut)"
+                                    class="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white py-4 rounded-xl font-bold text-base shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer">
+                                @if (isCheckingOut)
+                                {
+                                    <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Processing Checkout...</span>
+                                }
+                                else
+                                {
+                                    <span>Proceed to Checkout</span>
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                    </svg>
+                                }
+                            </button>
+
+                            <!-- Secure Payment Partners (Matching Reference UI) -->
+                            <div class="pt-2">
+                                <span class="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block text-center mb-2.5">
+                                    SECURE PAYMENT PARTNERS
+                                </span>
+                                <div class="grid grid-cols-4 gap-2">
+                                    <div class="bg-gray-50 border border-gray-200 py-1.5 rounded-lg text-center font-black text-xs text-blue-700">PayOS</div>
+                                    <div class="bg-gray-50 border border-gray-200 py-1.5 rounded-lg text-center font-black text-xs text-red-600">VietQR</div>
+                                    <div class="bg-gray-50 border border-gray-200 py-1.5 rounded-lg text-center font-black text-xs text-pink-600">MoMo</div>
+                                    <div class="bg-gray-50 border border-gray-200 py-1.5 rounded-lg text-center font-black text-xs text-cyan-700">Napas</div>
+                                </div>
+                            </div>
+
+                            <!-- Trust Badges (Matching Reference UI) -->
+                            <div class="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-100 text-xs text-gray-600">
+                                <div class="flex items-start gap-2.5">
+                                    <svg class="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                    </svg>
+                                    <span>Bank-grade secure checkout via PayOS & VietQR bank QR code.</span>
+                                </div>
+
+                                <div class="flex items-start gap-2.5">
+                                    <svg class="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span>Instant electronic coaching contract activated immediately upon bank transfer confirmation.</span>
+                                </div>
+
+                                <div class="flex items-start gap-2.5">
+                                    <svg class="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    <span>100% money-back guarantee if coach does not deliver agreed coaching services.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            }
+        </main>
+    </div>
+
+    <!-- Confirmation Modal: Remove Single Item -->
+    @if (showRemoveModal && itemToRemove != null)
+    {
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95">
+                <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900 text-center mb-2">Remove Package?</h3>
+                <p class="text-sm text-gray-500 text-center mb-6">
+                    Are you sure you want to remove <strong class="text-gray-800">@itemToRemove.Title</strong> from your cart?
+                </p>
+                <div class="flex items-center gap-3">
+                    <button @onclick="CancelRemoveItem" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold text-sm transition">
+                        Cancel
+                    </button>
+                    <button @onclick="ConfirmRemoveItem" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition shadow-sm">
+                        Remove
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Confirmation Modal: Clear Entire Cart -->
+    @if (showClearModal)
+    {
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95">
+                <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900 text-center mb-2">Clear Entire Cart?</h3>
+                <p class="text-sm text-gray-500 text-center mb-6">
+                    This will remove all @summary.TotalItems packages from your cart. You will need to add them again to proceed.
+                </p>
+                <div class="flex items-center gap-3">
+                    <button @onclick="CancelClearCart" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold text-sm transition">
+                        Cancel
+                    </button>
+                    <button @onclick="ConfirmClearCart" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition shadow-sm">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private CartSummaryDto summary = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+    private bool isCheckingOut = false;
+
+    // Accordion State
+    private HashSet<Guid> expandedItemIds = new();
+
+    // Modal State
+    private bool showRemoveModal = false;
+    private CartItemDto? itemToRemove;
+    private bool showClearModal = false;
+
+    // Header State
+    private string? headerSearchTerm = "";
+    private string userName = "User";
+    private string userInitials = "U";
+    private string userRole = "Trainee";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        await LoadCartData();
+    }
+
+    private async Task LoadCartData()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        var response = await CartService.GetCartAsync();
+        if (response.Success && response.Data != null)
+        {
+            summary = response.Data;
+        }
+        else
+        {
+            errorMessage = response.Message ?? "Failed to load cart items.";
+        }
+
+        isLoading = false;
+    }
+
+    private void ToggleDetails(Guid cartId)
+    {
+        if (expandedItemIds.Contains(cartId))
+        {
+            expandedItemIds.Remove(cartId);
+        }
+        else
+        {
+            expandedItemIds.Add(cartId);
+        }
+    }
+
+    private void PromptRemoveItem(CartItemDto item)
+    {
+        itemToRemove = item;
+        showRemoveModal = true;
+    }
+
+    private void CancelRemoveItem()
+    {
+        itemToRemove = null;
+        showRemoveModal = false;
+    }
+
+    private async Task ConfirmRemoveItem()
+    {
+        if (itemToRemove == null) return;
+
+        var res = await CartService.RemoveCartItemAsync(itemToRemove.CartId);
+        if (res.Success)
+        {
+            await LoadCartData();
+        }
+        else
+        {
+            errorMessage = res.Message ?? "Failed to remove item.";
+        }
+
+        showRemoveModal = false;
+        itemToRemove = null;
+    }
+
+    private void PromptClearCart()
+    {
+        showClearModal = true;
+    }
+
+    private void CancelClearCart()
+    {
+        showClearModal = false;
+    }
+
+    private async Task ConfirmClearCart()
+    {
+        var res = await CartService.ClearCartAsync();
+        if (res.Success)
+        {
+            await LoadCartData();
+        }
+        else
+        {
+            errorMessage = res.Message ?? "Failed to clear cart.";
+        }
+
+        showClearModal = false;
+    }
+
+    private async Task ProceedToCheckout()
+    {
+        if (summary.ValidItemsCount == 0) return;
+
+        isCheckingOut = true;
+        // Connect to checkout / order flow or payment gateway
+        await Task.Delay(400); // Visual feedback
+        isCheckingOut = false;
+        Navigation.NavigateTo("checkout");
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
+                userRole = isCoach ? "Coach" : "Trainee";
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            userInitials = "U";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e)
+    {
+        headerSearchTerm = e.Value?.ToString();
+    }
+
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
+    private void ExecuteHeaderSearch() { }
+    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
+}

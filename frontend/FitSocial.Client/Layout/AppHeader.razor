@@ -2,6 +2,8 @@
 @inject IAuthService AuthService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
+@inject ICartService CartService
+@implements IDisposable
 @using System.Security.Claims
 @using FitSocial.Client.Models.Auth
 
@@ -62,16 +64,16 @@
         else
         {
             <!-- Shopping Cart -->
-            <a href="training-packages" class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition block" title="Shopping Cart">
+            <a href="cart" class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition block" title="Shopping Cart">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z">
                     </path>
                 </svg>
-                @if (CartCount > 0)
+                @if (EffectiveCartCount > 0)
                 {
                     <span class="absolute top-1 right-1 bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                        @CartCount
+                        @EffectiveCartCount
                     </span>
                 }
             </a>
@@ -174,7 +176,7 @@
     [Parameter] public string? UserInitials { get; set; }
     [Parameter] public string? UserRole { get; set; }
 
-    [Parameter] public int CartCount { get; set; } = 2;
+    [Parameter] public int? CartCount { get; set; }
     [Parameter] public int MessageCount { get; set; } = 5;
     [Parameter] public int NotificationCount { get; set; } = 9;
 
@@ -186,17 +188,23 @@
     private string loadedUserName = "User";
     private string loadedUserInitials = "U";
     private string loadedUserRole = "Athlete";
+    private int dynamicCartCount = 0;
 
+    private int EffectiveCartCount => CartCount ?? dynamicCartCount;
     private string EffectiveUserName => !string.IsNullOrWhiteSpace(UserName) ? UserName : loadedUserName;
     private string EffectiveUserInitials => !string.IsNullOrWhiteSpace(UserInitials) ? UserInitials : loadedUserInitials;
     private string EffectiveUserRole => !string.IsNullOrWhiteSpace(UserRole) ? UserRole : loadedUserRole;
 
     protected override async Task OnInitializedAsync()
     {
+        CartService.OnCartChanged += HandleCartChanged;
+
         if (string.IsNullOrWhiteSpace(UserName) || string.IsNullOrWhiteSpace(UserInitials))
         {
             await LoadCurrentUserAsync();
         }
+
+        await LoadCartCountAsync();
     }
 
     private async Task LoadCurrentUserAsync()
@@ -295,5 +303,33 @@
             await AuthService.LogoutAsync();
             Navigation.NavigateTo("login");
         }
+    }
+
+    private async Task LoadCartCountAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                var res = await CartService.GetCartCountAsync();
+                if (res.Success)
+                {
+                    dynamicCartCount = res.Data;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void HandleCartChanged()
+    {
+        _ = LoadCartCountAsync();
+    }
+
+    public void Dispose()
+    {
+        CartService.OnCartChanged -= HandleCartChanged;
     }
 }

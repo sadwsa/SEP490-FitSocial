@@ -16,6 +16,7 @@ using FitSocial.Client.Services.Locations;
 using FitSocial.Client.Services.TrainingPackages;
 using FitSocial.Client.Services.Coaches;
 using FitSocial.Client.Services.Users;
+using FitSocial.Client.Services.Cart;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -50,5 +51,6 @@ builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ITrainingPackageService, TrainingPackageService>();
 builder.Services.AddScoped<ICoachService, CoachService>();
+builder.Services.AddScoped<ICartService, CartService>();
 
 await builder.Build().RunAsync();

@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
         services.AddScoped<ISportService, SportService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
+        services.AddScoped<ICartService, CartService>();
         return services;
     }
 
@@ -64,6 +65,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPostRepository, PostRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
+        services.AddScoped<ICartRepository, CartRepository>();
 
         return services;
     }

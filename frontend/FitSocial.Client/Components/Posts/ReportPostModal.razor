@@ -1,0 +1,255 @@
+@namespace FitSocial.Client.Components.Posts
+@inject IPostService PostService
+
+@if (IsVisible && PostId.HasValue)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-all animate-in fade-in"
+         @onclick="CloseModal">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 animate-in zoom-in-95 duration-150"
+             @onclick:stopPropagation="true">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-900 text-base">Report Post</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Help us understand what's wrong with this post.</p>
+                    </div>
+                </div>
+                <button type="button" @onclick="CloseModal" disabled="@isSubmitting"
+                        class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition cursor-pointer disabled:opacity-50">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Error Banner -->
+            @if (!string.IsNullOrWhiteSpace(apiErrorMessage))
+            {
+                <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2 animate-in fade-in">
+                    <svg class="w-4 h-4 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>@apiErrorMessage</span>
+                </div>
+            }
+
+            <!-- Reasons Selection List -->
+            <div class="space-y-2 mb-4 max-h-60 overflow-y-auto pr-1">
+                @foreach (var reason in ReportReasons)
+                {
+                    var isSelected = string.Equals(selectedReason, reason, StringComparison.OrdinalIgnoreCase);
+                    <label class="flex items-center gap-3 p-2.5 rounded-xl border transition cursor-pointer text-xs @(isSelected ? "border-[#FF5500] bg-orange-50/50 text-gray-900 font-medium" : "border-gray-200 hover:border-gray-300 text-gray-700")">
+                        <input type="radio"
+                               name="reportReasonOption"
+                               value="@reason"
+                               checked="@isSelected"
+                               @onchange="() => OnReasonSelected(reason)"
+                               disabled="@isSubmitting"
+                               class="w-4 h-4 text-[#FF5500] focus:ring-[#FF5500] border-gray-300 cursor-pointer" />
+                        <span>@reason</span>
+                    </label>
+                }
+            </div>
+
+            <!-- Custom Reason Input for 'Other' -->
+            @if (IsOtherSelected)
+            {
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                        Please specify the reason <span class="text-red-500">*</span>
+                    </label>
+                    <textarea @bind="otherReasonText"
+                              @bind:event="oninput"
+                              disabled="@isSubmitting"
+                              maxlength="500"
+                              rows="3"
+                              placeholder="Please describe the issue in detail..."
+                              class="w-full text-xs p-3 rounded-xl border @(!string.IsNullOrWhiteSpace(validationError) ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-[#FF5500]") focus:outline-hidden transition resize-none"></textarea>
+                    <div class="flex items-center justify-between text-[11px] text-gray-400 mt-1">
+                        @if (!string.IsNullOrWhiteSpace(validationError))
+                        {
+                            <span class="text-red-500 font-medium">@validationError</span>
+                        }
+                        else
+                        {
+                            <span></span>
+                        }
+                        <span>@(otherReasonText?.Length ?? 0)/500</span>
+                    </div>
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(validationError))
+            {
+                <div class="mb-3 text-[11px] text-red-500 font-medium">
+                    @validationError
+                </div>
+            }
+
+            <!-- Actions -->
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+                <button type="button" @onclick="CloseModal" disabled="@isSubmitting"
+                        class="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-100 rounded-xl transition disabled:opacity-50 cursor-pointer">
+                    Cancel
+                </button>
+                <button type="button" @onclick="ConfirmReportPostAsync" disabled="@IsSubmitDisabled"
+                        class="px-5 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#FF5500] hover:bg-[#e04b00] rounded-xl shadow-xs hover:shadow transition disabled:opacity-50 flex items-center gap-2 cursor-pointer">
+                    @if (isSubmitting)
+                    {
+                        <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Submitting...</span>
+                    }
+                    else
+                    {
+                        <span>Submit Report</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public Guid? PostId { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnReportSubmitted { get; set; }
+
+    private static readonly string[] ReportReasons = new[]
+    {
+        "Spam",
+        "Harassment or bullying",
+        "Inappropriate content",
+        "Hate speech",
+        "False information",
+        "Scam or fraud",
+        "Other"
+    };
+
+    private string? selectedReason;
+    private string otherReasonText = string.Empty;
+    private string? validationError;
+    private string? apiErrorMessage;
+    private bool isSubmitting = false;
+
+    private bool IsOtherSelected => string.Equals(selectedReason, "Other", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsSubmitDisabled =>
+        isSubmitting ||
+        string.IsNullOrWhiteSpace(selectedReason) ||
+        (IsOtherSelected && string.IsNullOrWhiteSpace(otherReasonText));
+
+    protected override void OnParametersSet()
+    {
+        if (!IsVisible)
+        {
+            ResetState();
+        }
+    }
+
+    private void OnReasonSelected(string reason)
+    {
+        selectedReason = reason;
+        validationError = null;
+        apiErrorMessage = null;
+    }
+
+    private void ResetState()
+    {
+        selectedReason = null;
+        otherReasonText = string.Empty;
+        validationError = null;
+        apiErrorMessage = null;
+        isSubmitting = false;
+    }
+
+    private async Task CloseModal()
+    {
+        if (isSubmitting) return;
+        ResetState();
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private async Task ConfirmReportPostAsync()
+    {
+        if (!PostId.HasValue || isSubmitting) return;
+
+        validationError = null;
+        apiErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(selectedReason))
+        {
+            validationError = "Please select a reason for reporting.";
+            return;
+        }
+
+        string finalReason;
+        if (IsOtherSelected)
+        {
+            if (string.IsNullOrWhiteSpace(otherReasonText))
+            {
+                validationError = "Please provide details for the report reason.";
+                return;
+            }
+            finalReason = otherReasonText.Trim();
+        }
+        else
+        {
+            finalReason = selectedReason.Trim();
+        }
+
+        if (finalReason.Length > 500)
+        {
+            validationError = "Report reason cannot exceed 500 characters.";
+            return;
+        }
+
+        isSubmitting = true;
+
+        try
+        {
+            var reportedTargetPostId = PostId.Value;
+            var request = new CreatePostReportRequest { Reason = finalReason };
+            var res = await PostService.ReportPostAsync(reportedTargetPostId, request);
+
+            if (res.Success)
+            {
+                isSubmitting = false;
+                ResetState();
+                if (OnReportSubmitted.HasDelegate)
+                {
+                    await OnReportSubmitted.InvokeAsync(reportedTargetPostId);
+                }
+            }
+            else
+            {
+                apiErrorMessage = res.Message ?? "Unable to submit report. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            apiErrorMessage = "Unable to submit report. Please try again.";
+            Console.WriteLine($"[ReportPostModal] Error: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

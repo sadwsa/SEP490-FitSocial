@@ -21,11 +21,20 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IPostService, PostService>();
+        services.AddScoped<IPostReportService, PostReportService>();
+        services.AddScoped<IPostReactionService, PostReactionService>();
         services.AddScoped<ICoachService, CoachService>();
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
         services.AddScoped<ISportService, SportService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
         services.AddScoped<ICartService, CartService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<ITermsService, TermsService>();
+        services.AddScoped<IEkycService, ViettelEkycService>();
+        services.AddScoped<ISystemOperationsService, SystemOperationsService>();
+        services.AddScoped<ILocationService, LocationService>();
+        services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IPostReportService, PostReportService>();
         return services;
     }
 
@@ -58,14 +67,23 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOtpLogRepository, OtpLogRepository>();
         services.AddScoped<ISportRepository, SportRepository>();
         services.AddScoped<IPriceRepository, PriceRepository>();
+        services.AddScoped<ICoachUpgradeRepository, CoachUpgradeRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<ICoachProfileRepository, CoachProfileRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<ITermsAndPolicyRepository, TermsAndPolicyRepository>();
+        services.AddScoped<IUserAgreementRepository, UserAgreementRepository>();
+        services.AddScoped<ICoachEkycVerificationRepository, CoachEkycVerificationRepository>();
+        services.AddScoped<ICoachCertificateRepository, CoachCertificateRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
+        services.AddScoped<IPostReportRepository, PostReportRepository>();
+        services.AddScoped<IPostReactionRepository, PostReactionRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
         services.AddScoped<ICartRepository, CartRepository>();
+        services.AddScoped<IReportRepository, ReportRepository>();
+        services.AddScoped<IPostReportRepository, PostReportRepository>();
 
         return services;
     }

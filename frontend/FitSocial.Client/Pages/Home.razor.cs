@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Components.Web;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Posts;
-using FitSocial.Client.Models.Sports;
 using FitSocial.Client.Models.Locations;
+using FitSocial.Client.Models.Coaches;
 
 namespace FitSocial.Client.Pages;
 
@@ -26,6 +26,11 @@ public partial class Home : ComponentBase, IDisposable
     private string userName = "Me";
     private string userInitials = "Me";
     private string userRole = "Athlete";
+    private string? currentUserAvatarUrl;
+
+    // Top coaches state
+    private List<TopCoachDto> topCoaches = new();
+    private bool isLoadingTopCoaches = true;
 
     // Edit post state
     private bool showEditPostModal = false;
@@ -35,8 +40,14 @@ public partial class Home : ComponentBase, IDisposable
     private bool showDeleteModal = false;
     private PostDto? postToDelete;
 
+    // Report post state
+    private bool showReportModal = false;
+    private Guid? reportPostId;
+    private readonly HashSet<Guid> reportedPostIds = new();
+    private string? toastWarningMessage;
+    private CancellationTokenSource? warningToastCts;
+
     // Dropdowns data
-    private List<SportDto> availableSports = new();
     private List<LocationDto> availableLocations = new();
 
     // Query & Filter state
@@ -44,12 +55,10 @@ public partial class Home : ComponentBase, IDisposable
     private CancellationTokenSource? searchCts;
 
     private string? selectedPostType;
-    private Guid? selectedFilterSportId;
     private Guid? selectedFilterLocationId;
 
     private bool HasActiveFilters =>
         !string.IsNullOrWhiteSpace(selectedPostType) ||
-        (selectedFilterSportId.HasValue && selectedFilterSportId != Guid.Empty) ||
         (selectedFilterLocationId.HasValue && selectedFilterLocationId != Guid.Empty);
 
     private int currentPage = 1;
@@ -68,7 +77,7 @@ public partial class Home : ComponentBase, IDisposable
     protected override async Task OnInitializedAsync()
     {
         await LoadUserInfoAsync();
-        await Task.WhenAll(LoadPostsAsync(), LoadSportsAndLocationsAsync());
+        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), LoadTopCoachesAsync());
     }
 
     private async Task LoadUserInfoAsync()
@@ -92,38 +101,62 @@ public partial class Home : ComponentBase, IDisposable
                           user.IsInRole("COACH") ||
                           string.Equals(user.FindFirst(ClaimTypes.Role)?.Value, AppRoles.Coach, StringComparison.OrdinalIgnoreCase);
                 userRole = isCoach ? "Coach" : "Trainee";
+                userInitials = AvatarHelper.GetInitials(userName);
 
-                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length > 0)
+                var meRes = await AuthService.GetCurrentUserAsync();
+                if (meRes.Success && meRes.Data != null)
                 {
-                    userInitials = parts.Length > 1
-                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
-                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                    currentUserAvatarUrl = meRes.Data.AvatarUrl;
+                    if (!string.IsNullOrWhiteSpace(meRes.Data.FullName))
+                    {
+                        userName = meRes.Data.FullName;
+                        userInitials = AvatarHelper.GetInitials(userName);
+                    }
+                    StateHasChanged();
+                }
+                else
+                {
+                    Console.WriteLine($"[Home] AuthService.GetCurrentUserAsync returned: Success={meRes.Success}, Message='{meRes.Message}'");
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[Home] Error loading user info: {ex.Message}");
             userInitials = "Me";
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
 
-    private async Task LoadSportsAndLocationsAsync()
+    private async Task LoadTopCoachesAsync()
     {
         try
         {
-            var sportsTask = SportService.GetPublicSportsAsync();
-            var locationsTask = LocationService.GetLocationsAsync();
-            await Task.WhenAll(sportsTask, locationsTask);
-
-            var sportsResponse = await sportsTask;
-            var locationsResponse = await locationsTask;
-
-            if (sportsResponse.Success && sportsResponse.Data != null)
+            isLoadingTopCoaches = true;
+            var response = await CoachService.GetTopCoachesAsync(5);
+            if (response.Success && response.Data != null)
             {
-                availableSports = sportsResponse.Data;
+                topCoaches = response.Data;
             }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading top coaches: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingTopCoaches = false;
+        }
+    }
 
+    private async Task LoadLocationsAsync()
+    {
+        try
+        {
+            var locationsResponse = await LocationService.GetLocationsAsync();
             if (locationsResponse.Success && locationsResponse.Data != null)
             {
                 availableLocations = locationsResponse.Data;
@@ -134,7 +167,6 @@ public partial class Home : ComponentBase, IDisposable
             // Graceful fallback
         }
     }
-
     private async Task LoadPostsAsync(bool append = false)
     {
         if (!append)
@@ -151,7 +183,6 @@ public partial class Home : ComponentBase, IDisposable
         currentQuery.PageSize = pageSize;
         currentQuery.SearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim();
         currentQuery.PostType = string.IsNullOrWhiteSpace(selectedPostType) ? null : selectedPostType;
-        currentQuery.SportId = selectedFilterSportId.HasValue && selectedFilterSportId != Guid.Empty ? selectedFilterSportId : null;
         currentQuery.LocationId = selectedFilterLocationId.HasValue && selectedFilterLocationId != Guid.Empty ? selectedFilterLocationId : null;
 
         try
@@ -289,34 +320,57 @@ public partial class Home : ComponentBase, IDisposable
     }
 
     // Filter Handlers
-    private async Task HandleApplyFilters((string? postType, Guid? sportId, Guid? locationId) filters)
+    private async Task HandleApplyFilters((string? postType, Guid? locationId) filters)
     {
         selectedPostType = filters.postType;
-        selectedFilterSportId = filters.sportId;
         selectedFilterLocationId = filters.locationId;
         currentPage = 1;
         await LoadPostsAsync();
     }
-
     private async Task ResetAllSearchAndFilters()
     {
         searchCts?.Cancel();
         searchTerm = string.Empty;
         selectedPostType = null;
-        selectedFilterSportId = null;
         selectedFilterLocationId = null;
         currentPage = 1;
         await LoadPostsAsync();
     }
 
     // Post Interactions
-    private void ToggleLike(PostDto post)
-    {
-        post.IsLikedByCurrentUser = !post.IsLikedByCurrentUser;
-        post.LikeCount += post.IsLikedByCurrentUser ? 1 : -1;
-        if (post.LikeCount < 0) post.LikeCount = 0;
+    private readonly HashSet<Guid> _pendingReactionPostIds = new();
 
-        _ = PostService.ToggleLikeAsync(post.Id);
+    private async Task ToggleLike(PostDto post)
+    {
+        if (post == null || _pendingReactionPostIds.Contains(post.Id))
+        {
+            return;
+        }
+
+        _pendingReactionPostIds.Add(post.Id);
+
+        try
+        {
+            var response = await PostService.ToggleLikeAsync(post.Id);
+            if (response.Success && response.Data != null)
+            {
+                post.IsLikedByCurrentUser = response.Data.IsLiked;
+                post.LikeCount = response.Data.LikeCount;
+                StateHasChanged();
+            }
+            else if (!response.Success && !string.IsNullOrWhiteSpace(response.Message))
+            {
+                Console.WriteLine($"[Home] Failed to react to post {post.Id}: {response.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Home] Exception toggling like for post {post.Id}: {ex.Message}");
+        }
+        finally
+        {
+            _pendingReactionPostIds.Remove(post.Id);
+        }
     }
 
     private void ToggleProfileMenu()
@@ -331,9 +385,47 @@ public partial class Home : ComponentBase, IDisposable
         Navigation.NavigateTo("login");
     }
 
-    private void HandleReportPost(Guid postId)
+    private async Task HandleReportPost(Guid postId)
     {
-        ShowSuccessToast("Thank you. Post reported to moderators for review.");
+        // 1. Check client-side cache for this specific post
+        if (reportedPostIds.Contains(postId))
+        {
+            ShowWarningToast("You have already submitted a pending report for this post.");
+            return;
+        }
+
+        // 2. Query backend duplicate check scoped strictly to (postId, reporterId)
+        try
+        {
+            var checkRes = await PostService.CheckPostReportedAsync(postId);
+            if (checkRes.Success && checkRes.Data)
+            {
+                reportedPostIds.Add(postId);
+                ShowWarningToast("You have already submitted a pending report for this post.");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Home] Error checking report status for post {postId}: {ex.Message}");
+        }
+
+        // 3. Not reported yet: display the report form modal
+        reportPostId = postId;
+        showReportModal = true;
+    }
+
+    private void CloseReportModal()
+    {
+        showReportModal = false;
+        reportPostId = null;
+    }
+
+    private void OnPostReported(Guid reportedTargetPostId)
+    {
+        reportedPostIds.Add(reportedTargetPostId);
+        CloseReportModal();
+        ShowSuccessToast("Report submitted successfully. Thank you for helping keep our community safe.");
     }
 
     // Delete post methods
@@ -423,6 +515,54 @@ public partial class Home : ComponentBase, IDisposable
         StateHasChanged();
     }
 
+    private void ShowWarningToast(string message)
+    {
+        warningToastCts?.Cancel();
+        warningToastCts?.Dispose();
+        warningToastCts = new CancellationTokenSource();
+        toastWarningMessage = message;
+        StateHasChanged();
+
+        var token = warningToastCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(3500, token);
+                if (!token.IsCancellationRequested)
+                {
+                    toastWarningMessage = null;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Ignored
+            }
+        });
+    }
+
+    private void DismissWarningToast()
+    {
+        warningToastCts?.Cancel();
+        toastWarningMessage = null;
+        StateHasChanged();
+    }
+
+    private void NavigateToAuthorProfile(Guid authorId)
+    {
+        if (authorId == Guid.Empty) return;
+
+        if (currentUserId.HasValue && authorId == currentUserId.Value)
+        {
+            Navigation.NavigateTo("/profile");
+        }
+        else
+        {
+            Navigation.NavigateTo($"/profile/{authorId}");
+        }
+    }
+
     // Dispose
     public void Dispose()
     {
@@ -430,5 +570,7 @@ public partial class Home : ComponentBase, IDisposable
         searchCts?.Dispose();
         toastCts?.Cancel();
         toastCts?.Dispose();
+        warningToastCts?.Cancel();
+        warningToastCts?.Dispose();
     }
 }

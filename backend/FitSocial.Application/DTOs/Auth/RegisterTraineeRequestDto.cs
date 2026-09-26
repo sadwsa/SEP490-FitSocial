@@ -31,5 +31,6 @@ public class RegisterTraineeRequestDto
 
     public DateOnly? DateOfBirth { get; set; }
 
-    public List<Guid>? FavoriteSportIds { get; set; }
+    /// <summary>Version of terms the user agreed to (TermsAndPolicies.TermID).</summary>
+    public Guid? TermId { get; set; }
 }

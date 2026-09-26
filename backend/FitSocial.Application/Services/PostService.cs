@@ -1,4 +1,4 @@
-using FitSocial.Application.DTOs.Common;
+﻿using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Posts;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
@@ -16,7 +16,6 @@ public class PostService : IPostService
 {
     private readonly IPostRepository _posts;
     private readonly IUserRepository _users;
-    private readonly ISportRepository _sports;
     private readonly ILocationRepository _locations;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<PostService>? _logger;
@@ -24,14 +23,12 @@ public class PostService : IPostService
     public PostService(
         IPostRepository posts,
         IUserRepository users,
-        ISportRepository sports,
         ILocationRepository locations,
         IUnitOfWork unitOfWork,
         ILogger<PostService>? logger = null)
     {
         _posts = posts;
         _users = users;
-        _sports = sports;
         _locations = locations;
         _unitOfWork = unitOfWork;
         _logger = logger;
@@ -80,13 +77,7 @@ public class PostService : IPostService
             throw new ForbiddenException("Your account is locked and cannot edit posts.");
         }
 
-        // 6. Verify Sport and Location exist
-        var sport = await _sports.GetByIdAsync(request.SportId, cancellationToken);
-        if (sport == null)
-        {
-            throw new NotFoundException($"Selected sport with ID '{request.SportId}' does not exist.");
-        }
-
+        // 6. Verify Location exists
         var location = await _locations.GetByIdAsync(request.LocationId, cancellationToken);
         if (location == null)
         {
@@ -128,7 +119,7 @@ public class PostService : IPostService
         try
         {
             // 9.1. Update post details
-            post.UpdateDetails(request.Content, parsedPostType, request.SportId, request.LocationId);
+            post.UpdateDetails(request.Content, parsedPostType, request.LocationId);
 
             // 9.2. Remove requested media
             if (mediaToRemove.Count > 0)
@@ -148,7 +139,6 @@ public class PostService : IPostService
                 {
                     var newMedium = new PostMedium
                     {
-
                         PostId = post.Id,
                         MediaUrl = item.MediaUrl.Trim(),
                         MediaType = item.MediaType.Trim().ToUpperInvariant(),
@@ -176,8 +166,6 @@ public class PostService : IPostService
             AuthorAvatarUrl = user.AvatarUrl,
             Content = post.Content,
             PostType = post.PostType,
-            SportId = sport.SportId,
-            SportName = sport.SportName,
             LocationId = location.LocationId,
             LocationName = location.LocationName,
             LocationAddress = location.Address,
@@ -281,19 +269,7 @@ public class PostService : IPostService
                 $"Trainee can only select Normal or FindCoach; Coach can select Normal, FindCoach, or FindTrainee.");
         }
 
-        // 3. Validate Sport exists
-        if (request.SportId == Guid.Empty)
-        {
-            throw new ValidationException("Sport is required and cannot be empty.");
-        }
-
-        var sport = await _sports.GetByIdAsync(request.SportId, cancellationToken);
-        if (sport == null)
-        {
-            throw new NotFoundException($"Selected sport with ID '{request.SportId}' does not exist.");
-        }
-
-        // 4. Validate Location exists
+        // 3. Validate Location exists
         if (request.LocationId == Guid.Empty)
         {
             throw new ValidationException("Location is required and cannot be empty.");
@@ -305,13 +281,13 @@ public class PostService : IPostService
             throw new NotFoundException($"Selected location with ID '{request.LocationId}' does not exist.");
         }
 
-        // 5. Validate media count (max 10 total)
+        // 4. Validate media count (max 10 total)
         if (request.Media != null && request.Media.Count > PostConstants.MaxMediaCount)
         {
             throw new BusinessException($"A post can contain at most {PostConstants.MaxMediaCount} media items in total (photos or videos combined). Found {request.Media.Count}.");
         }
 
-        // 6. Validate each media item
+        // 5. Validate each media item
         if (request.Media != null && request.Media.Count > 0)
         {
             for (int i = 0; i < request.Media.Count; i++)
@@ -340,7 +316,7 @@ public class PostService : IPostService
             }
         }
 
-        // 7. Validate content requirement
+        // 6. Validate content requirement
         if (!string.IsNullOrWhiteSpace(request.Content) && request.Content.Length > PostConstants.MaxContentLength)
         {
             throw new ValidationException($"Content must not exceed {PostConstants.MaxContentLength} characters.");
@@ -353,7 +329,7 @@ public class PostService : IPostService
             throw new ValidationException("Post must contain text content or at least one image/video.");
         }
 
-        // 8. Initialize Post entity
+        // 7. Initialize Post entity
         var now = DateTime.UtcNow;
         var post = new Post
         {
@@ -361,14 +337,13 @@ public class PostService : IPostService
             AuthorId = authorId,
             Content = request.Content?.Trim(),
             PostType = parsedPostType.ToString(),
-            SportId = request.SportId,
             LocationId = request.LocationId,
             CreatedAt = now,
             UpdatedAt = now,
             IsDeleted = false
         };
 
-        // 9. Add media items
+        // 8. Add media items
         if (request.Media != null && request.Media.Count > 0)
         {
             foreach (var m in request.Media)
@@ -384,7 +359,7 @@ public class PostService : IPostService
             }
         }
 
-        // 10. Persist to database within transaction
+        // 9. Persist to database within transaction
         var dbSw = Stopwatch.StartNew();
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
@@ -400,7 +375,7 @@ public class PostService : IPostService
             throw;
         }
 
-        // 11. Return response DTO
+        // 10. Return response DTO
         var resultDto = new PostDto
         {
             Id = post.Id,
@@ -409,8 +384,6 @@ public class PostService : IPostService
             AuthorAvatarUrl = author.AvatarUrl,
             Content = post.Content,
             PostType = post.PostType,
-            SportId = sport.SportId,
-            SportName = sport.SportName,
             LocationId = location.LocationId,
             LocationName = location.LocationName,
             LocationAddress = location.Address,
@@ -478,22 +451,7 @@ public class PostService : IPostService
             normalizedPostType = parsedType.ToString();
         }
 
-        // 3. Validate SportId if specified
-        if (query.SportId.HasValue)
-        {
-            if (query.SportId.Value == Guid.Empty)
-            {
-                throw new ValidationException("SportId cannot be empty GUID.");
-            }
-
-            var sport = await _sports.GetByIdAsync(query.SportId.Value, cancellationToken);
-            if (sport == null)
-            {
-                throw new NotFoundException($"Selected sport with ID '{query.SportId.Value}' does not exist.");
-            }
-        }
-
-        // 4. Validate LocationId if specified
+        // 3. Validate LocationId if specified
         if (query.LocationId.HasValue)
         {
             if (query.LocationId.Value == Guid.Empty)
@@ -508,10 +466,9 @@ public class PostService : IPostService
             }
         }
 
-        // 5. Query database with filtering and pagination
+        // 4. Query database with filtering and pagination
         var (items, totalCount) = await _posts.GetPagedPostsAsync(
             normalizedPostType,
-            query.SportId,
             query.LocationId,
             query.AuthorId,
             query.EffectiveKeyword,
@@ -535,8 +492,6 @@ public class PostService : IPostService
             AuthorAvatarUrl = post.Author?.AvatarUrl,
             Content = post.Content,
             PostType = post.PostType,
-            SportId = post.SportId ?? Guid.Empty,
-            SportName = post.Sport?.SportName,
             LocationId = post.LocationId ?? Guid.Empty,
             LocationName = post.Location?.LocationName,
             LocationAddress = post.Location?.Address,

@@ -1,0 +1,239 @@
+@page "/admin/coach-subscription-plans"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.SystemOperations
+@using FitSocial.Client.Services.SystemOperations
+@inject ISystemOperationsService SystemOps
+@inject NavigationManager Navigation
+
+<PageTitle>Coach Subscription Plans - System Operations</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+            <Authorized>
+                <h2 class="view-title">Coach Subscription Plans</h2>
+                <p class="view-sub">Manage and monitor coach subscription plans across the FitSocial platform.</p>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="auth-alert error"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+                }
+
+                <!-- Stats -->
+                <div class="stats-grid" style="display:grid; grid-template-columns: repeat(2,1fr); gap:12px; margin:16px 0;">
+                    <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                        <small class="muted">Total Plans</small><div style="font-size:22px; font-weight:700;">@data?.TotalPlans</div>
+                    </div>
+                    <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                        <small class="muted">Active Plans</small><div style="font-size:22px; font-weight:700; color:#16a34a;">@data?.ActivePlansCount</div>
+                    </div>
+                </div>
+
+                <div class="toolbar" style="display:flex; gap:8px; align-items:center; margin:12px 0; flex-wrap:wrap;">
+                    <div class="search-wrap" style="flex:1; position:relative; min-width:180px;">
+                        <span class="search-icon" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8;"><AppIcon Name="search" /></span>
+                        <input value="@search" @oninput="OnSearchInput" class="toolbar-input" style="width:100%; padding-left:32px;" placeholder="Search currency or amount..." />
+                    </div>
+                    <select value="@statusFilter" @onchange="OnStatusFilterChanged" class="toolbar-select" style="min-width:140px;">
+                        <option value="">All statuses</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                    <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="LoadAsync" disabled="@isLoading"><span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh</button>
+                    <button type="button" class="row-btn add" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="ToggleCreateForm">+ Add New Plan</button>
+                </div>
+
+                @if (showCreateForm)
+                {
+                    <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="ToggleCreateForm">
+                        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
+                            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                                <div>
+                                    <h3 class="font-bold text-gray-900 text-lg leading-tight">Create Coach Plan</h3>
+                                    <p class="text-xs text-gray-400 mt-0.5">UC_37.1 • Price</p>
+                                </div>
+                                <button type="button" @onclick="ToggleCreateForm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
+                            </div>
+                            <div class="px-6 py-5 overflow-y-auto space-y-4 flex-1">
+                                    <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Amount (VND) *</label>
+                                    <input type="number" @bind="createAmount" class="toolbar-input" placeholder="e.g. 5000" min="0" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Description</label>
+                                    <input @bind="createDescription" class="toolbar-input" placeholder="e.g. Gói 3 tháng - Cơ bản" maxlength="500" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Image</label>
+                                    <UploadBox Label="Plan Image" UploadTitle="Upload Plan Image" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="createImageUrl" />
+                                </div>
+                                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                    <input type="checkbox" @bind="createIsActive" class="rounded" />
+                                    <span>Active</span>
+                                </label>
+                                @if (!string.IsNullOrEmpty(createError))
+                                {
+                                    <div class="auth-alert error"><AppIcon Name="warning" /><span>@createError</span></div>
+                                }
+                            </div>
+                            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
+                                <button type="button" @onclick="ToggleCreateForm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isCreating">Cancel</button>
+                                <button type="button" @onclick="HandleCreateAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-[#FF5500] hover:bg-[#E64A19] rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isCreating">
+                                    @if (isCreating) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Creating...</span> } else { <span>Create</span> }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @if (isLoading)
+                {
+                    <div class="py-3 text-center muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading subscription plans...</div>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Image</th>
+                                    <th>Description</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Subscribers</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (data?.Plans.Any() == true)
+                                {
+                                    @foreach (var p in data.Plans)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(p.ImageUrl))
+                                                {
+                                                    <img src="@p.ImageUrl" alt="Plan" style="width:48px; height:48px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb;" />
+                                                }
+                                                else
+                                                {
+                                                    <div style="width:48px; height:48px; border-radius:8px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; border:1px solid #e5e7eb;"><AppIcon Name="trophy" /></div>
+                                                }
+                                            </td>
+                                            <td><span title="@p.Description">@(string.IsNullOrWhiteSpace(p.Description) ? "—" : p.Description)</span></td>
+                                            <td><strong>@p.Amount.ToString("N0") @p.Currency</strong></td>
+                                            <td>
+                                                @if (p.IsActive) { <span class="status-badge active">Active</span> } else { <span class="status-badge locked">Inactive</span> }
+                                            </td>
+                                            <td><span class="role-badge">@p.SubscriberCount total</span> <small class="muted">(@p.ActiveSubscriberCount active)</small></td>
+                                            <td><small>@p.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small></td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr><td colspan="6" class="text-center muted py-4">No subscription plans found.</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                }
+            </Authorized>
+            <NotAuthorized>
+                <div class="auth-alert error"><AppIcon Name="warning" /><span>You do not have access.</span></div>
+            </NotAuthorized>
+        </AuthorizeView>
+
+@code {
+    private CoachSubscriptionPlansResponseDto? data;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string search = "";
+    private string statusFilter = "";
+    private System.Timers.Timer? debounce;
+
+    private bool showCreateForm = false;
+    private decimal? createAmount = null;
+    private string createCurrency = "VND";
+    private string? createImageUrl;
+    private string? createDescription;
+    private bool createIsActive = true;
+    private string? createError;
+    private bool isCreating = false;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            bool? isActive = statusFilter switch { "active" => true, "inactive" => false, _ => null };
+            var res = await SystemOps.GetCoachSubscriptionPlansAsync(isActive, string.IsNullOrWhiteSpace(search) ? null : search, 1, 20);
+            if (res.Success && res.Data != null) data = res.Data;
+            else errorMessage = res.Message ?? "Failed to load plans.";
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { isLoading = false; }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        search = e.Value?.ToString() ?? "";
+        debounce?.Stop(); debounce?.Dispose();
+        debounce = new System.Timers.Timer(400) { AutoReset = false };
+        debounce.Elapsed += async (_, _) => { await InvokeAsync(LoadAsync); await InvokeAsync(StateHasChanged); };
+        debounce.Start();
+    }
+
+    private async Task OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        statusFilter = e.Value?.ToString() ?? "";
+        await LoadAsync();
+    }
+
+    private void ToggleCreateForm()
+    {
+        showCreateForm = !showCreateForm;
+        createError = null;
+        if (!showCreateForm)
+        {
+            createAmount = null;
+            createCurrency = "VND";
+            createImageUrl = null;
+            createDescription = null;
+            createIsActive = true;
+        }
+    }
+
+    private async Task HandleCreateAsync()
+    {
+        createError = null;
+        if (createAmount == null) { createError = "Amount is required."; return; }
+        if (createAmount < 0) { createError = "Amount must be >= 0."; return; }
+        if (createImageUrl != null && createImageUrl.Length > 2048) { createError = "Image URL must not exceed 2048 characters."; return; }
+        if (createDescription != null && createDescription.Length > 500) { createError = "Description must not exceed 500 characters."; return; }
+        isCreating = true;
+        try
+        {
+            var req = new CreatePlanRequest
+            {
+                Amount = createAmount.Value,
+                Currency = createCurrency,
+                ImageUrl = string.IsNullOrWhiteSpace(createImageUrl) ? null : createImageUrl.Trim(),
+                Description = string.IsNullOrWhiteSpace(createDescription) ? null : createDescription.Trim(),
+                IsActive = createIsActive
+            };
+            var res = await SystemOps.CreatePlanAsync(req);
+            if (res.Success)
+            {
+                ToggleCreateForm();
+                await LoadAsync();
+            }
+            else createError = res.Message ?? "Failed to create plan.";
+        }
+        catch (Exception ex) { createError = ex.Message; }
+        finally { isCreating = false; }
+    }
+}

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace FitSocial.Application.DTOs.Posts;
 
@@ -7,9 +7,6 @@ public class CreatePostRequestDto
     [Required(ErrorMessage = "PostType is required.")]
     [MaxLength(50, ErrorMessage = "PostType must not exceed 50 characters.")]
     public string PostType { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Sport is required.")]
-    public Guid SportId { get; set; }
 
     [Required(ErrorMessage = "Location is required.")]
     public Guid LocationId { get; set; }

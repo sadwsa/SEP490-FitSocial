@@ -16,8 +16,6 @@ public class PostDto
 
     public string? Content { get; set; }
     public string PostType { get; set; } = string.Empty;
-    public Guid SportId { get; set; }
-    public string? SportName { get; set; }
     public Guid LocationId { get; set; }
     public string? LocationName { get; set; }
     public string? LocationAddress { get; set; }
@@ -54,7 +52,6 @@ public class CreatePostRequest
 {
     public string? Content { get; set; }
     public string PostType { get; set; } = "Normal";
-    public Guid SportId { get; set; }
     public Guid LocationId { get; set; }
     public List<CreatePostMediaItemDto> Media { get; set; } = new();
     public List<string> MediaUrls { get; set; } = new();
@@ -64,7 +61,6 @@ public class EditPostRequest
 {
     public string PostType { get; set; } = "Normal";
     public string Content { get; set; } = string.Empty;
-    public Guid SportId { get; set; }
     public Guid LocationId { get; set; }
     public List<Guid> RemoveMediaIds { get; set; } = new();
     public List<CreatePostMediaItemDto> NewMedia { get; set; } = new();
@@ -81,7 +77,6 @@ public class GetPostsQuery
     public int PageNumber { get; set; } = 1;
     public int PageSize { get; set; } = 10;
     public string? PostType { get; set; }
-    public Guid? SportId { get; set; }
     public Guid? LocationId { get; set; }
     public Guid? AuthorId { get; set; }
     public string? SearchTerm { get; set; }
@@ -115,3 +110,26 @@ public class SelectedMediaItem
     public long Size => Data.Length;
     public bool IsVideo { get; set; }
 }
+
+public class PostReactionResponse
+{
+    public Guid PostId { get; set; }
+    public bool IsLiked { get; set; }
+    public int LikeCount { get; set; }
+}
+
+public class CreatePostReportRequest
+{
+    public string Reason { get; set; } = string.Empty;
+}
+
+public class PostReportResponse
+{
+    public Guid ReportId { get; set; }
+    public Guid PostId { get; set; }
+    public Guid ReporterId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime? CreatedAt { get; set; }
+}
+

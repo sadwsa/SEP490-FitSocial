@@ -1077,6 +1077,12 @@ namespace FitSocial.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LocationID");
 
+                    b.Property<string>("PostType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("PostType");
+
                     b.Property<Guid?>("SportId")
                         .HasColumnType("uuid")
                         .HasColumnName("SportID");
@@ -1092,8 +1098,6 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasIndex("AuthorId");
 
                     b.HasIndex("LocationId");
-
-                    b.HasIndex("SportId");
 
                     b.ToTable("Posts");
                 });
@@ -1175,6 +1179,14 @@ namespace FitSocial.Infrastructure.Migrations
                     b.Property<string>("Currency")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<bool?>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -1269,16 +1281,19 @@ namespace FitSocial.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.HasKey("ReportId")
                         .HasName("Reports_pkey");
-
-                    b.HasIndex("ReportedPostId");
 
                     b.HasIndex("ReportedUserId");
 
                     b.HasIndex("ReporterId");
 
                     b.HasIndex("ResolvedBy");
+
+                    b.HasIndex(new[] { "ReportedPostId", "ReporterId", "Status" }, "IX_Reports_ReportedPostId_ReporterId_Status");
 
                     b.ToTable("Reports");
                 });
@@ -1571,6 +1586,9 @@ namespace FitSocial.Infrastructure.Migrations
                     b.Property<string>("RoleCode")
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");
+
+                    b.Property<int>("TokenVersion")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -2149,16 +2167,9 @@ namespace FitSocial.Infrastructure.Migrations
                         .HasForeignKey("LocationId")
                         .HasConstraintName("Posts_LocationID_fkey");
 
-                    b.HasOne("FitSocial.Domain.Entities.Sport", "Sport")
-                        .WithMany("Posts")
-                        .HasForeignKey("SportId")
-                        .HasConstraintName("Posts_SportID_fkey");
-
                     b.Navigation("Author");
 
                     b.Navigation("Location");
-
-                    b.Navigation("Sport");
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.PostInteraction", b =>
@@ -2495,11 +2506,6 @@ namespace FitSocial.Infrastructure.Migrations
             modelBuilder.Entity("FitSocial.Domain.Entities.Price", b =>
                 {
                     b.Navigation("CoachUpgrades");
-                });
-
-            modelBuilder.Entity("FitSocial.Domain.Entities.Sport", b =>
-                {
-                    b.Navigation("Posts");
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.TrainingPackage", b =>

@@ -43,7 +43,8 @@
             Coaches List
         </a>
 
-      
+
+
 
         <AuthorizeView Roles="ADMIN,STAFF">
             <Authorized>
@@ -93,7 +94,7 @@
             "packages" => rootSegment == "training-packages" || rootSegment == "workouts",
             "coaches" => rootSegment == "coaches",
             "messages" => rootSegment == "messages",
-            "profile" => rootSegment == "profile",
+            "profile" => rootSegment == "profile" && segments.Length == 1,
             "reports" => rootSegment == "reports" || (rootSegment == "admin" && relativePath.Contains("reports")),
            
             _ => false

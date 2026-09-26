@@ -265,7 +265,7 @@
                         </div>
                     </div>
 
-                    <a href="profile"
+                    <a href="/profile" @onclick="CloseProfileMenu"
                        class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -274,7 +274,7 @@
                         My Profile
                     </a>
 
-                    <a href="change-password"
+                    <a href="/change-password" @onclick="CloseProfileMenu"
                        class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -611,6 +611,11 @@
         {
             showMessageMenu = false;
         }
+    }
+
+    private void CloseProfileMenu()
+    {
+        showProfileMenu = false;
     }
 
     private async Task HandleInput(ChangeEventArgs e)

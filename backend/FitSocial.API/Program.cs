@@ -117,7 +117,7 @@ builder.Services.AddAuthentication(options =>
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(FitSocial.Application.DTOs.Common.ApiResponseDto<object>.Fail(
-                "Your login session has expired or is invalid. Please log in again.));
+                "Your login session has expired or is invalid. Please log in again."));
         },
         OnForbidden = async context =>
         {

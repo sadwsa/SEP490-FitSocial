@@ -117,14 +117,14 @@ builder.Services.AddAuthentication(options =>
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(FitSocial.Application.DTOs.Common.ApiResponseDto<object>.Fail(
-                "Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."));
+                "Your login session has expired or is invalid. Please log in again.));
         },
         OnForbidden = async context =>
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(FitSocial.Application.DTOs.Common.ApiResponseDto<object>.Fail(
-                "Bạn không có quyền thực hiện thao tác này."));
+                "You do not have permission to perform this action."));
         },
         OnTokenValidated = async context =>
         {

@@ -27,6 +27,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
         services.AddScoped<ISportService, SportService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
+        services.AddScoped<ICartService, CartService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<ITermsService, TermsService>();
         services.AddScoped<IEkycService, ViettelEkycService>();
@@ -80,6 +81,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPostReactionRepository, PostReactionRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
+        services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<IPostReportRepository, PostReportRepository>();
 

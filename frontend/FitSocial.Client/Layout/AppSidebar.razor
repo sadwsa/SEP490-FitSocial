@@ -94,6 +94,7 @@
             "packages" => rootSegment == "training-packages" || rootSegment == "workouts",
             "coaches" => rootSegment == "coaches",
             "messages" => rootSegment == "messages",
+            "cart" => rootSegment == "cart",
             "profile" => rootSegment == "profile" && segments.Length == 1,
             "reports" => rootSegment == "reports" || (rootSegment == "admin" && relativePath.Contains("reports")),
            

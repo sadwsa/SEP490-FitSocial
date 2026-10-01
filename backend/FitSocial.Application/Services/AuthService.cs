@@ -28,6 +28,7 @@ public class AuthService : IAuthService
     private readonly ICoachCertificateRepository _certificates;
     private readonly ICoachProfileRepository _coachProfiles;
     private readonly IEkycService _ekycService;
+    private readonly IEncryptionService _encryptionService;
 
     public AuthService(
         IUserRepository users,
@@ -44,7 +45,8 @@ public class AuthService : IAuthService
         ICoachEkycVerificationRepository ekycs,
         ICoachCertificateRepository certificates,
         ICoachProfileRepository coachProfiles,
-        IEkycService ekycService)
+        IEkycService ekycService,
+        IEncryptionService encryptionService)
     {
         _users = users;
         _unitOfWork = unitOfWork;
@@ -61,6 +63,7 @@ public class AuthService : IAuthService
         _certificates = certificates;
         _coachProfiles = coachProfiles;
         _ekycService = ekycService;
+        _encryptionService = encryptionService;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
@@ -371,7 +374,7 @@ public class AuthService : IAuthService
                 IsLocked = true,
                 CreatedAt = now,
                 UpdatedAt = now,
-                CoachProfileCoach = new CoachProfile { ApprovalStatus = "PENDING", UpdatedAt = now }
+                CoachProfileCoach = new CoachProfile { ApprovalStatus = "PENDING", Status = "ACTIVE", UpdatedAt = now }
             };
             user.CoachProfileCoach.CoachId = user.UserId;
             await _users.AddAsync(user);
@@ -395,6 +398,7 @@ public class AuthService : IAuthService
         }
 
         profile.ApprovalStatus = "PENDING";
+        profile.Status = "ACTIVE";
         profile.ExperienceYears = request.ExperienceYears;
         profile.Bio = string.IsNullOrWhiteSpace(request.Biography) ? null : request.Biography.Trim();
         var firstCertUrl = request.Certificates?.FirstOrDefault()?.CertificateUrl ?? request.CertificateUrl;
@@ -415,6 +419,7 @@ public class AuthService : IAuthService
         {
             EkycId = Guid.NewGuid(),
             CoachId = user.UserId,
+            EncryptedIdCardNumber = _encryptionService.Encrypt(ekycResult.Result.IdCardNumber, deterministic: true),
             IdCardNumber = ekycResult.Result.IdCardNumber,
             FullNameOnCard = ekycResult.Result.FullNameOnCard,
             DateOfBirthOnCard = ekycResult.Result.DateOfBirthOnCard,
@@ -438,6 +443,7 @@ public class AuthService : IAuthService
             DocumentType = ekycResult.Result.DocumentType,
             LivenessScore = ekycResult.Result.LivenessScore,
             FaceMatchConfidence = ekycResult.Result.FaceMatchConfidence,
+            EncryptedRawInformationJson = _encryptionService.Encrypt(ekycResult.Result.RawInformationJson ?? ""),
             RawInformationJson = ekycResult.Result.RawInformationJson,
             FrontCardUrl = request.FrontCardUrl!.Trim(),
             BackCardUrl = request.BackCardUrl!.Trim(),
@@ -458,7 +464,10 @@ public class AuthService : IAuthService
                     CoachId = user.UserId,
                     CertificateName = string.IsNullOrWhiteSpace(cert.CertificateName) ? null : cert.CertificateName.Trim(),
                     CertificateUrl = cert.CertificateUrl.Trim(),
+                    IssuedBy = cert.IssuedBy,
                     IssuedDate = cert.IssuedDate,
+                    ExpiryDate = cert.ExpiryDate,
+                    VerificationStatus = "PENDING",
                     CreatedAt = now
                 });
             }
@@ -471,6 +480,7 @@ public class AuthService : IAuthService
                 CoachId = user.UserId,
                 CertificateName = "Primary Certificate",
                 CertificateUrl = request.CertificateUrl.Trim(),
+                VerificationStatus = "PENDING",
                 CreatedAt = now
             });
         }

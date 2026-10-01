@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace FitSocial.Application.DTOs.Reports;
 
@@ -29,7 +30,9 @@ public class ReportListItemDto
     public string? ReportedPostAuthorName { get; set; }
 
     // Report Details
+    public string? Type { get; set; }
     public string? Reason { get; set; }
+    public string? Description { get; set; }
     public string? Status { get; set; }
 
     // Resolution Details
@@ -37,6 +40,28 @@ public class ReportListItemDto
     public string? ResolverName { get; set; }
     public DateTime? ResolvedAt { get; set; }
 
+    // Appeal Details
+    public string? AppealStatus { get; set; }
+    public string? AppealContent { get; set; }
+    public DateTime? AppealedAt { get; set; }
+    public Guid? AppealReviewedBy { get; set; }
+    public string? AppealResolverName { get; set; }
+    public DateTime? AppealReviewedAt { get; set; }
+    public string? AppealReviewNote { get; set; }
+    public DateTime? NotifiedReportedUserAt { get; set; }
+
+    // Attached Evidence Media
+    public List<ReportMediaItemDto> Media { get; set; } = new();
+
     // Timestamp
     public DateTime? CreatedAt { get; set; }
+}
+
+public class ReportMediaItemDto
+{
+    public Guid MediaId { get; set; }
+    public string? MediaUrl { get; set; }
+    public string? MediaType { get; set; }
+    public string? MediaFor { get; set; }
+    public short? SortOrder { get; set; }
 }

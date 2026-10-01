@@ -19,9 +19,9 @@ public partial class Report
             ReportedPostId = postId,
             ReportedUserId = reportedAuthorId,
             Reason = reason.Trim(),
+            Type = "POST",
             Status = ReportStatus.Pending.ToString(),
-            CreatedAt = now,
-            UpdatedAt = now
+            CreatedAt = now
         };
     }
 

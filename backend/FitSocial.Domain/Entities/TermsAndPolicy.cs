@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace FitSocial.Domain.Entities;
 
@@ -17,4 +18,6 @@ public partial class TermsAndPolicy
     public DateTime? CreatedAt { get; set; }
 
     public virtual ICollection<UserAgreement> UserAgreements { get; set; } = new List<UserAgreement>();
+
+    public virtual ICollection<RefundRequest> RefundRequests { get; set; } = new List<RefundRequest>();
 }

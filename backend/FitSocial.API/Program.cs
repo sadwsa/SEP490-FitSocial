@@ -1,4 +1,4 @@
-﻿using FitSocial.Application.Interfaces;
+using FitSocial.Application.Interfaces;
 using FitSocial.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
@@ -174,6 +174,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "FitSocial.API", Version = "v1" });
+    c.CustomSchemaIds(type => type.FullName?.Replace("+", ".") ?? type.Name);
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
@@ -223,7 +224,7 @@ app.UseRateLimiter();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 
-// Ensure PostType column exists in PostgreSQL database
+// Ensure PostType column and Roles table exist in PostgreSQL database safely
 using (var scope = app.Services.CreateScope())
 {
     try
@@ -231,8 +232,66 @@ using (var scope = app.Services.CreateScope())
         var dbContext = scope.ServiceProvider.GetRequiredService<FitSocial.Infrastructure.Data.FitSocialDbContext>();
         Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(
             dbContext.Database,
-            @"ALTER TABLE ""Posts"" ADD COLUMN IF NOT EXISTS ""PostType"" VARCHAR(50) DEFAULT 'FEED';
-              UPDATE ""Posts"" SET ""PostType"" = 'FEED' WHERE ""PostType"" IS NULL;"
+            @"DO $$
+            DECLARE
+                v_price_id UUID;
+            BEGIN
+                IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'posts') THEN
+                    ALTER TABLE posts ADD COLUMN IF NOT EXISTS posttype VARCHAR(50) DEFAULT 'FEED';
+                    UPDATE posts SET posttype = 'FEED' WHERE posttype IS NULL;
+                ELSIF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Posts') THEN
+                    ALTER TABLE ""Posts"" ADD COLUMN IF NOT EXISTS ""posttype"" VARCHAR(50) DEFAULT 'FEED';
+                    UPDATE ""Posts"" SET ""posttype"" = 'FEED' WHERE ""posttype"" IS NULL;
+                END IF;
+
+                CREATE TABLE IF NOT EXISTS roles (
+                    rolecode VARCHAR(8) PRIMARY KEY,
+                    rolename VARCHAR(50) NOT NULL
+                );
+
+                INSERT INTO roles (rolecode, rolename) VALUES
+                ('ADMIN', 'Administrator'),
+                ('STAFF', 'Staff'),
+                ('COACH', 'Coach'),
+                ('TRAINEE', 'Trainee')
+                ON CONFLICT (rolecode) DO NOTHING;
+
+                CREATE TABLE IF NOT EXISTS termsandpolicies (
+                    termid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    version VARCHAR(50) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT NOT NULL,
+                    effectivedate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                INSERT INTO termsandpolicies (termid, version, title, content, effectivedate)
+                SELECT 
+                    gen_random_uuid(),
+                    'v1.0',
+                    'FitSocial Terms of Service & Privacy Policy',
+                    'Welcome to FitSocial sports platform. By accessing or using our services, you agree to be bound by these Terms of Service and Privacy Policy.',
+                    CURRENT_TIMESTAMP
+                WHERE NOT EXISTS (SELECT 1 FROM termsandpolicies);
+
+                IF NOT EXISTS (SELECT 1 FROM coachsubscriptionplans) THEN
+                    v_price_id := gen_random_uuid();
+                    INSERT INTO price (priceid, amount, createdat)
+                    VALUES (v_price_id, 299000, CURRENT_TIMESTAMP)
+                    ON CONFLICT DO NOTHING;
+
+                    INSERT INTO coachsubscriptionplans (
+                        coachsubscriptionplansid, priceid, amount, currency,
+                        description, subscriptionduration, trainingpackageduration,
+                        isactive, createdat
+                    )
+                    VALUES (
+                        gen_random_uuid(), v_price_id, 299000, 'VND',
+                        'Standard Coach Monthly Subscription Plan', 30, 30,
+                        TRUE, CURRENT_TIMESTAMP
+                    );
+                END IF;
+            END $$;"
         );
     }
     catch (Exception ex)

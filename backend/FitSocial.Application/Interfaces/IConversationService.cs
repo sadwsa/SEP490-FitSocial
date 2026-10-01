@@ -14,4 +14,5 @@ public interface IConversationService
     Task<ApiResponseDto<bool>> DeleteConversationAsync(Guid conversationId, Guid currentUserId);
     Task<ApiResponseDto<bool>> BlockUserAsync(Guid conversationId, Guid currentUserId);
     Task<ApiResponseDto<bool>> UnblockUserAsync(Guid conversationId, Guid currentUserId);
+    Task<ApiResponseDto<ConversationDetailDto>> GetOrCreateDirectConversationAsync(Guid currentUserId, Guid targetUserId);
 }

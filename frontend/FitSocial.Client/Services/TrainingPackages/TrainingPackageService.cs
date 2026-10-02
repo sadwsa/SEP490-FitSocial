@@ -32,8 +32,12 @@ public class TrainingPackageService : ITrainingPackageService
         return await _apiClient.PostAsync<CreateTrainingPackageDto, TrainingPackageResponseDto>(BaseEndpoint, dto);
     }
     public async Task<ApiResponse<bool>> DeletePackageAsync(Guid id)
-{
-    return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/{id}");
-}
+    {
+        return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/{id}");
+    }
 
+    public async Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPackagesByCoachIdAsync(Guid coachId)
+    {
+        return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}?coachId={coachId}");
+    }
 }

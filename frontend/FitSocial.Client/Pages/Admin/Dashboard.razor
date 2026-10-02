@@ -33,6 +33,15 @@
                 <div><strong>Coach Subscription Plans</strong><small>View and manage price plans</small></div>
                 <span>→</span>
             </button>
+            <AuthorizeView Roles="ADMIN" Context="adminContext">
+                <Authorized>
+                    <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/staff")'>
+                        <AppIcon Name="person" />
+                        <div><strong>Staff accounts</strong><small>View staff directory</small></div>
+                        <span>→</span>
+                    </button>
+                </Authorized>
+            </AuthorizeView>
         </div>
     </Authorized>
     <NotAuthorized>

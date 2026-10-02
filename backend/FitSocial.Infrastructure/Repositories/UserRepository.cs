@@ -1,3 +1,4 @@
+using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Infrastructure.Data;
@@ -81,6 +82,16 @@ public class UserRepository : Repository<User>, IUserRepository
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);
+    }
+
+    public Task<(List<User> Items, int TotalCount)> ListStaffForAdminAsync(
+        string? search = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        return ListUsersForAdminAsync(search, RoleConstants.Staff, isLocked, pageNumber, pageSize, cancellationToken);
     }
 
     public Task<User?> FindWithCoachProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default)

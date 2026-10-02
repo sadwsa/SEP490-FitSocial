@@ -82,6 +82,33 @@ public class ReportsController : ControllerBase
     }
 
     /// <summary>
+    /// Process a violation report with an action: WARN, BLOCK, LOCK, REJECT, or DISMISS (Admin/Staff).
+    /// </summary>
+    [HttpPost("{id:guid}/process")]
+    [Authorize(Roles = $"{RoleConstants.Admin},{RoleConstants.Staff}")]
+    [ProducesResponseType(typeof(ApiResponseDto<ReportListItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ProcessReport(Guid id, [FromBody] ProcessViolationReportRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(userIdStr, out var staffId))
+        {
+            return Unauthorized(ApiResponseDto<ReportListItemDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _reportService.ProcessViolationReportAsync(id, staffId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+
+    /// <summary>
     /// Submit an appeal against a report (by reported user).
     /// </summary>
     [HttpPost("{id:guid}/appeal")]

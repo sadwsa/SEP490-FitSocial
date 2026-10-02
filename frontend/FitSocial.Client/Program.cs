@@ -52,6 +52,7 @@ builder.Services.AddScoped<IPaymentService, PaymentApiService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<INotificationHubClient, NotificationHubClient>();
 builder.Services.AddScoped<IChatHubClient, ChatHubClient>();
+builder.Services.AddScoped<IPostHubClient, PostHubClient>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ITrainingPackageService, TrainingPackageService>();

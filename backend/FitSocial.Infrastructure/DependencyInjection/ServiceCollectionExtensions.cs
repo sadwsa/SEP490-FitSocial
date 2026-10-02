@@ -88,7 +88,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICoachSubscriptionPlanRepository, CoachSubscriptionPlanRepository>();
         services.AddScoped<IRefundRequestRepository, RefundRequestRepository>();
         services.AddScoped<IPaymentGatewayConfigRepository, PaymentGatewayConfigRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
 
         return services;
+
     }
 }

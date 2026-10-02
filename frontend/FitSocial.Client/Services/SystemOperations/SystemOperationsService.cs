@@ -12,6 +12,19 @@ public class CreatePlanRequest
     public bool IsActive { get; set; } = true;
     public string? ImageUrl { get; set; }
     public string? Description { get; set; }
+    public int? SubscriptionDuration { get; set; }
+    public int? TrainingPackageDuration { get; set; }
+}
+
+public class UpdatePlanRequest
+{
+    public decimal? Amount { get; set; }
+    public string? Currency { get; set; } = "VND";
+    public string? ImageUrl { get; set; }
+    public string? Description { get; set; }
+    public int? SubscriptionDuration { get; set; }
+    public int? TrainingPackageDuration { get; set; }
+    public bool? IsActive { get; set; }
 }
 
 public interface ISystemOperationsService
@@ -19,6 +32,8 @@ public interface ISystemOperationsService
     Task<ApiResponse<CoachSubscriptionPlansResponseDto>> GetCoachSubscriptionPlansAsync(bool? isActive = null, string? search = null, int page = 1, int pageSize = 20);
     Task<ApiResponse<CoachSubscriptionPlanDto>> GetPlanByIdAsync(Guid priceId);
     Task<ApiResponse<CoachSubscriptionPlanDto>> CreatePlanAsync(CreatePlanRequest request);
+    Task<ApiResponse<CoachSubscriptionPlanDto>> UpdatePlanAsync(Guid planId, UpdatePlanRequest request);
+    Task<ApiResponse<bool>> DeletePlanAsync(Guid planId);
     Task<ApiResponse<List<CoachSubscriptionPlanDto>>> GetActivePlansAsync();
 }
 
@@ -82,6 +97,40 @@ public class SystemOperationsService : ISystemOperationsService
         catch (Exception ex)
         {
             return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<CoachSubscriptionPlanDto>> UpdatePlanAsync(Guid planId, UpdatePlanRequest request)
+    {
+        try
+        {
+            var resp = await _http.PutAsJsonAsync($"system-operations/coach-subscription-plans/{planId}", request);
+            var raw = await resp.Content.ReadAsStringAsync();
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var wrapped = JsonSerializer.Deserialize<ApiResponse<CoachSubscriptionPlanDto>>(raw, opts);
+            if (wrapped != null) return wrapped;
+            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = "Failed to parse response." };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> DeletePlanAsync(Guid planId)
+    {
+        try
+        {
+            var resp = await _http.DeleteAsync($"system-operations/coach-subscription-plans/{planId}");
+            var raw = await resp.Content.ReadAsStringAsync();
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var wrapped = JsonSerializer.Deserialize<ApiResponse<bool>>(raw, opts);
+            if (wrapped != null) return wrapped;
+            return new ApiResponse<bool> { Success = false, Message = "Failed to parse response." };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool> { Success = false, Message = ex.Message };
         }
     }
 

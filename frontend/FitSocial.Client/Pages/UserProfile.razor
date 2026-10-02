@@ -7,11 +7,28 @@
 <PageTitle>@(profile?.FullName != null ? $"{profile.FullName} - FitSocial" : "User Profile - FitSocial")</PageTitle>
 
 <div class="min-h-screen bg-gray-100 text-gray-800">
+    <!-- Floating Success Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-emerald-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <span>@toastSuccessMessage</span>
+            <button type="button" @onclick="() => toastSuccessMessage = null"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer">
+                &times;
+            </button>
+        </div>
+    }
+
     <!-- Header / Navigation Bar -->
     <AppHeader SearchTerm="@headerSearchTerm" OnSearchInput="HandleHeaderSearchInput"
                OnSearchKeyUp="HandleHeaderSearchKeyUp" OnSearch="ExecuteHeaderSearch" OnClearSearch="ClearHeaderSearch"
                UserName="@headerUserName" UserInitials="@headerUserInitials" UserRole="@headerUserRole"
-               UserAvatarUrl="@headerUserAvatarUrl" OnLogout="HandleLogout" />
+               UserAvatarUrl="@headerUserAvatarUrl" CartCount="@headerCartCount" OnLogout="HandleLogout" />
 
     <style>
         @@media (min-width: 1024px) {

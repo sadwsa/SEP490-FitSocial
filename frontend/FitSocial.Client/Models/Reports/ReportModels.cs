@@ -28,8 +28,17 @@ public class ReportListItemDto
     public Guid? ReportedPostAuthorId { get; set; }
     public string? ReportedPostAuthorName { get; set; }
 
+    // Reported User Moderation & Status Details
+    public string? ReportedUserRole { get; set; }
+    public int ReportedUserViolationCount { get; set; }
+    public bool? ReportedUserIsLocked { get; set; }
+    public bool? HasSoldTrainingPackage { get; set; }
+    public System.Collections.Generic.List<string> AvailableActions { get; set; } = new();
+
     // Report Details
+    public string? Type { get; set; }
     public string? Reason { get; set; }
+    public string? Description { get; set; }
     public string? Status { get; set; }
 
     // Resolution Details
@@ -40,3 +49,11 @@ public class ReportListItemDto
     // Timestamp
     public DateTime? CreatedAt { get; set; }
 }
+
+public class ProcessViolationReportRequest
+{
+    public string Action { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+    public string? Note { get; set; }
+}
+

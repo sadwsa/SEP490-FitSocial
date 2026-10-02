@@ -18,6 +18,11 @@ public interface IUserService
         bool? isLocked = null,
         int pageNumber = 1,
         int pageSize = 10);
+    Task<ApiResponse<PagedResult<AdminUserDto>>> GetStaffUsersAsync(
+        string? search = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
     Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
     Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
@@ -104,6 +109,57 @@ public class UserService : IUserService
             {
                 Success = false,
                 Message = $"Unable to load user accounts (Status: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<PagedResult<AdminUserDto>>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<PagedResult<AdminUserDto>>> GetStaffUsersAsync(
+        string? search = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var query = new List<string>();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                query.Add($"search={Uri.EscapeDataString(search.Trim())}");
+            }
+            if (isLocked.HasValue)
+            {
+                query.Add($"isLocked={isLocked.Value.ToString().ToLowerInvariant()}");
+            }
+            query.Add($"pageNumber={pageNumber}");
+            query.Add($"pageSize={pageSize}");
+
+            var endpoint = "admin/staff";
+            if (query.Count > 0)
+            {
+                endpoint += "?" + string.Join("&", query);
+            }
+
+            var response = await _httpClient.GetAsync(endpoint);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResult<AdminUserDto>>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                result.Data ??= new PagedResult<AdminUserDto>();
+                return result;
+            }
+
+            return result ?? new ApiResponse<PagedResult<AdminUserDto>>
+            {
+                Success = false,
+                Message = $"Unable to load staff accounts (Status: {response.StatusCode})"
             };
         }
         catch (Exception ex)

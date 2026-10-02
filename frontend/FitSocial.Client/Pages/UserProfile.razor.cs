@@ -35,6 +35,8 @@ public partial class UserProfile : ComponentBase, IDisposable
     [Inject] private ITrainingPackageService PackageService { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private FitSocial.Client.Services.TrainingPackages.ITrainingPackageService PackageService { get; set; } = default!;
+    [Inject] private FitSocial.Client.Services.Cart.ICartService CartService { get; set; } = default!;
 
     private OtherUserProfileModel? profile;
     private bool isLoading = true;
@@ -51,6 +53,7 @@ public partial class UserProfile : ComponentBase, IDisposable
     private string headerUserInitials = "U";
     private string headerUserRole = "Trainee";
     private string? headerUserAvatarUrl;
+    private int headerCartCount = 0;
     private bool viewerIsCoach;
     private bool viewerIsTrainee = true;
 
@@ -121,6 +124,24 @@ public partial class UserProfile : ComponentBase, IDisposable
             headerUserInitials = "U";
             headerUserAvatarUrl = null;
         }
+
+        await LoadCartCountAsync();
+    }
+
+    private async Task LoadCartCountAsync()
+    {
+        try
+        {
+            var res = await CartService.GetCartCountAsync();
+            if (res.Success)
+            {
+                headerCartCount = res.Data;
+            }
+        }
+        catch
+        {
+            // Ignore cart count errors
+        }
     }
 
     private async Task LoadProfileAsync()
@@ -155,6 +176,10 @@ public partial class UserProfile : ComponentBase, IDisposable
             if (response.Success && response.Data != null)
             {
                 profile = response.Data;
+                if (profile.IsCoach)
+                {
+                    await LoadCoachPackagesAsync(targetUserId);
+                }
             }
             else
             {

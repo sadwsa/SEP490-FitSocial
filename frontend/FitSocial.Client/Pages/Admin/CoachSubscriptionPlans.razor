@@ -17,6 +17,10 @@
                 {
                     <div class="auth-alert error"><AppIcon Name="warning" /><span>@errorMessage</span></div>
                 }
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div class="auth-alert success"><AppIcon Name="check" /><span>@successMessage</span></div>
+                }
 
                 <!-- Stats -->
                 <div class="stats-grid" style="display:grid; grid-template-columns: repeat(2,1fr); gap:12px; margin:16px 0;">
@@ -66,6 +70,16 @@
                                     <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Image</label>
                                     <UploadBox Label="Plan Image" UploadTitle="Upload Plan Image" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="createImageUrl" />
                                 </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Duration (months)</label>
+                                        <input type="number" @bind="createDurationMonths" class="toolbar-input" placeholder="e.g. 12" min="1" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Training days</label>
+                                        <input type="number" @bind="createTrainingDays" class="toolbar-input" placeholder="e.g. 365" min="0" />
+                                    </div>
+                                </div>
                                 <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
                                     <input type="checkbox" @bind="createIsActive" class="rounded" />
                                     <span>Active</span>
@@ -85,6 +99,86 @@
                     </div>
                 }
 
+                @if (showEditForm)
+                {
+                    <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="CloseEditForm">
+                        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
+                            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                                <div>
+                                    <h3 class="font-bold text-gray-900 text-lg leading-tight">Edit Coach Plan</h3>
+                                </div>
+                                <button type="button" @onclick="CloseEditForm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
+                            </div>
+                            <div class="px-6 py-5 overflow-y-auto space-y-4 flex-1">
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Amount (VND) *</label>
+                                    <input type="number" @bind="editAmount" class="toolbar-input" placeholder="e.g. 5000" min="0" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Description *</label>
+                                    <input @bind="editDescription" class="toolbar-input" placeholder="e.g. Gói 3 tháng - Cơ bản" maxlength="500" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Image</label>
+                                    <UploadBox Label="Plan Image" UploadTitle="Upload Plan Image" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="editImageUrl" />
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Duration (months)</label>
+                                        <input type="number" @bind="editDurationMonths" class="toolbar-input" placeholder="e.g. 12" min="1" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Training days</label>
+                                        <input type="number" @bind="editTrainingDays" class="toolbar-input" placeholder="e.g. 365" min="0" />
+                                    </div>
+                                </div>
+                                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                    <input type="checkbox" @bind="editIsActive" class="rounded" />
+                                    <span>Active</span>
+                                </label>
+                                @if (!string.IsNullOrEmpty(editError))
+                                {
+                                    <div class="auth-alert error"><AppIcon Name="warning" /><span>@editError</span></div>
+                                }
+                            </div>
+                            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
+                                <button type="button" @onclick="CloseEditForm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isSaving">Cancel</button>
+                                <button type="button" @onclick="HandleUpdateAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-[#FF5500] hover:bg-[#E64A19] rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isSaving">
+                                    @if (isSaving) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Saving...</span> } else { <span>Save</span> }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @if (showDeleteConfirm)
+                {
+                    <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="CloseDeleteConfirm">
+                        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
+                            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                                <div>
+                                    <h3 class="font-bold text-gray-900 text-lg leading-tight">Delete Coach Plan</h3>
+                                </div>
+                                <button type="button" @onclick="CloseDeleteConfirm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
+                            </div>
+                            <div class="px-6 py-5">
+                                <p class="text-sm text-gray-700">Are you sure you want to delete <strong>@deletePlanDescription</strong> (@deletePlanAmount)?</p>
+                                <p class="text-xs text-gray-400 mt-2">Plans with linked subscriptions or billing history are deactivated instead of deleted.</p>
+                                @if (!string.IsNullOrEmpty(deleteError))
+                                {
+                                    <div class="auth-alert error mt-3"><AppIcon Name="warning" /><span>@deleteError</span></div>
+                                }
+                            </div>
+                            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
+                                <button type="button" @onclick="CloseDeleteConfirm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isDeleting">Cancel</button>
+                                <button type="button" @onclick="HandleDeleteAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isDeleting">
+                                    @if (isDeleting) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Deleting...</span> } else { <span>Delete</span> }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+
                 @if (isLoading)
                 {
                     <div class="py-3 text-center muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading subscription plans...</div>
@@ -98,9 +192,12 @@
                                     <th>Image</th>
                                     <th>Description</th>
                                     <th>Amount</th>
-                                    <th>Status</th>
+                                    <th>Duration</th>
+                                    <th>Training</th>
                                     <th>Subscribers</th>
                                     <th>Created</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -121,17 +218,23 @@
                                             </td>
                                             <td><span title="@p.Description">@(string.IsNullOrWhiteSpace(p.Description) ? "—" : p.Description)</span></td>
                                             <td><strong>@((p.Amount ?? 0).ToString("N0")) @(p.Currency ?? "VND")</strong></td>
+                                    <td><small class="muted">@(p.SubscriptionDuration != null ? $"{p.SubscriptionDuration} months" : "—")</small></td>
+                                            <td><small class="muted">@(p.TrainingPackageDuration != null ? $"{p.TrainingPackageDuration} days" : "—")</small></td>
+                                            <td><span class="role-badge">@p.SubscriberCount total</span> <small class="muted">(@p.ActiveSubscriberCount active)</small></td>
+                                            <td><small>@(p.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</small></td>
                                             <td>
                                                 @if (p.IsActive == true) { <span class="status-badge active">Active</span> } else { <span class="status-badge locked">Inactive</span> }
                                             </td>
-                                            <td><span class="role-badge">@p.SubscriberCount total</span> <small class="muted">(@p.ActiveSubscriberCount active)</small></td>
-                                            <td><small>@(p.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</small></td>
+                                            <td class="text-end whitespace-nowrap">
+                                                <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="() => OpenEditForm(p)"><AppIcon Name="pencil" /> Edit</button>
+                                                <button type="button" class="row-btn lock" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="() => OpenDeleteConfirm(p)"><AppIcon Name="trash" /> Delete</button>
+                                            </td>
                                         </tr>
                                     }
                                 }
                                 else
                                 {
-                                    <tr><td colspan="6" class="text-center muted py-4">No subscription plans found.</td></tr>
+                                    <tr><td colspan="9" class="text-center muted py-4">No subscription plans found.</td></tr>
                                 }
                             </tbody>
                         </table>
@@ -152,14 +255,36 @@
     private string statusFilter = "";
     private System.Timers.Timer? debounce;
 
+    private string? successMessage;
+
     private bool showCreateForm = false;
     private decimal? createAmount = null;
     private string createCurrency = "VND";
     private string? createImageUrl;
     private string? createDescription;
+    private int? createDurationMonths;
+    private int? createTrainingDays;
     private bool createIsActive = true;
     private string? createError;
     private bool isCreating = false;
+
+    private bool showDeleteConfirm = false;
+    private Guid deletePlanId = Guid.Empty;
+    private string? deletePlanDescription;
+    private string? deletePlanAmount;
+    private string? deleteError;
+    private bool isDeleting = false;
+
+    private bool showEditForm = false;
+    private Guid editPlanId = Guid.Empty;
+    private decimal? editAmount = null;
+    private string? editDescription;
+    private string? editImageUrl;
+    private int? editDurationMonths;
+    private int? editTrainingDays;
+    private bool editIsActive = true;
+    private string? editError;
+    private bool isSaving = false;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -167,6 +292,7 @@
     {
         isLoading = true;
         errorMessage = null;
+        successMessage = null;
         try
         {
             bool? isActive = statusFilter switch { "active" => true, "inactive" => false, _ => null };
@@ -203,6 +329,8 @@
             createCurrency = "VND";
             createImageUrl = null;
             createDescription = null;
+            createDurationMonths = null;
+            createTrainingDays = null;
             createIsActive = true;
         }
     }
@@ -223,6 +351,8 @@
                 Currency = createCurrency,
                 ImageUrl = string.IsNullOrWhiteSpace(createImageUrl) ? null : createImageUrl.Trim(),
                 Description = string.IsNullOrWhiteSpace(createDescription) ? null : createDescription.Trim(),
+                SubscriptionDuration = createDurationMonths,
+                TrainingPackageDuration = createTrainingDays,
                 IsActive = createIsActive
             };
             var res = await SystemOps.CreatePlanAsync(req);
@@ -230,10 +360,102 @@
             {
                 ToggleCreateForm();
                 await LoadAsync();
+                successMessage = res.Message ?? "Subscription plan created successfully.";
             }
             else createError = res.Message ?? "Failed to create plan.";
         }
         catch (Exception ex) { createError = ex.Message; }
         finally { isCreating = false; }
+    }
+
+    private void OpenDeleteConfirm(CoachSubscriptionPlanDto plan)
+    {
+        deletePlanId = plan.PlanId;
+        deletePlanDescription = string.IsNullOrWhiteSpace(plan.Description) ? "this plan" : plan.Description;
+        deletePlanAmount = $"{(plan.Amount ?? 0).ToString("N0")} {(plan.Currency ?? "VND")}";
+        deleteError = null;
+        showDeleteConfirm = true;
+    }
+
+    private void CloseDeleteConfirm()
+    {
+        showDeleteConfirm = false;
+        deletePlanId = Guid.Empty;
+        deleteError = null;
+    }
+
+    private async Task HandleDeleteAsync()
+    {
+        deleteError = null;
+        if (deletePlanId == Guid.Empty) { deleteError = "No plan selected."; return; }
+        isDeleting = true;
+        try
+        {
+            var res = await SystemOps.DeletePlanAsync(deletePlanId);
+            if (res.Success)
+            {
+                CloseDeleteConfirm();
+                await LoadAsync();
+                successMessage = res.Message ?? "Subscription plan deleted successfully.";
+            }
+            else deleteError = res.Message ?? "Failed to delete plan.";
+        }
+        catch (Exception ex) { deleteError = ex.Message; }
+        finally { isDeleting = false; }
+    }
+
+    private void OpenEditForm(CoachSubscriptionPlanDto plan)
+    {
+        editPlanId = plan.PlanId;
+        editAmount = plan.Amount;
+        editDescription = plan.Description;
+        editImageUrl = plan.ImageUrl;
+        editDurationMonths = plan.SubscriptionDuration;
+        editTrainingDays = plan.TrainingPackageDuration;
+        editIsActive = plan.IsActive == true;
+        editError = null;
+        showEditForm = true;
+    }
+
+    private void CloseEditForm()
+    {
+        showEditForm = false;
+        editPlanId = Guid.Empty;
+        editError = null;
+    }
+
+    private async Task HandleUpdateAsync()
+    {
+        editError = null;
+        if (editPlanId == Guid.Empty) { editError = "No plan selected."; return; }
+        if (editAmount == null) { editError = "Amount is required."; return; }
+        if (editAmount < 0) { editError = "Amount must be >= 0."; return; }
+        if (string.IsNullOrWhiteSpace(editDescription)) { editError = "Description is required."; return; }
+        if (editDescription!.Length > 500) { editError = "Description must not exceed 500 characters."; return; }
+        if (editImageUrl != null && editImageUrl.Length > 2048) { editError = "Image URL must not exceed 2048 characters."; return; }
+        isSaving = true;
+        try
+        {
+            var req = new UpdatePlanRequest
+            {
+                Amount = editAmount.Value,
+                Currency = "VND",
+                ImageUrl = string.IsNullOrWhiteSpace(editImageUrl) ? null : editImageUrl.Trim(),
+                Description = editDescription.Trim(),
+                SubscriptionDuration = editDurationMonths,
+                TrainingPackageDuration = editTrainingDays,
+                IsActive = editIsActive
+            };
+            var res = await SystemOps.UpdatePlanAsync(editPlanId, req);
+            if (res.Success)
+            {
+                CloseEditForm();
+                await LoadAsync();
+                successMessage = res.Message ?? "Subscription plan updated successfully.";
+            }
+            else editError = res.Message ?? "Failed to update plan.";
+        }
+        catch (Exception ex) { editError = ex.Message; }
+        finally { isSaving = false; }
     }
 }

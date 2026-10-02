@@ -68,6 +68,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
 builder.Services.AddHostedService<FitSocial.API.Services.EkycRetentionService>();
+builder.Services.AddScoped<IPostRealtimeNotifier, PostRealtimeNotifier>();
 
 // Cloudinary Singleton service registration (reuse HttpClient / SocketsHttpHandler connection pool)
 var cloudName = builder.Configuration["Cloudinary:CloudName"];
@@ -224,5 +225,6 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<PostHub>("/hubs/posts");
 
 app.Run();

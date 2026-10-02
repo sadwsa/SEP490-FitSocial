@@ -25,6 +25,11 @@ public class Repository<T> : IRepository<T> where T : class
         await DbSet.AddAsync(entity, cancellationToken);
     }
 
+    public virtual void Update(T entity)
+    {
+        DbSet.Update(entity);
+    }
+
     public virtual void Remove(T entity)
     {
         DbSet.Remove(entity);

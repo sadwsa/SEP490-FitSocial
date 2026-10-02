@@ -67,6 +67,8 @@ builder.Services.AddApplicationServices();
 builder.Services.AddHttpClient();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
+builder.Services.AddHostedService<FitSocial.API.Services.EkycRetentionService>();
+builder.Services.AddScoped<IPostRealtimeNotifier, PostRealtimeNotifier>();
 
 // Cloudinary Singleton service registration (reuse HttpClient / SocketsHttpHandler connection pool)
 var cloudName = builder.Configuration["Cloudinary:CloudName"];
@@ -223,140 +225,6 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
-
-// Ensure PostType column and Roles table exist in PostgreSQL database safely
-using (var scope = app.Services.CreateScope())
-{
-    try
-    {
-        var dbContext = scope.ServiceProvider.GetRequiredService<FitSocial.Infrastructure.Data.FitSocialDbContext>();
-        Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(
-            dbContext.Database,
-            @"DO $$
-            DECLARE
-                v_csp_table text := NULL;
-                v_price_table text := NULL;
-                v_has_plans boolean := false;
-                v_price_id UUID;
-            BEGIN
-                IF to_regclass('public.posts') IS NOT NULL THEN
-                    ALTER TABLE posts ADD COLUMN IF NOT EXISTS posttype VARCHAR(50) DEFAULT 'FEED';
-                    UPDATE posts SET posttype = 'FEED' WHERE posttype IS NULL;
-                ELSIF to_regclass('public.""Posts""') IS NOT NULL THEN
-                    ALTER TABLE ""Posts"" ADD COLUMN IF NOT EXISTS ""posttype"" VARCHAR(50) DEFAULT 'FEED';
-                    UPDATE ""Posts"" SET ""posttype"" = 'FEED' WHERE ""posttype"" IS NULL;
-                END IF;
-
-                IF to_regclass('public.""Roles""') IS NOT NULL THEN
-                    EXECUTE 'INSERT INTO ""Roles"" (""RoleCode"", ""RoleName"") VALUES
-                        (''ADMIN'', ''Administrator''),
-                        (''STAFF'', ''Staff''),
-                        (''COACH'', ''Coach''),
-                        (''TRAINEE'', ''Trainee'')
-                        ON CONFLICT (""RoleCode"") DO NOTHING';
-                ELSIF to_regclass('public.roles') IS NOT NULL THEN
-                    EXECUTE 'INSERT INTO roles (rolecode, rolename) VALUES
-                        (''ADMIN'', ''Administrator''),
-                        (''STAFF'', ''Staff''),
-                        (''COACH'', ''Coach''),
-                        (''TRAINEE'', ''Trainee'')
-                        ON CONFLICT (rolecode) DO NOTHING';
-                ELSE
-                    CREATE TABLE IF NOT EXISTS roles (
-                        rolecode VARCHAR(8) PRIMARY KEY,
-                        rolename VARCHAR(50) NOT NULL
-                    );
-                    INSERT INTO roles (rolecode, rolename) VALUES
-                        ('ADMIN', 'Administrator'),
-                        ('STAFF', 'Staff'),
-                        ('COACH', 'Coach'),
-                        ('TRAINEE', 'Trainee')
-                        ON CONFLICT (rolecode) DO NOTHING;
-                END IF;
-
-                IF to_regclass('public.""TermsAndPolicies""') IS NOT NULL THEN
-                    EXECUTE 'INSERT INTO ""TermsAndPolicies"" (""TermID"", ""Version"", ""Title"", ""Content"", ""EffectiveDate"")
-                        SELECT gen_random_uuid(), ''v1.0'', ''FitSocial Terms of Service & Privacy Policy'',
-                               ''Welcome to FitSocial sports platform. By accessing or using our services, you agree to be bound by these Terms of Service and Privacy Policy.'',
-                               CURRENT_TIMESTAMP
-                        WHERE NOT EXISTS (SELECT 1 FROM ""TermsAndPolicies"")';
-                ELSIF to_regclass('public.termsandpolicies') IS NOT NULL THEN
-                    EXECUTE 'INSERT INTO termsandpolicies (termid, version, title, content, effectivedate)
-                        SELECT gen_random_uuid(), ''v1.0'', ''FitSocial Terms of Service & Privacy Policy'',
-                               ''Welcome to FitSocial sports platform. By accessing or using our services, you agree to be bound by these Terms of Service and Privacy Policy.'',
-                               CURRENT_TIMESTAMP
-                        WHERE NOT EXISTS (SELECT 1 FROM termsandpolicies)';
-                ELSE
-                    CREATE TABLE IF NOT EXISTS termsandpolicies (
-                        termid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        version VARCHAR(50) NOT NULL,
-                        title VARCHAR(255) NOT NULL,
-                        content TEXT NOT NULL,
-                        effectivedate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                    INSERT INTO termsandpolicies (termid, version, title, content, effectivedate)
-                    SELECT 
-                        gen_random_uuid(),
-                        'v1.0',
-                        'FitSocial Terms of Service & Privacy Policy',
-                        'Welcome to FitSocial sports platform. By accessing or using our services, you agree to be bound by these Terms of Service and Privacy Policy.',
-                        CURRENT_TIMESTAMP
-                    WHERE NOT EXISTS (SELECT 1 FROM termsandpolicies);
-                END IF;
-
-                IF to_regclass('public.""Price""') IS NOT NULL THEN
-                    v_price_table := '""Price""';
-                ELSIF to_regclass('public.price') IS NOT NULL THEN
-                    v_price_table := 'price';
-                END IF;
-
-                IF to_regclass('public.""CoachSubscriptionPlans""') IS NOT NULL THEN
-                    v_csp_table := '""CoachSubscriptionPlans""';
-                ELSIF to_regclass('public.coachsubscriptionplans') IS NOT NULL THEN
-                    v_csp_table := 'coachsubscriptionplans';
-                END IF;
-
-                IF v_csp_table IS NOT NULL AND v_price_table IS NOT NULL THEN
-                    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s)', v_csp_table) INTO v_has_plans;
-                    IF NOT v_has_plans THEN
-                        v_price_id := gen_random_uuid();
-                        IF v_price_table = '""Price""' THEN
-                            EXECUTE 'INSERT INTO ""Price"" (""PriceID"", ""Amount"", ""CreatedAt"") VALUES ($1, 299000, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING' USING v_price_id;
-                        ELSE
-                            EXECUTE 'INSERT INTO price (priceid, amount, createdat) VALUES ($1, 299000, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING' USING v_price_id;
-                        END IF;
-
-                        IF v_csp_table = '""CoachSubscriptionPlans""' THEN
-                            EXECUTE 'INSERT INTO ""CoachSubscriptionPlans"" (
-                                ""CoachSubscriptionPlansID"", ""PriceID"", ""Amount"", ""Currency"",
-                                ""Description"", ""SubscriptionDuration"", ""TrainingPackageDuration"",
-                                ""IsActive"", ""CreatedAt""
-                            ) VALUES (
-                                gen_random_uuid(), $1, 299000, ''VND'',
-                                ''Standard Coach Monthly Subscription Plan'', 30, 30,
-                                TRUE, CURRENT_TIMESTAMP
-                            )' USING v_price_id;
-                        ELSE
-                            EXECUTE 'INSERT INTO coachsubscriptionplans (
-                                coachsubscriptionplansid, priceid, amount, currency,
-                                description, subscriptionduration, trainingpackageduration,
-                                isactive, createdat
-                            ) VALUES (
-                                gen_random_uuid(), $1, 299000, ''VND'',
-                                ''Standard Coach Monthly Subscription Plan'', 30, 30,
-                                TRUE, CURRENT_TIMESTAMP
-                            )' USING v_price_id;
-                        END IF;
-                    END IF;
-                END IF;
-            END $$;"
-        );
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"DB Migration check: {ex.Message}");
-    }
-}
+app.MapHub<PostHub>("/hubs/posts");
 
 app.Run();

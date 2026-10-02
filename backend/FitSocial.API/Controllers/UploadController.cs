@@ -30,7 +30,9 @@ public class UploadController : ControllerBase
 
     /// <summary>
     /// Upload coach credential files (ID card images, certificates PDF/PNG/JPG, max 10MB) to Cloudinary.
-    /// Returns the secure URL of the stored file.
+    /// Per FitConnect spec: stored as plain URL string in DB, Cloudinary folder must be Authenticated/Private
+    /// (Type=authenticated), frontend/admin must use Signed URLs (5-15 min) via GET /upload/signed-url.
+    /// Returns the secure URL of the stored file (plain string for DB storage).
     /// </summary>
     [HttpPost]
     [AllowAnonymous]
@@ -79,7 +81,8 @@ public class UploadController : ControllerBase
                     File = new FileDescription(file.FileName, stream),
                     Folder = "fitsocial/credentials",
                     UseFilename = true,
-                    UniqueFilename = true
+                    UniqueFilename = true,
+                    Type = "authenticated"
                 });
             }
             else
@@ -89,7 +92,8 @@ public class UploadController : ControllerBase
                     File = new FileDescription(file.FileName, stream),
                     Folder = "fitsocial/credentials",
                     UseFilename = true,
-                    UniqueFilename = true
+                    UniqueFilename = true,
+                    Type = "authenticated"
                 });
             }
 
@@ -274,6 +278,51 @@ public class UploadController : ControllerBase
         {
             _logger.LogError(ex, "[API][UploadPostMedia] Upload failed after {TotalMs} ms: {Message}", totalSw.ElapsedMilliseconds, ex.Message);
             return BadRequest(ApiResponseDto<List<FitSocial.Application.DTOs.Posts.CreatePostMediaDto>>.Fail($"Media upload failed: {ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// Generate a Signed URL (valid ~10 minutes) for an authenticated/private Cloudinary asset.
+    /// Per FitConnect spec: Backend must use Cloudinary SDK to create Signed URLs (5-15 min)
+    /// before sending to Frontend/Admin. DB only stores plain URL strings.
+    /// GET /api/upload/signed-url?publicId=fitsocial/credentials/xxx&amp;resourceType=image
+    /// </summary>
+    [HttpGet("signed-url")]
+    [AllowAnonymous]
+    public IActionResult GetSignedUrl([FromQuery] string publicId, [FromQuery] string resourceType = "image")
+    {
+        if (string.IsNullOrWhiteSpace(publicId))
+            return BadRequest(ApiResponseDto<string>.Fail("publicId is required."));
+
+        var cloudName = _configuration["Cloudinary:CloudName"];
+        var apiKey = _configuration["Cloudinary:ApiKey"];
+        var apiSecret = _configuration["Cloudinary:ApiSecret"];
+        if (string.IsNullOrWhiteSpace(cloudName) || string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(apiSecret))
+            return BadRequest(ApiResponseDto<string>.Fail("File upload is not configured on the server."));
+
+        try
+        {
+            var cloudinary = _cloudinary ?? new Cloudinary(new Account(cloudName, apiKey, apiSecret));
+            // Signed authenticated URL (CloudinaryDotNet 1.27: Signed(true) generates expiring signature).
+            // Frontend should refresh every ~10 minutes (within 5-15 min spec).
+            string signedUrl;
+            if (resourceType.Equals("raw", StringComparison.OrdinalIgnoreCase))
+            {
+                signedUrl = cloudinary.Api.Url.Signed(true).ResourceType("raw").Type("authenticated").BuildUrl(publicId);
+            }
+            else if (resourceType.Equals("video", StringComparison.OrdinalIgnoreCase))
+            {
+                signedUrl = cloudinary.Api.UrlVideoUp.Signed(true).Type("authenticated").BuildUrl(publicId);
+            }
+            else
+            {
+                signedUrl = cloudinary.Api.UrlImgUp.Signed(true).Type("authenticated").BuildUrl(publicId);
+            }
+            return Ok(ApiResponseDto<string>.Ok(signedUrl, "Signed URL generated (refresh every ~10 minutes)."));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponseDto<string>.Fail($"Could not generate signed URL: {ex.Message}"));
         }
     }
 }

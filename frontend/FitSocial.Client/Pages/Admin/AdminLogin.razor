@@ -93,6 +93,7 @@
 
         await TokenStorage.SetRememberMeAsync(rememberMe);
 
+        loginModel.RememberMe = rememberMe;
         var result = await AuthService.AdminLoginAsync(loginModel);
         if (result.Success)
         {

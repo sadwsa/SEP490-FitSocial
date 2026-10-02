@@ -18,9 +18,9 @@ public class CommentsController : ControllerBase
         _commentService = commentService;
     }
 
-    /// <summary>
-    /// Replies to an existing comment.
-    /// </summary>
+    
+    // Replies to an existing comment.
+
     [HttpPost("{commentId:guid}/replies")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<CommentDto>), StatusCodes.Status200OK)]

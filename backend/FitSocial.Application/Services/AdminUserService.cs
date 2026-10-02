@@ -47,6 +47,30 @@ public class AdminUserService : IAdminUserService
         }
     }
 
+    public async Task<ApiResponseDto<PagedResultDto<AdminUserDto>>> GetStaffUsersAsync(
+        string? search = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var (users, totalCount) = await _userRepository.ListStaffForAdminAsync(
+                search, isLocked, pageNumber, pageSize, cancellationToken);
+
+            var dtos = users.Select(u => MapToAdminDto(u)).ToList();
+
+            var pagedResult = PagedResultDto<AdminUserDto>.Create(dtos, totalCount, pageNumber, pageSize);
+
+            return ApiResponseDto<PagedResultDto<AdminUserDto>>.Ok(pagedResult, "Staff account list retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<PagedResultDto<AdminUserDto>>.Fail($"Error retrieving staff accounts: {ex.Message}");
+        }
+    }
+
     public async Task<ApiResponseDto<bool>> SetUserLockStatusAsync(
         Guid userId,
         bool isLocked,

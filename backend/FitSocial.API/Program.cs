@@ -244,6 +244,18 @@ using (var scope = app.Services.CreateScope())
                     UPDATE ""Posts"" SET ""posttype"" = 'FEED' WHERE ""posttype"" IS NULL;
                 END IF;
 
+                IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND (table_name = 'Comments' OR table_name = 'comments')) THEN
+                    CREATE TABLE IF NOT EXISTS ""Comments"" (
+                        ""ID"" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        ""PostID"" UUID,
+                        ""AuthorID"" UUID,
+                        ""ParentCommentID"" UUID,
+                        ""Content"" VARCHAR(500),
+                        ""CreatedAt"" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        ""UpdatedAt"" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                END IF;
+
                 CREATE TABLE IF NOT EXISTS roles (
                     rolecode VARCHAR(8) PRIMARY KEY,
                     rolename VARCHAR(50) NOT NULL

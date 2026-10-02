@@ -3,6 +3,7 @@ using FitSocial.Client.Models.TrainingPackages;
 using FitSocial.Client.Services.Http;
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace FitSocial.Client.Services.TrainingPackages;
@@ -35,5 +36,11 @@ public class TrainingPackageService : ITrainingPackageService
 {
     return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/{id}");
 }
+    public async Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync()
+    {
+        return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}/purchased");
+    }
+
+
 
 }

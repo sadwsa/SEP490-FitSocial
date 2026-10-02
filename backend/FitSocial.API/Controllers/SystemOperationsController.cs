@@ -72,4 +72,22 @@ public class SystemOperationsController : ControllerBase
         if (!result.Success) return BadRequest(result);
         return Ok(result);
     }
+
+    /// <summary>
+    /// UC_33.2: Staff/Admin Edit Coach Subscription Plan.
+    /// Only the plan row is updated; past Order/Payment/CoachUpgrade rows keep
+    /// their purchase-time price snapshot (no retroactive changes).
+    /// </summary>
+    [HttpPut("coach-subscription-plans/{planId:guid}")]
+    public async Task<IActionResult> UpdatePlan(Guid planId, [FromBody] UpdateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(FitSocial.Application.DTOs.Common.ApiResponseDto<CoachSubscriptionPlanDto>.Fail(firstError ?? "Invalid data"));
+        }
+        var result = await _systemOps.UpdatePlanAsync(planId, dto, cancellationToken);
+        if (!result.Success) return BadRequest(result);
+        return Ok(result);
+    }
 }

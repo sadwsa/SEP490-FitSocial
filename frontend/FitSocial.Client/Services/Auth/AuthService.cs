@@ -175,6 +175,23 @@ public class AuthService : IAuthService
             httpRequest.Content = JsonContent.Create(request);
 
             var response = await _httpClient.SendAsync(httpRequest);
+
+            // Production: access token may have expired in the 15-min window.
+            // Try one silent refresh and retry before surfacing 401 to the user.
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                var refreshed = await RefreshTokenAsync();
+                if (refreshed)
+                {
+                    token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+                    using var retryRequest = new HttpRequestMessage(HttpMethod.Post, "auth/change-password");
+                    retryRequest.Headers.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    retryRequest.Content = JsonContent.Create(request);
+                    response = await _httpClient.SendAsync(retryRequest);
+                }
+            }
+
             return await ReadBoolResponseAsync(response, "Password changed successfully", "Request failed");
         }
         catch (Exception ex)
@@ -438,7 +455,14 @@ public class AuthService : IAuthService
     public async Task<bool> IsAuthenticatedAsync()
     {
         var token = await GetTokenAsync();
-        return !string.IsNullOrEmpty(token);
+        if (string.IsNullOrWhiteSpace(token)) return false;
+
+        // Production: treat an expired 15-min access token as logged-out unless
+        // the refresh token can silently rotate it.
+        if (!CustomAuthenticationStateProvider.IsTokenExpired(token, TimeSpan.FromSeconds(60)))
+            return true;
+
+        return await RefreshTokenAsync();
     }
 
     public async Task<ApiResponse<UserInfo>> GetCurrentUserAsync()

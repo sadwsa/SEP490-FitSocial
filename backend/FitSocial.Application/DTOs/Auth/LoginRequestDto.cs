@@ -17,4 +17,11 @@ public class LoginRequestDto
     /// with the same generic message.
     /// </summary>
     public string? RoleCode { get; set; }
+
+    /// <summary>
+    /// Remember-me flag from the login page. Controls refresh-token lifetime:
+    /// remembered = RememberRefreshExpiryDays (30d), otherwise RefreshExpiryDays (7d).
+    /// Frontend also stores tokens in localStorage vs sessionStorage accordingly.
+    /// </summary>
+    public bool RememberMe { get; set; } = true;
 }

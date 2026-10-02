@@ -1,0 +1,74 @@
+@inherits LayoutComponentBase
+@using System.Security.Claims
+@inject IAuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <!-- Shared Topbar -->
+    <AppHeader ShowSearch="false"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               UserAvatarUrl="@currentUserAvatarUrl"
+               OnLogout="HandleLogout" />
+
+    <!-- Shared 3-Column Shell (sidebar + center + right) -->
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+
+        <!-- Shared Sidebar -->
+        <AppSidebar />
+
+        <!-- Page Content -->
+        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-12">
+            @Body
+        </section>
+
+        <!-- Right Column (spacer to match home grid) -->
+        <div class="home-right-sidebar hidden lg:block w-full"></div>
+    </div>
+</div>
+
+@code {
+    private string userName = "Athlete";
+    private string userInitials = "Me";
+    private string userRole = "Athlete";
+    private string? currentUserAvatarUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var state = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = state.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "Athlete";
+                var role = user.FindFirst(ClaimTypes.Role)?.Value;
+                userRole = string.Equals(role, AppRoles.Coach, StringComparison.OrdinalIgnoreCase) ? "Coach" : "Trainee";
+                userInitials = AvatarHelper.GetInitials(userName);
+            }
+
+            var meRes = await AuthService.GetCurrentUserAsync();
+            if (meRes.Success && meRes.Data != null)
+            {
+                if (!string.IsNullOrWhiteSpace(meRes.Data.FullName))
+                {
+                    userName = meRes.Data.FullName;
+                    userInitials = AvatarHelper.GetInitials(userName);
+                }
+                if (!string.IsNullOrWhiteSpace(meRes.Data.AvatarUrl))
+                {
+                    currentUserAvatarUrl = meRes.Data.AvatarUrl;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+}

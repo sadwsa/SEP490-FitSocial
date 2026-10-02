@@ -8,7 +8,7 @@ public class ChangePasswordRequestDto
     public string CurrentPassword { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "New password is required")]
-    [MinLength(6, ErrorMessage = "New password must be at least 6 characters")]
+    [MinLength(8, ErrorMessage = "New password must be at least 8 characters")]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please confirm the new password")]

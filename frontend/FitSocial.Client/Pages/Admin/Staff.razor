@@ -40,6 +40,9 @@
             <button type="button" class="row-btn" @onclick="LoadStaffAsync" disabled="@isLoadingStaff">
                 <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
             </button>
+            <button type="button" class="row-btn add" @onclick="OpenCreateStaffModal" id="btn-create-staff">
+                + Create Staff Account
+            </button>
         </div>
 
         @if (isLoadingStaff)
@@ -125,6 +128,74 @@
                 </select>
             </div>
         </div>
+
+        @if (showCreateStaffModal)
+        {
+            <div class="modal-overlay" @onclick="CloseCreateStaffModal">
+                <div class="modal-card" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <div>
+                            <h3>Create Staff Account</h3>
+                            <small>Provision a new account with STAFF permissions</small>
+                        </div>
+                        <button type="button" class="modal-close-btn" @onclick="CloseCreateStaffModal" title="Close" disabled="@isSubmitting">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        @if (!string.IsNullOrEmpty(createErrorMessage))
+                        {
+                            <div class="auth-alert error" role="alert">
+                                <AppIcon Name="warning" />
+                                <span>@createErrorMessage</span>
+                            </div>
+                        }
+
+                        <div class="form-group">
+                            <label class="form-label" for="staff-fullname">Full Name <span class="text-danger">*</span></label>
+                            <input id="staff-fullname" @bind="newStaffModel.FullName" class="toolbar-input" placeholder="e.g. John Doe" disabled="@isSubmitting" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="staff-email">Email Address <span class="text-danger">*</span></label>
+                            <input id="staff-email" type="email" @bind="newStaffModel.Email" class="toolbar-input" placeholder="e.g. staff@fitsocial.com" disabled="@isSubmitting" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="staff-phone">Phone Number <small class="text-muted">(Optional)</small></label>
+                            <input id="staff-phone" type="tel" @bind="newStaffModel.PhoneNumber" class="toolbar-input" placeholder="e.g. 0901234567" disabled="@isSubmitting" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="staff-password">Password <span class="text-danger">*</span></label>
+                            <input id="staff-password" type="password" @bind="newStaffModel.Password" class="toolbar-input" placeholder="At least 6 characters" disabled="@isSubmitting" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="staff-confirm-password">Confirm Password <span class="text-danger">*</span></label>
+                            <input id="staff-confirm-password" type="password" @bind="newStaffModel.ConfirmPassword" class="toolbar-input" placeholder="Re-enter password" disabled="@isSubmitting" />
+                        </div>
+
+                        <div class="role-notice">
+                            <span class="role-badge staff">Role: STAFF</span>
+                            <small class="text-muted ms-2">Role is automatically assigned to STAFF by the system</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="row-btn" @onclick="CloseCreateStaffModal" disabled="@isSubmitting">Cancel</button>
+                        <button type="button" class="row-btn add" @onclick="HandleCreateStaffAsync" disabled="@isSubmitting" id="btn-submit-create-staff">
+                            @if (isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span>Creating...</span>
+                            }
+                            else
+                            {
+                                <span>Create Staff</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
     </Authorized>
     <NotAuthorized>
         <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>You do not have access to this page.</span></div>
@@ -141,8 +212,87 @@
     private PagedResult<AdminUserDto> pagedStaff = new();
     private System.Timers.Timer? searchDebounceTimer;
     private bool isLoadingStaff = false;
+    private bool showCreateStaffModal = false;
+    private bool isSubmitting = false;
+    private string? createErrorMessage;
+    private CreateStaffAccountRequest newStaffModel = new();
 
     protected override async Task OnInitializedAsync() => await LoadStaffAsync();
+
+    private void OpenCreateStaffModal()
+    {
+        newStaffModel = new();
+        createErrorMessage = null;
+        showCreateStaffModal = true;
+    }
+
+    private void CloseCreateStaffModal()
+    {
+        if (isSubmitting) return;
+        showCreateStaffModal = false;
+        createErrorMessage = null;
+    }
+
+    private async Task HandleCreateStaffAsync()
+    {
+        createErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(newStaffModel.FullName) || newStaffModel.FullName.Trim().Length < 2)
+        {
+            createErrorMessage = "Please enter a valid full name (at least 2 characters).";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newStaffModel.Email))
+        {
+            createErrorMessage = "Email address is required.";
+            return;
+        }
+
+        if (!newStaffModel.Email.Contains('@') || !newStaffModel.Email.Contains('.'))
+        {
+            createErrorMessage = "Please enter a valid email address.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newStaffModel.Password) || newStaffModel.Password.Length < 6)
+        {
+            createErrorMessage = "Password must be at least 6 characters long.";
+            return;
+        }
+
+        if (newStaffModel.Password != newStaffModel.ConfirmPassword)
+        {
+            createErrorMessage = "Passwords do not match.";
+            return;
+        }
+
+        isSubmitting = true;
+        try
+        {
+            var res = await UserService.CreateStaffAccountAsync(newStaffModel);
+            if (res.Success)
+            {
+                showCreateStaffModal = false;
+                newStaffModel = new();
+                toastMessage = res.Message ?? "Staff account created successfully!";
+                staffCurrentPage = 1;
+                await LoadStaffAsync();
+            }
+            else
+            {
+                createErrorMessage = res.Message ?? "Failed to create staff account.";
+            }
+        }
+        catch (Exception ex)
+        {
+            createErrorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
 
     private async Task LoadStaffAsync()
     {

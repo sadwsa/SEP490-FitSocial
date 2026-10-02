@@ -1,6 +1,8 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.Application.DTOs.Users;
+using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
@@ -13,13 +15,15 @@ public class AdminUserServiceTests
 {
     private readonly Mock<IUserRepository> _userRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IPasswordHasher> _passwordHasherMock;
     private readonly AdminUserService _service;
 
     public AdminUserServiceTests()
     {
         _userRepoMock = new Mock<IUserRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
-        _service = new AdminUserService(_userRepoMock.Object, _unitOfWorkMock.Object);
+        _passwordHasherMock = new Mock<IPasswordHasher>();
+        _service = new AdminUserService(_userRepoMock.Object, _unitOfWorkMock.Object, _passwordHasherMock.Object);
     }
 
     [Fact]
@@ -211,5 +215,161 @@ public class AdminUserServiceTests
         Assert.NotNull(result);
         Assert.False(result.Success);
         Assert.Contains("Database connection failure", result.Message);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_ValidRequest_ShouldCreateStaffWithStaffRoleAndHashedPassword()
+    {
+        // Arrange
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "New Staff Member",
+            Email = "newstaff@fitsocial.com",
+            PhoneNumber = "0987654321",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!"
+        };
+
+        _userRepoMock.Setup(r => r.ExistsByEmailAsync("newstaff@fitsocial.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _userRepoMock.Setup(r => r.ExistsByPhoneAsync("0987654321", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _passwordHasherMock.Setup(p => p.HashPassword("Password123!"))
+            .Returns("hashed_pw_secret");
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        User? capturedUser = null;
+        _userRepoMock.Setup(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
+            .Callback<User, CancellationToken>((u, _) => capturedUser = u)
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal("newstaff@fitsocial.com", result.Data.Email);
+        Assert.Equal("New Staff Member", result.Data.FullName);
+        Assert.Equal("STAFF", result.Data.RoleCode);
+        Assert.False(result.Data.IsLocked);
+
+        // Verify captured entity
+        Assert.NotNull(capturedUser);
+        Assert.Equal("newstaff@fitsocial.com", capturedUser.Email);
+        Assert.Equal("New Staff Member", capturedUser.FullName);
+        Assert.Equal("STAFF", capturedUser.RoleCode);
+        Assert.True(capturedUser.IsInternal);
+        Assert.Equal("hashed_pw_secret", capturedUser.PasswordHash);
+        Assert.Equal(1, capturedUser.TokenVersion);
+        Assert.Equal(0, capturedUser.WarningCount);
+
+        _userRepoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_EmailAlreadyExists_ShouldReturnFailureWithoutCreating()
+    {
+        // Arrange
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "Duplicate Staff",
+            Email = "existing@fitsocial.com",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!"
+        };
+
+        _userRepoMock.Setup(r => r.ExistsByEmailAsync("existing@fitsocial.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Email is already registered", result.Message);
+        _userRepoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_PasswordMismatch_ShouldReturnFailure()
+    {
+        // Arrange
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "Mismatch Staff",
+            Email = "mismatch@fitsocial.com",
+            Password = "Password123!",
+            ConfirmPassword = "DifferentPassword!"
+        };
+
+        _userRepoMock.Setup(r => r.ExistsByEmailAsync("mismatch@fitsocial.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Passwords do not match", result.Message);
+        _userRepoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_PhoneAlreadyExists_ShouldReturnFailure()
+    {
+        // Arrange
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "Duplicate Phone Staff",
+            Email = "phonecheck@fitsocial.com",
+            PhoneNumber = "0911222333",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!"
+        };
+
+        _userRepoMock.Setup(r => r.ExistsByEmailAsync("phonecheck@fitsocial.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _userRepoMock.Setup(r => r.ExistsByPhoneAsync("0911222333", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Phone number is already registered", result.Message);
+        _userRepoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_WhenExceptionOccurs_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "Error Staff",
+            Email = "error@fitsocial.com",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!"
+        };
+
+        _userRepoMock.Setup(r => r.ExistsByEmailAsync("error@fitsocial.com", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Database write error"));
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Database write error", result.Message);
     }
 }

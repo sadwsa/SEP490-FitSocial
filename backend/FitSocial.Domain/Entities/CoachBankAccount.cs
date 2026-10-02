@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 
 namespace FitSocial.Domain.Entities;
 
@@ -15,11 +14,11 @@ public partial class CoachBankAccount
 
     public string? AccountName { get; set; }
 
-    public string? AccountNumber { get; set; }
+    public byte[]? EncryptedAccountNumber { get; set; }
 
     public string? Branch { get; set; }
 
-    public bool? IsDefault { get; set; }
+    public bool? IsDefault { get; set; } = false;
 
     public DateTime? CreatedAt { get; set; }
 

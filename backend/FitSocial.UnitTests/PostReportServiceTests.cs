@@ -125,6 +125,7 @@ public class PostReportServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.True(result.Success);
+        Assert.NotNull(result.Data);
         Assert.Equal(post2Id, result.Data.PostId);
         Assert.Equal(reporterId, result.Data.ReporterId);
 

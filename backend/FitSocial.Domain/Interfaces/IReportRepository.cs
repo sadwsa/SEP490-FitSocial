@@ -17,5 +17,9 @@ public interface IReportRepository : IRepository<Report>
         string? searchTerm,
         int pageNumber,
         int pageSize,
+        string? type = null,
+        string? appealStatus = null,
         CancellationToken cancellationToken = default);
+
+    Task<Report?> GetReportWithDetailsByIdAsync(Guid reportId, CancellationToken cancellationToken = default);
 }

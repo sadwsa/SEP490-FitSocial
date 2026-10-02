@@ -5,7 +5,10 @@ using FitSocial.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Collections.Generic;
+using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FitSocial.API.Controllers;
@@ -16,10 +19,12 @@ namespace FitSocial.API.Controllers;
 public class CoachesController : ControllerBase
 {
     private readonly ICoachService _coachService;
+    private readonly ICoachBankAccountService _bankAccountService;
 
-    public CoachesController(ICoachService coachService)
+    public CoachesController(ICoachService coachService, ICoachBankAccountService bankAccountService)
     {
         _coachService = coachService;
+        _bankAccountService = bankAccountService;
     }
 
     /// <summary>
@@ -31,16 +36,148 @@ public class CoachesController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<List<TopCoachDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetTopCoaches([FromQuery] int count = 3)
+    public async Task<IActionResult> GetTopCoaches([FromQuery] int count = 3, CancellationToken cancellationToken = default)
     {
-        var result = await _coachService.GetTopCoachesAsync(count, HttpContext.RequestAborted);
+        var result = await _coachService.GetTopCoachesAsync(count, cancellationToken);
         return Ok(result);
     }
 
+    /// <summary>
+    /// Gets a list of coaches with filtering and sorting.
+    /// Accessible publicly.
+    /// </summary>
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAllCoaches([FromQuery] string? searchKeyword, [FromQuery] int? minExperience, [FromQuery] string? sortBy)
     {
         var result = await _coachService.GetAllCoachesAsync(searchKeyword, minExperience, sortBy);
+        return Ok(ApiResponseDto<IEnumerable<CoachListDto>>.Ok(result));
+    }
+
+    /// <summary>
+    /// View detailed profile of a coach including locations, certificates, and packages.
+    /// Accessible publicly.
+    /// </summary>
+    [HttpGet("{coachId:guid}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCoachDetails(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        var result = await _coachService.GetCoachDetailsAsync(coachId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Gets the authenticated coach's own profile.
+    /// </summary>
+    [HttpGet("profile/me")]
+    [Authorize(Roles = "COACH")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetMyProfile(CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _coachService.GetCoachDetailsAsync(currentUserId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Updates the authenticated coach's profile.
+    /// </summary>
+    [HttpPut("profile/me")]
+    [Authorize(Roles = "COACH")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateCoachProfileDto dto, CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _coachService.UpdateCoachProfileAsync(currentUserId, dto, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Gets the list of bank accounts registered by the coach.
+    /// </summary>
+    [HttpGet("bank-accounts")]
+    [Authorize(Roles = "COACH")]
+    [ProducesResponseType(typeof(ApiResponseDto<List<CoachBankAccountDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBankAccounts(CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<List<CoachBankAccountDto>>.Fail("Unauthorized"));
+        }
+
+        var result = await _bankAccountService.GetAccountsAsync(currentUserId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Adds a new bank account with encrypted account number.
+    /// </summary>
+    [HttpPost("bank-accounts")]
+    [Authorize(Roles = "COACH")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachBankAccountDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AddBankAccount([FromBody] CreateCoachBankAccountDto dto, CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachBankAccountDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _bankAccountService.AddAccountAsync(currentUserId, dto, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Sets a bank account as default.
+    /// </summary>
+    [HttpPut("bank-accounts/{bankId:guid}/default")]
+    [Authorize(Roles = "COACH")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDefaultBankAccount(Guid bankId, CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<bool>.Fail("Unauthorized"));
+        }
+
+        var result = await _bankAccountService.SetDefaultAsync(currentUserId, bankId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Deletes a bank account.
+    /// </summary>
+    [HttpDelete("bank-accounts/{bankId:guid}")]
+    [Authorize(Roles = "COACH")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteBankAccount(Guid bankId, CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<bool>.Fail("Unauthorized"));
+        }
+
+        var result = await _bankAccountService.DeleteAccountAsync(currentUserId, bankId, cancellationToken);
         return Ok(result);
     }
 }

@@ -108,9 +108,9 @@ public class ConversationsController : ControllerBase
             return Unauthorized(ApiResponseDto<MessageDto>.Fail("Invalid authentication session. Please log in again."));
         }
 
-        if (request == null || string.IsNullOrWhiteSpace(request.Content))
+        if (request == null || (string.IsNullOrWhiteSpace(request.Content) && (request.Attachments == null || !request.Attachments.Any())))
         {
-            return BadRequest(ApiResponseDto<MessageDto>.Fail("Message content cannot be empty."));
+            return BadRequest(ApiResponseDto<MessageDto>.Fail("Message content or attachments cannot be empty."));
         }
 
         var result = await _conversationService.SendMessageAsync(conversationId, currentUserId, request);
@@ -248,6 +248,32 @@ public class ConversationsController : ControllerBase
                 return StatusCode(StatusCodes.Status403Forbidden, result);
             }
 
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get or create direct 1-1 conversation with target user
+    /// </summary>
+    [HttpPost("direct/{targetUserId:guid}")]
+    [ProducesResponseType(typeof(ApiResponseDto<ConversationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<ConversationDetailDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<ConversationDetailDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetOrCreateDirectConversation(Guid targetUserId)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<ConversationDetailDto>.Fail("Invalid authentication session. Please log in again."));
+        }
+
+        var result = await _conversationService.GetOrCreateDirectConversationAsync(currentUserId, targetUserId);
+        if (!result.Success)
+        {
             return BadRequest(result);
         }
 

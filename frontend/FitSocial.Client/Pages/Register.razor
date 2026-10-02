@@ -532,6 +532,10 @@
         // Map TermId for trainee (coach sets it in step 3)
         if (!isCoach)
         {
+            if (latestTerm == null)
+            {
+                try { latestTerm = await TermsService.GetLatestAsync(); } catch { }
+            }
             if (latestTerm == null) { errorMessage = "Terms are still loading. Please try again in a moment."; return; }
             registerModel.TermId = latestTerm.TermId;
         }

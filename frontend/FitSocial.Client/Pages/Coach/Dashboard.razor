@@ -1,0 +1,319 @@
+@page "/coach/dashboard"
+@layout EmptyLayout
+@attribute [Authorize(Roles = "COACH")]
+@inject ICoachDashboardService DashboardService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Coaches
+@using FitSocial.Client.Services.Coaches
+@using System.Security.Claims
+@using System.Globalization
+
+<PageTitle>Coach Dashboard - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 52rem) minmax(14rem, 1fr) !important;
+                align-items: start !important;
+            }
+
+            .home-left-sidebar { justify-self: start !important; }
+            .home-center-feed { justify-self: center !important; width: 100% !important; max-width: 52rem !important; min-width: 0 !important; }
+            .home-right-sidebar { justify-self: center !important; }
+        }
+    </style>
+
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="coach-dashboard" />
+
+        <!-- Center Column -->
+        <section class="home-center-feed w-full max-w-4xl flex flex-col gap-5 min-w-0 pb-12">
+            <!-- Header Section -->
+            <div class="bg-white rounded-2xl shadow-sm p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-gray-100">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-orange-100 text-[#FF5500] uppercase tracking-wider">
+                            Coach Portal
+                        </span>
+                        @if (metrics != null)
+                        {
+                            <span class="text-xs text-gray-400">
+                                Updated: @metrics.LastUpdatedAt.ToLocalTime().ToString("HH:mm:ss dd/MM/yyyy")
+                            </span>
+                        }
+                    </div>
+                    <h1 class="text-2xl font-extrabold text-gray-900 mt-1">Dashboard & Performance</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">Real-time overview of active trainees, package sales, and pending requests.</p>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button @onclick="LoadMetricsAsync" 
+                            disabled="@isLoading"
+                            class="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold text-sm rounded-xl border border-gray-200 transition flex items-center gap-2 shadow-sm disabled:opacity-50">
+                        <svg class="w-4 h-4 @(isLoading ? "animate-spin text-[#FF5500]" : "text-gray-500")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.03 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Refresh
+                    </button>
+                    <a href="training-packages" 
+                       class="px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        My Packages
+                    </a>
+                </div>
+            </div>
+
+            <!-- Error Notification -->
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between text-red-700 text-sm">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span>@errorMessage</span>
+                    </div>
+                    <button @onclick="LoadMetricsAsync" class="font-semibold underline hover:text-red-800">Retry</button>
+                </div>
+            }
+
+            <!-- 4 Key Performance Indicators (Cards) -->
+            @if (isLoading && metrics == null)
+            {
+                <!-- Loading Skeleton -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    @for (int i = 0; i < 4; i++)
+                    {
+                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-pulse flex flex-col gap-3">
+                            <div class="w-10 h-10 bg-gray-200 rounded-xl"></div>
+                            <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+                            <div class="h-8 bg-gray-200 rounded w-3/4"></div>
+                        </div>
+                    }
+                </div>
+            }
+            else if (metrics != null)
+            {
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- KPI 1: Active Trainees -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
+                        <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-50 rounded-full group-hover:scale-110 transition-transform"></div>
+                        <div class="flex items-center justify-between relative z-10">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Active Trainees</span>
+                            <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="mt-4 relative z-10">
+                            <div class="text-3xl font-extrabold text-gray-900">@metrics.ActiveTraineesCount</div>
+                            <p class="text-xs text-gray-500 mt-1">Currently enrolled with valid packages</p>
+                        </div>
+                    </div>
+
+                    <!-- KPI 2: Total Packages Sold -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
+                        <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-purple-50 rounded-full group-hover:scale-110 transition-transform"></div>
+                        <div class="flex items-center justify-between relative z-10">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Packages Sold</span>
+                            <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="mt-4 relative z-10">
+                            <div class="text-3xl font-extrabold text-gray-900">@metrics.TotalPackagesSold</div>
+                            <p class="text-xs text-gray-500 mt-1">Total successfully completed orders</p>
+                        </div>
+                    </div>
+
+                    <!-- KPI 3: Monthly Revenue -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
+                        <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-emerald-50 rounded-full group-hover:scale-110 transition-transform"></div>
+                        <div class="flex items-center justify-between relative z-10">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Monthly Revenue</span>
+                            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="mt-4 relative z-10">
+                            <div class="text-2xl font-extrabold text-emerald-600">
+                                @FormatCurrency(metrics.MonthlyRevenue, metrics.Currency)
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Earnings in current month</p>
+                        </div>
+                    </div>
+
+                    <!-- KPI 4: Pending Requests -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
+                        <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-50 rounded-full group-hover:scale-110 transition-transform"></div>
+                        <div class="flex items-center justify-between relative z-10">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Pending Requests</span>
+                            <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="mt-4 relative z-10">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-3xl font-extrabold text-gray-900">@metrics.PendingRequestsCount</span>
+                                @if (metrics.PendingRequestsCount > 0)
+                                {
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                                        Action Required
+                                    </span>
+                                }
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Orders, meal & workout plans to review</p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Quick Guide / Tips Box for Coach -->
+            <div class="bg-gradient-to-br from-white to-orange-50/40 rounded-2xl p-6 border border-orange-100/80 shadow-sm">
+                <div class="flex items-start gap-4">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#FF8C00] to-[#FF5500] text-white flex items-center justify-center shadow-md flex-shrink-0">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-800">Coach Operations & Performance Insights</h3>
+                        <p class="text-sm text-gray-600 mt-1 leading-relaxed">
+                            This dashboard automatically aggregates active trainees, successful package transactions, and real-time revenue directly from the database.
+                            Any pending items (such as unconfirmed orders or draft meal/training plans) require your attention to ensure your trainees stay on track with their fitness goals.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Sidebar (Empty Spacer to maintain 3-column balance) -->
+        <aside class="home-right-sidebar hidden lg:flex w-56 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
+    </div>
+</div>
+
+@code {
+    private CoachDashboardMetricsDto? metrics;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    // Header state
+    private string? headerSearchTerm = "";
+    private string userName = "Coach";
+    private string userInitials = "C";
+    private string userRole = "Coach";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        await LoadMetricsAsync();
+    }
+
+    private async Task LoadMetricsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var response = await DashboardService.GetOverviewMetricsAsync();
+            if (response.Success && response.Data != null)
+            {
+                metrics = response.Data;
+            }
+            else
+            {
+                errorMessage = response.Message ?? "Failed to load dashboard metrics.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.FindFirst(ClaimTypes.Name)?.Value 
+                           ?? user.FindFirst("name")?.Value 
+                           ?? user.FindFirst(ClaimTypes.Email)?.Value 
+                           ?? "Coach";
+
+                var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
+                userRole = roleClaim?.Equals("COACH", StringComparison.OrdinalIgnoreCase) == true ? "Coach" : "User";
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1 
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper() 
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            userInitials = "C";
+        }
+    }
+
+    private string FormatCurrency(decimal amount, string currency)
+    {
+        if (currency.Equals("VND", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{amount:N0} đ";
+        }
+        return $"{amount:N2} {currency}";
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e)
+    {
+        headerSearchTerm = e.Value?.ToString();
+    }
+
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
+    private void ExecuteHeaderSearch() { }
+    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
+}

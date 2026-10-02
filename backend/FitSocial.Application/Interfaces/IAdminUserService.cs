@@ -16,5 +16,8 @@ public interface IAdminUserService
         int pageNumber = 1,
         int pageSize = 10,
         CancellationToken cancellationToken = default);
+
     Task<ApiResponseDto<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked, Guid? adminId = null, CancellationToken cancellationToken = default);
+
+    Task<ApiResponseDto<AdminUserDto>> WarnUserAsync(Guid userId, string? reason = null, Guid? staffId = null, CancellationToken cancellationToken = default);
 }

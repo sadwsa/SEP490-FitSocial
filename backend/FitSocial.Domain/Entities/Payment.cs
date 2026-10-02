@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace FitSocial.Domain.Entities;
@@ -9,15 +9,17 @@ public partial class Payment
 
     public Guid OrderId { get; set; }
 
+    public Guid? GatewayId { get; set; }
+
     public decimal? Amount { get; set; }
 
     public string? Currency { get; set; }
 
     public string? Method { get; set; }
 
-    public int? GatewayId { get; set; }
-
     public string? TransactionRef { get; set; }
+
+    public string? TransactionType { get; set; }
 
     public string? GatewayTransactionId { get; set; }
 
@@ -31,9 +33,12 @@ public partial class Payment
 
     public DateTime? UpdatedAt { get; set; }
 
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? GatewayResponseRaw { get; set; }
 
     public virtual Order Order { get; set; } = null!;
 
     public virtual PaymentGatewayConfig? Gateway { get; set; }
+
+    public virtual ICollection<RefundRequest> RefundRequests { get; set; } = new List<RefundRequest>();
 }

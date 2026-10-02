@@ -1,6 +1,7 @@
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.SystemOperations;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -8,14 +9,18 @@ namespace FitSocial.Application.Services;
 
 public class SystemOperationsService : ISystemOperationsService
 {
-    private readonly IPriceRepository _prices;
+    private readonly ICoachSubscriptionPlanRepository _planRepository;
     private readonly ICoachUpgradeRepository _upgrades;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SystemOperationsService> _logger;
 
-    public SystemOperationsService(IPriceRepository prices, ICoachUpgradeRepository upgrades, IUnitOfWork unitOfWork, ILogger<SystemOperationsService> logger)
+    public SystemOperationsService(
+        ICoachSubscriptionPlanRepository planRepository,
+        ICoachUpgradeRepository upgrades,
+        IUnitOfWork unitOfWork,
+        ILogger<SystemOperationsService> logger)
     {
-        _prices = prices;
+        _planRepository = planRepository;
         _upgrades = upgrades;
         _unitOfWork = unitOfWork;
         _logger = logger;
@@ -30,22 +35,45 @@ public class SystemOperationsService : ISystemOperationsService
     {
         try
         {
-            var (prices, totalPlans) = await _prices.ListPagedAsync(isActive, search, page, pageSize, cancellationToken);
-            var activePlansCount = await _prices.CountActiveAsync(cancellationToken);
-            var priceIds = prices.Select(p => p.PriceId).ToList();
-            var countDict = await _upgrades.GetCountsByPriceIdsAsync(priceIds, cancellationToken);
+            var allPlans = await _planRepository.GetAllPlansAsync(cancellationToken);
+            var query = allPlans.AsQueryable();
 
-            var plans = prices.Select(p => new CoachSubscriptionPlanDto
+            if (isActive.HasValue)
             {
-                PriceId = p.PriceId,
-                Amount = p.Amount ?? 0,
+                query = query.Where(p => p.IsActive == isActive.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(p => 
+                    (p.Currency != null && p.Currency.ToLower().Contains(s)) || 
+                    (p.Amount.HasValue && p.Amount.Value.ToString().Contains(s)) || 
+                    (p.Description != null && p.Description.ToLower().Contains(s)));
+            }
+
+            var totalPlans = query.Count();
+            var activePlansCount = allPlans.Count(p => p.IsActive == true);
+            var pagedPlans = query
+                .OrderByDescending(p => p.CreatedAt)
+                .Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100))
+                .Take(Math.Clamp(pageSize, 1, 100))
+                .ToList();
+
+            var planIds = pagedPlans.Select(p => p.CoachSubscriptionPlansId).ToList();
+            var countDict = await _upgrades.GetCountsByPriceIdsAsync(planIds, cancellationToken);
+
+            var plans = pagedPlans.Select(p => new CoachSubscriptionPlanDto
+            {
+                PriceId = p.PriceId ?? p.CoachSubscriptionPlansId,
+                Amount = p.Amount ?? 0m,
                 Currency = p.Currency ?? "VND",
                 IsActive = p.IsActive ?? false,
                 ImageUrl = p.ImageUrl,
                 Description = p.Description,
                 CreatedAt = p.CreatedAt ?? DateTime.UtcNow,
-                SubscriberCount = countDict.TryGetValue(p.PriceId, out var c) ? c.Total : 0,
-                ActiveSubscriberCount = countDict.TryGetValue(p.PriceId, out var c2) ? c2.Active : 0
+                SubscriberCount = countDict.TryGetValue(p.PriceId ?? p.CoachSubscriptionPlansId, out var c) ? c.Total : 0,
+                ActiveSubscriberCount = countDict.TryGetValue(p.PriceId ?? p.CoachSubscriptionPlansId, out var c2) ? c2.Active : 0
             }).ToList();
 
             var result = new CoachSubscriptionPlansResponseDto
@@ -66,8 +94,8 @@ public class SystemOperationsService : ISystemOperationsService
 
     public async Task<ApiResponseDto<CoachSubscriptionPlanDto>> GetPlanByIdAsync(Guid priceId, CancellationToken cancellationToken = default)
     {
-        var price = await _prices.GetByIdAsync(priceId, cancellationToken);
-        if (price == null)
+        var plan = await _planRepository.GetByIdAsync(priceId, cancellationToken);
+        if (plan == null)
             return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Subscription plan not found.");
 
         var count = await _upgrades.CountByPriceIdAsync(priceId, cancellationToken);
@@ -75,13 +103,13 @@ public class SystemOperationsService : ISystemOperationsService
 
         var dto = new CoachSubscriptionPlanDto
         {
-            PriceId = price.PriceId,
-            Amount = price.Amount ?? 0,
-            Currency = price.Currency ?? "VND",
-            IsActive = price.IsActive ?? false,
-            ImageUrl = price.ImageUrl,
-            Description = price.Description,
-            CreatedAt = price.CreatedAt ?? DateTime.UtcNow,
+            PriceId = plan.PriceId ?? plan.CoachSubscriptionPlansId,
+            Amount = plan.Amount ?? 0m,
+            Currency = plan.Currency ?? "VND",
+            IsActive = plan.IsActive ?? false,
+            ImageUrl = plan.ImageUrl,
+            Description = plan.Description,
+            CreatedAt = plan.CreatedAt ?? DateTime.UtcNow,
             SubscriberCount = count,
             ActiveSubscriberCount = activeCount
         };
@@ -92,9 +120,9 @@ public class SystemOperationsService : ISystemOperationsService
     {
         try
         {
-            var price = new FitSocial.Domain.Entities.Price
+            var plan = new FitSocial.Domain.Entities.CoachSubscriptionPlan
             {
-                PriceId = Guid.NewGuid(),
+                CoachSubscriptionPlansId = Guid.NewGuid(),
                 Amount = dto.Amount,
                 Currency = string.IsNullOrWhiteSpace(dto.Currency) ? "VND" : dto.Currency.Trim().ToUpper(),
                 IsActive = dto.IsActive,
@@ -103,18 +131,18 @@ public class SystemOperationsService : ISystemOperationsService
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _prices.AddAsync(price, cancellationToken);
+            await _planRepository.AddAsync(plan, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var resultDto = new CoachSubscriptionPlanDto
             {
-                PriceId = price.PriceId,
-                Amount = price.Amount ?? 0,
-                Currency = price.Currency ?? "VND",
-                IsActive = price.IsActive ?? false,
-                ImageUrl = price.ImageUrl,
-                Description = price.Description,
-                CreatedAt = price.CreatedAt ?? DateTime.UtcNow,
+                PriceId = plan.CoachSubscriptionPlansId,
+                Amount = plan.Amount ?? 0m,
+                Currency = plan.Currency ?? "VND",
+                IsActive = plan.IsActive ?? false,
+                ImageUrl = plan.ImageUrl,
+                Description = plan.Description,
+                CreatedAt = plan.CreatedAt ?? DateTime.UtcNow,
                 SubscriberCount = 0,
                 ActiveSubscriberCount = 0
             };
@@ -127,3 +155,4 @@ public class SystemOperationsService : ISystemOperationsService
         }
     }
 }
+

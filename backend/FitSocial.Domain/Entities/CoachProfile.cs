@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace FitSocial.Domain.Entities;
@@ -18,6 +18,8 @@ public partial class CoachProfile
     public string? ApprovalStatus { get; set; }
 
     public Guid? ApprovedBy { get; set; }
+
+    public string? Status { get; set; }
 
     public DateTime? UpdatedAt { get; set; }
 
@@ -48,6 +50,4 @@ public partial class CoachProfile
     public virtual ICollection<VideoTutorial> VideoTutorials { get; set; } = new List<VideoTutorial>();
 
     public virtual ICollection<Location> Locations { get; set; } = new List<Location>();
-
-    public virtual ICollection<Sport> Sports { get; set; } = new List<Sport>();
 }

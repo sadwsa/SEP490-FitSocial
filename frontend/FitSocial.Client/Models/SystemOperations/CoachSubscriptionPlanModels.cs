@@ -2,21 +2,26 @@ namespace FitSocial.Client.Models.SystemOperations;
 
 public class CoachSubscriptionPlanDto
 {
-    public Guid PriceId { get; set; }
-    public decimal Amount { get; set; }
-    public string Currency { get; set; } = "VND";
-    public bool IsActive { get; set; }
+    public Guid CoachSubscriptionPlansId { get; set; }
+    public Guid? PriceId { get; set; }
+    public decimal? Amount { get; set; }
+    public string? Currency { get; set; } = "VND";
+    public bool? IsActive { get; set; }
     public string? ImageUrl { get; set; }
     public string? Description { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public int? SubscriptionDuration { get; set; }
+    public int? TrainingPackageDuration { get; set; }
+    public DateTime? CreatedAt { get; set; }
     public int SubscriberCount { get; set; }
     public int ActiveSubscriberCount { get; set; }
+
+    public Guid PlanId => CoachSubscriptionPlansId != Guid.Empty ? CoachSubscriptionPlansId : (PriceId ?? Guid.Empty);
 }
 
 public class CoachUpgradeDto
 {
     public Guid UpgradeId { get; set; }
-    public Guid PriceId { get; set; }
+    public Guid CoachSubscriptionPlansId { get; set; }
     public Guid CoachId { get; set; }
     public string CoachName { get; set; } = string.Empty;
     public string CoachEmail { get; set; } = string.Empty;

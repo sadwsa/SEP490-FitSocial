@@ -20,6 +20,7 @@ using FitSocial.Client.Services.Coaches;
 using FitSocial.Client.Services.Users;
 using FitSocial.Client.Services.SystemOperations;
 using FitSocial.Client.Services.Reports;
+using FitSocial.Client.Services.SubscriptionPriceHistory;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -52,11 +53,13 @@ builder.Services.AddScoped<IPaymentService, PaymentApiService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<INotificationHubClient, NotificationHubClient>();
 builder.Services.AddScoped<IChatHubClient, ChatHubClient>();
+builder.Services.AddScoped<IPostHubClient, PostHubClient>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ITrainingPackageService, TrainingPackageService>();
 builder.Services.AddScoped<ICoachService, CoachService>();
 builder.Services.AddScoped<ISystemOperationsService, SystemOperationsService>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<ISubscriptionPriceHistoryApiService, SubscriptionPriceHistoryApiService>();
 
 await builder.Build().RunAsync();

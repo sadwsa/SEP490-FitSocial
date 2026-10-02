@@ -29,6 +29,14 @@ public class ReportListItemDto
     public Guid? ReportedPostAuthorId { get; set; }
     public string? ReportedPostAuthorName { get; set; }
 
+    // Reported User Moderation & Status Details
+    public string? ReportedUserRole { get; set; }
+    public int ReportedUserViolationCount { get; set; }
+    public bool? ReportedUserIsLocked { get; set; }
+    public bool? HasSoldTrainingPackage { get; set; }
+    public List<string> AvailableActions { get; set; } = new();
+
+
     // Report Details
     public string? Type { get; set; }
     public string? Reason { get; set; }

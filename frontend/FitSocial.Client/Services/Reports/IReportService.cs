@@ -16,4 +16,9 @@ public interface IReportService
         DateTime? toDate = null,
         int pageNumber = 1,
         int pageSize = 10);
+
+    Task<ApiResponse<ReportListItemDto>> GetReportByIdAsync(Guid reportId);
+
+    Task<ApiResponse<ReportListItemDto>> ProcessReportAsync(Guid reportId, ProcessViolationReportRequest request);
 }
+

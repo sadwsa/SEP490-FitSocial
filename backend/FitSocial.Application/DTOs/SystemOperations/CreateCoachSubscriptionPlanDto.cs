@@ -19,4 +19,10 @@ public class CreateCoachSubscriptionPlanDto
 
     [StringLength(500, ErrorMessage = "Description must not exceed 500 characters.")]
     public string? Description { get; set; }
+
+    [Range(1, 3650, ErrorMessage = "Subscription duration must be between 1 and 3650.")]
+    public int? SubscriptionDuration { get; set; }
+
+    [Range(0, 3650, ErrorMessage = "Training package duration must be between 0 and 3650.")]
+    public int? TrainingPackageDuration { get; set; }
 }

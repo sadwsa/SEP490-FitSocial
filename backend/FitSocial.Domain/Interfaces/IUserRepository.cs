@@ -15,6 +15,12 @@ public interface IUserRepository : IRepository<User>
         int pageNumber = 1,
         int pageSize = 10,
         CancellationToken cancellationToken = default);
+    Task<(List<User> Items, int TotalCount)> ListStaffForAdminAsync(
+        string? search = null,
+        bool? isLocked = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default);
     Task<User?> FindWithCoachProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<User?> FindUserProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default);
 }

@@ -67,5 +67,15 @@ namespace FitSocial.Infrastructure.Repositories
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
         }
+
+        public async Task<IEnumerable<TrainingPackage>> GetPurchasedPackagesAsync(Guid traineeId, CancellationToken cancellationToken = default)
+        {
+            return await DbSet
+                .Include(x => x.Coach)
+                    .ThenInclude(c => c.Coach)
+                .Where(x => x.OrderDetails.Any(od => od.Order.TraineeId == traineeId))
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
+        }
     }
 }

@@ -12,6 +12,9 @@ public interface ITrainingPackageService
  Task<ApiResponse<bool>> DeletePackageAsync(Guid id);
     Task<ApiResponse<TrainingPackageResponseDto>> GetPackageByIdAsync(Guid id);
     Task<ApiResponse<TrainingPackageResponseDto>> CreatePackageAsync(CreateTrainingPackageDto dto);
+    Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync();
+
+
     Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPackagesByCoachIdAsync(Guid coachId);
     Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetAllPackagesAsync(string? searchKeyword = null, decimal? maxPrice = null, Guid? coachId = null);
 }

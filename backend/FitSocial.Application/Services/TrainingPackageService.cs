@@ -119,5 +119,11 @@ namespace FitSocial.Application.Services
                 CreatedAt = entity.CreatedAt
             };
         }
+
+        public async Task<IEnumerable<TrainingPackageResponseDto>> GetPurchasedPackagesAsync(Guid currentUserId)
+        {
+            var packages = await _repository.GetPurchasedPackagesAsync(currentUserId);
+            return packages.Select(MapToDto);
+        }
     }
 }

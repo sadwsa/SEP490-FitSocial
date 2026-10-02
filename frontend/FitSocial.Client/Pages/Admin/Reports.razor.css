@@ -676,8 +676,87 @@
     background: #b91c1c;
 }
 
+.btn-disabled-action {
+    background: #f1f5f9;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+    font-weight: 600;
+    font-size: 0.78rem;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.btn-secondary-action {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    font-weight: 700;
+    font-size: 0.78rem;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-secondary-action:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.role-badge.coach {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.role-badge.trainee {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.role-badge.admin, .role-badge.staff {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.violation-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.violation-pill.low {
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.violation-pill.medium {
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.violation-pill.high {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
 @media (max-width: 760px) {
     .toolbar {
         flex-direction: column;
     }
 }
+

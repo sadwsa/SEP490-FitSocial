@@ -38,4 +38,18 @@ public class CoachSubscriptionPlanRepository : Repository<CoachSubscriptionPlan>
         return DbSet
             .FirstOrDefaultAsync(p => p.CoachSubscriptionPlansId == id && p.IsActive == true, cancellationToken);
     }
+
+    public Task<(List<SubscriptionPriceHistoryItem> Items, int TotalCount)> GetPriceHistoryAsync(
+        Guid? planId,
+        string? keyword,
+        DateTime? fromDate,
+        DateTime? toDate,
+        int pageIndex,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var historyRepo = new SubscriptionPriceHistoryRepository(DbContext);
+        return historyRepo.GetPriceHistoryAsync(planId, keyword, fromDate, toDate, pageIndex, pageSize, cancellationToken);
+    }
 }
+

@@ -1,4 +1,4 @@
-﻿using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Posts;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
@@ -19,19 +19,22 @@ public class PostService : IPostService
     private readonly ILocationRepository _locations;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<PostService>? _logger;
+    private readonly IPostRealtimeNotifier? _postRealtimeNotifier;
 
     public PostService(
         IPostRepository posts,
         IUserRepository users,
         ILocationRepository locations,
         IUnitOfWork unitOfWork,
-        ILogger<PostService>? logger = null)
+        ILogger<PostService>? logger = null,
+        IPostRealtimeNotifier? postRealtimeNotifier = null)
     {
         _posts = posts;
         _users = users;
         _locations = locations;
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _postRealtimeNotifier = postRealtimeNotifier;
     }
 
     public async Task<ApiResponseDto<PostDto>> EditPostAsync(
@@ -223,9 +226,23 @@ public class PostService : IPostService
 
         // 5. Execute Soft Delete
         post.SoftDelete();
+        _posts.Update(post);
 
         // 6. Persist changes
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // 7. Realtime broadcast to active clients
+        if (_postRealtimeNotifier != null)
+        {
+            try
+            {
+                await _postRealtimeNotifier.NotifyPostDeletedAsync(postId);
+            }
+            catch
+            {
+                // Realtime failure should not fail the deletion response
+            }
+        }
 
         return ApiResponseDto<bool>.Ok(true, "Post deleted successfully.");
     }

@@ -76,8 +76,11 @@ public partial class Home : ComponentBase, IDisposable
     // Lifecycle
     protected override async Task OnInitializedAsync()
     {
+        PostHubClient.OnPostDeleted -= HandlePostDeletedRealtime;
+        PostHubClient.OnPostDeleted += HandlePostDeletedRealtime;
+
         await LoadUserInfoAsync();
-        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), LoadTopCoachesAsync());
+        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), LoadTopCoachesAsync(), PostHubClient.StartAsync());
     }
 
     private async Task LoadUserInfoAsync()
@@ -563,9 +566,46 @@ public partial class Home : ComponentBase, IDisposable
         }
     }
 
+    // Realtime Post Deletion Handler
+    private void HandlePostDeletedRealtime(Guid deletedPostId)
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (posts == null || deletedPostId == Guid.Empty) return;
+
+            var removed = posts.RemoveAll(p => p.Id == deletedPostId);
+            if (removed > 0)
+            {
+                posts = new List<PostDto>(posts);
+                totalCount = Math.Max(0, totalCount - removed);
+
+                if (editingPost?.Id == deletedPostId)
+                {
+                    CloseEditPostModal();
+                    ShowWarningToast("The post you were editing has been removed by an administrator.");
+                }
+
+                if (postToDelete?.Id == deletedPostId)
+                {
+                    CloseDeleteModal();
+                    ShowWarningToast("This post has already been removed.");
+                }
+
+                if (reportPostId == deletedPostId)
+                {
+                    CloseReportModal();
+                    ShowWarningToast("The post you were reporting has been removed.");
+                }
+
+                StateHasChanged();
+            }
+        });
+    }
+
     // Dispose
     public void Dispose()
     {
+        PostHubClient.OnPostDeleted -= HandlePostDeletedRealtime;
         searchCts?.Cancel();
         searchCts?.Dispose();
         toastCts?.Cancel();

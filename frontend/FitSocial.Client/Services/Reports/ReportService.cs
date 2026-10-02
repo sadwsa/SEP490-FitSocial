@@ -90,4 +90,47 @@ public class ReportService : IReportService
             };
         }
     }
+
+    public async Task<ApiResponse<ReportListItemDto>> GetReportByIdAsync(Guid reportId)
+    {
+        try
+        {
+            var result = await _apiClient.GetAsync<ReportListItemDto>($"reports/{reportId}");
+            return result ?? new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = "Unable to load report details."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = $"Error loading report details: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<ReportListItemDto>> ProcessReportAsync(Guid reportId, ProcessViolationReportRequest request)
+    {
+        try
+        {
+            var result = await _apiClient.PostAsync<ProcessViolationReportRequest, ReportListItemDto>($"reports/{reportId}/process", request);
+            return result ?? new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = "Unable to process report."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = $"Error processing report: {ex.Message}"
+            };
+        }
+    }
 }
+

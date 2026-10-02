@@ -50,4 +50,18 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .Include(o => o.Payments)
             .FirstOrDefaultAsync(o => o.OrderId == orderId, cancellationToken);
     }
+
+    public async Task<bool> HasSoldTrainingPackageAsync(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+
+        return await DbSet
+            .AsNoTracking()
+            .AnyAsync(o =>
+                (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
+                && o.OrderStatus != null
+                && paidStatuses.Contains(o.OrderStatus.ToUpper()),
+                cancellationToken);
+    }
 }
+

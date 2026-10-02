@@ -65,15 +65,15 @@ public class SystemOperationsService : ISystemOperationsService
 
             var plans = pagedPlans.Select(p => new CoachSubscriptionPlanDto
             {
-                PriceId = p.PriceId ?? p.CoachSubscriptionPlansId,
+                PriceId = p.CoachSubscriptionPlansId,
                 Amount = p.Amount ?? 0m,
                 Currency = p.Currency ?? "VND",
                 IsActive = p.IsActive ?? false,
                 ImageUrl = p.ImageUrl,
                 Description = p.Description,
                 CreatedAt = p.CreatedAt ?? DateTime.UtcNow,
-                SubscriberCount = countDict.TryGetValue(p.PriceId ?? p.CoachSubscriptionPlansId, out var c) ? c.Total : 0,
-                ActiveSubscriberCount = countDict.TryGetValue(p.PriceId ?? p.CoachSubscriptionPlansId, out var c2) ? c2.Active : 0
+                SubscriberCount = countDict.TryGetValue(p.CoachSubscriptionPlansId, out var c) ? c.Total : 0,
+                ActiveSubscriberCount = countDict.TryGetValue(p.CoachSubscriptionPlansId, out var c2) ? c2.Active : 0
             }).ToList();
 
             var result = new CoachSubscriptionPlansResponseDto
@@ -103,7 +103,7 @@ public class SystemOperationsService : ISystemOperationsService
 
         var dto = new CoachSubscriptionPlanDto
         {
-            PriceId = plan.PriceId ?? plan.CoachSubscriptionPlansId,
+            PriceId = plan.CoachSubscriptionPlansId,
             Amount = plan.Amount ?? 0m,
             Currency = plan.Currency ?? "VND",
             IsActive = plan.IsActive ?? false,

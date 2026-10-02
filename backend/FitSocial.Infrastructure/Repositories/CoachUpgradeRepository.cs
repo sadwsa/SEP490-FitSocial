@@ -13,8 +13,8 @@ public class CoachUpgradeRepository : Repository<CoachUpgrade>, ICoachUpgradeRep
     {
         var ids = priceIds.ToList();
         if (!ids.Any()) return new Dictionary<Guid, (int, int)>();
-        var groups = await DbSet.Where(cu => ids.Contains(cu.PriceId))
-            .GroupBy(cu => cu.PriceId)
+        var groups = await DbSet.Where(cu => ids.Contains(cu.CoachSubscriptionPlansId))
+            .GroupBy(cu => cu.CoachSubscriptionPlansId)
             .Select(g => new { PriceId = g.Key, Total = g.Count(), Active = g.Count(x => x.Status == "ACTIVE" || x.Status == "SUCCESS") })
             .ToListAsync(cancellationToken);
         return groups.ToDictionary(x => x.PriceId, x => (x.Total, x.Active));
@@ -24,10 +24,10 @@ public class CoachUpgradeRepository : Repository<CoachUpgrade>, ICoachUpgradeRep
         => DbSet.CountAsync(cancellationToken);
 
     public Task<int> CountByPriceIdAsync(Guid priceId, CancellationToken cancellationToken = default)
-        => DbSet.CountAsync(cu => cu.PriceId == priceId, cancellationToken);
+        => DbSet.CountAsync(cu => cu.CoachSubscriptionPlansId == priceId, cancellationToken);
 
     public Task<int> CountActiveByPriceIdAsync(Guid priceId, CancellationToken cancellationToken = default)
-        => DbSet.CountAsync(cu => cu.PriceId == priceId && (cu.Status == "ACTIVE" || cu.Status == "SUCCESS"), cancellationToken);
+        => DbSet.CountAsync(cu => cu.CoachSubscriptionPlansId == priceId && (cu.Status == "ACTIVE" || cu.Status == "SUCCESS"), cancellationToken);
 
     public Task<CoachUpgrade?> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default)
         => DbSet.FirstOrDefaultAsync(cu => cu.OrderId == orderId, cancellationToken);

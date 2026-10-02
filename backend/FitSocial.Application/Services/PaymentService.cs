@@ -129,7 +129,7 @@ public class PaymentService : IPaymentService
         var order = new Order
         {
             OrderId = Guid.NewGuid(),
-            TraineeId = user.UserId,
+            BuyerId = user.UserId,
             CoachId = user.UserId,
             TotalAmount = fee,
             OrderStatus = PaymentConstants.OrderStatusPending,
@@ -141,6 +141,9 @@ public class PaymentService : IPaymentService
             OrderDetailsId = Guid.NewGuid(),
             OrderId = order.OrderId,
             PackagePrice = fee,
+            PackageTitle = "Coach Activation Plan",
+            PackageDurationDays = 365,
+            CoachName = user.FullName ?? user.Email,
             CreatedAt = now
         });
         order.Payments.Add(new Payment
@@ -150,7 +153,7 @@ public class PaymentService : IPaymentService
             Amount = fee,
             Currency = PaymentConstants.CurrencyVnd,
             Method = "VietQR",
-            GatewayId = 1,
+            GatewayId = null,
             TransactionRef = $"COACH{orderCode}",
             GatewayTransactionId = orderCode.ToString(),
             Status = PaymentConstants.OrderStatusPending,
@@ -243,7 +246,7 @@ public class PaymentService : IPaymentService
 
         if (order.OrderStatus == PaymentConstants.OrderStatusPaid)
         {
-            var existingUser = await _users.GetByIdAsync(order.TraineeId);
+            var existingUser = await _users.GetByIdAsync(order.BuyerId);
             if (existingUser == null || existingUser.IsLocked == true)
             {
                 return ApiResponseDto<AuthResponseDto>.Fail("Account is not available.");
@@ -275,7 +278,7 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<AuthResponseDto>.Fail("Payment has not been completed yet.");
         }
 
-        var user = await _users.GetByIdAsync(order.TraineeId);
+        var user = await _users.GetByIdAsync(order.BuyerId);
         if (user == null)
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Account is not available.");
@@ -287,9 +290,13 @@ public class PaymentService : IPaymentService
         payment.GatewayResponseRaw = JsonSerializer.Serialize(new { status.IsPaid, status.Amount, status.Reference, verifiedAt = now });
         payment.ProcessedAt = now;
         payment.UpdatedAt = now;
-        // Mark CoachUpgrade as SUCCESS
+        // Mark CoachUpgrade as ACTIVE and set EndDay
         var upgrade = await _coachUpgrades.GetByOrderIdAsync(order.OrderId);
-        if (upgrade != null) upgrade.Status = "SUCCESS";
+        if (upgrade != null)
+        {
+            upgrade.Status = "ACTIVE";
+            upgrade.EndDay = now.AddDays(365);
+        }
         user.IsLocked = false;
         user.LastActiveAt = now;
         user.UpdatedAt = now;

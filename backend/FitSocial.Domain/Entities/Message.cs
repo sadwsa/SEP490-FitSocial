@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace FitSocial.Domain.Entities;
 
 public partial class Message
 {
-    public Guid Id { get; set; }
+    public Guid MessageId { get; set; }
 
     public Guid ConversationId { get; set; }
 
@@ -17,9 +17,16 @@ public partial class Message
 
     public DateTime? CreatedAt { get; set; }
 
+    // Helper property for backward compatibility with Id
+    public Guid Id
+    {
+        get => MessageId;
+        set => MessageId = value;
+    }
+
     public virtual Conversation Conversation { get; set; } = null!;
 
     public virtual User Sender { get; set; } = null!;
 
-    public virtual VideoCall? VideoCall { get; set; }
+    public virtual ICollection<MessageAttachment> MessageAttachments { get; set; } = new List<MessageAttachment>();
 }

@@ -68,7 +68,9 @@ public class NotificationService : INotificationService
                     {
                         Id = notificationId,
                         UserId = recipientId,
+                        ActorId = message.SenderId,
                         Type = "NewMessage",
+                        Description = preview,
                         ReferenceId = message.Id,
                         IsRead = false,
                         CreatedAt = createdAt

@@ -1,6 +1,7 @@
 using System;
+using System.Collections.Generic;
 
-namespace FitSocial.Application.DTOs.Cart
+namespace FitSocial.Client.Models.Cart
 {
     public class CartItemDto
     {
@@ -22,5 +23,25 @@ namespace FitSocial.Application.DTOs.Cart
         public bool IsAvailable { get; set; } = true;
         public string? UnavailableReason { get; set; }
         public DateTime? CreatedAt { get; set; }
+    }
+
+    public class CartSummaryDto
+    {
+        public List<CartItemDto> Items { get; set; } = new();
+        public int TotalItems { get; set; }
+        public int ValidItemsCount { get; set; }
+        public decimal Subtotal { get; set; }
+        public decimal PlatformFee { get; set; } = 0;
+        public decimal TotalPrice { get; set; }
+        public decimal ApproxUsd { get; set; }
+        public bool HasUnavailableItems { get; set; }
+        public bool IsCoach { get; set; }
+        public string TemporaryOrderCode { get; set; } = string.Empty;
+    }
+
+    public class AddToCartDto
+    {
+        public Guid PackageId { get; set; }
+        public int Quantity { get; set; } = 1;
     }
 }

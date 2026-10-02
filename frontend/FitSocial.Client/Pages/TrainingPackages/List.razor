@@ -94,10 +94,7 @@
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-2 mb-6">
-                            <InputCheckbox @bind-Value="createDto.IsActive" id="isActiveSwitch" class="w-4 h-4 text-[#FF5500] rounded focus:ring-[#FF5500]" />
-                            <label for="isActiveSwitch" class="text-sm font-medium text-gray-700 cursor-pointer">Set as Active immediately</label>
-                        </div>
+
 
                         <div class="flex justify-end gap-3">
                             <button type="button" @onclick="ToggleCreateForm" class="px-5 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
@@ -167,7 +164,8 @@
                                     <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                                         <td class="p-4 text-sm font-bold text-gray-800">@pkg.Title</td>
                                         <td class="p-4 text-sm text-gray-600">@(pkg.DurationDays >= 7 && pkg.DurationDays % 7 == 0 ? $"{pkg.DurationDays / 7} Weeks" : $"{pkg.DurationDays} Days")</td>
-                                        <td class="p-4 text-sm font-semibold text-[#FF5500]">@(pkg.Price >= 1000 ? (pkg.Price / 1000).ToString("0") + "k" : pkg.Price.ToString("N0") + "đ")</td>
+                                        <td class="p-4 text-sm font-semibold text-[#FF5500]">@($"{pkg.Price:N0} đ")</td>
+
                                         <td class="p-4 text-sm text-center">
                                             @if (pkg.IsActive)
                                             {
@@ -297,7 +295,7 @@
         }
         else
         {
-            errorMessage = response.Message ?? "Đã xảy ra lỗi khi xóa gói tập.";
+            errorMessage = response.Message ?? "An error occurred while deleting the exercise package.";
         }
         
         showDeleteModal = false;

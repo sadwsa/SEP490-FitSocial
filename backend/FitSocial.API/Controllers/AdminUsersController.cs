@@ -63,4 +63,26 @@ public class AdminUsersController : ControllerBase
         }
         return Ok(result);
     }
+
+    /// <summary>
+    /// Issue a warning to a user account. If user reaches 3 warnings, account is auto-locked and token invalidated.
+    /// </summary>
+    [HttpPost("{userId:guid}/warn")]
+    [ProducesResponseType(typeof(ApiResponseDto<AdminUserDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> WarnUser([FromRoute] Guid userId, [FromBody] WarnUserRequestDto? request, CancellationToken cancellationToken)
+    {
+        Guid? staffId = null;
+        var subClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+        if (Guid.TryParse(subClaim, out var parsedStaffId))
+        {
+            staffId = parsedStaffId;
+        }
+
+        var result = await _adminUserService.WarnUserAsync(userId, request?.Reason, staffId, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
 }

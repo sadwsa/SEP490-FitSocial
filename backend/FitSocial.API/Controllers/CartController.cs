@@ -43,8 +43,19 @@ public class CartController : ControllerBase
             return Unauthorized(ApiResponseDto<CartItemDto>.Fail("Invalid token or user ID"));
         }
 
-        var result = await _cartService.AddToCartAsync(currentUserId, request, cancellationToken);
-        return Ok(ApiResponseDto<CartItemDto>.Ok(result, "Product added to cart successfully."));
+        var dto = new AddToCartDto
+        {
+            PackageId = request.GetEffectivePackageId(),
+            Quantity = request.Quantity
+        };
+
+        var result = await _cartService.AddToCartAsync(currentUserId, dto, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
     }
 
     /// <summary>
@@ -63,7 +74,7 @@ public class CartController : ControllerBase
             return Unauthorized(ApiResponseDto<int>.Fail("Invalid token or user ID"));
         }
 
-        var count = await _cartService.GetCartCountAsync(currentUserId, cancellationToken);
-        return Ok(ApiResponseDto<int>.Ok(count));
+        var result = await _cartService.GetCartCountAsync(currentUserId, cancellationToken);
+        return Ok(result);
     }
 }

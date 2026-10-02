@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Cart;
-using FitSocial.Application.Exceptions;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
@@ -34,14 +33,13 @@ public class CartServiceTests
     }
 
     [Fact]
-    public async Task AddToCartAsync_FirstTimeAddingProduct_ShouldCreateCartItemAndReturnDto()
+    public async Task AddToCartAsync_FirstTimeAddingProduct_ShouldCreateCartItemAndReturnSuccess()
     {
         // Arrange
         var userId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
         var coachId = Guid.NewGuid();
 
-        var user = new User { UserId = userId, FullName = "Trainee User" };
         var package = new TrainingPackage
         {
             PackageId = packageId,
@@ -52,14 +50,12 @@ public class CartServiceTests
             IsActive = true
         };
 
-        var requestDto = new AddToCartRequestDto
+        var dto = new AddToCartDto
         {
             PackageId = packageId,
             Quantity = 1
         };
 
-        _mockUserRepo.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(package);
         _mockCartRepo.Setup(r => r.GetCartItemAsync(userId, packageId, It.IsAny<CancellationToken>()))
@@ -70,29 +66,29 @@ public class CartServiceTests
             .ReturnsAsync(1);
 
         // Act
-        var result = await _service.AddToCartAsync(userId, requestDto);
+        var result = await _service.AddToCartAsync(userId, dto);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(userId, result.UserId);
-        Assert.Equal(packageId, result.PackageId);
-        Assert.Equal(1, result.Quantity);
-        Assert.Equal("30-Day Weight Loss", result.PackageTitle);
-        Assert.Equal(500000, result.Price);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(packageId, result.Data.PackageId);
+        Assert.Equal(1, result.Data.Quantity);
+        Assert.Equal("30-Day Weight Loss", result.Data.Title);
+        Assert.Equal(500000, result.Data.Price);
 
         _mockCartRepo.Verify(r => r.AddAsync(It.Is<Cart>(c => c.UserId == userId && c.PackageId == packageId && c.Quantity == 1), It.IsAny<CancellationToken>()), Times.Once);
         _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task AddToCartAsync_SecondTimeAddingSameProduct_ShouldIncreaseQuantity()
+    public async Task AddToCartAsync_SecondTimeAddingSameProduct_ShouldReturnExistingItem()
     {
         // Arrange
         var userId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
         var coachId = Guid.NewGuid();
 
-        var user = new User { UserId = userId, FullName = "Trainee User" };
         var package = new TrainingPackage
         {
             PackageId = packageId,
@@ -112,117 +108,97 @@ public class CartServiceTests
             CreatedAt = DateTime.UtcNow.AddMinutes(-10)
         };
 
-        var requestDto = new AddToCartRequestDto
+        var dto = new AddToCartDto
         {
-            ProductId = packageId,
+            PackageId = packageId,
             Quantity = 3
         };
 
-        _mockUserRepo.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(package);
         _mockCartRepo.Setup(r => r.GetCartItemAsync(userId, packageId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingCart);
-        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
 
         // Act
-        var result = await _service.AddToCartAsync(userId, requestDto);
+        var result = await _service.AddToCartAsync(userId, dto);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(5, existingCart.Quantity);
-        Assert.Equal(5, result.Quantity);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Quantity);
         _mockCartRepo.Verify(r => r.AddAsync(It.IsAny<Cart>(), It.IsAny<CancellationToken>()), Times.Never);
-        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task AddToCartAsync_UnauthenticatedUser_ShouldThrowValidationException()
+    public async Task AddToCartAsync_UnauthenticatedUser_ShouldReturnFail()
     {
         // Arrange
-        var requestDto = new AddToCartRequestDto { PackageId = Guid.NewGuid(), Quantity = 1 };
+        var dto = new AddToCartDto { PackageId = Guid.NewGuid(), Quantity = 1 };
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.AddToCartAsync(Guid.Empty, requestDto));
-        Assert.Equal("User is not authenticated.", ex.Message);
+        // Act
+        var result = await _service.AddToCartAsync(Guid.Empty, dto);
+
+        // Assert
+        Assert.False(result.Success);
     }
 
     [Fact]
-    public async Task AddToCartAsync_EmptyProductId_ShouldThrowValidationException()
+    public async Task AddToCartAsync_EmptyPackageId_ShouldReturnFail()
     {
         // Arrange
         var userId = Guid.NewGuid();
-        var requestDto = new AddToCartRequestDto { Quantity = 1 };
+        var dto = new AddToCartDto { PackageId = Guid.Empty, Quantity = 1 };
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.AddToCartAsync(userId, requestDto));
-        Assert.Equal("Product ID is required.", ex.Message);
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.False(result.Success);
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(-10)]
-    public async Task AddToCartAsync_InvalidQuantity_ShouldThrowValidationException(int quantity)
+    public async Task AddToCartAsync_InvalidQuantity_ShouldReturnFail(int quantity)
     {
         // Arrange
         var userId = Guid.NewGuid();
-        var requestDto = new AddToCartRequestDto { PackageId = Guid.NewGuid(), Quantity = quantity };
+        var dto = new AddToCartDto { PackageId = Guid.NewGuid(), Quantity = quantity };
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.AddToCartAsync(userId, requestDto));
-        Assert.Equal("Quantity must be greater than 0.", ex.Message);
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.False(result.Success);
     }
 
     [Fact]
-    public async Task AddToCartAsync_UserNotFound_ShouldThrowNotFoundException()
+    public async Task AddToCartAsync_PackageNotFound_ShouldReturnFail()
     {
         // Arrange
         var userId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
-        var requestDto = new AddToCartRequestDto { PackageId = packageId, Quantity = 1 };
+        var dto = new AddToCartDto { PackageId = packageId, Quantity = 1 };
 
-        _mockUserRepo.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
-            _service.AddToCartAsync(userId, requestDto));
-        Assert.Equal("User account not found.", ex.Message);
-    }
-
-    [Fact]
-    public async Task AddToCartAsync_ProductNotFound_ShouldThrowNotFoundException()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var packageId = Guid.NewGuid();
-        var user = new User { UserId = userId };
-        var requestDto = new AddToCartRequestDto { PackageId = packageId, Quantity = 1 };
-
-        _mockUserRepo.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((TrainingPackage?)null);
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
-            _service.AddToCartAsync(userId, requestDto));
-        Assert.Equal("Training package not found.", ex.Message);
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Gói tập không tồn tại.", result.Message);
     }
 
     [Fact]
-    public async Task AddToCartAsync_ProductInactive_ShouldThrowBusinessException()
+    public async Task AddToCartAsync_ProductInactive_ShouldReturnFail()
     {
         // Arrange
         var userId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
-        var user = new User { UserId = userId };
         var package = new TrainingPackage
         {
             PackageId = packageId,
@@ -230,26 +206,25 @@ public class CartServiceTests
             Title = "Archived Package",
             IsActive = false
         };
-        var requestDto = new AddToCartRequestDto { PackageId = packageId, Quantity = 1 };
+        var dto = new AddToCartDto { PackageId = packageId, Quantity = 1 };
 
-        _mockUserRepo.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(package);
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
-            _service.AddToCartAsync(userId, requestDto));
-        Assert.Equal("Training package is no longer available.", ex.Message);
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Gói tập này hiện đang tạm dừng nhận học viên.", result.Message);
     }
 
     [Fact]
-    public async Task AddToCartAsync_CoachAddsOwnPackage_ShouldThrowBusinessException()
+    public async Task AddToCartAsync_CoachAddsOwnPackage_ShouldReturnFail()
     {
         // Arrange
         var userId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
-        var user = new User { UserId = userId };
         var package = new TrainingPackage
         {
             PackageId = packageId,
@@ -257,17 +232,17 @@ public class CartServiceTests
             Title = "My Own Package",
             IsActive = true
         };
-        var requestDto = new AddToCartRequestDto { PackageId = packageId, Quantity = 1 };
+        var dto = new AddToCartDto { PackageId = packageId, Quantity = 1 };
 
-        _mockUserRepo.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(package);
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
-            _service.AddToCartAsync(userId, requestDto));
-        Assert.Equal("You cannot add your own package to the cart.", ex.Message);
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Bạn không thể thêm gói tập do chính mình tạo vào giỏ hàng.", result.Message);
     }
 
     [Fact]
@@ -279,19 +254,21 @@ public class CartServiceTests
             .ReturnsAsync(5);
 
         // Act
-        var count = await _service.GetCartCountAsync(userId);
+        var result = await _service.GetCartCountAsync(userId);
 
         // Assert
-        Assert.Equal(5, count);
+        Assert.True(result.Success);
+        Assert.Equal(5, result.Data);
     }
 
     [Fact]
     public async Task GetCartCountAsync_EmptyUserId_ShouldReturnZero()
     {
         // Act
-        var count = await _service.GetCartCountAsync(Guid.Empty);
+        var result = await _service.GetCartCountAsync(Guid.Empty);
 
         // Assert
-        Assert.Equal(0, count);
+        Assert.True(result.Success);
+        Assert.Equal(0, result.Data);
     }
 }

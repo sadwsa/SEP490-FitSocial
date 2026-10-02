@@ -42,6 +42,16 @@ namespace FitSocial.Client.Services.Cart
             return response;
         }
 
+        public async Task<ApiResponse<CartItemDto>> AddToCartAsync(AddToCartRequestDto request)
+        {
+            var dto = new AddToCartDto
+            {
+                PackageId = request.PackageId ?? request.ProductId ?? Guid.Empty,
+                Quantity = request.Quantity
+            };
+            return await AddToCartAsync(dto);
+        }
+
         public async Task<ApiResponse<bool>> RemoveCartItemAsync(Guid cartId)
         {
             var response = await _apiClient.DeleteAsync<bool>($"carts/{cartId}");

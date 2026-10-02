@@ -3,7 +3,6 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject ICartService CartService
-@implements IDisposable
 @inject INotificationService NotificationService
 @inject IChatHubClient ChatHubClient
 @using System.Security.Claims
@@ -356,11 +355,7 @@
     [Parameter] public string? UserInitials { get; set; }
     [Parameter] public string? UserRole { get; set; }
     [Parameter] public string? UserAvatarUrl { get; set; }
-
     [Parameter] public int? CartCount { get; set; }
-    [Parameter] public int MessageCount { get; set; } = 5;
-    [Parameter] public int NotificationCount { get; set; } = 9;
-    [Parameter] public int CartCount { get; set; } = 0;
     [Parameter] public int? MessageCount { get; set; }
     [Parameter] public int NotificationCount { get; set; } = 0;
 
@@ -714,11 +709,9 @@
         _ = LoadCartCountAsync();
     }
 
-    public void Dispose()
-    {
-        CartService.OnCartChanged -= HandleCartChanged;
     public ValueTask DisposeAsync()
     {
+        CartService.OnCartChanged -= HandleCartChanged;
         NotificationService.OnConversationRead -= HandleConversationReadLocally;
         ChatHubClient.OnNotificationReceived -= HandleRealtimeNotification;
         _toastTimer?.Dispose();

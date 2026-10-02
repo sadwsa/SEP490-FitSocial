@@ -35,7 +35,6 @@ public partial class UserProfile : ComponentBase, IDisposable
     [Inject] private ITrainingPackageService PackageService { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
-    [Inject] private FitSocial.Client.Services.TrainingPackages.ITrainingPackageService PackageService { get; set; } = default!;
     [Inject] private FitSocial.Client.Services.Cart.ICartService CartService { get; set; } = default!;
 
     private OtherUserProfileModel? profile;
@@ -178,7 +177,7 @@ public partial class UserProfile : ComponentBase, IDisposable
                 profile = response.Data;
                 if (profile.IsCoach)
                 {
-                    await LoadCoachPackagesAsync(targetUserId);
+                    await LoadCoachPackagesAsync();
                 }
             }
             else

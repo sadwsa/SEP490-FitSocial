@@ -48,7 +48,6 @@ namespace FitSocial.Application.Services
                     var pkg = c.Package;
                     var coachProfile = pkg.Coach;
                     var coachUser = coachProfile?.Coach;
-                    var sports = coachProfile?.Sports?.ToList();
                     var reviews = coachProfile?.Reviews?.ToList();
 
                     var isOwnPackage = (pkg.CoachId == userId);
@@ -88,7 +87,7 @@ namespace FitSocial.Application.Services
                         }
                     }
 
-                    var sportName = sports != null && sports.Count > 0 ? sports[0].SportName : "Gym & Strength";
+                    var sportName = "Gym & Strength";
 
                     itemDtos.Add(new CartItemDto
                     {
@@ -146,6 +145,11 @@ namespace FitSocial.Application.Services
 
         public async Task<ApiResponseDto<int>> GetCartCountAsync(Guid userId, CancellationToken cancellationToken = default)
         {
+            if (userId == Guid.Empty)
+            {
+                return ApiResponseDto<int>.Ok(0);
+            }
+
             try
             {
                 var count = await _cartRepository.GetCartCountByUserIdAsync(userId, cancellationToken);
@@ -159,9 +163,19 @@ namespace FitSocial.Application.Services
 
         public async Task<ApiResponseDto<CartItemDto>> AddToCartAsync(Guid userId, AddToCartDto dto, CancellationToken cancellationToken = default)
         {
+            if (userId == Guid.Empty)
+            {
+                return ApiResponseDto<CartItemDto>.Fail("Người dùng chưa được xác thực.");
+            }
+
             if (dto == null || dto.PackageId == Guid.Empty)
             {
                 return ApiResponseDto<CartItemDto>.Fail("Thông tin gói tập không hợp lệ.");
+            }
+
+            if (dto.Quantity <= 0)
+            {
+                return ApiResponseDto<CartItemDto>.Fail("Số lượng phải lớn hơn 0.");
             }
 
             try

@@ -10,13 +10,6 @@ public partial class CoachUpgrade
 
     public Guid CoachSubscriptionPlansId { get; set; }
 
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-    public Guid PriceId
-    {
-        get => CoachSubscriptionPlansId;
-        set => CoachSubscriptionPlansId = value;
-    }
-
     public Guid OrderId { get; set; }
 
     public string? Status { get; set; }

@@ -83,17 +83,17 @@ public class AuthService : IAuthService
 
         var otpCode = await _otpService.GenerateOtpAsync(normalizedEmail, purpose);
 
-        var subject = "[FitSocial] Account registration verification code";
+        var subject = "[FitConnect] Account registration verification code";
         var body = $@"
             <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;"">
                 <div style=""text-align: center; margin-bottom: 20px;"">
-                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitSocial"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
-                    <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitSocial</h2>
+                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitConnect"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
+                    <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitConnect</h2>
                     <p style=""color: #666; margin: 5px 0 0;"">Sports & Fitness Community</p>
                 </div>
                 <div style=""background: #fff3e0; border-left: 4px solid #FF5722; padding: 15px; margin-bottom: 20px;"">
                     <p style=""margin: 0; color: #333; font-size: 16px;"">Hello,</p>
-                    <p style=""margin: 10px 0 0; color: #555;"">You are registering a Trainee account at FitSocial. Your OTP verification code is:</p>
+                    <p style=""margin: 10px 0 0; color: #555;"">You are registering a Trainee account at FitConnect. Your OTP verification code is:</p>
                 </div>
                 <div style=""text-align: center; margin: 30px 0;"">
                     <span style=""font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #FF5722; background: #fbe9e7; padding: 10px 24px; border-radius: 8px; border: 1px dashed #FF5722;"">
@@ -146,6 +146,7 @@ public class AuthService : IAuthService
     /// <summary>
     /// Email + password sign-in shared by all roles (Trainee, Coach, ...).
     /// The role travels in the JWT (ClaimTypes.Role) and AuthResponse.User.
+    /// Coach with Pending Approval is blocked with a specific message per FitConnect spec.
     /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> LoginAsync(LoginRequestDto request)
     {
@@ -161,6 +162,16 @@ public class AuthService : IAuthService
 
         if (user.IsLocked == true)
         {
+            // Coach pending approval: specific message per spec Step 5 abnormal flow
+            if (string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
+            {
+                var profile = await _coachProfiles.GetByIdAsync(user.UserId);
+                var approval = profile?.ApprovalStatus?.Trim().ToUpperInvariant();
+                if (approval == "PENDING")
+                    return ApiResponseDto<AuthResponseDto>.Fail("Your account application is currently under credential verification. Please check back later.");
+                if (approval == "REJECTED")
+                    return ApiResponseDto<AuthResponseDto>.Fail("Your coach application has been rejected. Please check your email for details and resubmission instructions.");
+            }
             return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
         }
 
@@ -178,7 +189,7 @@ public class AuthService : IAuthService
 
         user.LastActiveAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
-        var loginResponse = await _tokenService.CreateSessionAsync(user);
+        var loginResponse = await _tokenService.CreateSessionAsync(user, null, request.RememberMe);
         await _unitOfWork.SaveChangesAsync();
 
         return ApiResponseDto<AuthResponseDto>.Ok(loginResponse, "Signed in successfully!");
@@ -213,7 +224,7 @@ public class AuthService : IAuthService
 
         user.LastActiveAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
-        var adminResponse = await _tokenService.CreateSessionAsync(user);
+        var adminResponse = await _tokenService.CreateSessionAsync(user, null, request.RememberMe);
         await _unitOfWork.SaveChangesAsync();
 
         return ApiResponseDto<AuthResponseDto>.Ok(adminResponse, "Welcome to the Management Portal!");
@@ -420,7 +431,6 @@ public class AuthService : IAuthService
             EkycId = Guid.NewGuid(),
             CoachId = user.UserId,
             EncryptedIdCardNumber = _encryptionService.Encrypt(ekycResult.Result.IdCardNumber, deterministic: true),
-            IdCardNumber = ekycResult.Result.IdCardNumber,
             FullNameOnCard = ekycResult.Result.FullNameOnCard,
             DateOfBirthOnCard = ekycResult.Result.DateOfBirthOnCard,
             Birthplace = ekycResult.Result.Birthplace,
@@ -444,7 +454,6 @@ public class AuthService : IAuthService
             LivenessScore = ekycResult.Result.LivenessScore,
             FaceMatchConfidence = ekycResult.Result.FaceMatchConfidence,
             EncryptedRawInformationJson = _encryptionService.Encrypt(ekycResult.Result.RawInformationJson ?? ""),
-            RawInformationJson = ekycResult.Result.RawInformationJson,
             FrontCardUrl = request.FrontCardUrl!.Trim(),
             BackCardUrl = request.BackCardUrl!.Trim(),
             FaceImageUrl = request.FaceImageUrl?.Trim(),
@@ -506,10 +515,6 @@ public class AuthService : IAuthService
         try
         {
             await _unitOfWork.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("IdCardNumber") == true)
-        {
-            return ApiResponseDto<User>.Fail("This ID card has already been used for another coach.");
         }
         catch (DbUpdateException)
         {

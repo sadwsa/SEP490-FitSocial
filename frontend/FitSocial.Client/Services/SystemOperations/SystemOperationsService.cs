@@ -89,16 +89,13 @@ public class SystemOperationsService : ISystemOperationsService
     {
         try
         {
-            var resp = await _http.GetAsync("system-operations/coach-subscription-plans/active");
+            // Public plans endpoint (proper CoachSubscriptionPlansId). The old
+            // system-operations/.../active endpoint returned the admin DTO whose
+            // PriceId is the Price FK, which broke plan lookup at payment time.
+            // NOTE: controller route is api/CoachSubscriptionPlans (no hyphens).
+            var resp = await _http.GetAsync("coachsubscriptionplans");
             var raw = await resp.Content.ReadAsStringAsync();
             var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            // Backend returns {success, data: List<Plan>}
-            var doc = JsonDocument.Parse(raw);
-            if (doc.RootElement.TryGetProperty("data", out var dataEl))
-            {
-                var list = JsonSerializer.Deserialize<List<CoachSubscriptionPlanDto>>(dataEl.GetRawText(), opts);
-                return new ApiResponse<List<CoachSubscriptionPlanDto>> { Success = true, Data = list ?? new() };
-            }
             var wrapped = JsonSerializer.Deserialize<ApiResponse<List<CoachSubscriptionPlanDto>>>(raw, opts);
             if (wrapped != null) return wrapped;
             return new ApiResponse<List<CoachSubscriptionPlanDto>> { Success = false, Message = "Failed to parse response." };

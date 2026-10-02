@@ -13,12 +13,12 @@
 @inject FitSocial.Client.Services.SystemOperations.ISystemOperationsService SystemOps
 @inject NavigationManager Navigation
 
-<PageTitle>Join the FitSocial Community</PageTitle>
+<PageTitle>Join the FitConnect Community</PageTitle>
 
 <div class="reg-hero">
-    <img src="Logo_FitSocial.jpg" alt="FitSocial" class="hero-logo" />
+    <img src="Logo_FitSocial.jpg" alt="FitConnect" class="hero-logo" />
     <div class="hero-text">
-        <h1 class="hero-title">Join the <span>FitSocial</span> Community</h1>
+        <h1 class="hero-title">Join the <span>FitConnect</span> Community</h1>
         <p class="hero-sub">Unlock your unlimited physical potential, sync your smart training journey and connect with thousands of athletes and top coaches.</p>
     </div>
 </div>
@@ -266,7 +266,23 @@
                 <small class="muted">Accepted: NASM, CSCS, ACE. PDF, PNG, JPG (max 10MB). Pending manual verification within 3 days after payment.</small>
             </div>
             <div class="field"><label>Biography</label><InputTextArea @bind-Value="registerModel.Biography" class="form-control" rows="3" placeholder="Coaching background and data-driven approach..." /></div>
-            <div class="field">
+            <div class="wiz-actions">
+                <button type="button" class="btn-back" @onclick="() => coachStep = 2">← Back</button>
+                <button type="button" class="btn-auth-primary btn-coach flex-grow-1" @onclick="HandleCertificatesNext"><span>Next: Confirm & Choose Plan →</span></button>
+            </div>
+        }
+        else if (coachStep == 4)
+        {
+            <!-- Step 4: Confirm & Plan (Active) per FitConnect spec -->
+            <h4 class="fw-bold">Confirm Your Information</h4>
+            <div class="confirm-box">
+                <p><strong>Coach:</strong> @registerModel.FullName</p>
+                <p><strong>Email:</strong> @registerModel.Email | <strong>Phone:</strong> @registerModel.PhoneNumber</p>
+                <p><strong>Experience:</strong> @registerModel.ExperienceYears years | <strong>Certificates:</strong> @registerModel.Certificates.Count(c => !string.IsNullOrWhiteSpace(c.CertificateUrl)) file(s)</p>
+                <p><strong>CCCD:</strong> @(ekycResult?.IdCardNumber ?? "Verified")</p>
+            </div>
+
+            <div class="field" style="margin-top:12px;">
                 <label>Choose Subscription Plan <span class="req">*</span></label>
                 @if (isLoadingPlans)
                 {
@@ -281,9 +297,10 @@
                     <div style="display:grid; grid-template-columns:1fr; gap:10px;">
                         @foreach (var plan in availablePlans)
                         {
-                            var isSelected = registerModel.PriceId == plan.PriceId;
+                            var planId = plan.PlanId;
+                            var isSelected = registerModel.CoachSubscriptionPlansId == planId;
                             <label style="display:flex; gap:12px; align-items:center; border:2px solid @(isSelected ? "#FF5500" : "#e5e7eb"); background:@(isSelected ? "#fff7f3" : "#fff"); border-radius:12px; padding:12px; cursor:pointer;">
-                                <input type="radio" name="plan" checked="@isSelected" @onchange="() => SelectPlan(plan.PriceId)" style="accent-color:#FF5500;" />
+                                <input type="radio" name="plan" checked="@isSelected" @onchange="() => SelectPlan(planId)" style="accent-color:#FF5500;" />
                                 @if (!string.IsNullOrEmpty(plan.ImageUrl))
                                 {
                                     <img src="@plan.ImageUrl" alt="Plan" style="width:56px; height:56px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb;" />
@@ -293,58 +310,24 @@
                                     <div style="width:56px; height:56px; border-radius:8px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; border:1px solid #e5e7eb;"><AppIcon Name="trophy" /></div>
                                 }
                                 <div style="flex:1;">
-                                    <div style="font-weight:700; color:#1e293b;">@plan.Amount.ToString("N0") @plan.Currency <span style="font-weight:400; color:#64748b; font-size:0.85em;">@(!string.IsNullOrWhiteSpace(plan.Description) ? $"• {plan.Description}" : "")</span></div>
+                                    <div style="font-weight:700; color:#1e293b;">@((plan.Amount ?? 0).ToString("N0")) @(plan.Currency ?? "VND") - @(plan.Description ?? "Plan")</div>
+                                    <small class="muted">@(plan.SubscriptionDuration != null ? $"{plan.SubscriptionDuration} months" : "") @(plan.TrainingPackageDuration != null ? $"• {plan.TrainingPackageDuration} days training" : "")</small>
                                 </div>
-                                @if (isSelected) { <span class="status-badge active">Selected</span> }
                             </label>
                         }
                     </div>
                 }
-                @if (showCoachErrors && registerModel.PriceId == null) { <div class="field-error">Please select a subscription plan.</div> }
+                @if (showCoachErrors && registerModel.CoachSubscriptionPlansId == null) { <div class="field-error">Please select a subscription plan.</div> }
             </div>
-            <label class="terms"><input type="checkbox" @bind="agreedTerms" /><span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> (@latestTerm?.Version) </span></label>
+
+            <label class="terms" style="margin-top:8px;"><input type="checkbox" @bind="agreedTerms" /><span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> (@(latestTerm?.Version ?? "v1.0"))</span></label>
             @if (latestTerm != null) { <details class="terms-box"><summary>@latestTerm.Title</summary><div class="terms-content">@latestTerm.Content</div></details> }
             @if (showTermsError && !agreedTerms) { <div class="field-error">Please agree to the terms.</div> }
-            <div class="wiz-actions">
-                <button type="button" class="btn-back" @onclick="() => coachStep = 2">← Back</button>
-                <button type="button" class="btn-auth-primary btn-coach flex-grow-1" @onclick="HandleCertificatesNext"><span>Next: Confirm →</span></button>
+
+            <div style="border:2px solid #FF5500; background:#fff7f3; border-radius:8px; padding:12px; text-align:center; font-weight:800; margin-top:12px; color:#1e293b;">
+                Total Payment: @previewAmount VND
             </div>
-        }
-        else if (coachStep == 4)
-        {
-            <!-- Step 4: Confirm before payment -->
-            <h4 class="fw-bold">Confirm Your Information</h4>
-            <div class="confirm-box">
-                <p><strong>Coach:</strong> @registerModel.FullName</p>
-                <p><strong>Email:</strong> @registerModel.Email</p>
-                <p><strong>Phone:</strong> @registerModel.PhoneNumber</p>
-                <p><strong>Experience:</strong> @registerModel.ExperienceYears years</p>
-                <p><strong>Bio:</strong> @registerModel.Biography</p>
-                <p><strong>Certificates:</strong> @registerModel.Certificates.Count file(s)</p>
-                <p><strong>CCCD:</strong> @(ekycResult?.IdCardNumber ?? "Verified")</p>
-                @{
-                    var selectedPlan = availablePlans.FirstOrDefault(p => p.PriceId == registerModel.PriceId);
-                }
-                @if (selectedPlan != null)
-                {
-                    <div style="display:flex; gap:10px; align-items:center; margin-top:8px; padding:10px; background:#fff7f3; border:1px solid #ffd9c7; border-radius:8px;">
-                        @if (!string.IsNullOrEmpty(selectedPlan.ImageUrl))
-                        {
-                            <img src="@selectedPlan.ImageUrl" alt="Plan" style="width:48px; height:48px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb;" />
-                        }
-                        <div>
-                            <div style="font-weight:700; color:#1e293b;">@selectedPlan.Amount.ToString("N0") @selectedPlan.Currency</div>
-                            <small class="muted">@selectedPlan.Description</small>
-                        </div>
-                    </div>
-                }
-                else if (registerModel.PriceId != null)
-                {
-                    <p><strong>Plan:</strong> @registerModel.PriceId</p>
-                }
-                <hr />
-                <p class="fw-bold">Total: @previewAmount VND</p>
-            </div>
+
             <div class="wiz-actions">
                 <button type="button" class="btn-back" @onclick="() => coachStep = 3">← Back</button>
                 <button type="button" class="btn-auth-primary btn-coach flex-grow-1" @onclick="HandleConfirmPay" disabled="@isLoading">@if (isLoading) { <span class="spinner-border spinner-border-sm me-2"></span><span>Creating payment...</span> } else { <span>Pay @previewAmount VND →</span> }</button>
@@ -430,7 +413,7 @@
         }
     }
 
-    private string GetStepLabel(int step) => step switch { 1 => "Account", 2 => "CCCD", 3 => "Certificates", 4 => "Confirm", 5 => "Pay", _ => step.ToString() };
+    private string GetStepLabel(int step) => step switch { 1 => "Account", 2 => "CCCD", 3 => "Certificates", 4 => "Confirm & Plan", 5 => "Pay", _ => step.ToString() };
 
     protected override void OnInitialized()
     {
@@ -451,8 +434,8 @@
         await LoadActivePlansAsync();
         // Fetch price for preview (based on selected plan or first active)
         try {
-            var firstPlanId = availablePlans.FirstOrDefault()?.PriceId ?? registerModel.PriceId;
-            var draft = new RegisterRequest { Email = "preview@fitsocial.vn", FullName = "Preview", Password = "123456", ConfirmPassword = "123456", PhoneNumber = "0900000000", ExperienceYears = 1, PriceId = firstPlanId };
+            var firstPlanId = availablePlans.FirstOrDefault()?.PlanId ?? registerModel.CoachSubscriptionPlansId;
+            var draft = new RegisterRequest { Email = "preview@fitsocial.vn", FullName = "Preview", Password = "12345678", ConfirmPassword = "12345678", PhoneNumber = "0900000000", ExperienceYears = 1, CoachSubscriptionPlansId = firstPlanId };
             var prep = await PaymentService.PrepareCoachActivationAsync(draft);
             if (prep.Success && prep.Data != null) previewAmount = prep.Data.AmountVnd.ToString("N0");
         } catch { }
@@ -465,16 +448,17 @@
         {
             var res = await SystemOps.GetActivePlansAsync();
             if (res.Success && res.Data != null) availablePlans = res.Data;
+            else if (!res.Success) errorMessage = res.Message ?? "Could not load subscription plans. Please refresh.";
         }
-        catch { }
+        catch (Exception ex) { errorMessage = $"Could not load subscription plans: {ex.Message}"; }
         finally { isLoadingPlans = false; }
     }
 
-    private void SelectPlan(Guid priceId)
+    private void SelectPlan(Guid planId)
     {
-        registerModel.PriceId = priceId;
-        var selected = availablePlans.FirstOrDefault(p => p.PriceId == priceId);
-        if (selected != null) previewAmount = selected.Amount.ToString("N0");
+        registerModel.CoachSubscriptionPlansId = planId;
+        var selected = availablePlans.FirstOrDefault(p => p.PlanId == planId);
+        if (selected?.Amount != null) previewAmount = selected.Amount.Value.ToString("N0");
     }
 
     private async Task HandleGoogleButtonAsync()
@@ -593,14 +577,11 @@
 
     private void HandleCertificatesNext()
     {
-        showCoachErrors = true; showTermsError = true;
+        showCoachErrors = true;
         errorMessage = null;
         if (!(registerModel.ExperienceYears >= 0 && registerModel.ExperienceYears <= 60)) { errorMessage = "Please enter years of experience (0-60)."; return; }
         if (!registerModel.Certificates.Any(c => !string.IsNullOrWhiteSpace(c.CertificateUrl))) { errorMessage = "Please upload at least one certificate."; return; }
-        if (registerModel.PriceId == null || registerModel.PriceId == Guid.Empty) { errorMessage = "Please select a subscription plan."; return; }
-        if (!agreedTerms) { errorMessage = "Please agree to the terms."; return; }
-        // Store term
-        registerModel.TermId = latestTerm?.TermId;
+        // Per spec: plan + terms are selected at Confirm & Plan step (coachStep 4), not here
         coachStep = 4;
         // Prepare price preview
         _ = Task.Run(async () => {
@@ -611,7 +592,17 @@
 
     private async Task HandleConfirmPay()
     {
-        isLoading = true; errorMessage = null;
+        showCoachErrors = true; showTermsError = true;
+        errorMessage = null;
+        if (registerModel.CoachSubscriptionPlansId == null || registerModel.CoachSubscriptionPlansId == Guid.Empty) { errorMessage = "Please select a subscription plan."; return; }
+        if (!agreedTerms) { errorMessage = "Please agree to the Terms of Service and Privacy Policy."; return; }
+        if (latestTerm == null)
+        {
+            try { latestTerm = await TermsService.GetLatestAsync(); } catch { }
+        }
+        if (latestTerm == null) { errorMessage = "Terms are still loading. Please try again."; return; }
+        registerModel.TermId = latestTerm.TermId;
+        isLoading = true;
         // Keep pending for QR page
         PendingCoach.Draft = registerModel;
         var link = await PaymentService.CreateActivationLinkAsync(registerModel);

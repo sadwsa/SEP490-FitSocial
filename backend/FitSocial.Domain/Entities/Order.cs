@@ -19,7 +19,8 @@ public partial class Order
 
     public DateTime? CreatedAt { get; set; }
 
-    // Backward compatibility property
+    // Backward compatibility property (not mapped, use BuyerId)
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public Guid TraineeId
     {
         get => BuyerId;
@@ -28,7 +29,8 @@ public partial class Order
 
     public virtual User Buyer { get; set; } = null!;
 
-    // Backward compatibility navigation
+    // Backward compatibility navigation (not mapped, use Buyer)
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public virtual User Trainee
     {
         get => Buyer;

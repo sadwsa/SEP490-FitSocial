@@ -13,7 +13,7 @@ namespace FitSocial.Application.Services;
 public class PaymentService : IPaymentService
 {
     private readonly IUserRepository _users;
-    private readonly IPriceRepository _prices;
+    private readonly ICoachSubscriptionPlanRepository _plans;
     private readonly IOrderRepository _orders;
     private readonly IPaymentRepository _payments;
     private readonly ICoachUpgradeRepository _coachUpgrades;
@@ -24,7 +24,7 @@ public class PaymentService : IPaymentService
 
     public PaymentService(
         IUserRepository users,
-        IPriceRepository prices,
+        ICoachSubscriptionPlanRepository plans,
         IOrderRepository orders,
         IPaymentRepository payments,
         ICoachUpgradeRepository coachUpgrades,
@@ -34,7 +34,7 @@ public class PaymentService : IPaymentService
         IAuthService authService)
     {
         _users = users;
-        _prices = prices;
+        _plans = plans;
         _orders = orders;
         _payments = payments;
         _coachUpgrades = coachUpgrades;
@@ -44,9 +44,15 @@ public class PaymentService : IPaymentService
         _authService = authService;
     }
 
+    private Guid? ResolvePlanId(RegisterCoachRequestDto request)
+    {
+        // New field first, legacy PriceId alias second
+        return request.CoachSubscriptionPlansId ?? request.PriceId;
+    }
+
     /// <summary>
     /// Validates the coach draft BEFORE paying (model + email availability).
-    /// Uses selected PriceId if provided, otherwise the active Price.
+    /// Uses selected CoachSubscriptionPlansId (required per FitConnect spec).
     /// </summary>
     public async Task<ApiResponseDto<CoachActivationPreviewDto>> PrepareCoachActivationAsync(RegisterCoachRequestDto request)
     {
@@ -57,29 +63,20 @@ public class PaymentService : IPaymentService
             return ApiResponseDto<CoachActivationPreviewDto>.Fail("This email is already in use.");
         }
 
-        Price? selectedPrice = null;
-        if (request.PriceId.HasValue)
-        {
-            selectedPrice = await _prices.GetByIdAsync(request.PriceId.Value);
-            if (selectedPrice == null || selectedPrice.IsActive != true || selectedPrice.Amount == null)
-                return ApiResponseDto<CoachActivationPreviewDto>.Fail("Selected subscription plan is not available.");
-        }
-        else
-        {
-            selectedPrice = await _prices.GetActiveAsync();
-        }
+        var planId = ResolvePlanId(request);
+        if (planId == null || planId == Guid.Empty)
+            return ApiResponseDto<CoachActivationPreviewDto>.Fail("Please select a subscription plan.");
 
-        if (selectedPrice == null || selectedPrice.Amount == null)
-        {
-            return ApiResponseDto<CoachActivationPreviewDto>.Fail("Coach activation fee configuration not found.");
-        }
+        var plan = await _plans.GetByIdAsync(planId.Value);
+        if (plan == null || plan.IsActive != true || plan.Amount == null)
+            return ApiResponseDto<CoachActivationPreviewDto>.Fail("Selected subscription plan is not available.");
 
         return ApiResponseDto<CoachActivationPreviewDto>.Ok(
             new CoachActivationPreviewDto
             {
                 Email = normalizedEmail,
-                AmountVnd = selectedPrice.Amount.Value,
-                Currency = PaymentConstants.CurrencyVnd,
+                AmountVnd = plan.Amount.Value,
+                Currency = string.IsNullOrWhiteSpace(plan.Currency) ? PaymentConstants.CurrencyVnd : plan.Currency!,
                 OrderType = PaymentConstants.OrderTypeCoachActivation
             },
             "Order preview created. Proceed to payment.");
@@ -87,10 +84,19 @@ public class PaymentService : IPaymentService
 
     /// <summary>
     /// Delegates account creation to AuthService, then creates the payment order/link.
+    /// Plan is required per FitConnect spec (Confirm & Plan step).
     /// </summary>
     public async Task<ApiResponseDto<ActivationLinkDto>> CreateActivationLinkAsync(
         RegisterCoachRequestDto request, string originUrl, string? ipAddress = null)
     {
+        // 0. Validate plan BEFORE creating account (avoid orphan users)
+        var planId = ResolvePlanId(request);
+        if (planId == null || planId == Guid.Empty)
+            return ApiResponseDto<ActivationLinkDto>.Fail("Please select a subscription plan.");
+        var plan = await _plans.GetByIdAsync(planId.Value);
+        if (plan == null || plan.IsActive != true || plan.Amount == null)
+            return ApiResponseDto<ActivationLinkDto>.Fail("Selected subscription plan is not available.");
+
         // 1. Create the pending coach account via AuthService (handles OTP, eKYC, certificates, terms)
         var authResult = await _authService.RegisterCoachAsync(request, ipAddress);
         if (!authResult.Success || authResult.Data == null)
@@ -106,22 +112,9 @@ public class PaymentService : IPaymentService
             stale.OrderStatus = PaymentConstants.OrderStatusCancelled;
         }
 
-        Price? selectedPrice = null;
-        if (request.PriceId.HasValue)
-        {
-            selectedPrice = await _prices.GetByIdAsync(request.PriceId.Value);
-            if (selectedPrice == null || selectedPrice.IsActive != true || selectedPrice.Amount == null)
-                return ApiResponseDto<ActivationLinkDto>.Fail("Selected subscription plan is not available.");
-        }
-        else
-        {
-            selectedPrice = await _prices.GetActiveAsync();
-        }
-        if (selectedPrice == null || selectedPrice.Amount == null)
-        {
-            return ApiResponseDto<ActivationLinkDto>.Fail("Coach activation fee configuration not found.");
-        }
-        var fee = selectedPrice.Amount.Value;
+        var fee = plan.Amount.Value;
+        var currency = string.IsNullOrWhiteSpace(plan.Currency) ? PaymentConstants.CurrencyVnd : plan.Currency!;
+        var durationDays = plan.SubscriptionDuration ?? plan.TrainingPackageDuration ?? 365;
         var now = DateTime.UtcNow;
 
         var orderCode = long.Parse($"{DateTimeOffset.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}");
@@ -140,9 +133,10 @@ public class PaymentService : IPaymentService
         {
             OrderDetailsId = Guid.NewGuid(),
             OrderId = order.OrderId,
+            CoachSubscriptionPlansId = plan.CoachSubscriptionPlansId,
             PackagePrice = fee,
-            PackageTitle = "Coach Activation Plan",
-            PackageDurationDays = 365,
+            PackageTitle = string.IsNullOrWhiteSpace(plan.Description) ? "Coach Subscription Plan" : plan.Description!,
+            PackageDurationDays = durationDays,
             CoachName = user.FullName ?? user.Email,
             CreatedAt = now
         });
@@ -151,7 +145,7 @@ public class PaymentService : IPaymentService
             PaymentId = Guid.NewGuid(),
             OrderId = order.OrderId,
             Amount = fee,
-            Currency = PaymentConstants.CurrencyVnd,
+            Currency = currency,
             Method = "VietQR",
             GatewayId = null,
             TransactionRef = $"COACH{orderCode}",
@@ -162,11 +156,11 @@ public class PaymentService : IPaymentService
         });
         await _orders.AddAsync(order);
 
-        // Create CoachUpgrade linking the selected Price
+        // Create CoachUpgrade linking the selected plan
         var upgrade = new CoachUpgrade
         {
             UpgradeId = Guid.NewGuid(),
-            PriceId = selectedPrice.PriceId,
+            CoachSubscriptionPlansId = plan.CoachSubscriptionPlansId,
             CoachId = user.UserId,
             OrderId = order.OrderId,
             Status = "PENDING",
@@ -185,7 +179,6 @@ public class PaymentService : IPaymentService
 
         string frontend = string.IsNullOrWhiteSpace(originUrl) ? "https://localhost:7012" : originUrl.TrimEnd('/');
         PaymentLinkInfo link;
-        string gatewayRaw = "";
         try
         {
             link = await _paymentGateway.CreatePaymentLinkAsync(
@@ -194,20 +187,11 @@ public class PaymentService : IPaymentService
                 "COACH ACTIVATION",
                 $"{frontend}/payment-result",
                 $"{frontend}/payment-result");
-            gatewayRaw = JsonSerializer.Serialize(new { link.CheckoutUrl, link.QrCode, link.AccountNumber, link.AccountName, link.Amount, link.Description, orderCode });
         }
         catch (Exception ex)
         {
             return ApiResponseDto<ActivationLinkDto>.Fail($"Could not create the payment link: {ex.Message}");
         }
-
-        try
-        {
-            var payment = order.Payments.First();
-            payment.GatewayResponseRaw = gatewayRaw;
-            await _unitOfWork.SaveChangesAsync();
-        }
-        catch { }
 
         return ApiResponseDto<ActivationLinkDto>.Ok(
             new ActivationLinkDto
@@ -287,15 +271,16 @@ public class PaymentService : IPaymentService
         var now = DateTime.UtcNow;
         order.OrderStatus = PaymentConstants.OrderStatusPaid;
         payment.Status = PaymentConstants.PaymentStatusSuccess;
-        payment.GatewayResponseRaw = JsonSerializer.Serialize(new { status.IsPaid, status.Amount, status.Reference, verifiedAt = now });
         payment.ProcessedAt = now;
         payment.UpdatedAt = now;
-        // Mark CoachUpgrade as ACTIVE and set EndDay
+        // Mark CoachUpgrade as ACTIVE and set EndDay from plan duration
         var upgrade = await _coachUpgrades.GetByOrderIdAsync(order.OrderId);
         if (upgrade != null)
         {
             upgrade.Status = "ACTIVE";
-            upgrade.EndDay = now.AddDays(365);
+            var planForUpgrade = await _plans.GetByIdAsync(upgrade.CoachSubscriptionPlansId);
+            var durationDays = planForUpgrade?.SubscriptionDuration ?? planForUpgrade?.TrainingPackageDuration ?? 365;
+            upgrade.EndDay = now.AddDays(durationDays);
         }
         user.IsLocked = false;
         user.LastActiveAt = now;

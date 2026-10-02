@@ -29,7 +29,20 @@ public class MessageDto
     public string? MessageType { get; set; }
     public DateTime? CreatedAt { get; set; }
     public bool IsMine { get; set; }
+    public List<MessageAttachmentDto> Attachments { get; set; } = new();
     public MessageDto? AutoReply { get; set; }
+}
+
+public class MessageAttachmentDto
+{
+    public Guid AttachmentId { get; set; }
+    public string? MediaUrl { get; set; }
+    public string? ThumbnailUrl { get; set; }
+    public string? MediaType { get; set; }
+    public long? FileSize { get; set; }
+    public int? DurationSeconds { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
 }
 
 public class ConversationDetailDto
@@ -49,5 +62,18 @@ public class ConversationDetailDto
 
 public class SendMessageRequestDto
 {
-    public string Content { get; set; } = string.Empty;
+    public string? Content { get; set; }
+    public string? MessageType { get; set; } = "TEXT";
+    public List<CreateMessageAttachmentDto>? Attachments { get; set; }
+}
+
+public class CreateMessageAttachmentDto
+{
+    public string MediaUrl { get; set; } = string.Empty;
+    public string? ThumbnailUrl { get; set; }
+    public string? MediaType { get; set; }
+    public long? FileSize { get; set; }
+    public int? DurationSeconds { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
 }

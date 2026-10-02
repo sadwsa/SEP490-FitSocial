@@ -21,7 +21,7 @@ public class RegisterRequest
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please enter a password")]
-    [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+    [MinLength(8, ErrorMessage = "Password must be at least 8 characters")]
     public string Password { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please confirm your password")]
@@ -40,7 +40,7 @@ public class RegisterRequest
     public string? Biography { get; set; }
     public string? CertificateUrl { get; set; }
     public string? IdentityCardUrl { get; set; }
-    // --- Coach 5-step flow ---
+    // --- Coach 5-step flow per FitConnect spec: (1) Account -> (2) CCCD -> (3) Certificates -> (4) Confirm & Plan -> (5) Pay ---
     public Guid? TermId { get; set; }
     public string? FrontCardUrl { get; set; }
     public string? BackCardUrl { get; set; }
@@ -49,7 +49,12 @@ public class RegisterRequest
     public string? FaceImageRightUrl { get; set; }
     public string? FaceImageTopUrl { get; set; }
     public string? FaceImageBottomUrl { get; set; }
-    public Guid? PriceId { get; set; }
+    public Guid? CoachSubscriptionPlansId { get; set; }
+    public Guid? PriceId
+    {
+        get => CoachSubscriptionPlansId;
+        set => CoachSubscriptionPlansId = value;
+    }
     public List<CoachCertificateItem> Certificates { get; set; } = new();
 }
 
@@ -68,9 +73,10 @@ public class LoginRequest
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please enter your password")]
-    [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+    [MinLength(8, ErrorMessage = "Password must be at least 8 characters")]
     public string Password { get; set; } = string.Empty;
     public string? RoleCode { get; set; }
+    public bool RememberMe { get; set; } = true;
 }
 
 public class AuthResponse
@@ -110,7 +116,7 @@ public class ResetPasswordRequest
     public string OtpCode { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please enter a new password")]
-    [MinLength(6, ErrorMessage = "New password must be at least 6 characters")]
+    [MinLength(8, ErrorMessage = "New password must be at least 8 characters")]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please confirm the new password")]
@@ -124,7 +130,7 @@ public class ChangePasswordRequest
     public string CurrentPassword { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please enter a new password")]
-    [MinLength(6, ErrorMessage = "New password must be at least 6 characters")]
+    [MinLength(8, ErrorMessage = "New password must be at least 8 characters")]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please confirm the new password")]

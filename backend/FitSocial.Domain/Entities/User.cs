@@ -41,8 +41,6 @@ public partial class User
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual Role? Role { get; set; }
-
     public virtual User? LockedByNavigation { get; set; }
 
     public virtual CoachProfile? CoachProfileCoach { get; set; }

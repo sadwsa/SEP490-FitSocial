@@ -9,10 +9,14 @@
 @inject NavigationManager Navigation
 @inject IAuthService AuthService
 @inject IJSRuntime JSRuntime
+@inject FitSocial.Client.Services.Files.IFileUploadService FileUploadService
+@using System.IO
 @using System.Security.Claims
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Conversations
+@using FitSocial.Client.Models.Posts
 @using FitSocial.Client.Models.Auth
+@using FitSocial.Client.Services.Files
 @using FitSocial.Client.Services.Notifications
 @implements IAsyncDisposable
 
@@ -419,7 +423,40 @@
                                                     : (string.Equals(msg.MessageType, "AUTO", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO_REPLY", StringComparison.OrdinalIgnoreCase)
                                                         ? "bg-amber-50/70 text-gray-800 border border-amber-200 rounded-tl-xs"
                                                         : "bg-white text-gray-800 border border-gray-100 rounded-tl-xs"))">
-                                                @msg.Content
+                                                @if (!string.IsNullOrWhiteSpace(msg.Content))
+                                                {
+                                                    <span>@msg.Content</span>
+                                                }
+                                                @if (msg.Attachments != null && msg.Attachments.Any())
+                                                {
+                                                    <div class="@(!string.IsNullOrWhiteSpace(msg.Content) ? "mt-2" : "") space-y-2">
+                                                        @foreach (var att in msg.Attachments)
+                                                        {
+                                                            @if (IsVideoAttachment(att))
+                                                            {
+                                                                <div class="rounded-xl overflow-hidden bg-black/95 my-1 shadow-xs max-w-sm">
+                                                                    <video src="@att.MediaUrl" controls playsinline preload="metadata" class="w-full max-h-72 object-contain rounded-xl block"></video>
+                                                                </div>
+                                                            }
+                                                            else if (IsImageAttachment(att))
+                                                            {
+                                                                <div class="rounded-xl overflow-hidden cursor-pointer my-1 group relative max-w-sm"
+                                                                     @onclick="() => OpenImagePreview(att.MediaUrl)">
+                                                                    <img src="@att.MediaUrl" alt="Photo attachment" class="max-h-72 w-auto max-w-full rounded-xl object-cover group-hover:opacity-95 transition shadow-xs" />
+                                                                </div>
+                                                            }
+                                                            else
+                                                            {
+                                                                <a href="@att.MediaUrl" target="_blank" class="flex items-center gap-2 p-2.5 bg-black/10 rounded-xl text-xs hover:underline">
+                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                                                    </svg>
+                                                                    <span>View attachment</span>
+                                                                </a>
+                                                            }
+                                                        }
+                                                    </div>
+                                                }
                                             </div>
                                             @if (msg.CreatedAt.HasValue)
                                             {
@@ -454,21 +491,78 @@
                             }
                             else
                             {
+                                @if (_selectedMedia.Any())
+                                {
+                                    <div class="flex items-center gap-2 pb-2.5 overflow-x-auto">
+                                        @for (int i = 0; i < _selectedMedia.Count; i++)
+                                        {
+                                            var idx = i;
+                                            var media = _selectedMedia[idx];
+                                            <div class="relative group w-16 h-16 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 flex-shrink-0 flex items-center justify-center shadow-2xs">
+                                                @if (!string.IsNullOrWhiteSpace(media.PreviewUrl))
+                                                {
+                                                    <img src="@media.PreviewUrl" alt="Preview" class="w-full h-full object-cover" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="flex flex-col items-center justify-center p-1 text-center">
+                                                        <svg class="w-6 h-6 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                                        </svg>
+                                                        <span class="text-[9px] text-gray-500 truncate max-w-[52px]">@media.FileName</span>
+                                                    </div>
+                                                }
+                                                <button type="button"
+                                                        class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/75 hover:bg-red-600 text-white flex items-center justify-center text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+                                                        disabled="@(_isSending || _isUploadingMedia)"
+                                                        title="Remove media"
+                                                        @onclick="() => RemoveSelectedMedia(idx)">
+                                                    &times;
+                                                </button>
+                                            </div>
+                                        }
+                                        @if (_selectedMedia.Count < 5)
+                                        {
+                                            <label for="chatMediaInput"
+                                                   class="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 hover:border-[#FF5500] hover:bg-orange-50/40 flex flex-col items-center justify-center text-gray-400 hover:text-[#FF5500] transition cursor-pointer flex-shrink-0"
+                                                   title="Add more photos or videos">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                                </svg>
+                                                <span class="text-[9px] font-semibold mt-0.5">Add</span>
+                                            </label>
+                                        }
+                                    </div>
+                                }
+
                                 <div class="flex items-center gap-2">
+                                    <label for="chatMediaInput"
+                                           class="p-2.5 rounded-xl text-gray-400 hover:text-[#FF5500] hover:bg-orange-50 transition cursor-pointer flex-shrink-0 flex items-center justify-center @(_selectedMedia.Count >= 5 || _isSending || _isUploadingMedia ? "opacity-40 cursor-not-allowed pointer-events-none" : "")"
+                                           title="Attach image or video">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                        </svg>
+                                    </label>
+                                    <InputFile id="chatMediaInput" OnChange="HandleFileSelected" multiple accept="image/*,video/*"
+                                               disabled="@(_selectedMedia.Count >= 5 || _isSending || _isUploadingMedia)"
+                                               class="hidden" />
+
                                     <textarea class="flex-1 bg-gray-100 rounded-xl px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:bg-white transition resize-none leading-relaxed"
                                               placeholder="Type a message..."
                                               rows="1"
-                                              maxlength="300"
+                                              maxlength="1000"
                                               @bind="_messageText"
                                               @bind:event="oninput"
                                               @onkeydown="HandleKeyDown"
-                                              disabled="@_isSending"></textarea>
+                                              disabled="@(_isSending || _isUploadingMedia)"></textarea>
+
                                     <button type="button"
                                             class="p-2.5 rounded-xl bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white hover:opacity-95 shadow-xs disabled:opacity-40 transition flex items-center justify-center flex-shrink-0 cursor-pointer"
-                                            disabled="@(_isSending || string.IsNullOrWhiteSpace(_messageText))"
+                                            disabled="@(_isSending || _isUploadingMedia || (string.IsNullOrWhiteSpace(_messageText) && !_selectedMedia.Any()))"
                                             title="Send message"
                                             @onclick="SendMessageAsync">
-                                        @if (_isSending)
+                                        @if (_isSending || _isUploadingMedia)
                                         {
                                             <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                         }
@@ -482,9 +576,23 @@
                                     </button>
                                 </div>
                             }
+                            @if (!string.IsNullOrEmpty(_mediaErrorMessage))
+                            {
+                                <p class="text-xs text-red-500 mt-1.5 flex items-center gap-1 animate-in fade-in">
+                                    <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span>@_mediaErrorMessage</span>
+                                </p>
+                            }
                             @if (!string.IsNullOrEmpty(_sendErrorMessage))
                             {
-                                <p class="text-xs text-red-500 mt-2">@_sendErrorMessage</p>
+                                <p class="text-xs text-red-500 mt-1.5 flex items-center gap-1 animate-in fade-in">
+                                    <svg class="w-3.5 h-3.5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span>@_sendErrorMessage</span>
+                                </p>
                             }
                         </div>
                     }
@@ -588,6 +696,23 @@
     </div>
 }
 
+<!-- Lightbox Image Preview Modal -->
+@if (!string.IsNullOrEmpty(_previewImageUrl))
+{
+    <div class="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+         @onclick="CloseImagePreview">
+        <div class="relative max-w-4xl max-h-[90vh] flex items-center justify-center" @onclick:stopPropagation="true">
+            <button type="button"
+                    class="absolute -top-11 right-0 w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center text-xl font-bold transition cursor-pointer"
+                    title="Close"
+                    @onclick="CloseImagePreview">
+                &times;
+            </button>
+            <img src="@_previewImageUrl" alt="Full image preview" class="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl" />
+        </div>
+    </div>
+}
+
 @code {
     [Parameter]
     public Guid? ConversationId { get; set; }
@@ -610,6 +735,10 @@
     private bool _isSending = false;
     private string? _sendErrorMessage;
     private Guid _currentUserId = Guid.Empty;
+    private List<SelectedMediaItem> _selectedMedia = new();
+    private bool _isUploadingMedia = false;
+    private string? _mediaErrorMessage;
+    private string? _previewImageUrl;
 
     // Header & User states to match Home
     private string userName = "Athlete";
@@ -702,6 +831,9 @@
         if (ConversationId.HasValue && ConversationId.Value != _loadedConversationId)
         {
             _selectedConversationId = ConversationId.Value;
+            _selectedMedia.Clear();
+            _mediaErrorMessage = null;
+            _ = ResetChatFileInputAsync();
             await LoadConversationDetailAsync(ConversationId.Value);
         }
         else if (!ConversationId.HasValue)
@@ -710,6 +842,9 @@
             _loadedConversationId = null;
             _conversationDetail = null;
             _detailErrorMessage = null;
+            _selectedMedia.Clear();
+            _mediaErrorMessage = null;
+            _ = ResetChatFileInputAsync();
         }
     }
 
@@ -839,6 +974,9 @@
         {
             conv.UnreadCount = 0;
         }
+        _selectedMedia.Clear();
+        _mediaErrorMessage = null;
+        _ = ResetChatFileInputAsync();
         Navigation.NavigateTo($"messages/{id}");
     }
 
@@ -848,7 +986,194 @@
         _loadedConversationId = null;
         _conversationDetail = null;
         _detailErrorMessage = null;
+        _selectedMedia.Clear();
+        _mediaErrorMessage = null;
+        _ = ResetChatFileInputAsync();
         Navigation.NavigateTo("messages");
+    }
+
+    private static bool IsImageAttachment(MessageAttachmentDto att)
+    {
+        if (string.Equals(att.MediaType, "IMAGE", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.IsNullOrEmpty(att.MediaUrl)) return false;
+        var cleanUrl = att.MediaUrl.Split('?')[0];
+        return cleanUrl.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+               cleanUrl.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+               cleanUrl.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+               cleanUrl.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) ||
+               cleanUrl.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsVideoAttachment(MessageAttachmentDto att)
+    {
+        if (string.Equals(att.MediaType, "VIDEO", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.IsNullOrEmpty(att.MediaUrl)) return false;
+        var cleanUrl = att.MediaUrl.Split('?')[0];
+        return cleanUrl.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
+               cleanUrl.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) ||
+               cleanUrl.EndsWith(".webm", StringComparison.OrdinalIgnoreCase) ||
+               cleanUrl.EndsWith(".avi", StringComparison.OrdinalIgnoreCase) ||
+               cleanUrl.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OpenImagePreview(string? url)
+    {
+        if (!string.IsNullOrEmpty(url))
+        {
+            _previewImageUrl = url;
+        }
+    }
+
+    private void CloseImagePreview()
+    {
+        _previewImageUrl = null;
+    }
+
+    private async Task ResetChatFileInputAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", "var el = document.getElementById('chatMediaInput'); if (el) el.value = '';");
+        }
+        catch { }
+    }
+
+    private async Task RemoveSelectedMedia(int index)
+    {
+        if (_isSending || _isUploadingMedia) return;
+        if (index >= 0 && index < _selectedMedia.Count)
+        {
+            _selectedMedia.RemoveAt(index);
+            _mediaErrorMessage = null;
+            await ResetChatFileInputAsync();
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        if (_isSending || _isUploadingMedia) return;
+
+        _mediaErrorMessage = null;
+
+        IReadOnlyList<IBrowserFile> incomingFiles;
+        try
+        {
+            incomingFiles = e.GetMultipleFiles(10);
+        }
+        catch (InvalidOperationException)
+        {
+            _mediaErrorMessage = "You can select a maximum of 5 media files.";
+            await ResetChatFileInputAsync();
+            return;
+        }
+        catch (Exception ex)
+        {
+            _mediaErrorMessage = $"Error reading selected files: {ex.Message}";
+            await ResetChatFileInputAsync();
+            return;
+        }
+
+        if (incomingFiles == null || incomingFiles.Count == 0)
+        {
+            return;
+        }
+
+        int duplicateCount = 0;
+        bool limitExceeded = false;
+
+        foreach (var file in incomingFiles)
+        {
+            bool isDuplicate = _selectedMedia.Any(f =>
+                string.Equals(f.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
+                f.Size == file.Size);
+
+            if (isDuplicate)
+            {
+                duplicateCount++;
+                continue;
+            }
+
+            if (_selectedMedia.Count >= 5)
+            {
+                limitExceeded = true;
+                break;
+            }
+
+            try
+            {
+                if (file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    var isGif = file.ContentType.Equals("image/gif", StringComparison.OrdinalIgnoreCase);
+
+                    if (isGif)
+                    {
+                        using var ms = new MemoryStream();
+                        await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+                        await stream.CopyToAsync(ms);
+                        var data = ms.ToArray();
+
+                        _selectedMedia.Add(new SelectedMediaItem
+                        {
+                            FileName = file.Name,
+                            ContentType = file.ContentType,
+                            Data = data,
+                            PreviewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(data)}",
+                            IsVideo = false
+                        });
+                    }
+                    else
+                    {
+                        var optimizedFile = await file.RequestImageFileAsync("image/jpeg", 1280, 1280);
+                        using var ms = new MemoryStream();
+                        await using var stream = optimizedFile.OpenReadStream(20 * 1024 * 1024);
+                        await stream.CopyToAsync(ms);
+                        var data = ms.ToArray();
+
+                        _selectedMedia.Add(new SelectedMediaItem
+                        {
+                            FileName = Path.ChangeExtension(file.Name, ".jpg"),
+                            ContentType = "image/jpeg",
+                            Data = data,
+                            PreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(data)}",
+                            IsVideo = false
+                        });
+                    }
+                }
+                else
+                {
+                    using var ms = new MemoryStream();
+                    await using var stream = file.OpenReadStream(100 * 1024 * 1024);
+                    await stream.CopyToAsync(ms);
+                    var data = ms.ToArray();
+
+                    _selectedMedia.Add(new SelectedMediaItem
+                    {
+                        FileName = file.Name,
+                        ContentType = file.ContentType,
+                        Data = data,
+                        PreviewUrl = string.Empty,
+                        IsVideo = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _mediaErrorMessage = $"Failed to process '{file.Name}': {ex.Message}";
+            }
+        }
+
+        if (limitExceeded)
+        {
+            _mediaErrorMessage = "You can select a maximum of 5 media files.";
+        }
+        else if (duplicateCount > 0)
+        {
+            _mediaErrorMessage = duplicateCount == 1
+                ? "1 duplicate file was skipped."
+                : $"{duplicateCount} duplicate files were skipped.";
+        }
+
+        await ResetChatFileInputAsync();
     }
 
     private static string GetInitials(string? name)
@@ -893,34 +1218,77 @@
     {
         if (e.Key == "Enter" && !e.ShiftKey)
         {
-            await SendMessageAsync();
+            if (!string.IsNullOrWhiteSpace(_messageText) || _selectedMedia.Any())
+            {
+                await SendMessageAsync();
+            }
         }
     }
 
     private async Task SendMessageAsync()
     {
-        if (!ConversationId.HasValue || _isSending) return;
-        if (string.IsNullOrWhiteSpace(_messageText)) return;
+        if (!ConversationId.HasValue || _isSending || _isUploadingMedia) return;
+        if (string.IsNullOrWhiteSpace(_messageText) && !_selectedMedia.Any()) return;
 
-        var content = _messageText.Trim();
-        if (content.Length > 300)
+        var content = _messageText?.Trim() ?? string.Empty;
+        if (content.Length > 1000)
         {
-            _sendErrorMessage = "Message cannot exceed 300 characters.";
+            _sendErrorMessage = "Message cannot exceed 1000 characters.";
             return;
         }
 
         _isSending = true;
         _sendErrorMessage = null;
+        _mediaErrorMessage = null;
 
         try
         {
+            var attachments = new List<CreateMessageAttachmentDto>();
+
+            if (_selectedMedia.Any())
+            {
+                _isUploadingMedia = true;
+                StateHasChanged();
+
+                var payloads = _selectedMedia.Select(m => new UploadMediaPayload
+                {
+                    FileName = m.FileName,
+                    ContentType = m.ContentType,
+                    Data = m.Data
+                });
+
+                var uploadRes = await FileUploadService.UploadPostMediaAsync(payloads);
+                _isUploadingMedia = false;
+
+                if (!uploadRes.Success || uploadRes.Data == null)
+                {
+                    _sendErrorMessage = uploadRes.Message ?? "Failed to upload attachments.";
+                    _isSending = false;
+                    return;
+                }
+
+                attachments = uploadRes.Data.Select(d => new CreateMessageAttachmentDto
+                {
+                    MediaUrl = d.MediaUrl,
+                    MediaType = d.MediaType
+                }).ToList();
+            }
+
+            var request = new SendMessageRequestDto
+            {
+                Content = content,
+                Attachments = attachments
+            };
+
             var response = await ConversationService.SendMessageAsync(
                 ConversationId.Value,
-                new SendMessageRequestDto { Content = content });
+                request);
 
             if (response.Success && response.Data != null)
             {
                 _messageText = "";
+                _selectedMedia.Clear();
+                _ = ResetChatFileInputAsync();
 
                 var sentMsg = response.Data;
                 sentMsg.IsMine = true;
@@ -962,6 +1330,7 @@
         finally
         {
             _isSending = false;
+            _isUploadingMedia = false;
         }
     }
 
@@ -1017,7 +1386,13 @@
         var conv = _conversations.FirstOrDefault(c => c.ConversationId == msg.ConversationId);
         if (conv != null)
         {
-            conv.LastMessage = msg.Content;
+            var preview = !string.IsNullOrWhiteSpace(msg.Content)
+                ? msg.Content
+                : (msg.Attachments?.Any(a => string.Equals(a.MediaType, "VIDEO", StringComparison.OrdinalIgnoreCase)) == true
+                    ? "[Video]"
+                    : (msg.Attachments?.Any() == true ? "[Photo]" : "Sent a message"));
+
+            conv.LastMessage = preview;
             conv.LastMessageAt = msg.CreatedAt ?? DateTime.UtcNow;
             conv.LastMessageSenderId = msg.SenderId;
 

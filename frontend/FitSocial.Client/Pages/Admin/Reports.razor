@@ -80,6 +80,8 @@
                         <th>Report</th>
                         <th>Reporter</th>
                         <th>Target</th>
+                        <th>Role</th>
+                        <th>Violations</th>
                         <th>Reason</th>
                         <th>Status</th>
                         <th>Created At</th>
@@ -139,6 +141,17 @@
                                 }
                             </td>
                             <td>
+                                <span class="role-badge @(r.ReportedUserRole?.ToLowerInvariant() ?? "trainee")">
+                                    @(r.ReportedUserRole ?? "USER")
+                                </span>
+                            </td>
+                            <td>
+                                <span class="violation-pill @(r.ReportedUserViolationCount >= 3 ? "high" : (r.ReportedUserViolationCount > 0 ? "medium" : "low"))"
+                                      title="Current violations: @r.ReportedUserViolationCount">
+                                    @r.ReportedUserViolationCount
+                                </span>
+                            </td>
+                            <td>
                                 <div class="reason-cell" title="@r.Reason">
                                     @(r.Reason ?? "No reason specified")
                                 </div>
@@ -173,7 +186,7 @@
                     @if (!isLoadingReports && !pagedReports.Items.Any())
                     {
                         <tr>
-                            <td colspan="7" class="text-center py-8">
+                            <td colspan="9" class="text-center py-8">
                                 <div class="flex flex-col items-center justify-center text-gray-400">
                                     <svg class="w-12 h-12 mb-2 stroke-current opacity-40" fill="none" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -277,7 +290,7 @@
                                 @if (string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
                                 {
                                     <AppIcon Name="doc" />
-                                    <span>Reported Target (Post)</span>
+                                    <span>Reported Target (Post & Author)</span>
                                 }
                                 else
                                 {
@@ -288,7 +301,7 @@
 
                             @if (string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
                             {
-                                <div class="space-y-2">
+                                <div class="space-y-3">
                                     <div class="flex items-center justify-between text-xs">
                                         <span class="text-gray-500">Post ID: <code>@(selectedReport.ReportedPostId?.ToString() ?? "N/A")</code></span>
                                         <span class="font-medium text-gray-700">Author: <strong>@(selectedReport.ReportedPostAuthorName ?? "Unknown")</strong></span>
@@ -317,6 +330,43 @@
                                     Target ID: <code>@(selectedReport.TargetId?.ToString() ?? "N/A")</code>
                                 </div>
                             }
+
+                            <!-- Reported User Profile & Moderation Status Summary -->
+                            <div class="mt-3 pt-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <span class="text-gray-500 block mb-0.5">User Role:</span>
+                                    <span class="role-badge @(selectedReport.ReportedUserRole?.ToLowerInvariant() ?? "trainee")">
+                                        @(selectedReport.ReportedUserRole ?? "USER")
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 block mb-0.5">Current Violations:</span>
+                                    <span class="violation-pill @(selectedReport.ReportedUserViolationCount >= 3 ? "high" : (selectedReport.ReportedUserViolationCount > 0 ? "medium" : "low"))">
+                                        @selectedReport.ReportedUserViolationCount violation(s)
+                                    </span>
+                                </div>
+                                @if (string.Equals(selectedReport.ReportedUserRole, "COACH", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <div class="sm:col-span-2">
+                                        <span class="text-gray-500 block mb-0.5">Sold Training Packages:</span>
+                                        <strong class="@(selectedReport.HasSoldTrainingPackage == true ? "text-amber-700" : "text-gray-700")">
+                                            @(selectedReport.HasSoldTrainingPackage == true ? "Yes (Active / Completed packages sold to Trainees)" : "No")
+                                        </strong>
+                                        @if (selectedReport.HasSoldTrainingPackage == true)
+                                        {
+                                            <div class="p-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded mt-1.5 leading-relaxed">
+                                                <strong>Coach Policy:</strong> This Coach has sold training packages to trainees. Account <strong>LOCK</strong> is disabled to protect active training packages. Only <strong>BLOCK</strong> can be applied when violation threshold is met.
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                @if (selectedReport.ReportedUserIsLocked == true)
+                                {
+                                    <div class="sm:col-span-2">
+                                        <span class="status-badge locked">Account Locked</span>
+                                    </div>
+                                }
+                            </div>
                         </div>
 
                         <!-- Report Submission & Reason Details -->
@@ -351,6 +401,15 @@
                                         @(selectedReport.Reason ?? "No reason provided")
                                     </div>
                                 </div>
+                                @if (!string.IsNullOrWhiteSpace(selectedReport.Description))
+                                {
+                                    <div class="sm:col-span-2">
+                                        <span class="text-gray-500 block mb-0.5">Description:</span>
+                                        <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 leading-relaxed">
+                                            @selectedReport.Description
+                                        </div>
+                                    </div>
+                                }
 
                                 @if (selectedReport.ResolvedBy.HasValue || selectedReport.ResolvedAt.HasValue)
                                 {
@@ -366,42 +425,81 @@
                             </div>
                         </div>
 
-                        <!-- Actions Section (UI ONLY) -->
+                        <!-- Actions Section -->
                         <div class="modal-actions-box">
                             <div class="flex items-center gap-2">
                                 <AppIcon Name="shield" />
-                                <strong class="text-sm text-gray-900">Actions</strong>
+                                <strong class="text-sm text-gray-900">Process Violation Report</strong>
                             </div>
                             <p class="text-xs text-gray-600 mt-1">
-                                Moderation options for this reported @(string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase) ? "post and its author" : "user").
+                                Apply disciplinary action based on FitSocial Business Rules. Threshold: 1st & 2nd violations = Warn; 3rd violation onwards (&gt;2) = Lock or Block.
                             </p>
 
-                            <div class="actions-btn-group">
-                                @if (string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    <button type="button" class="btn-warning-action" @onclick='() => HandleWarningAsync("post author")'>
-                                        Warning User
+                            @if (!string.Equals(selectedReport.Status, "PENDING", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="p-3 bg-gray-100 border border-gray-200 rounded-lg text-xs text-gray-600 mt-2">
+                                    This report has already been processed with status <strong>@selectedReport.Status</strong>. No further actions can be taken.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="actions-btn-group mt-2">
+                                    <!-- Warn Action -->
+                                    <button type="button" class="btn-warning-action" @onclick='() => RequestProcessAction("WARN", "Warn User", $"Issue a formal violation warning to user {GetReportedUserName(selectedReport)}. Their violation count will increase from {selectedReport.ReportedUserViolationCount} to {selectedReport.ReportedUserViolationCount + 1}.")'>
+                                        Warn User (@(selectedReport.ReportedUserViolationCount + 1))
                                     </button>
-                                    <button type="button" class="btn-danger-action" @onclick='() => RequestConfirmAction("Lock Account", "lock the author account")'>
-                                        Lock Account
+
+                                    <!-- Lock Action -->
+                                    @if (selectedReport.AvailableActions.Contains("LOCK"))
+                                    {
+                                        <button type="button" class="btn-danger-action" @onclick='() => RequestProcessAction("LOCK", "Lock Account", $"Lock account for {GetReportedUserName(selectedReport)}. The user will be signed out and unable to log in.")'>
+                                            Lock Account
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn-disabled-action" disabled title="@GetLockDisabledReason(selectedReport)">
+                                            Lock Account 🔒
+                                        </button>
+                                    }
+
+                                    <!-- Block Action -->
+                                    @if (selectedReport.AvailableActions.Contains("BLOCK"))
+                                    {
+                                        <button type="button" class="btn-danger-action" @onclick='() => RequestProcessAction("BLOCK", "Block User", $"Block {GetReportedUserName(selectedReport)}. If this is a Coach who sold packages, only their coach profile will be blocked.")'>
+                                            Block User
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn-disabled-action" disabled title="@GetBlockDisabledReason(selectedReport)">
+                                            Block User 🚫
+                                        </button>
+                                    }
+
+                                    <!-- Delete Post Action (Only for Post Reports) -->
+                                    @if (selectedReport.AvailableActions.Contains("DELETE_POST") || selectedReport.ReportedPostId.HasValue)
+                                    {
+                                        @if (selectedReport.AvailableActions.Contains("DELETE_POST"))
+                                        {
+                                            <button type="button" class="btn-danger-action" @onclick="OpenDeletePostModal" style="background:#b91c1c;">
+                                                Delete Post
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn-disabled-action" disabled title="Post is already deleted or not available for deletion.">
+                                                Delete Post 🗑️
+                                            </button>
+                                        }
+                                    }
+
+                                    <!-- Reject Action -->
+                                    <button type="button" class="btn-secondary-action" @onclick='() => RequestProcessAction("REJECT", "Reject Report", "Reject/dismiss this report. Violation count will NOT increase and no notification will be sent.")'>
+                                        Reject Report
                                     </button>
-                                    <button type="button" class="btn-danger-action" @onclick='() => RequestConfirmAction("Block User", "block this user")'>
-                                        Block User
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button type="button" class="btn-warning-action" @onclick='() => HandleWarningAsync("user")'>
-                                        Warning
-                                    </button>
-                                    <button type="button" class="btn-danger-action" @onclick='() => RequestConfirmAction("Lock Account", "lock this account")'>
-                                        Lock Account
-                                    </button>
-                                    <button type="button" class="btn-danger-action" @onclick='() => RequestConfirmAction("Block", "block this account")'>
-                                        Block
-                                    </button>
-                                }
-                            </div>
+                                </div>
+                            }
                         </div>
                     </div>
 
@@ -413,29 +511,97 @@
             </div>
         }
 
-        <!-- Confirmation Modal for Destructive Actions -->
+        <!-- Confirmation Modal for Actions -->
         @if (showConfirmModal)
         {
             <div class="modal-overlay" style="z-index:1100;" @onclick="CancelConfirm">
                 <div class="modal-card confirm" @onclick:stopPropagation="true">
                     <div class="modal-header">
                         <h3>@confirmTitle</h3>
-                        <button type="button" class="modal-close-btn" @onclick="CancelConfirm" title="Close">✕</button>
+                        <button type="button" class="modal-close-btn" @onclick="CancelConfirm" title="Close" disabled="@isProcessingAction">✕</button>
                     </div>
                     <div class="modal-body">
                         <div class="flex items-start gap-3">
                             <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0 mt-0.5">
                                 <AppIcon Name="warning" />
                             </div>
-                            <div>
+                            <div class="flex-1">
                                 <p class="text-sm font-medium text-gray-900">@confirmMessage</p>
                                 <p class="text-xs text-gray-500 mt-1">Please confirm if you want to proceed with this moderation action.</p>
+
+                                <div class="mt-3">
+                                    <label class="text-xs font-medium text-gray-700 block mb-1">Staff Note (Optional):</label>
+                                    <textarea @bind="actionNote" class="w-full text-xs p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500" rows="2" placeholder="Enter reason or note for this action..."></textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn-modal-cancel" @onclick="CancelConfirm">Cancel</button>
-                        <button type="button" class="btn-modal-confirm" @onclick="ExecuteConfirmedAction">Confirm</button>
+                        <button type="button" class="btn-modal-cancel" @onclick="CancelConfirm" disabled="@isProcessingAction">Cancel</button>
+                        <button type="button" class="btn-modal-confirm" @onclick="ExecuteConfirmedActionAsync" disabled="@isProcessingAction">
+                            @if (isProcessingAction)
+                            {
+                                <span>Processing...</span>
+                            }
+                            else
+                            {
+                                <span>Confirm</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Dedicated Modal for Delete Post -->
+        @if (showDeletePostModal && selectedReport != null)
+        {
+            <div class="modal-overlay" style="z-index:1150;" @onclick="CancelDeletePost">
+                <div class="modal-card confirm" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h3>Delete Post</h3>
+                        <button type="button" class="modal-close-btn" @onclick="CancelDeletePost" title="Close" disabled="@isProcessingAction">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <AppIcon Name="warning" />
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm font-semibold text-gray-900">This action will soft-delete and permanently hide the post from users.</p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    The post owner (<strong>@(selectedReport.ReportedPostAuthorName ?? "Post Author")</strong>) will receive a violation notification with the reason you provide, and their violation count will increase.
+                                </p>
+
+                                <div class="mt-3">
+                                    <label class="text-xs font-semibold text-gray-700 block mb-1">
+                                        Deletion Reason <span class="text-red-500">*</span>:
+                                    </label>
+                                    <textarea @bind="deletePostReason"
+                                              @bind:event="oninput"
+                                              class="w-full text-xs p-2.5 border @(!string.IsNullOrEmpty(deletePostReasonError) ? "border-red-500 ring-1 ring-red-300" : "border-gray-300") rounded-lg focus:outline-none focus:border-red-500"
+                                              rows="3"
+                                              placeholder="Enter required reason for post removal (e.g. Violates community guidelines, inappropriate content)..."></textarea>
+                                    @if (!string.IsNullOrEmpty(deletePostReasonError))
+                                    {
+                                        <p class="text-xs text-red-600 mt-1 font-semibold">@deletePostReasonError</p>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal-cancel" @onclick="CancelDeletePost" disabled="@isProcessingAction">Cancel</button>
+                        <button type="button" class="btn-modal-confirm" @onclick="ConfirmDeletePostAsync" disabled="@isProcessingAction">
+                            @if (isProcessingAction)
+                            {
+                                <span>Processing...</span>
+                            }
+                            else
+                            {
+                                <span>Confirm Delete</span>
+                            }
+                        </button>
                     </div>
                 </div>
             </div>
@@ -473,7 +639,14 @@
     private bool showConfirmModal = false;
     private string confirmTitle = "";
     private string confirmMessage = "";
-    private string pendingActionName = "";
+    private string pendingActionCode = "";
+    private string actionNote = "";
+    private bool isProcessingAction = false;
+
+    // Delete Post Modal State
+    private bool showDeletePostModal = false;
+    private string deletePostReason = "";
+    private string? deletePostReasonError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -606,10 +779,22 @@
         }
     }
 
-    private void OpenReportDetails(ReportListItemDto report)
+    private async Task OpenReportDetails(ReportListItemDto report)
     {
         selectedReport = report;
         showDetailsModal = true;
+        try
+        {
+            var res = await ReportService.GetReportByIdAsync(report.ReportId);
+            if (res.Success && res.Data != null)
+            {
+                selectedReport = res.Data;
+            }
+        }
+        catch
+        {
+            // Fallback to list item data
+        }
     }
 
     private void CloseDetailsModal()
@@ -618,32 +803,154 @@
         selectedReport = null;
     }
 
-    // UI-ONLY Handlers (no backend API call as requested)
-    private Task HandleWarningAsync(string target)
+    private void RequestProcessAction(string actionCode, string actionTitle, string actionDescription)
     {
-        toastMessage = "This action is not available yet. Backend API is not implemented.";
-        toastType = "info";
-        return Task.CompletedTask;
-    }
-
-    private void RequestConfirmAction(string actionName, string actionTargetDescription)
-    {
-        pendingActionName = actionName;
-        confirmTitle = actionName;
-        confirmMessage = $"Are you sure you want to {actionTargetDescription}?";
+        pendingActionCode = actionCode;
+        actionNote = "";
+        confirmTitle = actionTitle;
+        confirmMessage = actionDescription;
         showConfirmModal = true;
     }
 
     private void CancelConfirm()
     {
+        if (isProcessingAction) return;
         showConfirmModal = false;
+        actionNote = "";
     }
 
-    private void ExecuteConfirmedAction()
+    private async Task ExecuteConfirmedActionAsync()
     {
-        showConfirmModal = false;
-        toastMessage = $"The {pendingActionName} action is currently unavailable because the backend API has not been implemented yet.";
-        toastType = "info";
+        if (selectedReport == null || string.IsNullOrWhiteSpace(pendingActionCode)) return;
+
+        isProcessingAction = true;
+        try
+        {
+            var req = new ProcessViolationReportRequest
+            {
+                Action = pendingActionCode,
+                Note = string.IsNullOrWhiteSpace(actionNote) ? null : actionNote.Trim()
+            };
+
+            var res = await ReportService.ProcessReportAsync(selectedReport.ReportId, req);
+            if (res.Success && res.Data != null)
+            {
+                selectedReport = res.Data;
+                toastMessage = $"Report #{ShortId(selectedReport.ReportId)} processed successfully with action: {pendingActionCode}.";
+                toastType = "info";
+                showConfirmModal = false;
+                await LoadReportsAsync();
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to process report.";
+                toastType = "error";
+                showConfirmModal = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error processing report: {ex.Message}";
+            toastType = "error";
+            showConfirmModal = false;
+        }
+        finally
+        {
+            isProcessingAction = false;
+        }
+    }
+
+    private void OpenDeletePostModal()
+    {
+        deletePostReason = "";
+        deletePostReasonError = null;
+        showDeletePostModal = true;
+    }
+
+    private void CancelDeletePost()
+    {
+        if (isProcessingAction) return;
+        showDeletePostModal = false;
+        deletePostReason = "";
+        deletePostReasonError = null;
+    }
+
+    private async Task ConfirmDeletePostAsync()
+    {
+        if (selectedReport == null) return;
+
+        if (string.IsNullOrWhiteSpace(deletePostReason))
+        {
+            deletePostReasonError = "Deletion reason is required and cannot be empty.";
+            return;
+        }
+
+        deletePostReasonError = null;
+        isProcessingAction = true;
+        try
+        {
+            var req = new ProcessViolationReportRequest
+            {
+                Action = "DELETE_POST",
+                Reason = deletePostReason.Trim(),
+                Note = deletePostReason.Trim()
+            };
+
+            var res = await ReportService.ProcessReportAsync(selectedReport.ReportId, req);
+            if (res.Success && res.Data != null)
+            {
+                selectedReport = res.Data;
+                toastMessage = $"Post deleted and report #{ShortId(selectedReport.ReportId)} resolved successfully.";
+                toastType = "info";
+                showDeletePostModal = false;
+                await LoadReportsAsync();
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to delete post.";
+                toastType = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error deleting post: {ex.Message}";
+            toastType = "error";
+        }
+        finally
+        {
+            isProcessingAction = false;
+        }
+    }
+
+    private string GetReportedUserName(ReportListItemDto report)
+    {
+        if (string.Equals(report.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
+        {
+            return report.ReportedPostAuthorName ?? "Post Author";
+        }
+        return report.ReportedUserName ?? "User";
+    }
+
+    private string GetLockDisabledReason(ReportListItemDto report)
+    {
+        if (string.Equals(report.ReportedUserRole, "COACH", StringComparison.OrdinalIgnoreCase) && report.HasSoldTrainingPackage == true)
+        {
+            return "Cannot lock account: This Coach has sold training packages to trainees. Only BLOCK is allowed.";
+        }
+        if (report.ReportedUserViolationCount < 2)
+        {
+            return $"Cannot lock account: Violation count must be greater than 2 (current: {report.ReportedUserViolationCount}). Please issue a Warning first.";
+        }
+        return "Lock account is currently unavailable.";
+    }
+
+    private string GetBlockDisabledReason(ReportListItemDto report)
+    {
+        if (report.ReportedUserViolationCount < 2)
+        {
+            return $"Cannot block user: Violation count must be greater than 2 (current: {report.ReportedUserViolationCount}). Please issue a Warning first.";
+        }
+        return "Block user is currently unavailable.";
     }
 
     private static string ShortId(Guid? id)

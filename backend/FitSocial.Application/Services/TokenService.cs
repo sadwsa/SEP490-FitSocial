@@ -37,15 +37,18 @@ public class TokenService : ITokenService
     }
 
     public async Task<AuthResponseDto> CreateSessionAsync(
-        User user, string? deviceInfo = null, CancellationToken cancellationToken = default)
+        User user, string? deviceInfo = null, bool rememberMe = true, CancellationToken cancellationToken = default)
     {
         var (accessToken, expiresAt) = _jwtTokenGenerator.GenerateToken(user);
         var refreshToken = GenerateOpaqueToken();
 
-        var refreshDaysStr = _configuration["Jwt:RefreshExpiryDays"];
+        // Production tiers: not-remembered = short session (7d), remembered = long session (30d)
+        var refreshDaysStr = rememberMe
+            ? _configuration["Jwt:RememberRefreshExpiryDays"]
+            : _configuration["Jwt:RefreshExpiryDays"];
         if (!int.TryParse(refreshDaysStr, out var refreshDays) || refreshDays <= 0)
         {
-            refreshDays = 30;
+            refreshDays = rememberMe ? 30 : 7;
         }
 
         await _refreshTokens.AddAsync(new RefreshToken
@@ -96,9 +99,12 @@ public class TokenService : ITokenService
             return ApiResponseDto<AuthResponseDto>.Fail("Account is not available.");
         }
 
-        // Rotation: revoke the used token, issue a brand-new session
+        // Rotation: revoke the used token, issue a brand-new session.
+        // Preserve the original tier (7d vs 30d) by reusing its lifetime (sliding).
         stored.RevokedAt = DateTime.UtcNow;
-        var response = await CreateSessionAsync(user, stored.DeviceInfo, cancellationToken);
+        var originalDuration = stored.ExpiresAt - (stored.CreatedAt ?? DateTime.UtcNow);
+        var rememberMe = originalDuration.TotalDays >= 15;
+        var response = await CreateSessionAsync(user, stored.DeviceInfo, rememberMe, cancellationToken);
 
         try
         {

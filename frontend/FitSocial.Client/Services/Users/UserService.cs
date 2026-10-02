@@ -23,6 +23,7 @@ public interface IUserService
         bool? isLocked = null,
         int pageNumber = 1,
         int pageSize = 10);
+    Task<ApiResponse<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequest request);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
     Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
     Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
@@ -194,6 +195,34 @@ public class UserService : IUserService
         catch (Exception ex)
         {
             return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequest request)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _httpClient.PostAsJsonAsync("admin/staff", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AdminUserDto>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Failed to create staff account (Status: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<AdminUserDto>
             {
                 Success = false,
                 Message = $"Connection error: {ex.Message}"

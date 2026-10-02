@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Users;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 
@@ -15,11 +16,13 @@ public class AdminUserService : IAdminUserService
 {
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public AdminUserService(IUserRepository userRepository, IUnitOfWork unitOfWork)
+    public AdminUserService(IUserRepository userRepository, IUnitOfWork unitOfWork, IPasswordHasher passwordHasher)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<ApiResponseDto<PagedResultDto<AdminUserDto>>> GetUsersAsync(
@@ -141,6 +144,81 @@ public class AdminUserService : IAdminUserService
         catch (Exception ex)
         {
             return ApiResponseDto<AdminUserDto>.Fail($"Error issuing warning: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<AdminUserDto>> CreateStaffAccountAsync(
+        CreateStaffAccountRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (request == null)
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Request cannot be null.");
+            }
+
+            var trimmedFullName = request.FullName?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmedFullName) || trimmedFullName.Length < 2)
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Full name must be at least 2 characters.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Email))
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Email is required.");
+            }
+
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+            if (await _userRepository.ExistsByEmailAsync(normalizedEmail, cancellationToken))
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Email is already registered.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Password must be at least 6 characters.");
+            }
+
+            if (request.Password != request.ConfirmPassword)
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Passwords do not match.");
+            }
+
+            var trimmedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmedPhone))
+            {
+                if (await _userRepository.ExistsByPhoneAsync(trimmedPhone, cancellationToken: cancellationToken))
+                {
+                    return ApiResponseDto<AdminUserDto>.Fail("Phone number is already registered.");
+                }
+            }
+
+            var now = DateTime.UtcNow;
+            var staffUser = new User
+            {
+                UserId = Guid.NewGuid(),
+                Email = normalizedEmail,
+                FullName = trimmedFullName,
+                PasswordHash = _passwordHasher.HashPassword(request.Password),
+                PhoneNumber = trimmedPhone,
+                RoleCode = RoleConstants.Staff,
+                IsInternal = true,
+                IsLocked = false,
+                TokenVersion = 1,
+                WarningCount = 0,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await _userRepository.AddAsync(staffUser, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return ApiResponseDto<AdminUserDto>.Ok(MapToAdminDto(staffUser), "Staff account created successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<AdminUserDto>.Fail($"Error creating staff account: {ex.Message}");
         }
     }
 

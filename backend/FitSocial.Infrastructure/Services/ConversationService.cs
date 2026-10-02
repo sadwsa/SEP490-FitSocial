@@ -88,6 +88,27 @@ public class ConversationService : IConversationService
 
                 var otherUserName = otherUser.FullName ?? otherUser.Email ?? "FitSocial User";
 
+                string? displayLastMessage = conv.LastMessageContent;
+                DateTime? displayLastMessageAt = conv.LastMessageAt ?? conv.UpdatedAt ?? conv.CreatedAt;
+                Guid? displayLastMessageSenderId = conv.LastMessageSenderId;
+
+                if (isOtherBlocked || deletedHistoryAt != null)
+                {
+                    var latestValidMsg = validMessages.FirstOrDefault();
+                    if (latestValidMsg != null)
+                    {
+                        displayLastMessage = latestValidMsg.Content;
+                        displayLastMessageAt = latestValidMsg.CreatedAt;
+                        displayLastMessageSenderId = latestValidMsg.SenderId;
+                    }
+                    else
+                    {
+                        displayLastMessage = null;
+                        displayLastMessageAt = conv.UpdatedAt ?? conv.CreatedAt;
+                        displayLastMessageSenderId = null;
+                    }
+                }
+
                 var dto = new ConversationDto
                 {
                     ConversationId = conv.ConversationId,
@@ -97,14 +118,18 @@ public class ConversationService : IConversationService
                     OtherUserId = otherUser.UserId,
                     OtherUserName = otherUserName,
                     OtherUserAvatar = otherUser.AvatarUrl,
-                    LastMessage = conv.LastMessageContent,
-                    LastMessageAt = conv.LastMessageAt ?? conv.UpdatedAt ?? conv.CreatedAt,
-                    LastMessageSenderId = conv.LastMessageSenderId,
+                    LastMessage = displayLastMessage,
+                    LastMessageAt = displayLastMessageAt,
+                    LastMessageSenderId = displayLastMessageSenderId,
                     UpdatedAt = conv.UpdatedAt ?? conv.CreatedAt
                 };
 
-                // Calculate unread count
-                if (lastReadMessageId.HasValue)
+                // Calculate unread count (if other user is blocked, do not count unread)
+                if (isOtherBlocked)
+                {
+                    dto.UnreadCount = 0;
+                }
+                else if (lastReadMessageId.HasValue)
                 {
                     var lastReadMsg = conv.Messages.FirstOrDefault(m => m.MessageId == lastReadMessageId.Value);
                     if (lastReadMsg?.CreatedAt != null)
@@ -331,6 +356,27 @@ public class ConversationService : IConversationService
                     MessageType = "BLOCK",
                     CreatedAt = now
                 };
+
+                if (request.Attachments != null && request.Attachments.Any())
+                {
+                    foreach (var att in request.Attachments)
+                    {
+                        blockedMessage.MessageAttachments.Add(new MessageAttachment
+                        {
+                            AttachmentId = Guid.NewGuid(),
+                            MessageId = blockedMessage.MessageId,
+                            MediaUrl = att.MediaUrl,
+                            ThumbnailUrl = att.ThumbnailUrl,
+                            MediaType = att.MediaType ?? "IMAGE",
+                            FileSize = att.FileSize,
+                            DurationSeconds = att.DurationSeconds,
+                            Width = att.Width,
+                            Height = att.Height,
+                            CreatedAt = now
+                        });
+                    }
+                }
+
                 _context.Messages.Add(blockedMessage);
 
                 var autoReplyMessage = new Message
@@ -387,6 +433,17 @@ public class ConversationService : IConversationService
                     MessageType = blockedMessage.MessageType,
                     CreatedAt = blockedMessage.CreatedAt,
                     IsMine = true,
+                    Attachments = blockedMessage.MessageAttachments.Select(a => new MessageAttachmentDto
+                    {
+                        AttachmentId = a.AttachmentId,
+                        MediaUrl = a.MediaUrl,
+                        ThumbnailUrl = a.ThumbnailUrl,
+                        MediaType = a.MediaType,
+                        FileSize = a.FileSize,
+                        DurationSeconds = a.DurationSeconds,
+                        Width = a.Width,
+                        Height = a.Height
+                    }).ToList(),
                     AutoReply = autoReplyDto
                 };
 
@@ -394,13 +451,26 @@ public class ConversationService : IConversationService
             }
 
             // Normal Message Creation
+            var messageType = request.MessageType ?? "TEXT";
+            if (request.Attachments != null && request.Attachments.Any())
+            {
+                if (request.Attachments.Any(a => string.Equals(a.MediaType, "VIDEO", StringComparison.OrdinalIgnoreCase)))
+                {
+                    messageType = "VIDEO";
+                }
+                else if (request.Attachments.Any(a => string.Equals(a.MediaType, "IMAGE", StringComparison.OrdinalIgnoreCase)))
+                {
+                    messageType = "IMAGE";
+                }
+            }
+
             var message = new Message
             {
                 MessageId = Guid.NewGuid(),
                 ConversationId = conversationId,
                 SenderId = currentUserId,
                 Content = trimmedContent,
-                MessageType = request.MessageType ?? "TEXT",
+                MessageType = messageType,
                 CreatedAt = now
             };
 
@@ -414,7 +484,7 @@ public class ConversationService : IConversationService
                         MessageId = message.MessageId,
                         MediaUrl = att.MediaUrl,
                         ThumbnailUrl = att.ThumbnailUrl,
-                        MediaType = att.MediaType ?? "FILE",
+                        MediaType = att.MediaType ?? "IMAGE",
                         FileSize = att.FileSize,
                         DurationSeconds = att.DurationSeconds,
                         Width = att.Width,
@@ -429,7 +499,9 @@ public class ConversationService : IConversationService
             // Update conversation tracking fields
             conv.LastMessageContent = !string.IsNullOrWhiteSpace(trimmedContent)
                 ? trimmedContent
-                : (message.MessageAttachments.Count > 0 ? "[Attachment]" : "Sent a message");
+                : (message.MessageAttachments.Count > 0
+                    ? (message.MessageAttachments.Any(a => string.Equals(a.MediaType, "VIDEO", StringComparison.OrdinalIgnoreCase)) ? "[Video]" : "[Photo]")
+                    : "Sent a message");
             conv.LastMessageSenderId = currentUserId;
             conv.LastMessageAt = now;
             conv.UpdatedAt = now;

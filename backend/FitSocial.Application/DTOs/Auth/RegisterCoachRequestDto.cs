@@ -13,7 +13,7 @@ public class RegisterCoachRequestDto
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Password is required")]
-    [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+    [MinLength(8, ErrorMessage = "Password must be at least 8 characters")]
     public string Password { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Please confirm your password")]
@@ -45,23 +45,29 @@ public class RegisterCoachRequestDto
     [StringLength(2048, ErrorMessage = "Identity card link is too long")]
     public string? IdentityCardUrl { get; set; }
 
-    // --- 5-step flow (all data comes from frontend, no mock) ---
-    /// <summary>Version of terms the user agreed to (TermsAndPolicies.TermID).</summary>
+    // --- 5-step flow per FitConnect spec: (1) Account -> (2) CCCD -> (3) Certificates -> (4) Confirm & Plan -> (5) Pay ---
+    /// <summary>Version of terms the user agreed to (TermsAndPolicies.TermID). Required at Confirm & Plan step.</summary>
     public Guid? TermId { get; set; }
 
-    /// <summary>eKYC front/back/face image URLs (uploaded via /upload, verified before payment).</summary>
+    /// <summary>eKYC front/back/face image URLs (uploaded via /upload, verified before payment). Stored as plain URL strings.</summary>
     public string? FrontCardUrl { get; set; }
     public string? BackCardUrl { get; set; }
     public string? FaceImageUrl { get; set; }
-    /// <summary>Optional extra liveness poses: Left/Right/Top/Bottom (lại gần/ra xa được map vào Portrait, trái/phải vào Left/Right)</summary>
+    /// <summary>Optional extra liveness poses: Left/Right/Top/Bottom</summary>
     public string? FaceImageLeftUrl { get; set; }
     public string? FaceImageRightUrl { get; set; }
     public string? FaceImageTopUrl { get; set; }
     public string? FaceImageBottomUrl { get; set; }
 
-    /// <summary>Selected subscription plan (Price) for the coach. Must be an active Price.</summary>
-    [Required(ErrorMessage = "Please select a subscription plan.")]
-    public Guid? PriceId { get; set; }
+    /// <summary>Selected subscription plan (CoachSubscriptionPlans) for the coach. Must be an active plan.</summary>
+    public Guid? CoachSubscriptionPlansId { get; set; }
+
+    /// <summary>Legacy alias for CoachSubscriptionPlansId (old clients send PriceId).</summary>
+    public Guid? PriceId
+    {
+        get => CoachSubscriptionPlansId;
+        set => CoachSubscriptionPlansId = value;
+    }
 
     /// <summary>Multiple certificates for the coach (replaces single CertificateUrl).</summary>
     public List<FitSocial.Application.DTOs.Coach.CoachCertificateDto>? Certificates { get; set; }

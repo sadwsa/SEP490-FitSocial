@@ -120,12 +120,12 @@
                                                 }
                                             </td>
                                             <td><span title="@p.Description">@(string.IsNullOrWhiteSpace(p.Description) ? "—" : p.Description)</span></td>
-                                            <td><strong>@p.Amount.ToString("N0") @p.Currency</strong></td>
+                                            <td><strong>@((p.Amount ?? 0).ToString("N0")) @(p.Currency ?? "VND")</strong></td>
                                             <td>
-                                                @if (p.IsActive) { <span class="status-badge active">Active</span> } else { <span class="status-badge locked">Inactive</span> }
+                                                @if (p.IsActive == true) { <span class="status-badge active">Active</span> } else { <span class="status-badge locked">Inactive</span> }
                                             </td>
                                             <td><span class="role-badge">@p.SubscriberCount total</span> <small class="muted">(@p.ActiveSubscriberCount active)</small></td>
-                                            <td><small>@p.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small></td>
+                                            <td><small>@(p.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</small></td>
                                         </tr>
                                     }
                                 }

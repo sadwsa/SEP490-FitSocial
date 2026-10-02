@@ -30,6 +30,7 @@ public partial class Conversation
     public DateTime? UpdatedAt { get; set; }
 
     // Helper property for backward compatibility with Id
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public Guid Id
     {
         get => ConversationId;

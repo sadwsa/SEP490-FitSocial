@@ -556,6 +556,8 @@ public partial class FitSocialDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
 
+            entity.Ignore(e => e.Id);
+
             entity.HasOne(d => d.User1).WithMany(p => p.ConversationsAsUser1)
                 .HasForeignKey(d => d.User1Id)
                 .HasConstraintName("Conversations_User1ID_fkey");
@@ -592,6 +594,8 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
+
+            entity.Ignore(e => e.Id);
 
             entity.HasOne(d => d.Conversation).WithMany(p => p.Messages)
                 .HasForeignKey(d => d.ConversationId)

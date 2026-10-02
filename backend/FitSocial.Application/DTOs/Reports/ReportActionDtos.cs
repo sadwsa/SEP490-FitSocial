@@ -52,3 +52,19 @@ public class CreateUserReportRequestDto
 
     public List<string>? MediaUrls { get; set; }
 }
+
+public class ProcessViolationReportRequestDto
+{
+    [Required(ErrorMessage = "Action is required.")]
+    [StringLength(30)]
+    public string Action { get; set; } = string.Empty; // WARN, BLOCK, LOCK, DELETE_POST, REJECT, DISMISS
+
+    [StringLength(300, ErrorMessage = "Deletion reason cannot exceed 300 characters.")]
+    public string? Reason { get; set; }
+
+    [StringLength(1000)]
+    public string? Note { get; set; }
+
+    public string? EffectiveReason => !string.IsNullOrWhiteSpace(Reason) ? Reason.Trim() : (!string.IsNullOrWhiteSpace(Note) ? Note.Trim() : null);
+}
+

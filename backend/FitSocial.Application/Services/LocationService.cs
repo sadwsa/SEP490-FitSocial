@@ -38,7 +38,7 @@ public class LocationService : ILocationService
                 LocationId = l.LocationId,
                 LocationName = l.LocationName,
                 Address = l.Address,
-                PostCount = l.Posts?.Count ?? 0
+                PostCount = l.Posts?.Count(p => p.IsDeleted != true) ?? 0
             }).ToList();
 
             var pagedResult = PagedResultDto<LocationDto>.Create(dtos, totalCount, pageNumber, pageSize);
@@ -70,7 +70,7 @@ public class LocationService : ILocationService
                 LocationId = l.LocationId,
                 LocationName = l.LocationName,
                 Address = l.Address,
-                PostCount = l.Posts?.Count ?? 0
+                PostCount = l.Posts?.Count(p => p.IsDeleted != true) ?? 0
             }).ToList();
 
             return ApiResponseDto<List<LocationDto>>.Ok(dtos, "Locations list retrieved successfully.");
@@ -221,9 +221,9 @@ public class LocationService : ILocationService
                 return ApiResponseDto<bool>.Fail("Location not found.");
             }
 
-            if (location.Posts != null && location.Posts.Count > 0)
+            if (location.Posts != null && location.Posts.Any(p => p.IsDeleted != true))
             {
-                return ApiResponseDto<bool>.Fail("Cannot delete this location because it is currently used by posts.");
+                return ApiResponseDto<bool>.Fail("Cannot delete this location because it is currently used by active posts.");
             }
 
             if (location.Coaches != null && location.Coaches.Count > 0)

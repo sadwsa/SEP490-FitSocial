@@ -46,3 +46,4 @@ public class CoachSubscriptionPlanRepository : Repository<CoachSubscriptionPlan>
         return (upgrades, details);
     }
 }
+

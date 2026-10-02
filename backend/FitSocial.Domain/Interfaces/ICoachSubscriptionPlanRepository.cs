@@ -14,3 +14,4 @@ public interface ICoachSubscriptionPlanRepository : IRepository<CoachSubscriptio
     /// <summary>UC_33.3: references blocking hard-delete (upgrades + order details).</summary>
     Task<(int Upgrades, int OrderDetails)> CountReferencesAsync(Guid planId, CancellationToken cancellationToken = default);
 }
+

@@ -2,16 +2,13 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FitSocial.Application.DTOs.SystemOperations;
 
-public class CreateCoachSubscriptionPlanDto
+public class UpdateCoachSubscriptionPlanDto
 {
-    [Required(ErrorMessage = "Amount is required.")]
     [Range(0, 100000000, ErrorMessage = "Amount must be between 0 and 100,000,000.")]
-    public decimal Amount { get; set; }
+    public decimal? Amount { get; set; }
 
     [StringLength(10, ErrorMessage = "Currency must not exceed 10 characters.")]
-    public string Currency { get; set; } = "VND";
-
-    public bool IsActive { get; set; } = true;
+    public string? Currency { get; set; }
 
     [StringLength(2048, ErrorMessage = "Image URL must not exceed 2048 characters.")]
     [Url(ErrorMessage = "Image URL must be a valid URL.")]
@@ -20,9 +17,9 @@ public class CreateCoachSubscriptionPlanDto
     [StringLength(500, ErrorMessage = "Description must not exceed 500 characters.")]
     public string? Description { get; set; }
 
-    [Range(1, 3650, ErrorMessage = "Subscription duration must be between 1 and 3650.")]
     public int? SubscriptionDuration { get; set; }
 
-    [Range(0, 3650, ErrorMessage = "Training package duration must be between 0 and 3650.")]
     public int? TrainingPackageDuration { get; set; }
+
+    public bool? IsActive { get; set; }
 }

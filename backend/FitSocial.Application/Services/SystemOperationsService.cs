@@ -65,15 +65,18 @@ public class SystemOperationsService : ISystemOperationsService
 
             var plans = pagedPlans.Select(p => new CoachSubscriptionPlanDto
             {
-                PriceId = p.PriceId ?? p.CoachSubscriptionPlansId,
+                CoachSubscriptionPlansId = p.CoachSubscriptionPlansId,
+                PriceId = p.PriceId,
                 Amount = p.Amount ?? 0m,
                 Currency = p.Currency ?? "VND",
                 IsActive = p.IsActive ?? false,
                 ImageUrl = p.ImageUrl,
                 Description = p.Description,
+                SubscriptionDuration = p.SubscriptionDuration,
+                TrainingPackageDuration = p.TrainingPackageDuration,
                 CreatedAt = p.CreatedAt ?? DateTime.UtcNow,
-                SubscriberCount = countDict.TryGetValue(p.PriceId ?? p.CoachSubscriptionPlansId, out var c) ? c.Total : 0,
-                ActiveSubscriberCount = countDict.TryGetValue(p.PriceId ?? p.CoachSubscriptionPlansId, out var c2) ? c2.Active : 0
+                SubscriberCount = countDict.TryGetValue(p.CoachSubscriptionPlansId, out var c) ? c.Total : 0,
+                ActiveSubscriberCount = countDict.TryGetValue(p.CoachSubscriptionPlansId, out var c2) ? c2.Active : 0
             }).ToList();
 
             var result = new CoachSubscriptionPlansResponseDto
@@ -103,12 +106,15 @@ public class SystemOperationsService : ISystemOperationsService
 
         var dto = new CoachSubscriptionPlanDto
         {
-            PriceId = plan.PriceId ?? plan.CoachSubscriptionPlansId,
+            CoachSubscriptionPlansId = plan.CoachSubscriptionPlansId,
+            PriceId = plan.PriceId,
             Amount = plan.Amount ?? 0m,
             Currency = plan.Currency ?? "VND",
             IsActive = plan.IsActive ?? false,
             ImageUrl = plan.ImageUrl,
             Description = plan.Description,
+            SubscriptionDuration = plan.SubscriptionDuration,
+            TrainingPackageDuration = plan.TrainingPackageDuration,
             CreatedAt = plan.CreatedAt ?? DateTime.UtcNow,
             SubscriberCount = count,
             ActiveSubscriberCount = activeCount
@@ -128,6 +134,8 @@ public class SystemOperationsService : ISystemOperationsService
                 IsActive = dto.IsActive,
                 ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim(),
                 Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
+                SubscriptionDuration = dto.SubscriptionDuration,
+                TrainingPackageDuration = dto.TrainingPackageDuration,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -136,12 +144,15 @@ public class SystemOperationsService : ISystemOperationsService
 
             var resultDto = new CoachSubscriptionPlanDto
             {
-                PriceId = plan.CoachSubscriptionPlansId,
+                CoachSubscriptionPlansId = plan.CoachSubscriptionPlansId,
+                PriceId = plan.PriceId,
                 Amount = plan.Amount ?? 0m,
                 Currency = plan.Currency ?? "VND",
                 IsActive = plan.IsActive ?? false,
                 ImageUrl = plan.ImageUrl,
                 Description = plan.Description,
+                SubscriptionDuration = plan.SubscriptionDuration,
+                TrainingPackageDuration = plan.TrainingPackageDuration,
                 CreatedAt = plan.CreatedAt ?? DateTime.UtcNow,
                 SubscriberCount = 0,
                 ActiveSubscriberCount = 0
@@ -152,6 +163,56 @@ public class SystemOperationsService : ISystemOperationsService
         {
             _logger.LogError(ex, "Failed to create coach subscription plan");
             return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Could not create subscription plan.");
+        }
+    }
+
+    public async Task<ApiResponseDto<CoachSubscriptionPlanDto>> UpdatePlanAsync(Guid planId, UpdateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var plan = await _planRepository.GetByIdAsync(planId, cancellationToken);
+            if (plan == null)
+                return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Subscription plan not found.");
+
+            if (!dto.Amount.HasValue || dto.Amount.Value < 0)
+                return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Amount must be >= 0.");
+            if (string.IsNullOrWhiteSpace(dto.Description))
+                return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Description is required.");
+
+            plan.Amount = dto.Amount;
+            plan.Currency = string.IsNullOrWhiteSpace(dto.Currency) ? plan.Currency : dto.Currency.Trim().ToUpper();
+            plan.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+            plan.ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
+            if (dto.IsActive.HasValue) plan.IsActive = dto.IsActive.Value;
+            if (dto.SubscriptionDuration.HasValue) plan.SubscriptionDuration = dto.SubscriptionDuration.Value;
+            if (dto.TrainingPackageDuration.HasValue) plan.TrainingPackageDuration = dto.TrainingPackageDuration.Value;
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var result = new CoachSubscriptionPlanDto
+            {
+                CoachSubscriptionPlansId = plan.CoachSubscriptionPlansId,
+                PriceId = plan.PriceId,
+                Amount = plan.Amount ?? 0m,
+                Currency = plan.Currency ?? "VND",
+                IsActive = plan.IsActive ?? false,
+                ImageUrl = plan.ImageUrl,
+                Description = plan.Description,
+                SubscriptionDuration = plan.SubscriptionDuration,
+                TrainingPackageDuration = plan.TrainingPackageDuration,
+                CreatedAt = plan.CreatedAt ?? DateTime.UtcNow,
+                SubscriberCount = 0,
+                ActiveSubscriberCount = 0
+            };
+
+            // Active subscribers keep their historical tier: CoachUpgrade holds the price snapshot at purchase
+            // time (Order/Payment rows), so changing this plan does NOT alter past transactions.
+            return ApiResponseDto<CoachSubscriptionPlanDto>.Ok(result, "Subscription plan updated successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update subscription plan {PlanId}", planId);
+            return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Could not update subscription plan.");
         }
     }
 }

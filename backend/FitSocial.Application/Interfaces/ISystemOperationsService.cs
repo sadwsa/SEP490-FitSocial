@@ -21,4 +21,9 @@ public interface ISystemOperationsService
     /// UC_37.1: Staff/Admin Create Coach Subscription Plan
     /// </summary>
     Task<ApiResponseDto<CoachSubscriptionPlanDto>> CreatePlanAsync(CreateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_33.2: Staff/Admin Edit Coach Subscription Plan
+    /// </summary>
+    Task<ApiResponseDto<CoachSubscriptionPlanDto>> UpdatePlanAsync(Guid planId, UpdateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken = default);
 }

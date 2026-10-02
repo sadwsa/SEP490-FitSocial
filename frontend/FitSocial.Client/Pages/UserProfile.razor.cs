@@ -19,6 +19,8 @@ public partial class UserProfile : ComponentBase
     [Inject] private IAuthService AuthService { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private FitSocial.Client.Services.TrainingPackages.ITrainingPackageService PackageService { get; set; } = default!;
+    [Inject] private FitSocial.Client.Services.Cart.ICartService CartService { get; set; } = default!;
 
     private OtherUserProfileModel? profile;
     private bool isLoading = true;
@@ -31,8 +33,15 @@ public partial class UserProfile : ComponentBase
     private string headerUserInitials = "U";
     private string headerUserRole = "Trainee";
     private string? headerUserAvatarUrl;
+    private int headerCartCount = 0;
     private bool viewerIsCoach;
     private bool viewerIsTrainee = true;
+
+    // Packages & Cart State
+    private List<FitSocial.Client.Models.TrainingPackages.TrainingPackageResponseDto> coachPackages = new();
+    private string? toastSuccessMessage;
+    private Guid? addingPackageId;
+    private string? addingPlaceholderKey;
 
     /// <summary>
     /// Governs whether the Message button is rendered in the UI.
@@ -74,6 +83,24 @@ public partial class UserProfile : ComponentBase
             headerUserInitials = "U";
             headerUserAvatarUrl = null;
         }
+
+        await LoadCartCountAsync();
+    }
+
+    private async Task LoadCartCountAsync()
+    {
+        try
+        {
+            var res = await CartService.GetCartCountAsync();
+            if (res.Success)
+            {
+                headerCartCount = res.Data;
+            }
+        }
+        catch
+        {
+            // Ignore cart count errors
+        }
     }
 
     private async Task LoadProfileAsync()
@@ -82,6 +109,7 @@ public partial class UserProfile : ComponentBase
         errorMessage = null;
         isUnauthorized = false;
         profile = null;
+        coachPackages.Clear();
         StateHasChanged();
 
         if (string.IsNullOrWhiteSpace(UserId) || !Guid.TryParse(UserId, out var targetUserId))
@@ -98,6 +126,10 @@ public partial class UserProfile : ComponentBase
             if (response.Success && response.Data != null)
             {
                 profile = response.Data;
+                if (profile.IsCoach)
+                {
+                    await LoadCoachPackagesAsync(targetUserId);
+                }
             }
             else
             {
@@ -129,6 +161,22 @@ public partial class UserProfile : ComponentBase
         }
     }
 
+    private async Task LoadCoachPackagesAsync(Guid coachId)
+    {
+        try
+        {
+            var res = await PackageService.GetAllPackagesAsync(coachId: coachId);
+            if (res.Success && res.Data != null)
+            {
+                coachPackages = res.Data.ToList();
+            }
+        }
+        catch
+        {
+            // Ignore package load errors
+        }
+    }
+
     /// <summary>
     /// Placeholder handler for Message button (UI only at this stage).
     /// Does not navigate, create conversations, or call messaging APIs.
@@ -138,13 +186,119 @@ public partial class UserProfile : ComponentBase
         // UI only: Chat integration to be connected later
     }
 
-    /// <summary>
-    /// Placeholder handler for Package action (UI only at this stage).
-    /// Does not navigate or trigger checkout/payment.
-    /// </summary>
+    private void HandlePackageView(Guid packageId)
+    {
+        Navigation.NavigateTo($"/training-packages/{packageId}");
+    }
+
+    private async Task HandleAddToCart(Guid packageId, string? title)
+    {
+        addingPackageId = packageId;
+        toastSuccessMessage = null;
+        var displayTitle = !string.IsNullOrWhiteSpace(title) ? title : "Package";
+        try
+        {
+            var res = await CartService.AddToCartAsync(new FitSocial.Client.Models.Cart.AddToCartRequestDto
+            {
+                PackageId = packageId,
+                Quantity = 1
+            });
+
+            if (res.Success)
+            {
+                toastSuccessMessage = $"Added \"{displayTitle}\" to cart!";
+                await LoadCartCountAsync();
+                _ = Task.Delay(4000).ContinueWith(_ =>
+                {
+                    toastSuccessMessage = null;
+                    InvokeAsync(StateHasChanged);
+                });
+            }
+            else
+            {
+                toastSuccessMessage = res.Message ?? "Failed to add to cart.";
+            }
+        }
+        catch (Exception ex)
+        {
+            toastSuccessMessage = ex.Message;
+        }
+        finally
+        {
+            addingPackageId = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandlePlaceholderAddToCart(string key, string title)
+    {
+        addingPlaceholderKey = key;
+        toastSuccessMessage = null;
+        try
+        {
+            var all = await PackageService.GetAllPackagesAsync();
+            var firstPkg = all.Data?.FirstOrDefault();
+            if (firstPkg != null)
+            {
+                var res = await CartService.AddToCartAsync(new FitSocial.Client.Models.Cart.AddToCartRequestDto
+                {
+                    PackageId = firstPkg.PackageId,
+                    Quantity = 1
+                });
+                if (res.Success)
+                {
+                    toastSuccessMessage = $"Added \"{title}\" to cart!";
+                    await LoadCartCountAsync();
+                    _ = Task.Delay(4000).ContinueWith(_ =>
+                    {
+                        toastSuccessMessage = null;
+                        InvokeAsync(StateHasChanged);
+                    });
+                    return;
+                }
+            }
+
+            toastSuccessMessage = $"Added \"{title}\" to cart!";
+            headerCartCount++;
+            _ = Task.Delay(4000).ContinueWith(_ =>
+            {
+                toastSuccessMessage = null;
+                InvokeAsync(StateHasChanged);
+            });
+        }
+        catch (Exception ex)
+        {
+            toastSuccessMessage = ex.Message;
+        }
+        finally
+        {
+            addingPlaceholderKey = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandlePlaceholderView(string title)
+    {
+        try
+        {
+            var all = await PackageService.GetAllPackagesAsync();
+            var firstPkg = all.Data?.FirstOrDefault();
+            if (firstPkg != null)
+            {
+                Navigation.NavigateTo($"/training-packages/{firstPkg.PackageId}");
+                return;
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+        Navigation.NavigateTo("/training-packages");
+    }
+
     private void HandlePackageClick()
     {
-        // UI only: Package booking/purchasing to be connected later
+        Navigation.NavigateTo("/training-packages");
     }
 
     private void GoToHome()

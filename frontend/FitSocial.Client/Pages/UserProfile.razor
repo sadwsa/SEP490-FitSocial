@@ -7,11 +7,28 @@
 <PageTitle>@(profile?.FullName != null ? $"{profile.FullName} - FitSocial" : "User Profile - FitSocial")</PageTitle>
 
 <div class="min-h-screen bg-gray-100 text-gray-800">
+    <!-- Floating Success Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-emerald-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <span>@toastSuccessMessage</span>
+            <button type="button" @onclick="() => toastSuccessMessage = null"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer">
+                &times;
+            </button>
+        </div>
+    }
+
     <!-- Header / Navigation Bar -->
     <AppHeader SearchTerm="@headerSearchTerm" OnSearchInput="HandleHeaderSearchInput"
                OnSearchKeyUp="HandleHeaderSearchKeyUp" OnSearch="ExecuteHeaderSearch" OnClearSearch="ClearHeaderSearch"
                UserName="@headerUserName" UserInitials="@headerUserInitials" UserRole="@headerUserRole"
-               UserAvatarUrl="@headerUserAvatarUrl" OnLogout="HandleLogout" />
+               UserAvatarUrl="@headerUserAvatarUrl" CartCount="@headerCartCount" OnLogout="HandleLogout" />
 
     <style>
         @@media (min-width: 1024px) {
@@ -342,8 +359,6 @@
 
                 @if (profile.IsCoach)
                 {
-                    <!-- Available Packages Section (COACH ONLY - UI Placeholder) -->
-                    <!-- NOTE: Package API integration, purchasing, and selection are not yet implemented. This is a design placeholder. -->
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-7">
                         <div class="flex items-center justify-between mb-5 pb-3 border-b border-gray-100">
                             <div class="flex items-center gap-3">
@@ -359,87 +374,193 @@
                                 </div>
                             </div>
                             <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-orange-50 text-[#FF5500] border border-orange-200">
-                                3 Packages
+                                @(coachPackages.Any() ? $"{coachPackages.Count} Packages" : "3 Packages")
                             </span>
                         </div>
 
-                        <!-- Placeholder Package Cards Grid -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <!-- Package Card 1 -->
-                            <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col justify-between hover:shadow-md hover:border-orange-200 transition-all duration-200">
-                                <div>
-                                    <div class="flex items-center justify-between gap-2 mb-2">
-                                        <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-orange-100/70 text-[#FF5500]">
-                                            3 Months
-                                        </span>
+                        @if (coachPackages.Any())
+                        {
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                @foreach (var pkg in coachPackages)
+                                {
+                                    <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col justify-between hover:shadow-md hover:border-orange-200 transition-all duration-200">
+                                        <div>
+                                            <div class="flex items-center justify-between gap-2 mb-2">
+                                                <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-orange-100/70 text-[#FF5500]">
+                                                    @(pkg.DurationDays >= 7 && pkg.DurationDays % 7 == 0 ? $"{pkg.DurationDays / 7} Weeks" : $"{pkg.DurationDays} Days")
+                                                </span>
+                                            </div>
+                                            <h3 class="font-bold text-gray-900 text-sm mb-1 line-clamp-1">@pkg.Title</h3>
+                                            <p class="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">
+                                                @pkg.Description
+                                            </p>
+                                        </div>
+                                        <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                                            <div>
+                                                <p class="text-[11px] text-gray-400">Price</p>
+                                                <p class="text-sm font-extrabold text-[#FF5500]">@pkg.Price.ToString("N0") ₫</p>
+                                            </div>
+                                            <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                                                <button type="button" @onclick="() => HandlePackageView(pkg.PackageId)"
+                                                        class="px-2.5 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 rounded-lg text-xs font-semibold transition cursor-pointer">
+                                                    View
+                                                </button>
+                                                <button type="button" @onclick='() => HandleAddToCart(pkg.PackageId, pkg.Title ?? "Package")'
+                                                        disabled="@(addingPackageId == pkg.PackageId)"
+                                                        class="px-2.5 py-1.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white hover:opacity-95 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50">
+                                                    @if (addingPackageId == pkg.PackageId)
+                                                    {
+                                                        <span class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                        <span>Adding...</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                                                        </svg>
+                                                        <span>Add to Cart</span>
+                                                    }
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <h3 class="font-bold text-gray-900 text-sm mb-1 line-clamp-1">1-on-1 Personalized Coaching</h3>
-                                    <p class="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">
-                                        Tailored workout plan, nutritional guidance, and weekly progress check-ins with your coach.
-                                    </p>
-                                </div>
-                                <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-                                    <div>
-                                        <p class="text-[11px] text-gray-400">Price</p>
-                                        <p class="text-sm font-extrabold text-[#FF5500]">2,500,000 ₫</p>
-                                    </div>
-                                    <button type="button" @onclick="HandlePackageClick"
-                                            class="px-3 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 rounded-lg text-xs font-semibold transition cursor-pointer">
-                                        View
-                                    </button>
-                                </div>
+                                }
                             </div>
+                        }
+                        else
+                        {
+                            <!-- Placeholder Package Cards Grid with View & Add to Cart -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <!-- Package Card 1 -->
+                                <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col justify-between hover:shadow-md hover:border-orange-200 transition-all duration-200">
+                                    <div>
+                                        <div class="flex items-center justify-between gap-2 mb-2">
+                                            <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-orange-100/70 text-[#FF5500]">
+                                                3 Months
+                                            </span>
+                                        </div>
+                                        <h3 class="font-bold text-gray-900 text-sm mb-1 line-clamp-1">1-on-1 Personalized Coaching</h3>
+                                        <p class="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">
+                                            Tailored workout plan, nutritional guidance, and weekly progress check-ins with your coach.
+                                        </p>
+                                    </div>
+                                    <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                                        <div>
+                                            <p class="text-[11px] text-gray-400">Price</p>
+                                            <p class="text-sm font-extrabold text-[#FF5500]">2,500,000 ₫</p>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                                            <button type="button" @onclick='() => HandlePlaceholderView("1-on-1 Personalized Coaching")'
+                                                    class="px-2.5 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 rounded-lg text-xs font-semibold transition cursor-pointer">
+                                                View
+                                            </button>
+                                            <button type="button" @onclick='() => HandlePlaceholderAddToCart("pkg1", "1-on-1 Personalized Coaching")'
+                                                    disabled='@(addingPlaceholderKey == "pkg1")'
+                                                    class="px-2.5 py-1.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white hover:opacity-95 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50">
+                                                @if (addingPlaceholderKey == "pkg1")
+                                                {
+                                                    <span class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                    <span>Adding...</span>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                                                    </svg>
+                                                    <span>Add to Cart</span>
+                                                }
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
 
-                            <!-- Package Card 2 -->
-                            <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col justify-between hover:shadow-md hover:border-orange-200 transition-all duration-200">
-                                <div>
-                                    <div class="flex items-center justify-between gap-2 mb-2">
-                                        <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100/70 text-blue-600">
-                                            1 Month
-                                        </span>
-                                    </div>
-                                    <h3 class="font-bold text-gray-900 text-sm mb-1 line-clamp-1">Hypertrophy & Strength</h3>
-                                    <p class="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">
-                                        Intensive strength building routine with exercise video demonstrations and form feedback.
-                                    </p>
-                                </div>
-                                <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                                <!-- Package Card 2 -->
+                                <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col justify-between hover:shadow-md hover:border-orange-200 transition-all duration-200">
                                     <div>
-                                        <p class="text-[11px] text-gray-400">Price</p>
-                                        <p class="text-sm font-extrabold text-[#FF5500]">950,000 ₫</p>
+                                        <div class="flex items-center justify-between gap-2 mb-2">
+                                            <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100/70 text-blue-600">
+                                                1 Month
+                                            </span>
+                                        </div>
+                                        <h3 class="font-bold text-gray-900 text-sm mb-1 line-clamp-1">Hypertrophy & Strength</h3>
+                                        <p class="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">
+                                            Intensive strength building routine with exercise video demonstrations and form feedback.
+                                        </p>
                                     </div>
-                                    <button type="button" @onclick="HandlePackageClick"
-                                            class="px-3 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 rounded-lg text-xs font-semibold transition cursor-pointer">
-                                        View
-                                    </button>
+                                    <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                                        <div>
+                                            <p class="text-[11px] text-gray-400">Price</p>
+                                            <p class="text-sm font-extrabold text-[#FF5500]">950,000 ₫</p>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                                            <button type="button" @onclick='() => HandlePlaceholderView("Hypertrophy & Strength")'
+                                                    class="px-2.5 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 rounded-lg text-xs font-semibold transition cursor-pointer">
+                                                View
+                                            </button>
+                                            <button type="button" @onclick='() => HandlePlaceholderAddToCart("pkg2", "Hypertrophy & Strength")'
+                                                    disabled='@(addingPlaceholderKey == "pkg2")'
+                                                    class="px-2.5 py-1.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white hover:opacity-95 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50">
+                                                @if (addingPlaceholderKey == "pkg2")
+                                                {
+                                                    <span class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                    <span>Adding...</span>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                                                    </svg>
+                                                    <span>Add to Cart</span>
+                                                }
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <!-- Package Card 3 -->
-                            <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col justify-between hover:shadow-md hover:border-orange-200 transition-all duration-200">
-                                <div>
-                                    <div class="flex items-center justify-between gap-2 mb-2">
-                                        <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100/70 text-emerald-600">
-                                            6 Weeks
-                                        </span>
-                                    </div>
-                                    <h3 class="font-bold text-gray-900 text-sm mb-1 line-clamp-1">Fat Loss & Conditioning</h3>
-                                    <p class="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">
-                                        High-energy conditioning regimen designed for efficient fat loss and metabolic endurance.
-                                    </p>
-                                </div>
-                                <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                                <!-- Package Card 3 -->
+                                <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col justify-between hover:shadow-md hover:border-orange-200 transition-all duration-200">
                                     <div>
-                                        <p class="text-[11px] text-gray-400">Price</p>
-                                        <p class="text-sm font-extrabold text-[#FF5500]">1,200,000 ₫</p>
+                                        <div class="flex items-center justify-between gap-2 mb-2">
+                                            <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100/70 text-emerald-600">
+                                                6 Weeks
+                                            </span>
+                                        </div>
+                                        <h3 class="font-bold text-gray-900 text-sm mb-1 line-clamp-1">Fat Loss & Conditioning</h3>
+                                        <p class="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">
+                                            High-energy conditioning regimen designed for efficient fat loss and metabolic endurance.
+                                        </p>
                                     </div>
-                                    <button type="button" @onclick="HandlePackageClick"
-                                            class="px-3 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 rounded-lg text-xs font-semibold transition cursor-pointer">
-                                        View
-                                    </button>
+                                    <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                                        <div>
+                                            <p class="text-[11px] text-gray-400">Price</p>
+                                            <p class="text-sm font-extrabold text-[#FF5500]">1,200,000 ₫</p>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                                            <button type="button" @onclick='() => HandlePlaceholderView("Fat Loss & Conditioning")'
+                                                    class="px-2.5 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 rounded-lg text-xs font-semibold transition cursor-pointer">
+                                                View
+                                            </button>
+                                            <button type="button" @onclick='() => HandlePlaceholderAddToCart("pkg3", "Fat Loss & Conditioning")'
+                                                    disabled='@(addingPlaceholderKey == "pkg3")'
+                                                    class="px-2.5 py-1.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white hover:opacity-95 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50">
+                                                @if (addingPlaceholderKey == "pkg3")
+                                                {
+                                                    <span class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                    <span>Adding...</span>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                                                    </svg>
+                                                    <span>Add to Cart</span>
+                                                }
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        }
                     </div>
                 }
             }

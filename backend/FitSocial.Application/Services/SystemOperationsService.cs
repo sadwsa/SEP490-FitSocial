@@ -215,5 +215,34 @@ public class SystemOperationsService : ISystemOperationsService
             return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Could not update subscription plan.");
         }
     }
+
+    public async Task<ApiResponseDto<bool>> DeletePlanAsync(Guid planId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var plan = await _planRepository.GetByIdAsync(planId, cancellationToken);
+            if (plan == null)
+                return ApiResponseDto<bool>.Fail("Subscription plan not found.");
+
+            // 33.3.E1: preserve financial audit logs — never hard-delete referenced plans.
+            var (upgrades, details) = await _planRepository.CountReferencesAsync(planId, cancellationToken);
+            if (upgrades > 0 || details > 0)
+            {
+                plan.IsActive = false;
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                return ApiResponseDto<bool>.Ok(true,
+                    $"Plan has {upgrades + details} linked subscription record(s); it was deactivated instead of deleted to preserve billing history.");
+            }
+
+            _planRepository.Remove(plan);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return ApiResponseDto<bool>.Ok(true, "Subscription plan deleted successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete subscription plan {PlanId}", planId);
+            return ApiResponseDto<bool>.Fail("Could not delete subscription plan.");
+        }
+    }
 }
 

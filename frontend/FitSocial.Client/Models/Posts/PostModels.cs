@@ -86,10 +86,31 @@ public class CommentDto
 {
     public Guid Id { get; set; }
     public Guid PostId { get; set; }
+    public Guid AuthorId { get; set; }
     public string AuthorName { get; set; } = string.Empty;
-    public string? AuthorAvatar { get; set; }
+    public string? AuthorAvatarUrl { get; set; }
+    public string? AuthorAvatar
+    {
+        get => AuthorAvatarUrl;
+        set => AuthorAvatarUrl = value;
+    }
     public string Content { get; set; } = string.Empty;
+    public Guid? ParentCommentId { get; set; }
+    public string? ReplyToAuthorName { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; }
+    public List<CommentDto> Replies { get; set; } = new();
+}
+
+public class CreateCommentRequest
+{
+    public string Content { get; set; } = string.Empty;
+    public Guid? ParentCommentId { get; set; }
+}
+
+public class CreateReplyRequest
+{
+    public string Content { get; set; } = string.Empty;
 }
 
 public class UploadMediaPayload

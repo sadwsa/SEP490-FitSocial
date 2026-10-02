@@ -171,9 +171,10 @@
                     {
                         @foreach (var post in posts)
                         {
-                            <PostCard @key="post.Id" Post="post" CurrentUserId="currentUserId" OnLike="ToggleLike"
-                                      OnEdit="OpenEditPostModal" OnDelete="OpenDeletePostModal" OnReport="HandleReportPost"
-                                      OnAuthorClick="NavigateToAuthorProfile" />
+                            <PostCard @key="post.Id" Post="post" CurrentUserId="currentUserId"
+                                      CurrentUserName="@userName" CurrentUserAvatarUrl="@currentUserAvatarUrl"
+                                      OnLike="ToggleLike" OnEdit="OpenEditPostModal" OnDelete="OpenDeletePostModal"
+                                      OnReport="HandleReportPost" OnAuthorClick="NavigateToAuthorProfile" />
                         }
                     }
 

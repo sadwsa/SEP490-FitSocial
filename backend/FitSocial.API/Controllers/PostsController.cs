@@ -15,15 +15,18 @@ public class PostsController : ControllerBase
     private readonly IPostReportService _postReportService;
 
     private readonly IPostReactionService _postReactionService;
+    private readonly IPostCommentService _commentService;
 
     public PostsController(
         IPostService postService,
         IPostReportService postReportService,
-        IPostReactionService postReactionService)
+        IPostReactionService postReactionService,
+        IPostCommentService commentService)
     {
         _postService = postService;
         _postReportService = postReportService;
         _postReactionService = postReactionService;
+        _commentService = commentService;
     }
 
   
@@ -251,6 +254,47 @@ public class PostsController : ControllerBase
             currentUserRole,
             HttpContext.RequestAborted);
 
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Gets all comments and nested replies for a specific post.
+    /// </summary>
+    [HttpGet("{postId:guid}/comments")]
+    [ProducesResponseType(typeof(ApiResponseDto<List<CommentDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetComments(Guid postId)
+    {
+        var result = await _commentService.GetCommentsByPostIdAsync(postId, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Adds a new comment (or reply if parentCommentId is provided) to a post.
+    /// </summary>
+    [HttpPost("{postId:guid}/comments")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponseDto<CommentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateComment(Guid postId, [FromBody] CreateCommentRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            throw new FitSocial.Application.Exceptions.ValidationException(firstError ?? "Invalid comment data.");
+        }
+
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+        {
+            return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
+        }
+
+        var result = await _commentService.CreateCommentAsync(postId, currentUserId.Value, request, HttpContext.RequestAborted);
         return Ok(result);
     }
 

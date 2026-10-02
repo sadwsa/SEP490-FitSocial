@@ -1,5 +1,6 @@
 @namespace FitSocial.Client.Components.Posts
 @inject NavigationManager Navigation
+@inject FitSocial.Client.Services.Posts.IPostService PostService
 <article class="bg-white rounded-xl shadow-sm p-4 transition hover:shadow-md w-full min-w-0">
     <div class="flex justify-between items-center mb-3">
         <div class="flex items-center gap-3">
@@ -190,7 +191,10 @@
             <div>
                 @if (Post.CommentCount > 0)
                 {
-                    <span>@Post.CommentCount @(Post.CommentCount == 1 ? "Comment" : "Comments")</span>
+                    <button type="button" @onclick="ToggleComments"
+                            class="hover:underline hover:text-[#FF5500] transition cursor-pointer text-gray-500 font-medium">
+                        @Post.CommentCount @(Post.CommentCount == 1 ? "Comment" : "Comments")
+                    </button>
                 }
             </div>
         </div>
@@ -209,9 +213,9 @@
             </svg>
             <span>React</span>
         </button>
-        <button type="button" @onclick="HandleComment"
-                class="flex-1 py-1.5 hover:bg-orange-50 rounded-lg font-medium text-gray-600 hover:text-[#FF5500] text-sm flex items-center justify-center gap-2 transition">
-            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button type="button" @onclick="ToggleComments"
+                class="flex-1 py-1.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition @(isCommentsOpen ? "text-[#FF5500] bg-orange-50/70" : "text-gray-600 hover:text-[#FF5500] hover:bg-orange-50")">
+            <svg class="w-5 h-5 @(isCommentsOpen ? "text-[#FF5500]" : "text-gray-500")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
                 </path>
@@ -219,6 +223,279 @@
             <span>Comment</span>
         </button>
     </div>
+
+    <!-- Collapsible Comments Section -->
+    @if (isCommentsOpen)
+    {
+        <div class="mt-3 pt-3 border-t border-gray-100 space-y-3 animate-in fade-in duration-150">
+            <!-- Add Comment Input Box -->
+            @if (CurrentUserId.HasValue && CurrentUserId.Value != Guid.Empty)
+            {
+                <div class="flex gap-2.5 items-start">
+                    <div class="w-8 h-8 rounded-full flex-shrink-0 relative mt-0.5">
+                        @if (HasValidAvatarUrl(CurrentUserAvatarUrl))
+                        {
+                            <img src="@CurrentUserAvatarUrl" alt=""
+                                 class="w-8 h-8 rounded-full object-cover border border-gray-100 flex-shrink-0"
+                                 referrerpolicy="no-referrer" loading="lazy"
+                                 onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 items-center justify-center text-white font-bold text-xs flex-shrink-0 select-none shadow-xs"
+                                 style="display: none;">
+                                @GetAuthorInitial(CurrentUserName)
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 select-none shadow-xs">
+                                @GetAuthorInitial(CurrentUserName)
+                            </div>
+                        }
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <div class="relative flex items-center">
+                            <input type="text"
+                                   @bind="newCommentText"
+                                   @bind:event="oninput"
+                                   @onkeydown="HandleCommentKeyDown"
+                                   placeholder="Write a comment..."
+                                   disabled="@isSubmittingComment"
+                                   maxlength="500"
+                                   class="w-full text-xs bg-gray-50 border border-gray-200 rounded-full py-2 pl-3.5 pr-10 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition disabled:opacity-60" />
+
+                            <button type="button"
+                                    @onclick="SubmitCommentAsync"
+                                    disabled="@(isSubmittingComment || string.IsNullOrWhiteSpace(newCommentText))"
+                                    class="absolute right-1.5 p-1 rounded-full text-[#FF5500] hover:bg-orange-100/60 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
+                                    title="Send comment">
+                                @if (isSubmittingComment)
+                                {
+                                    <span class="w-4 h-4 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin inline-block"></span>
+                                }
+                                else
+                                {
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path>
+                                    </svg>
+                                }
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(commentErrorMessage))
+                        {
+                            <p class="text-[11px] text-red-600 mt-1 pl-1">@commentErrorMessage</p>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="bg-orange-50/60 border border-orange-100 rounded-xl p-2.5 text-center text-xs text-gray-600">
+                    <span>Please </span>
+                    <a href="/login" class="text-[#FF5500] font-semibold hover:underline">log in</a>
+                    <span> to leave a comment.</span>
+                </div>
+            }
+
+            <!-- Comments List -->
+            @if (isLoadingComments)
+            {
+                <div class="flex items-center justify-center py-4 text-xs text-gray-500 gap-2">
+                    <span class="w-4 h-4 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin"></span>
+                    <span>Loading comments...</span>
+                </div>
+            }
+            else if (comments.Count == 0)
+            {
+                <div class="py-3 text-center text-xs text-gray-400 font-medium">
+                    No comments yet. Be the first to share your thoughts!
+                </div>
+            }
+            else
+            {
+                <div class="space-y-3 pt-1">
+                    @foreach (var c in comments)
+                    {
+                        <div class="space-y-1.5" @key="c.Id">
+                            <!-- Root Comment -->
+                            <div class="flex gap-2.5 items-start">
+                                <button type="button" @onclick="() => NavigateToAuthor(c.AuthorId)"
+                                        class="w-8 h-8 rounded-full flex-shrink-0 mt-0.5 cursor-pointer p-0 bg-transparent border-0 hover:opacity-90 transition">
+                                    @if (HasValidAvatarUrl(c.AuthorAvatarUrl))
+                                    {
+                                        <img src="@c.AuthorAvatarUrl" alt=""
+                                             class="w-8 h-8 rounded-full object-cover border border-gray-100 flex-shrink-0"
+                                             referrerpolicy="no-referrer" loading="lazy"
+                                             onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                                        <div class="w-8 h-8 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 items-center justify-center text-white font-bold text-xs flex-shrink-0 select-none shadow-xs"
+                                             style="display: none;">
+                                            @GetAuthorInitial(c.AuthorName)
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="w-8 h-8 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 select-none shadow-xs">
+                                            @GetAuthorInitial(c.AuthorName)
+                                        </div>
+                                    }
+                                </button>
+
+                                <div class="flex-1 min-w-0">
+                                    <div class="bg-gray-50 border border-gray-100 rounded-2xl px-3.5 py-2 inline-block max-w-full">
+                                        <div class="flex items-center gap-1.5">
+                                            <button type="button" @onclick="() => NavigateToAuthor(c.AuthorId)"
+                                                    class="font-semibold text-gray-900 text-xs hover:text-[#FF5500] hover:underline p-0 bg-transparent border-0 cursor-pointer inline text-left">
+                                                @c.AuthorName
+                                            </button>
+                                        </div>
+                                        <p class="text-xs text-gray-800 break-words whitespace-pre-wrap mt-0.5 leading-relaxed">@c.Content</p>
+                                    </div>
+
+                                    <div class="flex items-center gap-3 text-[11px] text-gray-400 font-medium mt-1 ml-2">
+                                        <span>@GetTimeAgo(c.CreatedAt)</span>
+                                        <button type="button" @onclick="() => StartReply(c.Id, c.Id, c.AuthorName)"
+                                                class="font-semibold text-gray-500 hover:text-[#FF5500] hover:underline transition cursor-pointer p-0 bg-transparent border-0">
+                                            Reply
+                                        </button>
+                                        @if (c.Replies.Count > 0)
+                                        {
+                                            <button type="button" @onclick="() => ToggleRepliesVisibility(c.Id)"
+                                                    class="font-medium text-[#FF5500] hover:underline flex items-center gap-1 cursor-pointer p-0 bg-transparent border-0">
+                                                @if (collapsedReplyCommentIds.Contains(c.Id))
+                                                {
+                                                    <span>View @c.Replies.Count @(c.Replies.Count == 1 ? "reply" : "replies")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>Hide replies</span>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+
+                                    <!-- Inline Reply Input (when replying to this comment or thread) -->
+                                    @if (activeReplyRootId == c.Id && isReplyInputVisible)
+                                    {
+                                        <div class="mt-2.5 flex gap-2 items-start animate-in fade-in duration-150">
+                                            <div class="w-6 h-6 rounded-full flex-shrink-0 relative mt-0.5">
+                                                @if (HasValidAvatarUrl(CurrentUserAvatarUrl))
+                                                {
+                                                    <img src="@CurrentUserAvatarUrl" alt=""
+                                                         class="w-6 h-6 rounded-full object-cover border border-gray-100 flex-shrink-0"
+                                                         referrerpolicy="no-referrer" loading="lazy" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="w-6 h-6 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0 select-none shadow-xs">
+                                                        @GetAuthorInitial(CurrentUserName)
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <div class="flex-1 min-w-0">
+                                                <div class="relative flex items-center">
+                                                    <input type="text"
+                                                           @bind="replyText"
+                                                           @bind:event="oninput"
+                                                           @onkeydown="HandleReplyKeyDown"
+                                                           placeholder="@($"Reply to {replyTargetAuthorName}...")"
+                                                           disabled="@isSubmittingReply"
+                                                           maxlength="500"
+                                                           class="w-full text-xs bg-white border border-gray-200 rounded-full py-1.5 pl-3 pr-20 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition disabled:opacity-60" />
+
+                                                    <div class="absolute right-1 flex items-center gap-1">
+                                                        <button type="button"
+                                                                @onclick="CancelReply"
+                                                                class="px-1.5 py-0.5 text-[10px] text-gray-400 hover:text-gray-600 rounded cursor-pointer">
+                                                            Cancel
+                                                        </button>
+                                                        <button type="button"
+                                                                @onclick="SubmitReplyAsync"
+                                                                disabled="@(isSubmittingReply || string.IsNullOrWhiteSpace(replyText))"
+                                                                class="px-2 py-0.5 text-[11px] font-semibold bg-[#FF5500] hover:bg-[#e04b00] text-white rounded-full disabled:opacity-40 transition cursor-pointer">
+                                                            @if (isSubmittingReply)
+                                                            {
+                                                                <span class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block"></span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span>Reply</span>
+                                                            }
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(replyErrorMessage))
+                                                {
+                                                    <p class="text-[11px] text-red-600 mt-1 pl-1">@replyErrorMessage</p>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <!-- Nested Replies Thread -->
+                                    @if (c.Replies.Count > 0 && !collapsedReplyCommentIds.Contains(c.Id))
+                                    {
+                                        <div class="mt-2.5 ml-2 sm:ml-3 pl-3 border-l-2 border-orange-100 space-y-2.5">
+                                            @foreach (var r in c.Replies)
+                                            {
+                                                <div class="flex gap-2 items-start" @key="r.Id">
+                                                    <button type="button" @onclick="() => NavigateToAuthor(r.AuthorId)"
+                                                            class="w-6 h-6 rounded-full flex-shrink-0 mt-0.5 cursor-pointer p-0 bg-transparent border-0 hover:opacity-90 transition">
+                                                        @if (HasValidAvatarUrl(r.AuthorAvatarUrl))
+                                                        {
+                                                            <img src="@r.AuthorAvatarUrl" alt=""
+                                                                 class="w-6 h-6 rounded-full object-cover border border-gray-100 flex-shrink-0"
+                                                                 referrerpolicy="no-referrer" loading="lazy"
+                                                                 onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                                                            <div class="w-6 h-6 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 items-center justify-center text-white font-bold text-[10px] flex-shrink-0 select-none shadow-xs"
+                                                                 style="display: none;">
+                                                                @GetAuthorInitial(r.AuthorName)
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="w-6 h-6 rounded-full bg-gradient-to-r from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0 select-none shadow-xs">
+                                                                @GetAuthorInitial(r.AuthorName)
+                                                            </div>
+                                                        }
+                                                    </button>
+
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="bg-gray-50 border border-gray-100 rounded-2xl px-3 py-1.5 inline-block max-w-full">
+                                                            <div class="flex items-center gap-1.5">
+                                                                <button type="button" @onclick="() => NavigateToAuthor(r.AuthorId)"
+                                                                        class="font-semibold text-gray-900 text-xs hover:text-[#FF5500] hover:underline p-0 bg-transparent border-0 cursor-pointer inline text-left">
+                                                                    @r.AuthorName
+                                                                </button>
+                                                            </div>
+                                                            <p class="text-xs text-gray-800 break-words whitespace-pre-wrap mt-0.5 leading-relaxed">
+                                                                @if (!string.IsNullOrWhiteSpace(r.ReplyToAuthorName) && !string.Equals(r.ReplyToAuthorName, c.AuthorName, StringComparison.OrdinalIgnoreCase))
+                                                                {
+                                                                    <span class="text-[#FF5500] font-medium mr-1">@@@r.ReplyToAuthorName</span>
+                                                                }
+                                                                @r.Content
+                                                            </p>
+                                                        </div>
+
+                                                        <div class="flex items-center gap-3 text-[11px] text-gray-400 font-medium mt-1 ml-2">
+                                                            <span>@GetTimeAgo(r.CreatedAt)</span>
+                                                            <button type="button" @onclick="() => StartReply(c.Id, r.Id, r.AuthorName)"
+                                                                    class="font-semibold text-gray-500 hover:text-[#FF5500] hover:underline transition cursor-pointer p-0 bg-transparent border-0">
+                                                                Reply
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
 </article>
 
 @code {
@@ -227,6 +504,12 @@
 
     [Parameter]
     public Guid? CurrentUserId { get; set; }
+
+    [Parameter]
+    public string? CurrentUserName { get; set; }
+
+    [Parameter]
+    public string? CurrentUserAvatarUrl { get; set; }
 
     [Parameter]
     public EventCallback<PostDto> OnLike { get; set; }
@@ -310,11 +593,198 @@
         }
     }
 
-    private async Task HandleComment()
+    // Comments state
+    private bool isCommentsOpen = false;
+    private bool commentsLoaded = false;
+    private bool isLoadingComments = false;
+    private List<CommentDto> comments = new();
+    private string newCommentText = string.Empty;
+    private bool isSubmittingComment = false;
+    private string? commentErrorMessage;
+
+    // Replies state
+    private Guid? activeReplyRootId = null;
+    private Guid replyTargetCommentId = Guid.Empty;
+    private string replyTargetAuthorName = string.Empty;
+    private bool isReplyInputVisible = false;
+    private string replyText = string.Empty;
+    private bool isSubmittingReply = false;
+    private string? replyErrorMessage;
+    private readonly HashSet<Guid> collapsedReplyCommentIds = new();
+
+    private async Task ToggleComments()
     {
+        isCommentsOpen = !isCommentsOpen;
+        if (isCommentsOpen && !commentsLoaded)
+        {
+            await LoadCommentsAsync();
+        }
+
         if (OnComment.HasDelegate)
         {
             await OnComment.InvokeAsync(Post);
+        }
+    }
+
+    private async Task LoadCommentsAsync()
+    {
+        try
+        {
+            isLoadingComments = true;
+            commentErrorMessage = null;
+            var res = await PostService.GetCommentsAsync(Post.Id);
+            if (res.Success && res.Data != null)
+            {
+                comments = res.Data;
+                commentsLoaded = true;
+            }
+            else
+            {
+                commentErrorMessage = res.Message ?? "Failed to load comments.";
+            }
+        }
+        catch (Exception ex)
+        {
+            commentErrorMessage = "An error occurred while loading comments.";
+            Console.WriteLine($"[PostCard] Error loading comments: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingComments = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SubmitCommentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newCommentText) || isSubmittingComment) return;
+
+        try
+        {
+            isSubmittingComment = true;
+            commentErrorMessage = null;
+            var request = new CreateCommentRequest { Content = newCommentText.Trim() };
+            var res = await PostService.CreateCommentAsync(Post.Id, request);
+            if (res.Success && res.Data != null)
+            {
+                comments.Add(res.Data);
+                newCommentText = string.Empty;
+                Post.CommentCount++;
+            }
+            else
+            {
+                commentErrorMessage = res.Message ?? "Failed to post comment. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            commentErrorMessage = "Failed to post comment. Please try again.";
+            Console.WriteLine($"[PostCard] Error posting comment: {ex.Message}");
+        }
+        finally
+        {
+            isSubmittingComment = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleCommentKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SubmitCommentAsync();
+        }
+    }
+
+    private void StartReply(Guid rootCommentId, Guid targetCommentId, string targetAuthorName)
+    {
+        activeReplyRootId = rootCommentId;
+        replyTargetCommentId = targetCommentId;
+        replyTargetAuthorName = !string.IsNullOrWhiteSpace(targetAuthorName) ? targetAuthorName : "User";
+        isReplyInputVisible = true;
+        replyText = string.Empty;
+        replyErrorMessage = null;
+    }
+
+    private void CancelReply()
+    {
+        isReplyInputVisible = false;
+        replyText = string.Empty;
+        replyErrorMessage = null;
+        activeReplyRootId = null;
+        replyTargetCommentId = Guid.Empty;
+        replyTargetAuthorName = string.Empty;
+    }
+
+    private async Task SubmitReplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(replyText) || isSubmittingReply || replyTargetCommentId == Guid.Empty) return;
+
+        try
+        {
+            isSubmittingReply = true;
+            replyErrorMessage = null;
+            var request = new CreateReplyRequest { Content = replyText.Trim() };
+            var res = await PostService.CreateReplyAsync(replyTargetCommentId, request);
+            if (res.Success && res.Data != null)
+            {
+                var root = comments.FirstOrDefault(c => c.Id == activeReplyRootId);
+                if (root != null)
+                {
+                    root.Replies ??= new List<CommentDto>();
+                    root.Replies.Add(res.Data);
+                    collapsedReplyCommentIds.Remove(root.Id);
+                }
+                Post.CommentCount++;
+                CancelReply();
+            }
+            else
+            {
+                replyErrorMessage = res.Message ?? "Failed to post reply. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            replyErrorMessage = "Failed to post reply. Please try again.";
+            Console.WriteLine($"[PostCard] Error posting reply: {ex.Message}");
+        }
+        finally
+        {
+            isSubmittingReply = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleReplyKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SubmitReplyAsync();
+        }
+    }
+
+    private void ToggleRepliesVisibility(Guid commentId)
+    {
+        if (collapsedReplyCommentIds.Contains(commentId))
+        {
+            collapsedReplyCommentIds.Remove(commentId);
+        }
+        else
+        {
+            collapsedReplyCommentIds.Add(commentId);
+        }
+    }
+
+    private void NavigateToAuthor(Guid authorId)
+    {
+        if (authorId == Guid.Empty) return;
+        if (CurrentUserId.HasValue && authorId == CurrentUserId.Value)
+        {
+            Navigation.NavigateTo("/profile");
+        }
+        else
+        {
+            Navigation.NavigateTo($"/profile/{authorId}");
         }
     }
 

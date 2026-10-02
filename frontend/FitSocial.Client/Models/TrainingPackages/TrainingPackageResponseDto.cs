@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace FitSocial.Client.Models.TrainingPackages;
 
@@ -8,6 +8,7 @@ public class TrainingPackageResponseDto
     public Guid CoachId { get; set; }
     public string? CoachName { get; set; }
     public string? Title { get; set; }
+    public string? Description { get; set; }
     public decimal Price { get; set; }
     public int DurationDays { get; set; }
     public bool IsActive { get; set; }

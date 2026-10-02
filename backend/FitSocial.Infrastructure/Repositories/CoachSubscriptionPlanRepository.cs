@@ -38,4 +38,12 @@ public class CoachSubscriptionPlanRepository : Repository<CoachSubscriptionPlan>
         return DbSet
             .FirstOrDefaultAsync(p => p.CoachSubscriptionPlansId == id && p.IsActive == true, cancellationToken);
     }
+
+    public async Task<(int Upgrades, int OrderDetails)> CountReferencesAsync(Guid planId, CancellationToken cancellationToken = default)
+    {
+        var upgrades = await DbContext.Set<CoachUpgrade>().CountAsync(u => u.CoachSubscriptionPlansId == planId, cancellationToken);
+        var details = await DbContext.Set<OrderDetail>().CountAsync(d => d.CoachSubscriptionPlansId == planId, cancellationToken);
+        return (upgrades, details);
+    }
 }
+

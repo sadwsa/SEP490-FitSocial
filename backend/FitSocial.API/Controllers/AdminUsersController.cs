@@ -43,6 +43,24 @@ public class AdminUsersController : ControllerBase
     }
 
     /// <summary>
+    /// Get staff accounts for admin console with optional search, lock status filter, and pagination (Admin only - UC_34)
+    /// </summary>
+    [HttpGet("staff")]
+    [HttpGet("~/api/admin/staff")]
+    [Authorize(Roles = RoleConstants.Admin)]
+    [ProducesResponseType(typeof(ApiResponseDto<PagedResultDto<AdminUserDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetStaff(
+        [FromQuery] string? search,
+        [FromQuery] bool? isLocked,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _adminUserService.GetStaffUsersAsync(search, isLocked, pageNumber, pageSize, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Lock or unlock a user account (Admin / Staff only)
     /// </summary>
     [HttpPut("{userId:guid}/lock")]

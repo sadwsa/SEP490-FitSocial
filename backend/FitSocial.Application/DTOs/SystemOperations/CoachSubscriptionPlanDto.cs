@@ -6,12 +6,17 @@ namespace FitSocial.Application.DTOs.SystemOperations;
 /// </summary>
 public class CoachSubscriptionPlanDto
 {
-    public Guid PriceId { get; set; }
+    /// <summary>PK of CoachSubscriptionPlans (new DB). Null only for legacy rows.</summary>
+    public Guid CoachSubscriptionPlansId { get; set; }
+    /// <summary>FK to Price table (may be null for plans created without a Price row).</summary>
+    public Guid? PriceId { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "VND";
     public bool IsActive { get; set; }
     public string? ImageUrl { get; set; }
     public string? Description { get; set; }
+    public int? SubscriptionDuration { get; set; }
+    public int? TrainingPackageDuration { get; set; }
     public DateTime CreatedAt { get; set; }
     public int SubscriberCount { get; set; }
     public int ActiveSubscriberCount { get; set; }

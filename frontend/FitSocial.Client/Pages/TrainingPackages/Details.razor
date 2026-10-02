@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject FitSocial.Client.Services.Cart.ICartService CartService
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Cart
 @using System.Security.Claims
@@ -12,6 +13,38 @@
 <PageTitle>Package Details - FitSocial</PageTitle>
 
 <div class="min-h-screen bg-gray-100 text-gray-800">
+    <!-- Floating Success Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-emerald-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <span>@toastSuccessMessage</span>
+            <button type="button" @onclick="DismissToast"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer"
+                    title="Close">&times;</button>
+        </div>
+    }
+
+    <!-- Floating Error Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastErrorMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-red-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-red-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            <span>@toastErrorMessage</span>
+            <button type="button" @onclick="DismissToast"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer"
+                    title="Close">&times;</button>
+        </div>
+    }
+
     <AppHeader SearchTerm="@headerSearchTerm"
                OnSearchInput="HandleHeaderSearchInput"
                OnSearchKeyUp="HandleHeaderSearchKeyUp"
@@ -20,6 +53,7 @@
                UserName="@userName"
                UserInitials="@userInitials"
                UserRole="@userRole"
+               CartCount="@cartCount"
                OnLogout="HandleLogout" />
 
     <style>
@@ -73,6 +107,13 @@
                     </div>
                     
                     <div class="p-8">
+                        @if (!string.IsNullOrWhiteSpace(package.Description))
+                        {
+                            <p class="text-gray-600 text-sm leading-relaxed mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                @package.Description
+                            </p>
+                        }
+
                         <div class="flex flex-col md:flex-row text-center divide-y md:divide-y-0 md:divide-x divide-gray-100 mb-8 bg-gray-50 rounded-xl p-4">
                             <div class="flex-1 py-4 md:py-2">
                                 <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">Duration</h6>
@@ -125,9 +166,62 @@
                                     </svg>
                                 </button>
                             </div>
+                        <!-- Quantity Selector -->
+                        <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/70 p-4 rounded-xl border border-gray-100">
+                            <div>
+                                <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-0.5">Quantity</h6>
+                                <p class="text-xs text-gray-400">Select number of packages to add</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="inline-flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                                    <button type="button"
+                                            @onclick="DecrementQuantity"
+                                            disabled="@(quantity <= 1 || isAddingToCart)"
+                                            class="px-3.5 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition cursor-pointer font-bold text-base select-none"
+                                            aria-label="Decrease quantity">
+                                        &minus;
+                                    </button>
+                                    <span class="px-4 py-2 text-sm font-bold text-gray-800 min-w-12 text-center select-none">
+                                        @quantity
+                                    </span>
+                                    <button type="button"
+                                            @onclick="IncrementQuantity"
+                                            disabled="@isAddingToCart"
+                                            class="px-3.5 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition cursor-pointer font-bold text-base select-none"
+                                            aria-label="Increase quantity">
+                                        &#43;
+                                    </button>
+                                </div>
+                                <span class="text-xs text-gray-500">
+                                    Subtotal: <span class="font-bold text-[#FF5500]">@((package.Price * quantity).ToString("N0")) VNĐ</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-3">
+                            <!-- Add to Cart Button -->
+                            <button type="button"
+                                    id="btn-add-to-cart"
+                                    @onclick="HandleAddToCart"
+                                    disabled="@isAddingToCart"
+                                    class="w-full bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer">
+                                @if (isAddingToCart)
+                                {
+                                    <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Adding to Cart...</span>
+                                }
+                                else
+                                {
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                                    </svg>
+                                    <span>Add to Cart</span>
+                                }
+                            </button>
 
                             <a href="/training-packages" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold text-center transition-colors">
-                                Back to List
+                                Back to Packages
                             </a>
                         </div>
                     </div>
@@ -147,6 +241,17 @@
     private TrainingPackageResponseDto? package;
     private bool isLoading = true;
     private string errorMessage = "Package not found.";
+
+    // Add to Cart state
+    private int quantity = 1;
+    private bool isAddingToCart = false;
+    private int cartCount = 0;
+    private bool isAuthenticated = false;
+
+    // Toast state
+    private string? toastSuccessMessage;
+    private string? toastErrorMessage;
+    private System.Threading.CancellationTokenSource? toastCts;
     
     // Header state
     private string? headerSearchTerm = "";
@@ -177,6 +282,7 @@
             var user = authState.User;
             if (user.Identity?.IsAuthenticated == true)
             {
+                isAuthenticated = true;
                 userName = user.Identity.Name ?? "User";
                 var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
                 userRole = isCoach ? "Coach" : "Trainee";
@@ -188,12 +294,135 @@
                         ? $"{parts[0][0]}{parts[^1][0]}".ToUpper() 
                         : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
                 }
+
+                // Load initial Cart count
+                try
+                {
+                    var countResponse = await CartService.GetCartCountAsync();
+                    if (countResponse.Success)
+                    {
+                        cartCount = countResponse.Data;
+                    }
+                }
+                catch
+                {
+                    // Ignore cart count failure on init
+                }
+            }
+            else
+            {
+                isAuthenticated = false;
             }
         }
         catch
         {
             userInitials = "U";
+            isAuthenticated = false;
         }
+    }
+
+    private void IncrementQuantity()
+    {
+        quantity++;
+    }
+
+    private void DecrementQuantity()
+    {
+        if (quantity > 1)
+        {
+            quantity--;
+        }
+    }
+
+    private async Task HandleAddToCart()
+    {
+        if (!isAuthenticated)
+        {
+            Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
+            return;
+        }
+
+        if (package == null)
+        {
+            ShowErrorToast("Cannot add an invalid package.");
+            return;
+        }
+
+        isAddingToCart = true;
+        try
+        {
+            var request = new FitSocial.Client.Models.Cart.AddToCartRequestDto
+            {
+                PackageId = package.PackageId,
+                Quantity = quantity
+            };
+
+            var response = await CartService.AddToCartAsync(request);
+            if (response.Success)
+            {
+                cartCount += quantity;
+                ShowSuccessToast(response.Message ?? "Product added to cart successfully!");
+            }
+            else
+            {
+                ShowErrorToast(response.Message ?? "Failed to add product to cart.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowErrorToast($"An error occurred: {ex.Message}");
+        }
+        finally
+        {
+            isAddingToCart = false;
+        }
+    }
+
+    private void ShowSuccessToast(string message)
+    {
+        toastErrorMessage = null;
+        toastSuccessMessage = message;
+        ScheduleToastDismiss();
+    }
+
+    private void ShowErrorToast(string message)
+    {
+        toastSuccessMessage = null;
+        toastErrorMessage = message;
+        ScheduleToastDismiss();
+    }
+
+    private void ScheduleToastDismiss()
+    {
+        toastCts?.Cancel();
+        toastCts?.Dispose();
+        toastCts = new System.Threading.CancellationTokenSource();
+        var token = toastCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(4000, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        toastSuccessMessage = null;
+                        toastErrorMessage = null;
+                        StateHasChanged();
+                    });
+                }
+            }
+            catch { }
+        }, token);
+    }
+
+    private void DismissToast()
+    {
+        toastSuccessMessage = null;
+        toastErrorMessage = null;
+        toastCts?.Cancel();
     }
 
     private async Task HandleLogout()

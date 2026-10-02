@@ -26,6 +26,12 @@ namespace FitSocial.Application.Services
             return packages.Where(p => p.IsActive == true).Select(MapToDto);
         }
 
+        public async Task<IEnumerable<TrainingPackageResponseDto>> GetAllPackagesAsync(string? searchKeyword = null, decimal? maxPrice = null, Guid? coachId = null)
+        {
+            var packages = await _repository.GetAllActivePackagesAsync(searchKeyword, maxPrice, coachId);
+            return packages.Select(MapToDto);
+        }
+
         public async Task<TrainingPackageResponseDto?> GetPackageByIdAsync(Guid id)
         {
             var package = await _repository.GetByIdAsync(id);
@@ -43,8 +49,12 @@ namespace FitSocial.Application.Services
                 PackageId = Guid.NewGuid(),
                 CoachId = currentUserId,
                 Title = dto.Title,
+                Description = dto.Description,
                 Price = dto.Price,
                 DurationDays = dto.DurationDays,
+                SessionCount = dto.SessionCount,
+                MinAge = dto.MinAge,
+                TargetAudience = dto.TargetAudience,
                 IsActive = dto.IsActive,
                 CreatedAt = DateTime.UtcNow
             };
@@ -52,7 +62,43 @@ namespace FitSocial.Application.Services
             await _repository.AddAsync(package);
             await _unitOfWork.SaveChangesAsync();
 
+            var createdPackage = await _repository.GetByIdAsync(package.PackageId);
+            return MapToDto(createdPackage ?? package);
+        }
+
+        public async Task<TrainingPackageResponseDto?> UpdatePackageAsync(Guid id, Guid currentUserId, UpdateTrainingPackageDto dto)
+        {
+            var package = await _repository.GetByIdAsync(id);
+            if (package == null || package.CoachId != currentUserId)
+            {
+                return null;
+            }
+
+            if (dto.Title != null) package.Title = dto.Title;
+            if (dto.Description != null) package.Description = dto.Description;
+            if (dto.Price.HasValue) package.Price = dto.Price.Value;
+            if (dto.DurationDays.HasValue) package.DurationDays = dto.DurationDays.Value;
+            if (dto.SessionCount.HasValue) package.SessionCount = dto.SessionCount.Value;
+            if (dto.MinAge.HasValue) package.MinAge = dto.MinAge.Value;
+            if (dto.TargetAudience != null) package.TargetAudience = dto.TargetAudience;
+            if (dto.IsActive.HasValue) package.IsActive = dto.IsActive.Value;
+
+            await _unitOfWork.SaveChangesAsync();
+
             return MapToDto(package);
+        }
+
+        public async Task<bool> SoftDeletePackageAsync(Guid id, Guid currentUserId)
+        {
+            var package = await _repository.GetByIdAsync(id);
+            if (package == null || package.CoachId != currentUserId)
+            {
+                return false;
+            }
+
+            package.IsActive = false;
+            await _unitOfWork.SaveChangesAsync();
+            return true;
         }
 
         private static TrainingPackageResponseDto MapToDto(TrainingPackage entity)
@@ -61,45 +107,17 @@ namespace FitSocial.Application.Services
             {
                 PackageId = entity.PackageId,
                 CoachId = entity.CoachId,
-                // Truy cập chuẩn xác theo DB: TrainingPackage -> CoachProfile -> User -> FullName
                 CoachName = entity.Coach?.Coach?.FullName ?? "Unknown Coach",
                 Title = entity.Title,
+                Description = entity.Description,
                 Price = entity.Price,
                 DurationDays = entity.DurationDays,
+                SessionCount = entity.SessionCount,
+                MinAge = entity.MinAge,
+                TargetAudience = entity.TargetAudience,
                 IsActive = entity.IsActive,
                 CreatedAt = entity.CreatedAt
             };
-        }
-        public async Task<bool> SoftDeletePackageAsync(Guid id, Guid currentUserId)
-{
-    // Tìm package theo ID
-    var package = await _repository.GetByIdAsync(id);
-    
-    // Nếu không tìm thấy
-    if (package == null)
-    {
-        return false;
-    }
-
-    // Kiểm tra xem package này có phải do user hiện tại (Coach) tạo không
-    if (package.CoachId != currentUserId)
-    {
-        return false;
-    }
-
-    // Thay đổi trạng thái thành không hoạt động (Soft delete)
-    package.IsActive = false;
-    
-    // Cập nhật Database
-    await _unitOfWork.SaveChangesAsync();
-
-    return true;
-}
-
-
-        public Task<IEnumerable<TrainingPackageResponseDto>> GetAllPackagesAsync()
-        {
-            throw new NotImplementedException();
         }
     }
 }

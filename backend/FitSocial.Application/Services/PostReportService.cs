@@ -127,8 +127,33 @@ public class PostReportService : IPostReportService
         }
 
         // 7. Create and persist Report
-        // BR-06, BR-07, BR-08, BR-09: Create and persist Report
         var report = Report.CreatePostReport(reporterId, postId, post.AuthorId, trimmedReason);
+        if (!string.IsNullOrWhiteSpace(request.Description))
+        {
+            report.Description = request.Description.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(request.Type))
+        {
+            report.Type = request.Type.Trim();
+        }
+
+        if (request.MediaUrls != null && request.MediaUrls.Any())
+        {
+            short sortOrder = 0;
+            foreach (var url in request.MediaUrls.Where(u => !string.IsNullOrWhiteSpace(u)))
+            {
+                report.ReportMedia.Add(new ReportMedium
+                {
+                    MediaId = Guid.NewGuid(),
+                    ReportId = report.ReportId,
+                    MediaUrl = url.Trim(),
+                    MediaType = "IMAGE",
+                    MediaFor = "REPORT",
+                    SortOrder = sortOrder++,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
 
         await _reportRepository.AddAsync(report, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -142,7 +167,10 @@ public class PostReportService : IPostReportService
             PostId = postId,
             ReporterId = reporterId,
             Reason = report.Reason ?? string.Empty,
+            Description = report.Description,
+            Type = report.Type,
             Status = report.Status ?? string.Empty,
+            MediaUrls = report.ReportMedia.Select(m => m.MediaUrl ?? string.Empty).Where(u => !string.IsNullOrEmpty(u)).ToList(),
             CreatedAt = report.CreatedAt
         };
 

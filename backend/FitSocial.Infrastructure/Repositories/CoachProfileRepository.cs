@@ -14,8 +14,17 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
 
     public Task<CoachProfile?> FindWithSportsByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
+        return FindWithDetailsByCoachIdAsync(coachId, cancellationToken);
+    }
+
+    public Task<CoachProfile?> FindWithDetailsByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
+    {
         return DbSet
-            .Include(p => p.Sports)
+            .Include(p => p.Coach)
+            .Include(p => p.Locations)
+            .Include(p => p.CoachCertificates)
+            .Include(p => p.Reviews)
+            .Include(p => p.TrainingPackages)
             .FirstOrDefaultAsync(p => p.CoachId == coachId, cancellationToken);
     }
 
@@ -45,7 +54,10 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
 
     public async Task<IEnumerable<CoachProfile>> GetAllCoachesWithDetailsAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, CancellationToken cancellationToken = default)
     {
-        var query = DbSet.Include(c => c.Coach).AsQueryable();
+        var query = DbSet
+            .Include(c => c.Coach)
+            .Include(c => c.Locations)
+            .AsQueryable();
         // 1. Tìm kiếm theo tên / giới thiệu
         if (!string.IsNullOrWhiteSpace(searchKeyword))
         {

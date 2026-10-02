@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Users;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 
 namespace FitSocial.Application.Services;
@@ -34,17 +35,7 @@ public class AdminUserService : IAdminUserService
             var (users, totalCount) = await _userRepository.ListUsersForAdminAsync(
                 search, role, isLocked, pageNumber, pageSize, cancellationToken);
 
-            var dtos = users.Select(u => new AdminUserDto
-            {
-                UserId = u.UserId,
-                Email = u.Email,
-                PhoneNumber = u.PhoneNumber,
-                FullName = u.FullName ?? u.Email.Split('@')[0],
-                RoleCode = u.RoleCode ?? "TRAINEE",
-                IsLocked = u.IsLocked ?? false,
-                CreatedAt = u.CreatedAt,
-                LastActiveAt = u.LastActiveAt
-            }).ToList();
+            var dtos = users.Select(u => MapToAdminDto(u)).ToList();
 
             var pagedResult = PagedResultDto<AdminUserDto>.Create(dtos, totalCount, pageNumber, pageSize);
 
@@ -56,7 +47,11 @@ public class AdminUserService : IAdminUserService
         }
     }
 
-    public async Task<ApiResponseDto<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked, Guid? adminId = null, CancellationToken cancellationToken = default)
+    public async Task<ApiResponseDto<bool>> SetUserLockStatusAsync(
+        Guid userId,
+        bool isLocked,
+        Guid? adminId = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -68,6 +63,11 @@ public class AdminUserService : IAdminUserService
 
             user.IsLocked = isLocked;
             user.LockedBy = isLocked ? adminId : null;
+            if (isLocked)
+            {
+                // Invalidate all active tokens for locked user
+                user.TokenVersion += 1;
+            }
             user.UpdatedAt = DateTime.UtcNow;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -79,5 +79,61 @@ public class AdminUserService : IAdminUserService
         {
             return ApiResponseDto<bool>.Fail($"Error setting lock status: {ex.Message}");
         }
+    }
+
+    public async Task<ApiResponseDto<AdminUserDto>> WarnUserAsync(
+        Guid userId,
+        string? reason = null,
+        Guid? staffId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user == null)
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("User not found.");
+            }
+
+            user.WarningCount += 1;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            // When reaching 3 warnings, automatically lock the account and invalidate tokens
+            if (user.WarningCount >= 3)
+            {
+                user.IsLocked = true;
+                user.LockedBy = staffId;
+                user.TokenVersion += 1;
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var msg = user.WarningCount >= 3
+                ? $"User '{user.FullName ?? user.Email}' has reached {user.WarningCount} warnings and has been locked."
+                : $"Warning issued to '{user.FullName ?? user.Email}'. Total warnings: {user.WarningCount}.";
+
+            return ApiResponseDto<AdminUserDto>.Ok(MapToAdminDto(user), msg);
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<AdminUserDto>.Fail($"Error issuing warning: {ex.Message}");
+        }
+    }
+
+    private static AdminUserDto MapToAdminDto(User u)
+    {
+        return new AdminUserDto
+        {
+            UserId = u.UserId,
+            Email = u.Email,
+            PhoneNumber = u.PhoneNumber,
+            FullName = u.FullName ?? u.Email.Split('@')[0],
+            RoleCode = u.RoleCode ?? "TRAINEE",
+            IsLocked = u.IsLocked ?? false,
+            WarningCount = u.WarningCount,
+            TokenVersion = u.TokenVersion,
+            CreatedAt = u.CreatedAt,
+            LastActiveAt = u.LastActiveAt
+        };
     }
 }

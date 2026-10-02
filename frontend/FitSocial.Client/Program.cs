@@ -60,6 +60,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ITrainingPackageService, TrainingPackageService>();
 builder.Services.AddScoped<ICoachService, CoachService>();
 builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<FitSocial.Client.Services.Checkout.ICheckoutService, FitSocial.Client.Services.Checkout.CheckoutService>();
 builder.Services.AddScoped<ICoachDashboardService, CoachDashboardService>();
 builder.Services.AddScoped<ISystemOperationsService, SystemOperationsService>();
 builder.Services.AddScoped<IReportService, ReportService>();

@@ -435,7 +435,8 @@
             var response = await CartService.AddToCartAsync(request);
             if (response.Success)
             {
-                Navigation.NavigateTo("cart");
+                // UC-20: go straight to checkout for this package (Pay Now flow)
+                Navigation.NavigateTo($"checkout?packageId={package.PackageId}");
             }
             else
             {

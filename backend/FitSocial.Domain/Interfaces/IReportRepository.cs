@@ -22,4 +22,9 @@ public interface IReportRepository : IRepository<Report>
         CancellationToken cancellationToken = default);
 
     Task<Report?> GetReportWithDetailsByIdAsync(Guid reportId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC-23.1 TH1: counts unresolved reports filed against a user (coach).
+    /// </summary>
+    Task<int> CountUnresolvedAgainstUserAsync(Guid userId, CancellationToken cancellationToken = default);
 }

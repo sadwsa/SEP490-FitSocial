@@ -23,6 +23,11 @@ public partial class Payout
 
     public string? Status { get; set; }
 
+    /// <summary>
+    /// UC-23.1: bank transaction reference recorded when the payout is PROCESSED.
+    /// </summary>
+    public string? TransactionRef { get; set; }
+
     public Guid? ProcessedBy { get; set; }
 
     public DateTime? ProcessedAt { get; set; }

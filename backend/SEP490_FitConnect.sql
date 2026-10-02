@@ -514,6 +514,7 @@ CREATE TABLE Payouts (
     TaxAmount NUMERIC(18,2),
     NetPayoutAmount NUMERIC(18,2),
     Status VARCHAR(50),
+    TransactionRef VARCHAR(100),
     ProcessedBy UUID REFERENCES Users(UserID),
     ProcessedAt TIMESTAMP,
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

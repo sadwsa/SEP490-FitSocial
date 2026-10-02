@@ -64,6 +64,7 @@ builder.Services.AddScoped<FitSocial.Client.Services.Checkout.ICheckoutService, 
 builder.Services.AddScoped<ICoachDashboardService, CoachDashboardService>();
 builder.Services.AddScoped<ISystemOperationsService, SystemOperationsService>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<FitSocial.Client.Services.Payouts.IPayoutService, FitSocial.Client.Services.Payouts.PayoutApiService>();
 builder.Services.AddScoped<ISubscriptionPriceHistoryApiService, SubscriptionPriceHistoryApiService>();
 
 await builder.Build().RunAsync();

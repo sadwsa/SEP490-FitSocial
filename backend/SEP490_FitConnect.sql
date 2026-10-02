@@ -7,10 +7,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 1. TẠO CÁC BẢNG ĐỘC LẬP (BẢNG CHA)
 -- ==========================================
 
-CREATE TABLE Roles (
-    RoleCode VARCHAR(8) PRIMARY KEY,
-    RoleName VARCHAR(50) NOT NULL
-);
 
 CREATE TABLE Locations (
     LocationID UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -56,7 +52,7 @@ CREATE TABLE Users (
     PasswordHash VARCHAR(255),
     GoogleProviderID VARCHAR(255) UNIQUE,
     FullName VARCHAR(100),
-    RoleCode VARCHAR(8) REFERENCES Roles(RoleCode),
+    RoleCode VARCHAR(8),
     IsInternal BOOLEAN DEFAULT FALSE,
     AvatarUrl VARCHAR(2048),
     DateOfBirth DATE,

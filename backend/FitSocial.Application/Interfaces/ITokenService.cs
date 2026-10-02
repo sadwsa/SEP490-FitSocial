@@ -7,7 +7,7 @@ namespace FitSocial.Application.Interfaces;
 public interface ITokenService
 {
     Task<AuthResponseDto> CreateSessionAsync(
-        User user, string? deviceInfo = null, CancellationToken cancellationToken = default);
+        User user, string? deviceInfo = null, bool rememberMe = true, CancellationToken cancellationToken = default);
 
     Task<ApiResponseDto<AuthResponseDto>> RefreshSessionAsync(
         string refreshToken, CancellationToken cancellationToken = default);

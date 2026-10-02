@@ -147,6 +147,10 @@ public class PostsController : ControllerBase
     {
         var currentUserId = GetCurrentUserId();
         var result = await _postService.GetPostByIdAsync(id, currentUserId, HttpContext.RequestAborted);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
         return Ok(result);
     }
 

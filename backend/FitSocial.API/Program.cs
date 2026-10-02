@@ -67,6 +67,8 @@ builder.Services.AddApplicationServices();
 builder.Services.AddHttpClient();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
+builder.Services.AddHostedService<FitSocial.API.Services.EkycRetentionService>();
+builder.Services.AddScoped<IPostRealtimeNotifier, PostRealtimeNotifier>();
 
 // Cloudinary Singleton service registration (reuse HttpClient / SocketsHttpHandler connection pool)
 var cloudName = builder.Configuration["Cloudinary:CloudName"];
@@ -223,93 +225,6 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
-
-// Ensure PostType column and Roles table exist in PostgreSQL database safely
-using (var scope = app.Services.CreateScope())
-{
-    try
-    {
-        var dbContext = scope.ServiceProvider.GetRequiredService<FitSocial.Infrastructure.Data.FitSocialDbContext>();
-        Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(
-            dbContext.Database,
-            @"DO $$
-            DECLARE
-                v_price_id UUID;
-            BEGIN
-                IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'posts') THEN
-                    ALTER TABLE posts ADD COLUMN IF NOT EXISTS posttype VARCHAR(50) DEFAULT 'FEED';
-                    UPDATE posts SET posttype = 'FEED' WHERE posttype IS NULL;
-                ELSIF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Posts') THEN
-                    ALTER TABLE ""Posts"" ADD COLUMN IF NOT EXISTS ""posttype"" VARCHAR(50) DEFAULT 'FEED';
-                    UPDATE ""Posts"" SET ""posttype"" = 'FEED' WHERE ""posttype"" IS NULL;
-                END IF;
-
-                IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND (table_name = 'Comments' OR table_name = 'comments')) THEN
-                    CREATE TABLE IF NOT EXISTS ""Comments"" (
-                        ""ID"" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        ""PostID"" UUID,
-                        ""AuthorID"" UUID,
-                        ""ParentCommentID"" UUID,
-                        ""Content"" VARCHAR(500),
-                        ""CreatedAt"" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        ""UpdatedAt"" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                END IF;
-
-                CREATE TABLE IF NOT EXISTS roles (
-                    rolecode VARCHAR(8) PRIMARY KEY,
-                    rolename VARCHAR(50) NOT NULL
-                );
-
-                INSERT INTO roles (rolecode, rolename) VALUES
-                ('ADMIN', 'Administrator'),
-                ('STAFF', 'Staff'),
-                ('COACH', 'Coach'),
-                ('TRAINEE', 'Trainee')
-                ON CONFLICT (rolecode) DO NOTHING;
-
-                CREATE TABLE IF NOT EXISTS termsandpolicies (
-                    termid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    version VARCHAR(50) NOT NULL,
-                    title VARCHAR(255) NOT NULL,
-                    content TEXT NOT NULL,
-                    effectivedate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                INSERT INTO termsandpolicies (termid, version, title, content, effectivedate)
-                SELECT 
-                    gen_random_uuid(),
-                    'v1.0',
-                    'FitSocial Terms of Service & Privacy Policy',
-                    'Welcome to FitSocial sports platform. By accessing or using our services, you agree to be bound by these Terms of Service and Privacy Policy.',
-                    CURRENT_TIMESTAMP
-                WHERE NOT EXISTS (SELECT 1 FROM termsandpolicies);
-
-                IF NOT EXISTS (SELECT 1 FROM coachsubscriptionplans) THEN
-                    v_price_id := gen_random_uuid();
-                    INSERT INTO price (priceid, amount, createdat)
-                    VALUES (v_price_id, 299000, CURRENT_TIMESTAMP)
-                    ON CONFLICT DO NOTHING;
-
-                    INSERT INTO coachsubscriptionplans (
-                        coachsubscriptionplansid, priceid, amount, currency,
-                        description, subscriptionduration, trainingpackageduration,
-                        isactive, createdat
-                    )
-                    VALUES (
-                        gen_random_uuid(), v_price_id, 299000, 'VND',
-                        'Standard Coach Monthly Subscription Plan', 30, 30,
-                        TRUE, CURRENT_TIMESTAMP
-                    );
-                END IF;
-            END $$;"
-        );
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"DB Migration check: {ex.Message}");
-    }
-}
+app.MapHub<PostHub>("/hubs/posts");
 
 app.Run();

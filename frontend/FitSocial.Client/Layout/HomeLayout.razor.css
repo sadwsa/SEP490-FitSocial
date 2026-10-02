@@ -1,0 +1,22 @@
+@media (min-width: 1024px) {
+    .home-3col-layout {
+        display: grid !important;
+        grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
+        align-items: start !important;
+    }
+
+    .home-left-sidebar {
+        justify-self: start !important;
+    }
+
+    .home-center-feed {
+        justify-self: end !important;
+        width: 100% !important;
+        max-width: 42rem !important;
+        min-width: 0 !important;
+    }
+
+    .home-right-sidebar {
+        justify-self: center !important;
+    }
+}

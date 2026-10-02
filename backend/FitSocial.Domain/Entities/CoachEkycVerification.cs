@@ -10,12 +10,6 @@ public partial class CoachEkycVerification
 
     public byte[]? EncryptedIdCardNumber { get; set; }
 
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-    public string? IdCardNumber { get; set; }
-
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-    public string? RawInformationJson { get; set; }
-
     public string? FullNameOnCard { get; set; }
 
     public DateOnly? DateOfBirthOnCard { get; set; }

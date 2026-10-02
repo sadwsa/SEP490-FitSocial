@@ -173,6 +173,7 @@
 
         // Shared login for all roles: no RoleCode sent, backend skips the role check
         loginModel.RoleCode = null;
+        loginModel.RememberMe = rememberMe;
         var result = await AuthService.LoginAsync(loginModel);
         if (result.Success)
         {

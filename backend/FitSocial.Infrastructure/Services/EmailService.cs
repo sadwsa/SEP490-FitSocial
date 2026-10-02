@@ -39,8 +39,8 @@ public class EmailService : IEmailService
             using var client = new SmtpClient();
             var port = int.TryParse(smtpPortStr, out var p) ? p : 587;
 
-            await client.ConnectAsync(smtpHost, port, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(senderEmail ?? string.Empty, password);
+            await client.ConnectAsync(smtpHost ?? "smtp.gmail.com", port, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(senderEmail ?? string.Empty, password ?? string.Empty);
             await client.SendAsync(emailMessage);
             await client.DisconnectAsync(true);
 

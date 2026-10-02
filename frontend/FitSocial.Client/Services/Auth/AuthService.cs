@@ -96,17 +96,7 @@ public class AuthService : IAuthService
         try
         {
             var response = await _httpClient.PostAsJsonAsync("auth/send-otp", request);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            if (result != null)
-            {
-                return result;
-            }
-
-            return new ApiResponse<bool>
-            {
-                Success = response.IsSuccessStatusCode,
-                Message = response.IsSuccessStatusCode ? "OTP code sent successfully" : $"Failed to send OTP code (Code: {response.StatusCode})"
-            };
+            return await ReadBoolResponseAsync(response, "OTP code sent successfully", "Failed to send OTP code");
         }
         catch (Exception ex)
         {
@@ -123,9 +113,7 @@ public class AuthService : IAuthService
         try
         {
             var response = await _httpClient.PostAsJsonAsync("auth/verify-otp", new { email, otpCode, purpose });
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            if (result != null) return result;
-            return new ApiResponse<bool> { Success = false, Message = $"Verification failed (Code: {response.StatusCode})" };
+            return await ReadBoolResponseAsync(response, "OTP verified successfully", "Verification failed");
         }
         catch (Exception ex)
         {
@@ -138,17 +126,7 @@ public class AuthService : IAuthService
         try
         {
             var response = await _httpClient.PostAsJsonAsync("auth/forgot-password", new { email });
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            if (result != null)
-            {
-                return result;
-            }
-
-            return new ApiResponse<bool>
-            {
-                Success = false,
-                Message = $"Request failed (Code: {response.StatusCode})"
-            };
+            return await ReadBoolResponseAsync(response, "Password reset email sent", "Request failed");
         }
         catch (Exception ex)
         {
@@ -165,17 +143,7 @@ public class AuthService : IAuthService
         try
         {
             var response = await _httpClient.PostAsJsonAsync("auth/reset-password", request);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            if (result != null)
-            {
-                return result;
-            }
-
-            return new ApiResponse<bool>
-            {
-                Success = false,
-                Message = $"Request failed (Code: {response.StatusCode})"
-            };
+            return await ReadBoolResponseAsync(response, "Password reset successfully", "Request failed");
         }
         catch (Exception ex)
         {
@@ -207,17 +175,7 @@ public class AuthService : IAuthService
             httpRequest.Content = JsonContent.Create(request);
 
             var response = await _httpClient.SendAsync(httpRequest);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            if (result != null)
-            {
-                return result;
-            }
-
-            return new ApiResponse<bool>
-            {
-                Success = false,
-                Message = $"Request failed (Code: {response.StatusCode})"
-            };
+            return await ReadBoolResponseAsync(response, "Password changed successfully", "Request failed");
         }
         catch (Exception ex)
         {
@@ -359,6 +317,53 @@ public class AuthService : IAuthService
         }
 
         return new ApiResponse<T> { Success = false, Message = fallback };
+    }
+
+    private async Task<ApiResponse<bool>> ReadBoolResponseAsync(HttpResponseMessage response, string defaultSuccessMessage, string defaultFallbackError)
+    {
+        string raw;
+        try
+        {
+            raw = await response.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not read the response body.");
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Failed to read response (Code: {response.StatusCode})"
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<ApiResponse<bool?>>(
+                    raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                if (parsed != null)
+                {
+                    return new ApiResponse<bool>
+                    {
+                        Success = parsed.Success,
+                        Message = parsed.Message ?? (parsed.Success ? defaultSuccessMessage : defaultFallbackError),
+                        Data = parsed.Data ?? false,
+                        Errors = parsed.Errors
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Response body could not be parsed as ApiResponse<bool?>. Raw: {Raw}", raw);
+            }
+        }
+
+        return new ApiResponse<bool>
+        {
+            Success = response.IsSuccessStatusCode,
+            Message = response.IsSuccessStatusCode ? defaultSuccessMessage : $"{defaultFallbackError} (Code: {(int)response.StatusCode})"
+        };
     }
 
     public async Task LogoutAsync()

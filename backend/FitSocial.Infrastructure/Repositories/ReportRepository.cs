@@ -25,6 +25,8 @@ public class ReportRepository : Repository<Report>, IReportRepository
         string? searchTerm,
         int pageNumber,
         int pageSize,
+        string? type = null,
+        string? appealStatus = null,
         CancellationToken cancellationToken = default)
     {
         var query = DbSet.AsNoTracking();
@@ -48,6 +50,18 @@ public class ReportRepository : Repository<Report>, IReportRepository
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            var typ = type.Trim().ToUpper();
+            query = query.Where(r => r.Type != null && r.Type.ToUpper() == typ);
+        }
+
+        if (!string.IsNullOrWhiteSpace(appealStatus))
+        {
+            var ast = appealStatus.Trim().ToUpper();
+            query = query.Where(r => r.AppealStatus != null && r.AppealStatus.ToUpper() == ast);
+        }
+
         if (reporterId.HasValue && reporterId.Value != Guid.Empty)
         {
             query = query.Where(r => r.ReporterId == reporterId.Value);
@@ -68,6 +82,7 @@ public class ReportRepository : Repository<Report>, IReportRepository
             var term = $"%{searchTerm.Trim()}%";
             query = query.Where(r =>
                 (r.Reason != null && EF.Functions.ILike(r.Reason, term)) ||
+                (r.Description != null && EF.Functions.ILike(r.Description, term)) ||
                 (r.Reporter != null && ((r.Reporter.FullName != null && EF.Functions.ILike(r.Reporter.FullName, term)) || EF.Functions.ILike(r.Reporter.Email, term))) ||
                 (r.ReportedUser != null && ((r.ReportedUser.FullName != null && EF.Functions.ILike(r.ReportedUser.FullName, term)) || EF.Functions.ILike(r.ReportedUser.Email, term))));
         }
@@ -86,9 +101,25 @@ public class ReportRepository : Repository<Report>, IReportRepository
             .Include(r => r.ReportedPost)
                 .ThenInclude(p => p!.Author)
             .Include(r => r.ResolvedByNavigation)
+            .Include(r => r.AppealReviewedByNavigation)
+            .Include(r => r.ReportMedia)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);
+    }
+
+    public async Task<Report?> GetReportWithDetailsByIdAsync(Guid reportId, CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .Include(r => r.Reporter)
+            .Include(r => r.ReportedUser)
+            .Include(r => r.ReportedPost)
+                .ThenInclude(p => p!.Author)
+            .Include(r => r.ResolvedByNavigation)
+            .Include(r => r.AppealReviewedByNavigation)
+            .Include(r => r.ReportMedia)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(r => r.ReportId == reportId, cancellationToken);
     }
 }

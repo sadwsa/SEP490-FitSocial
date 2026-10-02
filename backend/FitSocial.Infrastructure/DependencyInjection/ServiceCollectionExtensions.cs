@@ -25,7 +25,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPostReactionService, PostReactionService>();
         services.AddScoped<ICoachService, CoachService>();
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
-        services.AddScoped<ISportService, SportService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<IUserService, UserService>();
@@ -34,7 +33,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISystemOperationsService, SystemOperationsService>();
         services.AddScoped<ILocationService, LocationService>();
         services.AddScoped<IReportService, ReportService>();
-        services.AddScoped<IPostReportService, PostReportService>();
+        services.AddScoped<IOrderService, OrderService>();
+        services.AddScoped<ICoachBankAccountService, CoachBankAccountService>();
+        services.AddScoped<ICoachSubscriptionPlanService, CoachSubscriptionPlanService>();
+        services.AddScoped<IRefundRequestService, RefundRequestService>();
+        services.AddScoped<IPaymentGatewayConfigService, PaymentGatewayConfigService>();
         return services;
     }
 
@@ -52,6 +55,7 @@ public static class ServiceCollectionExtensions
             options.InstanceName = "FitSocial_";
         });
 
+        services.AddSingleton<IEncryptionService, AesEncryptionService>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IEmailService, EmailService>();
@@ -65,7 +69,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IOtpLogRepository, OtpLogRepository>();
-        services.AddScoped<ISportRepository, SportRepository>();
         services.AddScoped<IPriceRepository, PriceRepository>();
         services.AddScoped<ICoachUpgradeRepository, CoachUpgradeRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
@@ -76,6 +79,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserAgreementRepository, UserAgreementRepository>();
         services.AddScoped<ICoachEkycVerificationRepository, CoachEkycVerificationRepository>();
         services.AddScoped<ICoachCertificateRepository, CoachCertificateRepository>();
+        services.AddScoped<ICoachBankAccountRepository, CoachBankAccountRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
         services.AddScoped<IPostReportRepository, PostReportRepository>();
         services.AddScoped<IPostReactionRepository, PostReactionRepository>();
@@ -83,7 +87,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
-        services.AddScoped<IPostReportRepository, PostReportRepository>();
+        services.AddScoped<ICoachSubscriptionPlanRepository, CoachSubscriptionPlanRepository>();
+        services.AddScoped<IRefundRequestRepository, RefundRequestRepository>();
+        services.AddScoped<IPaymentGatewayConfigRepository, PaymentGatewayConfigRepository>();
 
         return services;
     }

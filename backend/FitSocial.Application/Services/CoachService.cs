@@ -1,6 +1,7 @@
 using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Coaches;
 using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.DTOs.TrainingPackage;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Interfaces;
@@ -15,10 +16,17 @@ namespace FitSocial.Application.Services;
 public class CoachService : ICoachService
 {
     private readonly ICoachProfileRepository _coachProfiles;
+    private readonly ILocationRepository _locationRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public CoachService(ICoachProfileRepository coachProfiles)
+    public CoachService(
+        ICoachProfileRepository coachProfiles,
+        ILocationRepository locationRepository,
+        IUnitOfWork unitOfWork)
     {
         _coachProfiles = coachProfiles;
+        _locationRepository = locationRepository;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<ApiResponseDto<List<TopCoachDto>>> GetTopCoachesAsync(int count = 3, CancellationToken cancellationToken = default)
@@ -28,7 +36,6 @@ public class CoachService : ICoachService
             throw new ValidationException("Count must be greater than or equal to 1.");
         }
 
-        // Enforce an upper bound if requested by query to protect against oversized requests
         if (count > 50)
         {
             count = 50;
@@ -61,7 +68,119 @@ public class CoachService : ICoachService
             AvatarUrl = c.Coach?.AvatarUrl,
             ExperienceYears = c.ExperienceYears,
             Bio = c.Bio,
-            CertificateUrl = c.CertificateUrl
+            CertificateUrl = c.CertificateUrl,
+            Status = c.Status,
+            ApprovalStatus = c.ApprovalStatus,
+            Locations = c.Locations.Select(l => l.LocationName).ToList()
         });
+    }
+
+    public async Task<ApiResponseDto<CoachDetailDto>> GetCoachDetailsAsync(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        var coach = await _coachProfiles.FindWithDetailsByCoachIdAsync(coachId, cancellationToken);
+        if (coach == null)
+        {
+            throw new NotFoundException("Coach not found.");
+        }
+
+        var validReviews = coach.Reviews?.Where(r => r.Rating != null).ToList() ?? new();
+        var avgRating = validReviews.Any() ? validReviews.Average(r => (double)r.Rating!.Value) : 0.0;
+
+        var dto = new CoachDetailDto
+        {
+            CoachId = coach.CoachId,
+            FullName = coach.Coach?.FullName ?? "Unknown Coach",
+            Email = coach.Coach?.Email,
+            PhoneNumber = coach.Coach?.PhoneNumber,
+            AvatarUrl = coach.Coach?.AvatarUrl,
+            Gender = coach.Coach?.Gender,
+            DateOfBirth = coach.Coach?.DateOfBirth,
+
+            Bio = coach.Bio,
+            ExperienceYears = coach.ExperienceYears,
+            ApprovalStatus = coach.ApprovalStatus,
+            Status = coach.Status ?? "ACTIVE",
+            UpdatedAt = coach.UpdatedAt,
+
+            Rating = Math.Round(avgRating, 1),
+            TotalReviews = validReviews.Count,
+
+            Locations = coach.Locations.Select(l => new CoachLocationDetailDto
+            {
+                LocationId = l.LocationId,
+                LocationName = l.LocationName,
+                Address = l.Address
+            }).ToList(),
+
+            Certificates = coach.CoachCertificates.Select(cert => new CoachCertificateDetailDto
+            {
+                CertificateId = cert.CertificateId,
+                CertificateName = cert.CertificateName,
+                CertificateUrl = cert.CertificateUrl,
+                IssuedBy = cert.IssuedBy,
+                IssuedDate = cert.IssuedDate,
+                ExpiryDate = cert.ExpiryDate,
+                VerificationStatus = cert.VerificationStatus
+            }).ToList(),
+
+            Packages = coach.TrainingPackages.Where(p => p.IsActive == true).Select(p => new TrainingPackageResponseDto
+            {
+                PackageId = p.PackageId,
+                CoachId = p.CoachId,
+                CoachName = coach.Coach?.FullName ?? "Coach",
+                Title = p.Title,
+                Description = p.Description,
+                Price = p.Price,
+                DurationDays = p.DurationDays,
+                SessionCount = p.SessionCount,
+                MinAge = p.MinAge,
+                TargetAudience = p.TargetAudience,
+                IsActive = p.IsActive,
+                CreatedAt = p.CreatedAt
+            }).ToList()
+        };
+
+        return ApiResponseDto<CoachDetailDto>.Ok(dto, "Coach details retrieved successfully.");
+    }
+
+    public async Task<ApiResponseDto<CoachDetailDto>> UpdateCoachProfileAsync(Guid coachId, UpdateCoachProfileDto dto, CancellationToken cancellationToken = default)
+    {
+        var coach = await _coachProfiles.FindWithDetailsByCoachIdAsync(coachId, cancellationToken);
+        if (coach == null)
+        {
+            throw new NotFoundException("Coach profile not found.");
+        }
+
+        if (dto.Bio != null) coach.Bio = dto.Bio.Trim();
+        if (dto.ExperienceYears.HasValue) coach.ExperienceYears = dto.ExperienceYears.Value;
+
+        if (!string.IsNullOrWhiteSpace(dto.Status))
+        {
+            var status = dto.Status.Trim().ToUpperInvariant();
+            if (status != "ACTIVE" && status != "INACTIVE" && status != "SUSPENDED")
+            {
+                throw new ValidationException("Invalid Status. Allowed values are 'ACTIVE', 'INACTIVE', or 'SUSPENDED'.");
+            }
+            coach.Status = status;
+        }
+
+        if (dto.LocationIds != null)
+        {
+            coach.Locations.Clear();
+            if (dto.LocationIds.Any())
+            {
+                var allLocations = await _locationRepository.ListAllAsync(cancellationToken);
+                var selectedLocations = allLocations.Where(l => dto.LocationIds.Contains(l.LocationId)).ToList();
+                foreach (var loc in selectedLocations)
+                {
+                    coach.Locations.Add(loc);
+                }
+            }
+        }
+
+        coach.UpdatedAt = DateTime.UtcNow;
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await GetCoachDetailsAsync(coachId, cancellationToken);
     }
 }

@@ -12,4 +12,6 @@ public class GetReportsQueryDto
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     public string? SearchTerm { get; set; }
+    public string? Type { get; set; }
+    public string? AppealStatus { get; set; }
 }

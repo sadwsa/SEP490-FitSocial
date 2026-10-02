@@ -11,4 +11,6 @@ public interface ICoachSubscriptionPlanRepository : IRepository<CoachSubscriptio
     Task<List<CoachSubscriptionPlan>> ListActivePlansAsync(CancellationToken cancellationToken = default);
     Task<List<CoachSubscriptionPlan>> GetAllPlansAsync(CancellationToken cancellationToken = default);
     Task<CoachSubscriptionPlan?> GetActivePlanByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>UC_33.3: references blocking hard-delete (upgrades + order details).</summary>
+    Task<(int Upgrades, int OrderDetails)> CountReferencesAsync(Guid planId, CancellationToken cancellationToken = default);
 }

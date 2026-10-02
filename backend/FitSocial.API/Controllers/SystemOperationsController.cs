@@ -90,4 +90,17 @@ public class SystemOperationsController : ControllerBase
         if (!result.Success) return BadRequest(result);
         return Ok(result);
     }
+
+    /// <summary>
+    /// UC_33.3: Staff/Admin Delete Coach Subscription Plan.
+    /// Hard-deletes unreferenced plans; auto soft-deletes (Inactive) when the plan
+    /// has linked subscriptions or billing history (33.3.E1).
+    /// </summary>
+    [HttpDelete("coach-subscription-plans/{planId:guid}")]
+    public async Task<IActionResult> DeletePlan(Guid planId, CancellationToken cancellationToken)
+    {
+        var result = await _systemOps.DeletePlanAsync(planId, cancellationToken);
+        if (!result.Success) return BadRequest(result);
+        return Ok(result);
+    }
 }

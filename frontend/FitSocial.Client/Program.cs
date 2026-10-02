@@ -56,6 +56,7 @@ builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ITrainingPackageService, TrainingPackageService>();
 builder.Services.AddScoped<ICoachService, CoachService>();
+builder.Services.AddScoped<ICoachDashboardService, CoachDashboardService>();
 builder.Services.AddScoped<ISystemOperationsService, SystemOperationsService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 

@@ -37,6 +37,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICoachSubscriptionPlanService, CoachSubscriptionPlanService>();
         services.AddScoped<IRefundRequestService, RefundRequestService>();
         services.AddScoped<IPaymentGatewayConfigService, PaymentGatewayConfigService>();
+        services.AddScoped<ICoachDashboardService, CoachDashboardService>();
         return services;
     }
 
@@ -88,6 +89,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICoachSubscriptionPlanRepository, CoachSubscriptionPlanRepository>();
         services.AddScoped<IRefundRequestRepository, RefundRequestRepository>();
         services.AddScoped<IPaymentGatewayConfigRepository, PaymentGatewayConfigRepository>();
+        services.AddScoped<ICoachDashboardRepository, CoachDashboardRepository>();
 
         return services;
     }

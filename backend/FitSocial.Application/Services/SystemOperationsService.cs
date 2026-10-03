@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.SystemOperations;
 using FitSocial.Application.Interfaces;
@@ -12,18 +13,21 @@ public class SystemOperationsService : ISystemOperationsService
     private readonly ICoachSubscriptionPlanRepository _planRepository;
     private readonly ICoachUpgradeRepository _upgrades;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IAuditLogRepository? _auditLogs;
     private readonly ILogger<SystemOperationsService> _logger;
 
     public SystemOperationsService(
         ICoachSubscriptionPlanRepository planRepository,
         ICoachUpgradeRepository upgrades,
         IUnitOfWork unitOfWork,
-        ILogger<SystemOperationsService> logger)
+        ILogger<SystemOperationsService> logger,
+        IAuditLogRepository? auditLogs = null)
     {
         _planRepository = planRepository;
         _upgrades = upgrades;
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _auditLogs = auditLogs;
     }
 
     public async Task<ApiResponseDto<CoachSubscriptionPlansResponseDto>> GetCoachSubscriptionPlansAsync(
@@ -179,6 +183,7 @@ public class SystemOperationsService : ISystemOperationsService
             if (string.IsNullOrWhiteSpace(dto.Description))
                 return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Description is required.");
 
+            var oldAmount = plan.Amount ?? 0m;
             plan.Amount = dto.Amount;
             plan.Currency = string.IsNullOrWhiteSpace(dto.Currency) ? plan.Currency : dto.Currency.Trim().ToUpper();
             plan.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
@@ -186,6 +191,27 @@ public class SystemOperationsService : ISystemOperationsService
             if (dto.IsActive.HasValue) plan.IsActive = dto.IsActive.Value;
             if (dto.SubscriptionDuration.HasValue) plan.SubscriptionDuration = dto.SubscriptionDuration.Value;
             if (dto.TrainingPackageDuration.HasValue) plan.TrainingPackageDuration = dto.TrainingPackageDuration.Value;
+
+            if (_auditLogs != null && dto.Amount.HasValue && dto.Amount.Value != oldAmount)
+            {
+                try
+                {
+                    var auditLog = new AuditLog
+                    {
+                        EntityType = "CoachSubscriptionPlan",
+                        EntityId = plan.CoachSubscriptionPlansId.ToString(),
+                        Action = "UPDATE_PRICE",
+                        OldValue = JsonSerializer.Serialize(new { amount = oldAmount, description = plan.Description }),
+                        NewValue = JsonSerializer.Serialize(new { amount = dto.Amount.Value, description = plan.Description }),
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _auditLogs.AddAsync(auditLog, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to log price change audit log for plan {PlanId}", planId);
+                }
+            }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 

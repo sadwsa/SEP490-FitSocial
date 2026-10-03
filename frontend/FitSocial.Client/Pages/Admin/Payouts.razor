@@ -1,0 +1,388 @@
+@page "/admin/payouts"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.Payouts
+@using FitSocial.Client.Services.Payouts
+@inject IPayoutService PayoutService
+@inject NavigationManager Navigation
+
+<PageTitle>Payout History - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert @toastType" role="alert">
+                <span class="flex-1">@toastMessage</span>
+                <button type="button" class="ml-2 font-bold cursor-pointer opacity-70 hover:opacity-100" @onclick="() => toastMessage = null">✕</button>
+            </div>
+        }
+
+        <h2 class="view-title">Coach Payout History</h2>
+        <p class="view-sub">Monthly earnings disbursement to coaches (UC-23.1)</p>
+
+        <!-- Status Filter Tabs -->
+        <div class="cat-tabs">
+            <button type="button" class="cat-tab @(statusFilter == "" ? "active" : "")" @onclick='() => SetStatusFilterAsync("")'>All</button>
+            <button type="button" class="cat-tab @(statusFilter == "PENDING" ? "active" : "")" @onclick='() => SetStatusFilterAsync("PENDING")'>
+                <span class="status-dot" style="background:#f59e0b;"></span> Pending
+            </button>
+            <button type="button" class="cat-tab @(statusFilter == "PROCESSED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("PROCESSED")'>
+                <span class="status-dot" style="background:#16a34a;"></span> Processed
+            </button>
+        </div>
+
+        <!-- Toolbar: cycle + generate -->
+        <div class="toolbar">
+            <select value="@filterMonth" @onchange="OnMonthChanged" class="toolbar-select">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m">Month @m</option>
+                }
+            </select>
+            <select value="@filterYear" @onchange="OnYearChanged" class="toolbar-select">
+                @foreach (var y in yearOptions)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <button type="button" class="row-btn" @onclick="LoadHistoryAsync" disabled="@isLoading">
+                ↻ Refresh
+            </button>
+            <span class="grow"></span>
+            <button type="button" class="btn-primary" @onclick="HandleGenerateAsync" disabled="@isGenerating">
+                @(isGenerating ? "Generating..." : $"Generate {filterMonth:D2}/{filterYear}")
+            </button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="py-4 text-center muted">Loading payout history...</div>
+        }
+        else if (payouts.Count == 0)
+        {
+            <div class="empty-box">
+                <p class="font-bold">No payout records for @(filterMonth.ToString("D2"))/@filterYear</p>
+                <p class="text-sm">Click "Generate" to build payout snapshots from completed package sales.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Coach</th>
+                            <th>Cycle</th>
+                            <th class="text-end">Gross Sales</th>
+                            <th class="text-end">Refunds</th>
+                            <th class="text-end">Net Payout</th>
+                            <th>Flags</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in payouts)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="font-semibold">@p.CoachName</div>
+                                    <div class="muted-sm">@p.CoachEmail</div>
+                                </td>
+                                <td><span class="cycle-badge">@p.CycleLabel</span></td>
+                                <td class="text-end">@p.TotalGrossAmount.ToString("N0") VND</td>
+                                <td class="text-end">@p.RefundAdjustmentTotal.ToString("N0") VND</td>
+                                <td class="text-end font-bold text-orange">@p.NetPayoutAmount.ToString("N0") VND</td>
+                                <td>
+                                    @if (p.HasBlockingReports)
+                                    {
+                                        <span class="flag flag-report" title="@p.BlockingReportCount unresolved report(s)">⚠ @p.BlockingReportCount report(s)</span>
+                                    }
+                                    @if (!p.HasBankAccount)
+                                    {
+                                        <span class="flag flag-bank" title="No bank account">⚠ No bank</span>
+                                    }
+                                    @if (!p.HasBlockingReports && p.HasBankAccount)
+                                    {
+                                        <span class="flag flag-ok">✓ Clear</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="status-pill @(p.Status == "PROCESSED" ? "done" : "pending")">@p.Status</span>
+                                    @if (!string.IsNullOrWhiteSpace(p.TransactionRef))
+                                    {
+                                        <div class="muted-sm">Ref: @p.TransactionRef</div>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (p.Status == "PENDING")
+                                    {
+                                        <button type="button" class="row-btn primary" @onclick="() => OpenProcessModal(p.PayoutId)"
+                                                disabled="@(!p.CanProcess)" title="@(p.CanProcess ? "Process payout" : p.BlockReason)">
+                                            Process Payout
+                                        </button>
+                                        @if (!p.CanProcess && !string.IsNullOrEmpty(p.BlockReason))
+                                        {
+                                            <div class="muted-sm" style="max-width:220px;">@p.BlockReason</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="row-btn" @onclick="() => OpenProcessModal(p.PayoutId)">View</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <!-- Processing Modal -->
+        @if (showModal)
+        {
+            <div class="modal-backdrop" @onclick="CloseModal">
+                <div class="modal-card" @onclick:stopPropagation="true">
+                    <div class="modal-head">
+                        <div>
+                            <h3>Process Coach Payout</h3>
+                            @if (detail != null)
+                            {
+                                <p class="muted-sm">@detail.CoachName • Cycle @detail.CycleLabel • Status: @detail.Status</p>
+                            }
+                        </div>
+                        <button type="button" class="modal-x" @onclick="CloseModal">✕</button>
+                    </div>
+
+                    @if (isLoadingDetail)
+                    {
+                        <div class="py-4 text-center muted">Loading payout statement...</div>
+                    }
+                    else if (detail != null)
+                    {
+                        <!-- Calculation breakdown -->
+                        <p class="muted-sm" style="margin-bottom:8px;">Doanh thu ghi nhận theo kỳ tháng: gói N tháng thì mỗi tháng nhận 1/N giá trị gói.</p>
+                        <div class="breakdown">
+                            <div class="bd-row"><span>Gross Package Sales (@detail.Items.Count(i => i.GrossAmount > 0) orders)</span><strong>@detail.TotalGrossAmount.ToString("N0") VND</strong></div>
+                            <div class="bd-row"><span>Platform Commission (@((detail.CommissionRate * 100).ToString("0"))%)</span><span>-@detail.SystemCommissionAmount.ToString("N0") VND</span></div>
+                            <div class="bd-row"><span>Refund Adjustments</span><span>-@detail.RefundAdjustmentTotal.ToString("N0") VND</span></div>
+                            <div class="bd-row"><span>Tax Withheld</span><span>-@detail.TaxAmount.ToString("N0") VND</span></div>
+                            <div class="bd-row total"><span>Final Net Payout Amount</span><strong>@detail.NetPayoutAmount.ToString("N0") VND</strong></div>
+                        </div>
+
+                        <!-- Bank account -->
+                        <h4 class="sec-title">Coach Bank Account</h4>
+                        @if (detail.BankAccount == null)
+                        {
+                            <div class="auth-alert error">Coach has not added or activated a valid bank account. Payout cannot be executed (E1).</div>
+                        }
+                        else
+                        {
+                            <div class="bank-box">
+                                <div><span class="muted-sm">Bank</span><strong> @detail.BankAccount.BankName (@detail.BankAccount.BankCode)</strong></div>
+                                <div><span class="muted-sm">Account</span><strong> @detail.BankAccount.MaskedAccountNumber</strong></div>
+                                <div><span class="muted-sm">Name</span><strong> @detail.BankAccount.AccountName</strong></div>
+                                @if (!string.IsNullOrWhiteSpace(detail.BankAccount.Branch))
+                                {
+                                    <div><span class="muted-sm">Branch</span><strong> @detail.BankAccount.Branch</strong></div>
+                                }
+                            </div>
+                        }
+
+                        <!-- Report guard -->
+                        @if (detail.HasBlockingReports)
+                        {
+                            <div class="auth-alert error">Coach has @detail.BlockingReportCount unresolved report(s). Payout is blocked until reports are resolved (TH1).</div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(detail.BlockReason) && !detail.CanProcess && detail.Status == "PENDING")
+                        {
+                            <div class="auth-alert error">@detail.BlockReason</div>
+                        }
+
+                        <!-- Order items -->
+                        @if (detail.Items.Count > 0)
+                        {
+                            <h4 class="sec-title">Included Orders (@detail.Items.Count)</h4>
+                            <div class="items-list">
+                                @foreach (var it in detail.Items)
+                                {
+                                    <div class="item-row">
+                                        <div class="flex-1">
+                                            <div class="font-semibold text-sm">@(it.PackageTitle ?? "Training Package")</div>
+                                            <div class="muted-sm">@it.BuyerName • @it.OrderCreatedAt?.ToLocalTime().ToString("dd/MM/yyyy")@(string.IsNullOrWhiteSpace(it.VestingInfo) ? "" : $" • {it.VestingInfo}")</div>
+                                        </div>
+                                        <div class="text-end text-sm">
+                                            @if (it.GrossAmount > 0)
+                                            {
+                                                <div>@it.GrossAmount.ToString("N0") − @it.CommissionAmount.ToString("N0") = <strong>@it.NetAmount.ToString("N0")</strong></div>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-red">Refund −@it.RefundAdjustment.ToString("N0")</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(modalError))
+                        {
+                            <div class="auth-alert error">@modalError</div>
+                        }
+
+                        <div class="modal-actions">
+                            <button type="button" class="btn-ghost" @onclick="CloseModal" disabled="@isProcessing">Cancel</button>
+                            @if (detail.Status == "PENDING")
+                            {
+                                <button type="button" class="btn-primary" @onclick="HandleConfirmPayoutAsync"
+                                        disabled="@(!detail.CanProcess || isProcessing)"
+                                        title="@(detail.CanProcess ? "Confirm payout execution" : detail.BlockReason)">
+                                    @(isProcessing ? "Executing..." : "Confirm Payout Execution")
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private List<PayoutHistoryItem> payouts = new();
+    private bool isLoading = true;
+    private bool isGenerating = false;
+    private string statusFilter = "";
+    private int filterMonth = DateTime.UtcNow.Month;
+    private int filterYear = DateTime.UtcNow.Year;
+    private List<int> yearOptions = new();
+    private string? toastMessage;
+    private string toastType = "info";
+
+    private bool showModal = false;
+    private bool isLoadingDetail = false;
+    private bool isProcessing = false;
+    private PayoutDetail? detail;
+    private string? modalError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var y = DateTime.UtcNow.Year;
+        yearOptions = new List<int> { y - 1, y, y + 1 };
+        await LoadHistoryAsync();
+    }
+
+    private async Task SetStatusFilterAsync(string status)
+    {
+        statusFilter = status;
+        await LoadHistoryAsync();
+    }
+
+    private async Task OnMonthChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var m)) filterMonth = m;
+        await LoadHistoryAsync();
+    }
+
+    private async Task OnYearChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var y)) filterYear = y;
+        await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        isLoading = true;
+        var res = await PayoutService.GetHistoryAsync(filterMonth, filterYear,
+            string.IsNullOrEmpty(statusFilter) ? null : statusFilter);
+        if (res.Success && res.Data != null)
+        {
+            payouts = res.Data;
+        }
+        else
+        {
+            ShowToast(res.Message ?? "Failed to load payout history.", "error");
+        }
+        isLoading = false;
+    }
+
+    private async Task HandleGenerateAsync()
+    {
+        isGenerating = true;
+        try
+        {
+            var res = await PayoutService.GenerateAsync(filterMonth, filterYear);
+            if (res.Success && res.Data != null)
+            {
+                ShowToast($"Cycle {res.Data.Month:D2}/{res.Data.Year}: {res.Data.Created} created, {res.Data.Updated} updated.", "info");
+            }
+            else
+            {
+                ShowToast(res.Message ?? "Failed to generate payouts.", "error");
+            }
+        }
+        finally
+        {
+            isGenerating = false;
+            await LoadHistoryAsync();
+        }
+    }
+
+    private async Task OpenProcessModal(Guid payoutId)
+    {
+        showModal = true;
+        isLoadingDetail = true;
+        modalError = null;
+        detail = null;
+
+        var res = await PayoutService.GetDetailAsync(payoutId);
+        if (res.Success && res.Data != null)
+        {
+            detail = res.Data;
+        }
+        else
+        {
+            modalError = res.Message ?? "Failed to load payout detail.";
+        }
+        isLoadingDetail = false;
+    }
+
+    private void CloseModal()
+    {
+        if (isProcessing) return;
+        showModal = false;
+        detail = null;
+        modalError = null;
+    }
+
+    private async Task HandleConfirmPayoutAsync()
+    {
+        if (detail == null || isProcessing) return;
+        isProcessing = true;
+        modalError = null;
+
+        var res = await PayoutService.ProcessAsync(detail.PayoutId);
+        if (res.Success && res.Data != null)
+        {
+            ShowToast($"Payout processed: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
+            showModal = false;
+            detail = null;
+            await LoadHistoryAsync();
+        }
+        else
+        {
+            modalError = res.Message ?? "Payout failed. Kept as PENDING — please retry.";
+        }
+        isProcessing = false;
+    }
+
+    private void ShowToast(string message, string type)
+    {
+        toastMessage = message;
+        toastType = type;
+    }
+}

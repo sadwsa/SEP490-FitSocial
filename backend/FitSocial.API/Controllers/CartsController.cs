@@ -39,7 +39,7 @@ namespace FitSocial.API.Controllers
         {
             if (!TryGetCurrentUserId(out var userId))
             {
-                return Unauthorized(ApiResponseDto<CartSummaryDto>.Fail("Phiên đăng nhập không hợp lệ."));
+                return Unauthorized(ApiResponseDto<CartSummaryDto>.Fail("Invalid or expired session."));
             }
 
             var result = await _cartService.GetCartAsync(userId, cancellationToken);
@@ -60,7 +60,7 @@ namespace FitSocial.API.Controllers
         {
             if (!TryGetCurrentUserId(out var userId))
             {
-                return Unauthorized(ApiResponseDto<int>.Fail("Phiên đăng nhập không hợp lệ."));
+                return Unauthorized(ApiResponseDto<int>.Fail("Invalid or expired session."));
             }
 
             var result = await _cartService.GetCartCountAsync(userId, cancellationToken);
@@ -76,7 +76,7 @@ namespace FitSocial.API.Controllers
         {
             if (!TryGetCurrentUserId(out var userId))
             {
-                return Unauthorized(ApiResponseDto<CartItemDto>.Fail("Phiên đăng nhập không hợp lệ."));
+                return Unauthorized(ApiResponseDto<CartItemDto>.Fail("Invalid or expired session."));
             }
 
             var result = await _cartService.AddToCartAsync(userId, dto, cancellationToken);
@@ -97,7 +97,7 @@ namespace FitSocial.API.Controllers
         {
             if (!TryGetCurrentUserId(out var userId))
             {
-                return Unauthorized(ApiResponseDto<bool>.Fail("Phiên đăng nhập không hợp lệ."));
+                return Unauthorized(ApiResponseDto<bool>.Fail("Invalid or expired session."));
             }
 
             var result = await _cartService.RemoveCartItemAsync(userId, cartId, cancellationToken);
@@ -118,7 +118,7 @@ namespace FitSocial.API.Controllers
         {
             if (!TryGetCurrentUserId(out var userId))
             {
-                return Unauthorized(ApiResponseDto<bool>.Fail("Phiên đăng nhập không hợp lệ."));
+                return Unauthorized(ApiResponseDto<bool>.Fail("Invalid or expired session."));
             }
 
             var result = await _cartService.ClearCartAsync(userId, cancellationToken);

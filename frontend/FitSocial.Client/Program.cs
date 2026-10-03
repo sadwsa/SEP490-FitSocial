@@ -7,7 +7,6 @@ using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Http;
 using FitSocial.Client.Services.Posts;
 using FitSocial.Client.Services.Realtime;
-using FitSocial.Client.Services.Sports;
 using FitSocial.Client.Services.Files;
 using FitSocial.Client.Services.Payment;
 using FitSocial.Client.Services.Terms;
@@ -43,7 +42,6 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseU
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<GoogleSignInService>();
-builder.Services.AddScoped<ISportService, SportService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IFileUploadService, FileUploadService>();

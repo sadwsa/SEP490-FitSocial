@@ -135,11 +135,11 @@ namespace FitSocial.Application.Services
                     TemporaryOrderCode = orderCode
                 };
 
-                return ApiResponseDto<CartSummaryDto>.Ok(summary, "Lấy giỏ hàng thành công.");
+                return ApiResponseDto<CartSummaryDto>.Ok(summary, "Cart retrieved successfully.");
             }
             catch (Exception ex)
             {
-                return ApiResponseDto<CartSummaryDto>.Fail($"Lỗi khi tải giỏ hàng: {ex.Message}");
+                return ApiResponseDto<CartSummaryDto>.Fail($"Error loading cart: {ex.Message}");
             }
         }
 
@@ -157,7 +157,7 @@ namespace FitSocial.Application.Services
             }
             catch (Exception ex)
             {
-                return ApiResponseDto<int>.Fail($"Lỗi khi đếm số lượng giỏ hàng: {ex.Message}");
+                return ApiResponseDto<int>.Fail($"Error counting cart items: {ex.Message}");
             }
         }
 
@@ -165,17 +165,17 @@ namespace FitSocial.Application.Services
         {
             if (userId == Guid.Empty)
             {
-                return ApiResponseDto<CartItemDto>.Fail("Người dùng chưa được xác thực.");
+                return ApiResponseDto<CartItemDto>.Fail("User is not authenticated.");
             }
 
             if (dto == null || dto.PackageId == Guid.Empty)
             {
-                return ApiResponseDto<CartItemDto>.Fail("Thông tin gói tập không hợp lệ.");
+                return ApiResponseDto<CartItemDto>.Fail("Invalid training package information.");
             }
 
             if (dto.Quantity <= 0)
             {
-                return ApiResponseDto<CartItemDto>.Fail("Số lượng phải lớn hơn 0.");
+                return ApiResponseDto<CartItemDto>.Fail("Quantity must be greater than 0.");
             }
 
             try
@@ -183,17 +183,17 @@ namespace FitSocial.Application.Services
                 var package = await _packageRepository.GetByIdAsync(dto.PackageId, cancellationToken);
                 if (package == null)
                 {
-                    return ApiResponseDto<CartItemDto>.Fail("Gói tập không tồn tại.");
+                    return ApiResponseDto<CartItemDto>.Fail("Training package does not exist.");
                 }
 
                 if (package.CoachId == userId)
                 {
-                    return ApiResponseDto<CartItemDto>.Fail("Bạn không thể thêm gói tập do chính mình tạo vào giỏ hàng.");
+                    return ApiResponseDto<CartItemDto>.Fail("You cannot add your own training package to cart.");
                 }
 
                 if (package.IsActive == false)
                 {
-                    return ApiResponseDto<CartItemDto>.Fail("Gói tập này hiện đang tạm dừng nhận học viên.");
+                    return ApiResponseDto<CartItemDto>.Fail("This training package is currently suspended from taking trainees.");
                 }
 
                 var existing = await _cartRepository.GetCartItemAsync(userId, dto.PackageId, cancellationToken);
@@ -212,7 +212,7 @@ namespace FitSocial.Application.Services
                         IsActive = package.IsActive ?? true,
                         IsAvailable = true
                     };
-                    return ApiResponseDto<CartItemDto>.Ok(existingDto, "Gói tập đã có sẵn trong giỏ hàng của bạn.");
+                    return ApiResponseDto<CartItemDto>.Ok(existingDto, "This training package is already in your cart.");
                 }
 
                 var newCart = new Cart
@@ -242,11 +242,11 @@ namespace FitSocial.Application.Services
                     CreatedAt = newCart.CreatedAt
                 };
 
-                return ApiResponseDto<CartItemDto>.Ok(resultDto, "Đã thêm gói tập vào giỏ hàng thành công.");
+                return ApiResponseDto<CartItemDto>.Ok(resultDto, "Added to cart successfully.");
             }
             catch (Exception ex)
             {
-                return ApiResponseDto<CartItemDto>.Fail($"Lỗi khi thêm vào giỏ hàng: {ex.Message}");
+                return ApiResponseDto<CartItemDto>.Fail($"Error adding to cart: {ex.Message}");
             }
         }
 
@@ -257,17 +257,17 @@ namespace FitSocial.Application.Services
                 var cart = await _cartRepository.GetByIdAsync(cartId, cancellationToken);
                 if (cart == null || cart.UserId != userId)
                 {
-                    return ApiResponseDto<bool>.Fail("Mục trong giỏ hàng không tồn tại hoặc không thuộc về bạn.");
+                    return ApiResponseDto<bool>.Fail("Cart item does not exist or does not belong to you.");
                 }
 
                 _cartRepository.Remove(cart);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                return ApiResponseDto<bool>.Ok(true, "Đã xóa gói tập khỏi giỏ hàng.");
+                return ApiResponseDto<bool>.Ok(true, "Removed package from cart successfully.");
             }
             catch (Exception ex)
             {
-                return ApiResponseDto<bool>.Fail($"Lỗi khi xóa gói tập khỏi giỏ hàng: {ex.Message}");
+                return ApiResponseDto<bool>.Fail($"Error removing package from cart: {ex.Message}");
             }
         }
 
@@ -278,11 +278,11 @@ namespace FitSocial.Application.Services
                 await _cartRepository.ClearCartAsync(userId, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                return ApiResponseDto<bool>.Ok(true, "Đã làm trống giỏ hàng.");
+                return ApiResponseDto<bool>.Ok(true, "Cart cleared successfully.");
             }
             catch (Exception ex)
             {
-                return ApiResponseDto<bool>.Fail($"Lỗi khi làm trống giỏ hàng: {ex.Message}");
+                return ApiResponseDto<bool>.Fail($"Error clearing cart: {ex.Message}");
             }
         }
     }

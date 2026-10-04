@@ -32,8 +32,20 @@ public class TrainingPackageService : ITrainingPackageService
         return await _apiClient.PostAsync<CreateTrainingPackageDto, TrainingPackageResponseDto>(BaseEndpoint, dto);
     }
     public async Task<ApiResponse<bool>> DeletePackageAsync(Guid id)
-{
-    return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/{id}");
-}
+    {
+        return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/{id}");
+    }
 
+    public async Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPackagesByCoachIdAsync(Guid coachId)
+    {
+        return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}?coachId={coachId}");
+    }public async Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetAllPackagesAsync(string? searchKeyword = null, decimal? maxPrice = null, Guid? coachId = null)
+    {
+        var queryParams = new List<string>();
+        if (!string.IsNullOrWhiteSpace(searchKeyword)) queryParams.Add($"searchKeyword={Uri.EscapeDataString(searchKeyword)}");
+        if (maxPrice.HasValue) queryParams.Add($"maxPrice={maxPrice.Value}");
+        if (coachId.HasValue) queryParams.Add($"coachId={coachId.Value}");
+        var query = queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : "";
+        return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}{query}");
+    }
 }

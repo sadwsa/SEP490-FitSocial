@@ -1,12 +1,9 @@
 @page "/admin"
 @layout AdminLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
-@using FitSocial.Client.Models.Sports
-@using FitSocial.Client.Services.Sports
 @using FitSocial.Client.Services.Users
 @using FitSocial.Client.Models.Common
 @using FitSocial.Client.Models.Users
-@inject ISportService SportService
 @inject IUserService UserService
 @inject NavigationManager Navigation
 
@@ -16,21 +13,49 @@
     <Authorized>
         <h2 class="view-title">Overview</h2>
         <p class="view-sub">Platform metrics loaded directly from database.</p>
-        <WidgetsRow ActiveCount="@sports.Count(s => s.Visible)" TotalLogs="@sports.Sum(s => s.PostCount)" />
+
+        <div class="widgets">
+            <div class="widget">
+                <small class="widget-label">Total Users</small>
+                <strong class="widget-value">@(totalUsers > 0 ? totalUsers.ToString("N0") : (isLoadingMetrics ? "..." : "0"))</strong>
+                <span class="widget-delta up">Registered platform accounts</span>
+            </div>
+            <div class="widget">
+                <small class="widget-label">Staff Accounts</small>
+                <strong class="widget-value">@(totalStaff > 0 ? totalStaff.ToString("N0") : (isLoadingMetrics ? "..." : "0"))</strong>
+                <span class="widget-delta up">Active administrators &amp; staff</span>
+            </div>
+            <div class="widget">
+                <small class="widget-label">System Health</small>
+                <strong class="widget-value">Operational</strong>
+                <span class="widget-delta up">Services running normally</span>
+            </div>
+        </div>
+
         <div class="shortcuts">
             <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/users")'>
                 <AppIcon Name="person" />
                 <div><strong>Manage user accounts</strong><small>View, lock, unlock</small></div>
                 <span>→</span>
             </button>
-            <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/sports")'>
-                <AppIcon Name="dumbbell" />
-                <div><strong>Manage sport categories</strong><small>View, create, edit, delete</small></div>
-                <span>→</span>
-            </button>
             <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/coach-subscription-plans")'>
                 <AppIcon Name="trophy" />
                 <div><strong>Coach Subscription Plans</strong><small>View and manage price plans</small></div>
+                <span>→</span>
+            </button>
+            <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/locations")'>
+                <AppIcon Name="location" />
+                <div><strong>Locations &amp; Facilities</strong><small>Gym and partner locations</small></div>
+                <span>→</span>
+            </button>
+            <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/reports")'>
+                <AppIcon Name="flag" />
+                <div><strong>Content Reports</strong><small>Moderation and safety</small></div>
+                <span>→</span>
+            </button>
+            <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/payouts")'>
+                <AppIcon Name="chart" />
+                <div><strong>Coach Payouts</strong><small>Payout requests &amp; revenue</small></div>
                 <span>→</span>
             </button>
             <AuthorizeView Roles="ADMIN" Context="adminContext">
@@ -53,20 +78,36 @@
 </AuthorizeView>
 
 @code {
-    private List<SportDto> sports = new();
+    private int totalUsers = 0;
+    private int totalStaff = 0;
+    private bool isLoadingMetrics = false;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadSportsAsync();
+        await LoadMetricsAsync();
     }
 
-    private async Task LoadSportsAsync()
+    private async Task LoadMetricsAsync()
     {
+        isLoadingMetrics = true;
         try
         {
-            var res = await SportService.GetSportsAsync();
-            if (res.Success && res.Data != null) sports = res.Data;
+            var userRes = await UserService.GetUsersAsync(pageSize: 1);
+            if (userRes.Success && userRes.Data != null)
+            {
+                totalUsers = userRes.Data.TotalCount;
+            }
+
+            var staffRes = await UserService.GetStaffUsersAsync(pageSize: 1);
+            if (staffRes.Success && staffRes.Data != null)
+            {
+                totalStaff = staffRes.Data.TotalCount;
+            }
         }
         catch { }
+        finally
+        {
+            isLoadingMetrics = false;
+        }
     }
 }

@@ -42,4 +42,9 @@ public class ConversationService : IConversationService
     {
         return await _apiClient.PostAsync<bool>($"conversations/{conversationId}/unblock");
     }
+
+    public async Task<ApiResponse<ConversationDetailDto>> GetOrCreateDirectConversationAsync(Guid targetUserId)
+    {
+        return await _apiClient.PostAsync<object, ConversationDetailDto>($"conversations/direct/{targetUserId}", new { });
+    }
 }

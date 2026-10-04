@@ -39,17 +39,11 @@ public class CoachSubscriptionPlanRepository : Repository<CoachSubscriptionPlan>
             .FirstOrDefaultAsync(p => p.CoachSubscriptionPlansId == id && p.IsActive == true, cancellationToken);
     }
 
-    public Task<(List<SubscriptionPriceHistoryItem> Items, int TotalCount)> GetPriceHistoryAsync(
-        Guid? planId,
-        string? keyword,
-        DateTime? fromDate,
-        DateTime? toDate,
-        int pageIndex,
-        int pageSize,
-        CancellationToken cancellationToken = default)
+    public async Task<(int Upgrades, int OrderDetails)> CountReferencesAsync(Guid planId, CancellationToken cancellationToken = default)
     {
-        var historyRepo = new SubscriptionPriceHistoryRepository(DbContext);
-        return historyRepo.GetPriceHistoryAsync(planId, keyword, fromDate, toDate, pageIndex, pageSize, cancellationToken);
+        var upgrades = await DbContext.Set<CoachUpgrade>().CountAsync(u => u.CoachSubscriptionPlansId == planId, cancellationToken);
+        var details = await DbContext.Set<OrderDetail>().CountAsync(d => d.CoachSubscriptionPlansId == planId, cancellationToken);
+        return (upgrades, details);
     }
 }
 

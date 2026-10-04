@@ -15,7 +15,9 @@ public interface IPostService
     Task<ApiResponse<PostReactionResponse>> ToggleLikeAsync(Guid postId);
     Task<ApiResponse<PostReportResponse>> ReportPostAsync(Guid postId, CreatePostReportRequest request);
     Task<ApiResponse<bool>> CheckPostReportedAsync(Guid postId);
-   
+    Task<ApiResponse<List<CommentDto>>> GetCommentsAsync(Guid postId);
+    Task<ApiResponse<CommentDto>> CreateCommentAsync(Guid postId, CreateCommentRequest request);
+    Task<ApiResponse<CommentDto>> CreateReplyAsync(Guid commentId, CreateReplyRequest request);
 }
 
 public class PostService : IPostService
@@ -142,6 +144,23 @@ public class PostService : IPostService
     public async Task<ApiResponse<bool>> CheckPostReportedAsync(Guid postId)
     {
         return await _apiClient.GetAsync<bool>($"posts/{postId}/reports/check");
+    }
+
+    public async Task<ApiResponse<List<CommentDto>>> GetCommentsAsync(Guid postId)
+    {
+        var response = await _apiClient.GetAsync<List<CommentDto>>($"posts/{postId}/comments");
+        response.Data ??= new List<CommentDto>();
+        return response;
+    }
+
+    public async Task<ApiResponse<CommentDto>> CreateCommentAsync(Guid postId, CreateCommentRequest request)
+    {
+        return await _apiClient.PostAsync<CreateCommentRequest, CommentDto>($"posts/{postId}/comments", request);
+    }
+
+    public async Task<ApiResponse<CommentDto>> CreateReplyAsync(Guid commentId, CreateReplyRequest request)
+    {
+        return await _apiClient.PostAsync<CreateReplyRequest, CommentDto>($"comments/{commentId}/replies", request);
     }
 
     private static List<PostDto> GetSamplePosts()

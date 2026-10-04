@@ -46,7 +46,6 @@ public partial class FitSocialDbContext : DbContext
     public virtual DbSet<Report> Reports { get; set; }
     public virtual DbSet<ReportMedium> ReportMedia { get; set; }
     public virtual DbSet<Review> Reviews { get; set; }
-    public virtual DbSet<Role> Roles { get; set; }
     public virtual DbSet<TermsAndPolicy> TermsAndPolicies { get; set; }
     public virtual DbSet<TrainingPackage> TrainingPackages { get; set; }
     public virtual DbSet<TrainingPlan> TrainingPlans { get; set; }
@@ -61,15 +60,6 @@ public partial class FitSocialDbContext : DbContext
     {
         modelBuilder
             .HasPostgresExtension("uuid-ossp");
-
-        // 1. Roles
-        modelBuilder.Entity<Role>(entity =>
-        {
-            entity.HasKey(e => e.RoleCode).HasName("Roles_pkey");
-            entity.ToTable("Roles");
-            entity.Property(e => e.RoleCode).HasMaxLength(8).HasColumnName("RoleCode");
-            entity.Property(e => e.RoleName).HasMaxLength(50).HasColumnName("RoleName");
-        });
 
         // 2. Locations
         modelBuilder.Entity<Location>(entity =>
@@ -175,13 +165,14 @@ public partial class FitSocialDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
 
-            entity.HasOne(d => d.Role).WithMany(p => p.Users)
-                .HasForeignKey(d => d.RoleCode)
-                .HasConstraintName("Users_RoleCode_fkey");
-
             entity.HasOne(d => d.LockedByNavigation).WithMany(p => p.InverseLockedByNavigation)
                 .HasForeignKey(d => d.LockedBy)
                 .HasConstraintName("Users_LockedBy_fkey");
+
+            // Unpaired scaffolded nav: Payout is reached via CoachProfile.Payouts
+            // (CoachId) and User.PayoutsProcessed (ProcessedBy). Ignoring User.Payouts
+            // prevents a shadow UserId FK that does not exist in the database.
+            entity.Ignore(e => e.Payouts);
         });
 
         // 7. CoachProfiles
@@ -556,6 +547,8 @@ public partial class FitSocialDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
 
+            entity.Ignore(e => e.Id);
+
             entity.HasOne(d => d.User1).WithMany(p => p.ConversationsAsUser1)
                 .HasForeignKey(d => d.User1Id)
                 .HasConstraintName("Conversations_User1ID_fkey");
@@ -592,6 +585,8 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
+
+            entity.Ignore(e => e.Id);
 
             entity.HasOne(d => d.Conversation).WithMany(p => p.Messages)
                 .HasForeignKey(d => d.ConversationId)
@@ -1142,6 +1137,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.ProcessedAt).HasColumnType("timestamp without time zone");
             entity.Property(e => e.ProcessedBy).HasColumnName("ProcessedBy");
             entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.TransactionRef).HasMaxLength(100);
             entity.Property(e => e.SystemCommissionAmount).HasPrecision(18, 2);
             entity.Property(e => e.TaxAmount).HasPrecision(18, 2);
             entity.Property(e => e.TotalGrossAmount).HasPrecision(18, 2);

@@ -404,30 +404,8 @@
     background: #fafcff;
 }
 
-.location-row.row-selected {
-    background: #f0f7ff;
-}
-
 .location-row:last-child td {
     border-bottom: none;
-}
-
-/* Checkbox Column */
-.col-check {
-    width: 44px;
-    text-align: center;
-    padding-right: 8px !important;
-}
-
-.table-checkbox,
-.row-checkbox {
-    width: 16px;
-    height: 16px;
-    border: 1.5px solid #cbd5e1;
-    border-radius: 4px;
-    cursor: pointer;
-    accent-color: #c2410c;
-    vertical-align: middle;
 }
 
 /* Location ID Column */

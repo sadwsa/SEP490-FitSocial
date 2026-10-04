@@ -12,11 +12,6 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
     {
     }
 
-    public Task<CoachProfile?> FindWithSportsByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
-    {
-        return FindWithDetailsByCoachIdAsync(coachId, cancellationToken);
-    }
-
     public Task<CoachProfile?> FindWithDetailsByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
         return DbSet

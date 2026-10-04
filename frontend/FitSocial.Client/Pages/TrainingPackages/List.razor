@@ -4,6 +4,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject FitSocial.Client.Services.Cart.ICartService CartService
 @inject IJSRuntime JS
 @using FitSocial.Client.Layout
 @using System.Security.Claims
@@ -11,6 +12,23 @@
 <PageTitle>My Training Packages - FitSocial</PageTitle>
 
 <div class="min-h-screen bg-gray-100 text-gray-800">
+    <!-- Floating Success Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-emerald-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <span>@toastSuccessMessage</span>
+            <button type="button" @onclick="() => toastSuccessMessage = null"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer">
+                &times;
+            </button>
+        </div>
+    }
+
     <AppHeader SearchTerm="@headerSearchTerm"
                OnSearchInput="HandleHeaderSearchInput"
                OnSearchKeyUp="HandleHeaderSearchKeyUp"
@@ -19,6 +37,7 @@
                UserName="@userName"
                UserInitials="@userInitials"
                UserRole="@userRole"
+               CartCount="@headerCartCount"
                OnLogout="HandleLogout" />
 
     <style>
@@ -162,7 +181,9 @@
                                 @foreach (var pkg in packages)
                                 {
                                     <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                                        <td class="p-4 text-sm font-bold text-gray-800">@pkg.Title</td>
+                                        <td class="p-4 text-sm font-bold text-gray-800">
+                                            <a href="/training-packages/@pkg.PackageId" class="hover:text-[#FF5500] transition-colors">@pkg.Title</a>
+                                        </td>
                                         <td class="p-4 text-sm text-gray-600">@(pkg.DurationDays >= 7 && pkg.DurationDays % 7 == 0 ? $"{pkg.DurationDays / 7} Weeks" : $"{pkg.DurationDays} Days")</td>
                                         <td class="p-4 text-sm font-semibold text-[#FF5500]">@($"{pkg.Price:N0} đ")</td>
 
@@ -180,11 +201,33 @@
                                                 </span>
                                             }
                                         </td>
-                                        <td class="p-4 text-sm text-center text-gray-400">
-                                            <a href="/training-packages/edit/@pkg.PackageId" class="text-[#FF8C00] hover:text-[#FF5500] font-semibold hover:underline">Edit</a> |
-                                        <button @onclick="() => PromptDelete(pkg.PackageId)" class="text-red-500 hover:text-red-600 font-semibold hover:underline cursor-pointer">Delete</button>
-
-
+                                        <td class="p-4 text-sm text-center space-x-2 whitespace-nowrap">
+                                            <a href="/training-packages/@pkg.PackageId" class="text-gray-600 hover:text-[#FF5500] hover:underline font-semibold text-xs">View</a>
+                                            <button type="button"
+                                                    @onclick="() => QuickAddToCart(pkg)"
+                                                    disabled="@(addingPackageId == pkg.PackageId)"
+                                                    class="inline-flex items-center gap-1.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-xs hover:shadow-sm hover:opacity-95 transition cursor-pointer disabled:opacity-50">
+                                                @if (addingPackageId == pkg.PackageId)
+                                                {
+                                                    <span class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                                    <span>Adding...</span>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                                                    </svg>
+                                                    <span>Add to Cart</span>
+                                                }
+                                            </button>
+                                            <AuthorizeView Roles="COACH">
+                                                <Authorized>
+                                                    <span class="text-gray-300">|</span>
+                                                    <a href="/training-packages/edit/@pkg.PackageId" class="text-[#FF8C00] hover:text-[#FF5500] font-semibold hover:underline text-xs">Edit</a>
+                                                    <span class="text-gray-300">|</span>
+                                                    <button @onclick="() => PromptDelete(pkg.PackageId)" class="text-red-500 hover:text-red-600 font-semibold hover:underline cursor-pointer text-xs">Delete</button>
+                                                </Authorized>
+                                            </AuthorizeView>
                                         </td>
                                     </tr>
                                 }
@@ -230,16 +273,73 @@
     private bool isSubmitting = false;
     private string? createErrorMessage;
 
-    // Header state
+    // Header & Cart state
     private string? headerSearchTerm = "";
     private string userName = "User";
     private string userInitials = "U";
     private string userRole = "Trainee";
+    private int headerCartCount = 0;
+    private string? toastSuccessMessage;
+    private Guid? addingPackageId;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadUserInfoAsync();
         await LoadPackages();
+        await LoadCartCountAsync();
+    }
+
+    private async Task LoadCartCountAsync()
+    {
+        try
+        {
+            var res = await CartService.GetCartCountAsync();
+            if (res.Success)
+            {
+                headerCartCount = res.Data;
+            }
+        }
+        catch
+        {
+            // Ignore cart count fetch errors on list page
+        }
+    }
+
+    private async Task QuickAddToCart(TrainingPackageResponseDto pkg)
+    {
+        addingPackageId = pkg.PackageId;
+        toastSuccessMessage = null;
+        try
+        {
+            var response = await CartService.AddToCartAsync(new FitSocial.Client.Models.Cart.AddToCartRequestDto
+            {
+                PackageId = pkg.PackageId,
+                Quantity = 1
+            });
+
+            if (response.Success)
+            {
+                toastSuccessMessage = $"Added \"{pkg.Title}\" to cart!";
+                await LoadCartCountAsync();
+                _ = Task.Delay(4000).ContinueWith(_ =>
+                {
+                    toastSuccessMessage = null;
+                    InvokeAsync(StateHasChanged);
+                });
+            }
+            else
+            {
+                errorMessage = response.Message ?? "Failed to add to cart.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            addingPackageId = null;
+        }
     }
     
     private void ToggleCreateForm()

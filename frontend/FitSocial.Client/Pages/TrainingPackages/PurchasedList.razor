@@ -77,7 +77,7 @@
                     <ul class="divide-y divide-gray-100">
                         @foreach (var pkg in packages)
                         {
-                            <li class="p-5 hover:bg-gray-50 transition duration-200 cursor-pointer flex flex-col sm:flex-row justify-between sm:items-center gap-4" @onclick="() => ViewDetails(pkg.PackageId)">
+                            <li class="p-5 hover:bg-gray-50 transition duration-200 cursor-pointer flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                                 <div>
                                     <h3 class="text-lg font-bold text-gray-800">@pkg.Title</h3>
                                     <p class="text-sm text-gray-500 mb-2">Coach: <span class="font-semibold text-gray-700">@pkg.CoachName</span></p>

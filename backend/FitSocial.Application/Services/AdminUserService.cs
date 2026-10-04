@@ -164,6 +164,11 @@ public class AdminUserService : IAdminUserService
                 return ApiResponseDto<AdminUserDto>.Fail("Full name must be at least 2 characters.");
             }
 
+            if (trimmedFullName.Any(char.IsDigit))
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Full name cannot contain numbers.");
+            }
+
             if (string.IsNullOrWhiteSpace(request.Email))
             {
                 return ApiResponseDto<AdminUserDto>.Fail("Email is required.");
@@ -188,6 +193,16 @@ public class AdminUserService : IAdminUserService
             var trimmedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
             if (!string.IsNullOrWhiteSpace(trimmedPhone))
             {
+                if (trimmedPhone.Any(char.IsLetter))
+                {
+                    return ApiResponseDto<AdminUserDto>.Fail("Phone number cannot contain letters.");
+                }
+
+                if (!System.Text.RegularExpressions.Regex.IsMatch(trimmedPhone, @"^0\d{9}$"))
+                {
+                    return ApiResponseDto<AdminUserDto>.Fail("Phone number must be a valid 10-digit number starting with 0.");
+                }
+
                 if (await _userRepository.ExistsByPhoneAsync(trimmedPhone, cancellationToken: cancellationToken))
                 {
                     return ApiResponseDto<AdminUserDto>.Fail("Phone number is already registered.");
@@ -219,6 +234,25 @@ public class AdminUserService : IAdminUserService
         catch (Exception ex)
         {
             return ApiResponseDto<AdminUserDto>.Fail($"Error creating staff account: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<bool>> CheckEmailExistsAsync(string email, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return ApiResponseDto<bool>.Fail("Email cannot be empty.");
+            }
+
+            var normalizedEmail = email.Trim().ToLowerInvariant();
+            var exists = await _userRepository.ExistsByEmailAsync(normalizedEmail, cancellationToken);
+            return ApiResponseDto<bool>.Ok(exists, exists ? "Email is already registered." : "Email is available.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<bool>.Fail($"Error checking email availability: {ex.Message}");
         }
     }
 

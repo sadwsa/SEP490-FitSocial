@@ -29,4 +29,6 @@ public interface IAdminUserService
     Task<ApiResponseDto<AdminUserDto>> WarnUserAsync(Guid userId, string? reason = null, Guid? staffId = null, CancellationToken cancellationToken = default);
 
     Task<ApiResponseDto<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequestDto request, CancellationToken cancellationToken = default);
+
+    Task<ApiResponseDto<bool>> CheckEmailExistsAsync(string email, CancellationToken cancellationToken = default);
 }

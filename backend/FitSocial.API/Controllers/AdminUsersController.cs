@@ -86,6 +86,29 @@ public class AdminUsersController : ControllerBase
     }
 
     /// <summary>
+    /// Check whether an email is already registered in the system (Admin only)
+    /// </summary>
+    [HttpGet("check-email")]
+    [HttpGet("~/api/admin/staff/check-email")]
+    [Authorize(Roles = RoleConstants.Admin)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CheckEmail([FromQuery] string email, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return BadRequest(ApiResponseDto<bool>.Fail("Email query parameter is required."));
+        }
+
+        var result = await _adminUserService.CheckEmailExistsAsync(email, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Lock or unlock a user account (Admin / Staff only)
     /// </summary>
     [HttpPut("{userId:guid}/lock")]

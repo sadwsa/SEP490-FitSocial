@@ -350,6 +350,74 @@ public class AdminUserServiceTests
     }
 
     [Fact]
+    public async Task CreateStaffAccountAsync_FullNameContainsNumbers_ShouldReturnFailure()
+    {
+        // Arrange
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "John Doe 123",
+            Email = "johndoe123@fitsocial.com",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!"
+        };
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("cannot contain numbers", result.Message, StringComparison.OrdinalIgnoreCase);
+        _userRepoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_PhoneNumberContainsLetters_ShouldReturnFailure()
+    {
+        // Arrange
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "Valid Name",
+            Email = "valid@fitsocial.com",
+            PhoneNumber = "090123abc",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!"
+        };
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("cannot contain letters", result.Message, StringComparison.OrdinalIgnoreCase);
+        _userRepoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_PhoneNumberInvalidFormat_ShouldReturnFailure()
+    {
+        // Arrange
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "Valid Name",
+            Email = "valid@fitsocial.com",
+            PhoneNumber = "12345",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!"
+        };
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("valid 10-digit number", result.Message, StringComparison.OrdinalIgnoreCase);
+        _userRepoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task CreateStaffAccountAsync_WhenExceptionOccurs_ShouldReturnFailureResult()
     {
         // Arrange
@@ -371,5 +439,51 @@ public class AdminUserServiceTests
         Assert.NotNull(result);
         Assert.False(result.Success);
         Assert.Contains("Database write error", result.Message);
+    }
+
+    [Fact]
+    public async Task CheckEmailExistsAsync_WhenEmailExists_ShouldReturnTrueWithRegisteredMessage()
+    {
+        // Arrange
+        _userRepoMock.Setup(r => r.ExistsByEmailAsync("registered@fitsocial.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _service.CheckEmailExistsAsync("registered@fitsocial.com");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.True(result.Data);
+        Assert.Equal("Email is already registered.", result.Message);
+    }
+
+    [Fact]
+    public async Task CheckEmailExistsAsync_WhenEmailDoesNotExist_ShouldReturnFalseWithAvailableMessage()
+    {
+        // Arrange
+        _userRepoMock.Setup(r => r.ExistsByEmailAsync("available@fitsocial.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await _service.CheckEmailExistsAsync("available@fitsocial.com");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.False(result.Data);
+        Assert.Equal("Email is available.", result.Message);
+    }
+
+    [Fact]
+    public async Task CheckEmailExistsAsync_WhenEmailIsEmpty_ShouldReturnFailure()
+    {
+        // Act
+        var result = await _service.CheckEmailExistsAsync("   ");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Email cannot be empty.", result.Message);
     }
 }

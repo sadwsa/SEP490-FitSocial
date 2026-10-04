@@ -21,9 +21,6 @@
             <button type="button" class="side-item @(IsActive("/admin/users") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/users")'>
                 <AppIcon Name="person" /><span>User Accounts</span>
             </button>
-            <button type="button" class="side-item @(IsActive("/admin/sports") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/sports")'>
-                <AppIcon Name="dumbbell" /><span>Sport Categories</span>
-            </button>
             <button type="button" class="side-item @(IsActive("/admin/coach-subscription-plans") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-subscription-plans")'>
                 <AppIcon Name="trophy" /><span>Coach Plans</span>
             </button>
@@ -32,6 +29,9 @@
             </button>
             <button type="button" class="side-item @(IsActive("/admin/reports") || IsActive("/reports") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/reports")'>
                 <AppIcon Name="flag" /><span>Reports</span>
+            </button>
+            <button type="button" class="side-item @(IsActive("/admin/payouts") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payouts")'>
+                <AppIcon Name="chart" /><span>Coach Payouts</span>
             </button>
 
             <AuthorizeView Roles="ADMIN">

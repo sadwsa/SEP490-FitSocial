@@ -38,7 +38,13 @@ public class NotificationService : INotificationService
         try
         {
             var preview = message.Content;
-            if (!string.IsNullOrEmpty(preview) && preview.Length > 100)
+            if (string.IsNullOrWhiteSpace(preview))
+            {
+                preview = string.Equals(message.MessageType, "VIDEO", StringComparison.OrdinalIgnoreCase)
+                    ? "[Video]"
+                    : (string.Equals(message.MessageType, "IMAGE", StringComparison.OrdinalIgnoreCase) ? "[Photo]" : "[Attachment]");
+            }
+            else if (preview.Length > 100)
             {
                 preview = preview.Substring(0, 97) + "...";
             }
@@ -56,7 +62,7 @@ public class NotificationService : INotificationService
 
                 // Idempotency: avoid creating duplicate notification for the same recipient + message + type
                 var exists = await _context.Notifications
-                    .AnyAsync(n => n.UserId == recipientId && n.ReferenceId == message.Id && n.Type == "NewMessage");
+                    .AnyAsync(n => n.UserId == recipientId && n.ReferenceId == message.MessageId && n.Type == "NewMessage");
 
                 Guid notificationId;
                 DateTime createdAt = message.CreatedAt ?? DateTime.UtcNow;
@@ -71,7 +77,7 @@ public class NotificationService : INotificationService
                         ActorId = message.SenderId,
                         Type = "NewMessage",
                         Description = preview,
-                        ReferenceId = message.Id,
+                        ReferenceId = message.MessageId,
                         IsRead = false,
                         CreatedAt = createdAt
                     };
@@ -82,7 +88,7 @@ public class NotificationService : INotificationService
                 else
                 {
                     var existing = await _context.Notifications
-                        .FirstOrDefaultAsync(n => n.UserId == recipientId && n.ReferenceId == message.Id && n.Type == "NewMessage");
+                        .FirstOrDefaultAsync(n => n.UserId == recipientId && n.ReferenceId == message.MessageId && n.Type == "NewMessage");
                     notificationId = existing?.Id ?? Guid.NewGuid();
                     createdAt = existing?.CreatedAt ?? createdAt;
                 }
@@ -96,7 +102,7 @@ public class NotificationService : INotificationService
                     SenderName = senderName,
                     SenderAvatar = senderAvatar,
                     ConversationId = message.ConversationId,
-                    MessageId = message.Id,
+                    MessageId = message.MessageId,
                     MessagePreview = preview,
                     CreatedAt = createdAt,
                     IsRead = false
@@ -114,7 +120,7 @@ public class NotificationService : INotificationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating and sending notifications for message {MessageId}", message.Id);
+            _logger.LogError(ex, "Error creating and sending notifications for message {MessageId}", message.MessageId);
         }
     }
 
@@ -146,8 +152,8 @@ public class NotificationService : INotificationService
                 messagesDict = await _context.Messages
                     .AsNoTracking()
                     .Include(m => m.Sender)
-                    .Where(m => messageIds.Contains(m.Id))
-                    .ToDictionaryAsync(m => m.Id);
+                    .Where(m => messageIds.Contains(m.MessageId))
+                    .ToDictionaryAsync(m => m.MessageId);
             }
 
             var dtos = new List<NotificationDto>();
@@ -167,10 +173,16 @@ public class NotificationService : INotificationService
                     dto.SenderName = msg.Sender?.FullName ?? msg.Sender?.Email ?? "FitSocial User";
                     dto.SenderAvatar = msg.Sender?.AvatarUrl;
                     dto.ConversationId = msg.ConversationId;
-                    dto.MessageId = msg.Id;
+                    dto.MessageId = msg.MessageId;
 
                     var preview = msg.Content;
-                    if (!string.IsNullOrEmpty(preview) && preview.Length > 100)
+                    if (string.IsNullOrWhiteSpace(preview))
+                    {
+                        preview = string.Equals(msg.MessageType, "VIDEO", StringComparison.OrdinalIgnoreCase)
+                            ? "[Video]"
+                            : (string.Equals(msg.MessageType, "IMAGE", StringComparison.OrdinalIgnoreCase) ? "[Photo]" : "[Attachment]");
+                    }
+                    else if (preview.Length > 100)
                     {
                         preview = preview.Substring(0, 97) + "...";
                     }

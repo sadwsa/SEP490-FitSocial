@@ -37,4 +37,19 @@ public class CoachService : ICoachService
     {
         return await _apiClient.GetAsync<List<TopCoachDto>>($"{BaseEndpoint}/top?count={count}");
     }
+    public async Task<FitSocial.Client.Models.Common.ApiResponse<bool>> SubmitReviewAsync(Guid coachId, FitSocial.Client.Models.Coaches.CreateReviewDto dto)
+    {
+        return await _apiClient.PostAsync<FitSocial.Client.Models.Coaches.CreateReviewDto, bool>($"{BaseEndpoint}/{coachId}/reviews", dto);
+    }
+    public async Task<FitSocial.Client.Models.Common.ApiResponse<bool>> UpdateReviewAsync(Guid reviewId, FitSocial.Client.Models.Coaches.UpdateReviewDto dto)
+    {
+        return await _apiClient.PutAsync<FitSocial.Client.Models.Coaches.UpdateReviewDto, bool>($"{BaseEndpoint}/reviews/{reviewId}", dto);
+    }
+
+    public async Task<FitSocial.Client.Models.Common.ApiResponse<bool>> DeleteReviewAsync(Guid reviewId)
+    {
+        return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/reviews/{reviewId}");
+    }
+
+
 }

@@ -730,3 +730,50 @@
         grid-template-columns: 1fr;
     }
 }
+
+.widgets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.widget {
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: #fff;
+}
+
+.widget-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+}
+
+.widget-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #1e293b;
+}
+
+.widget-delta {
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+.widget-delta.up {
+    color: #15803d;
+}
+
+@media (max-width: 640px) {
+    .widgets {
+        grid-template-columns: 1fr;
+    }
+}
+

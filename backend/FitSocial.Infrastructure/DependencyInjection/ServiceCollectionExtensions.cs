@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICoachService, CoachService>();
         services.AddScoped<ITrainingPackageService, TrainingPackageService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
+        services.AddScoped<ICartService, CartService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<ITermsService, TermsService>();
         services.AddScoped<IEkycService, ViettelEkycService>();
@@ -38,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRefundRequestService, RefundRequestService>();
         services.AddScoped<IPostCommentService, PostCommentService>();
         services.AddScoped<IPaymentGatewayConfigService, PaymentGatewayConfigService>();
+        services.AddScoped<IPayoutService, PayoutService>();
         services.AddScoped<ICoachDashboardService, CoachDashboardService>();
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<ISubscriptionPriceHistoryService, SubscriptionPriceHistoryService>();
@@ -65,6 +67,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOtpService, OtpService>();
         services.AddScoped<ITokenBlacklistService, TokenBlacklistService>();
         services.AddScoped<IPaymentGateway, PayOSGateway>();
+        services.AddScoped<IBankTransferGateway, PayOSPayoutGateway>();
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<INotificationService, NotificationService>();
 
@@ -88,6 +91,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPostReactionRepository, PostReactionRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
+        services.AddScoped<IPayoutRepository, PayoutRepository>();
+        services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<ICartRepository, CartRepository>();
+        services.AddScoped<ITrainingPlanRepository, TrainingPlanRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<ICoachSubscriptionPlanRepository, CoachSubscriptionPlanRepository>();
         services.AddScoped<IRefundRequestRepository, RefundRequestRepository>();
@@ -97,6 +104,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ISubscriptionPriceHistoryRepository, SubscriptionPriceHistoryRepository>();
+        services.AddScoped<IReviewRepository, ReviewRepository>();
 
         return services;
 

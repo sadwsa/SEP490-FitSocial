@@ -106,6 +106,7 @@
             "coaches" => rootSegment == "coaches",
             "coach-dashboard" => rootSegment == "coach" && (segments.Length == 1 || segments.Contains("dashboard")),
             "messages" => rootSegment == "messages",
+            "cart" => rootSegment == "cart",
             "profile" => rootSegment == "profile" && segments.Length == 1,
             "reports" => rootSegment == "reports" || (rootSegment == "admin" && relativePath.Contains("reports")),
            

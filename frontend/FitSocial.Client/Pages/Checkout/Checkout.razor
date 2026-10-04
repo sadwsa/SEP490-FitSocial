@@ -1,0 +1,550 @@
+@page "/checkout"
+@layout EmptyLayout
+@implements IDisposable
+@inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
+@inject FitSocial.Client.Services.Cart.ICartService CartService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject IJSRuntime JS
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Cart
+@using FitSocial.Client.Models.Payments
+@using System.Security.Claims
+
+<PageTitle>Checkout &amp; Package Activation - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
+                align-items: start !important;
+            }
+            .home-left-sidebar { justify-self: start !important; }
+            .home-center-feed { justify-self: center !important; width: 100% !important; max-width: 42rem !important; min-width: 0 !important; }
+            .home-right-sidebar { justify-self: center !important; }
+        }
+    </style>
+
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="cart" Class="home-left-sidebar" />
+
+        <!-- Center Column -->
+        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-10">
+            @if (step == CheckoutStep.Qr && paymentLink != null && preview != null)
+            {
+                <h2 class="text-xl font-bold text-gray-800">Scan QR Code with Banking App</h2>
+                <div class="bg-white rounded-xl shadow-sm p-5 sm:p-8 flex flex-col items-center">
+                    <p class="font-bold text-gray-900 text-sm mb-4">Scan with your banking app to pay</p>
+
+                    <div class="border border-gray-200 w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center mb-4 bg-white">
+                        @if (!string.IsNullOrWhiteSpace(QrImageUrl))
+                        {
+                            <img src="@QrImageUrl" alt="VietQR payment code" class="w-60 h-60 sm:w-64 sm:h-64 object-contain" />
+                        }
+                        else
+                        {
+                            <div class="text-center text-gray-400 text-sm">
+                                <p>[ QR CODE IMAGE ]</p>
+                                <p>PayOS Gateway</p>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="text-lg font-black text-gray-900 mb-5">@paymentLink.Amount.ToString("N0") VND</div>
+
+                    <div class="w-full border border-gray-100 bg-gray-50/60 rounded-xl px-5 py-4 mb-3 flex flex-col gap-3 text-sm">
+                        <div><span class="text-gray-500 text-xs">Content </span><span class="text-gray-900 font-semibold text-xs">TRAINEE PACKAGE PAYMENT</span></div>
+                        <div>
+                            <span class="text-gray-500 text-xs">Account </span>
+                            <span class="text-gray-900 font-semibold text-xs">@paymentLink.AccountNumber (@paymentLink.AccountName)</span>
+                        </div>
+                        <div><span class="text-gray-500 text-xs">Order code </span><span class="text-gray-900 font-semibold text-xs">@paymentLink.OrderCode</span></div>
+                    </div>
+
+                    <p class="text-xs text-gray-400 mb-2">Keep exact amount and content. Expires in about 15 minutes.</p>
+                    @if (isAutoChecking)
+                    {
+                        <p class="text-xs text-[#EA580C] font-semibold mb-4 flex items-center gap-1.5">
+                            <span class="w-3 h-3 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin inline-block"></span>
+                            Auto-checking payment status...
+                        </p>
+                    }
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="w-full bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-4">@errorMessage</div>
+                    }
+                    @if (!string.IsNullOrEmpty(infoMessage))
+                    {
+                        <div class="w-full bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3 rounded-xl mb-4">@infoMessage</div>
+                    }
+
+                    <div class="w-full flex flex-col sm:flex-row gap-3">
+                        <button @onclick="HandleCancelOrder" disabled="@isProcessing"
+                                class="sm:w-36 py-3 bg-gray-100 text-gray-700 font-semibold text-sm rounded-xl hover:bg-gray-200 transition disabled:opacity-60 cursor-pointer">
+                            @(isProcessing ? "..." : "Cancel order")
+                        </button>
+                        <button @onclick="HandleVerifyPaid" disabled="@isProcessing"
+                                class="flex-1 py-3 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white font-bold text-sm rounded-xl shadow-md shadow-orange-500/25 hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-60 cursor-pointer">
+                            @if (isProcessing)
+                            {
+                                <span>Verifying payment with the bank...</span>
+                            }
+                            else
+                            {
+                                <span>I've Paid — Verify Now -&gt;</span>
+                            }
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(paymentLink.CheckoutUrl))
+                    {
+                        <p class="text-xs text-gray-400 mt-4">QR not loading? <a href="@paymentLink.CheckoutUrl" target="_blank" rel="noopener" class="text-[#EA580C] underline">Open the full PayOS checkout</a></p>
+                    }
+                </div>
+            }
+            else
+            {
+                <h2 class="text-xl font-bold text-gray-800">Checkout &amp; Package Activation</h2>
+                <div class="bg-white rounded-xl shadow-sm p-5 sm:p-8">
+                    @if (isLoading)
+                    {
+                        <div class="flex flex-col items-center justify-center py-16">
+                            <div class="w-10 h-10 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-4"></div>
+                            <p class="text-gray-500 font-medium text-sm">Preparing your order...</p>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(errorMessage) && preview == null)
+                    {
+                        <div class="bg-red-50 border border-red-200 text-red-700 p-6 rounded-xl text-center">
+                            <p class="font-bold mb-1">Could not prepare checkout</p>
+                            <p class="text-sm mb-4">@errorMessage</p>
+                            <div class="flex items-center justify-center gap-3">
+                                <a href="cart" class="px-5 py-2 bg-gray-100 text-sm font-semibold rounded-lg hover:bg-gray-200 transition">Back to Cart</a>
+                                <button @onclick="LoadCheckoutData" class="px-5 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white text-sm font-semibold rounded-lg hover:shadow-md transition cursor-pointer">Try Again</button>
+                            </div>
+                        </div>
+                    }
+                    else if (preview != null)
+                    {
+                        <h3 class="font-bold text-gray-900 mb-6">Training Package Order Summary</h3>
+
+                        @if (cartItems.Count > 1)
+                        {
+                            <div class="mb-5">
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-2">Select package to pay (@cartItems.Count in cart)</label>
+                                <select value="@selectedPackageId" @onchange="OnSelectPackageChanged" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#FF5500]">
+                                    @foreach (var c in cartItems)
+                                    {
+                                        <option value="@c.PackageId">@c.Title — @c.Price.ToString("N0") VND (@c.CoachName)</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+
+                        <div class="flex items-start justify-between gap-4 mb-2">
+                            <p class="font-bold text-gray-900 text-sm">@preview.PackageTitle (@preview.DurationDays Days)</p>
+                            <p class="font-bold text-gray-900 text-sm whitespace-nowrap">@preview.PriceVnd.ToString("N0") VND</p>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-1.5">Assigned Coach: @preview.CoachName</p>
+                        <p class="text-xs text-gray-500 mb-6">Trainee: @preview.BuyerName (@preview.BuyerEmail)</p>
+
+                        <hr class="border-gray-100 mb-6" />
+
+                        <div class="flex items-center justify-between mb-8">
+                            <p class="font-bold text-gray-900 text-sm">Total Amount to Pay:</p>
+                            <p class="font-black text-[#EA580C]">@preview.PriceVnd.ToString("N0") VND</p>
+                        </div>
+
+                        <p class="font-bold text-gray-900 text-sm mb-3">Select Payment Method</p>
+                        <div class="flex flex-col gap-3 mb-10">
+                            <label class="border-2 @(paymentMethod == "vietqr" ? "border-[#FF5500] bg-orange-50/50" : "border-gray-200") rounded-xl px-4 py-3.5 flex items-center gap-2.5 cursor-pointer transition">
+                                <input type="radio" name="paymethod" checked="@(paymentMethod == "vietqr")" @onchange='() => paymentMethod = "vietqr"' class="accent-[#FF5500]" />
+                                <span class="font-bold text-sm text-gray-900">VietQR (PayOS - Instant Bank Transfer)</span>
+                            </label>
+                            <label class="border border-gray-100 bg-gray-50 rounded-xl px-4 py-3.5 flex items-center gap-2.5 opacity-60 cursor-not-allowed">
+                                <input type="radio" disabled class="accent-gray-300" />
+                                <span class="text-sm text-gray-400">Credit / Debit Card (Visa/Mastercard) - Coming soon</span>
+                            </label>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-4">@errorMessage</div>
+                        }
+                        @if (!string.IsNullOrEmpty(infoMessage))
+                        {
+                            <div class="bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3 rounded-xl mb-4">@infoMessage</div>
+                        }
+
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <a href="cart" class="sm:w-40 py-3 bg-gray-100 text-center text-sm font-semibold text-gray-700 rounded-xl hover:bg-gray-200 transition">&lt;- Back to Cart</a>
+                            <button @onclick="HandleProceedToPay" disabled="@isProcessing"
+                                    class="flex-1 py-3 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white font-bold text-sm rounded-xl shadow-md shadow-orange-500/25 hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-60 cursor-pointer">
+                                @if (isProcessing)
+                                {
+                                    <span>Creating VietQR code...</span>
+                                }
+                                else
+                                {
+                                    <span>Proceed to Pay @preview.PriceVnd.ToString("N0") VND -&gt;</span>
+                                }
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        <!-- Right Sidebar (Empty) -->
+        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
+    </div>
+</div>
+
+@code {
+    private enum CheckoutStep { Summary, Qr }
+
+    [SupplyParameterFromQuery(Name = "packageId")]
+    public Guid? PackageId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "orderCode")]
+    public long? OrderCodeQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "cancel")]
+    public bool? CancelledQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "code")]
+    public string? PayOsCode { get; set; }
+
+    private CheckoutStep step = CheckoutStep.Summary;
+    private PackagePurchasePreview? preview;
+    private PackagePaymentLink? paymentLink;
+    private List<CartItemDto> cartItems = new();
+    private Guid selectedPackageId = Guid.Empty;
+    private string paymentMethod = "vietqr";
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private bool isAutoChecking = false;
+    private string? errorMessage;
+    private string? infoMessage;
+    private CancellationTokenSource? pollCts;
+
+    private string? headerSearchTerm = "";
+    private string userName = "User";
+    private string userInitials = "U";
+    private string userRole = "Trainee";
+
+    private string QrImageUrl
+    {
+        get
+        {
+            var qr = paymentLink?.QrCode ?? "";
+            if (string.IsNullOrWhiteSpace(qr)) return "";
+            if (qr.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                qr.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                return qr;
+            }
+            return $"https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={Uri.EscapeDataString(qr)}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        await LoadCheckoutData();
+
+        // PayOS cancel redirect lands here: ?cancel=true&orderCode=xxx
+        if ((CancelledQuery == true || string.Equals(PayOsCode, "99", StringComparison.OrdinalIgnoreCase))
+            && OrderCodeQuery.HasValue && OrderCodeQuery.Value > 0)
+        {
+            await CancelOrderByCode(OrderCodeQuery.Value);
+        }
+    }
+
+    public void Dispose()
+    {
+        StopAutoVerify();
+    }
+
+    private void StartAutoVerify()
+    {
+        StopAutoVerify();
+        pollCts = new CancellationTokenSource();
+        isAutoChecking = true;
+        _ = AutoVerifyLoopAsync(pollCts.Token);
+    }
+
+    private void StopAutoVerify()
+    {
+        try { pollCts?.Cancel(); } catch { }
+        try { pollCts?.Dispose(); } catch { }
+        pollCts = null;
+        isAutoChecking = false;
+    }
+
+    /// <summary>
+    /// Polls PayOS every few seconds so a successful transfer
+    /// automatically moves to the success page (no manual click needed).
+    /// </summary>
+    private async Task AutoVerifyLoopAsync(CancellationToken token)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
+            while (await timer.WaitForNextTickAsync(token))
+            {
+                if (paymentLink == null || step != CheckoutStep.Qr) break;
+
+                FitSocial.Client.Models.Common.ApiResponse<FitSocial.Client.Models.Orders.OrderDto>? res = null;
+                try
+                {
+                    res = await CheckoutService.CompleteAsync(paymentLink.OrderCode);
+                }
+                catch
+                {
+                    continue; // transient network error -> keep polling
+                }
+
+                if (token.IsCancellationRequested) break;
+
+                if (res != null && res.Success && res.Data != null)
+                {
+                    var orderId = res.Data.OrderId;
+                    var orderCode = paymentLink.OrderCode;
+                    await InvokeAsync(() =>
+                    {
+                        StopAutoVerify();
+                        CartService.NotifyCartChanged();
+                        Navigation.NavigateTo($"checkout/success?orderId={orderId}&orderCode={orderCode}");
+                    });
+                    break;
+                }
+                // Not paid yet -> keep polling silently
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch { }
+    }
+
+    private async Task LoadCheckoutData()
+    {
+        isLoading = true;
+        errorMessage = null;
+        infoMessage = null;
+        preview = null;
+        paymentLink = null;
+        step = CheckoutStep.Summary;
+
+        try
+        {
+            if (PackageId.HasValue && PackageId.Value != Guid.Empty)
+            {
+                selectedPackageId = PackageId.Value;
+                var res = await CheckoutService.PrepareAsync(selectedPackageId);
+                if (res.Success && res.Data != null)
+                {
+                    preview = res.Data;
+                }
+                else
+                {
+                    errorMessage = res.Message ?? "Could not prepare the order.";
+                }
+            }
+            else
+            {
+                var cartRes = await CartService.GetCartAsync();
+                if (!cartRes.Success || cartRes.Data == null)
+                {
+                    errorMessage = cartRes.Message ?? "Failed to load cart.";
+                }
+                else
+                {
+                    cartItems = cartRes.Data.Items.Where(i => i.IsAvailable).ToList();
+                    if (cartItems.Count == 0)
+                    {
+                        errorMessage = cartRes.Data.Items.Count == 0
+                            ? "Your cart is empty. Add a training package first."
+                            : "All items in your cart are currently unavailable (inactive or your own package). Please refresh your cart.";
+                    }
+                    else
+                    {
+                        selectedPackageId = cartItems[0].PackageId;
+                        var res = await CheckoutService.PrepareAsync(selectedPackageId);
+                        if (res.Success && res.Data != null)
+                        {
+                            preview = res.Data;
+                        }
+                        else
+                        {
+                            errorMessage = res.Message ?? "Could not prepare the order.";
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+
+        isLoading = false;
+    }
+
+    private async Task OnSelectPackageChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id) && id != Guid.Empty && id != selectedPackageId)
+        {
+            selectedPackageId = id;
+            errorMessage = null;
+            var res = await CheckoutService.PrepareAsync(selectedPackageId);
+            if (res.Success && res.Data != null)
+            {
+                preview = res.Data;
+            }
+            else
+            {
+                errorMessage = res.Message ?? "Could not prepare the order.";
+            }
+        }
+    }
+
+    private async Task HandleProceedToPay()
+    {
+        if (preview == null || isProcessing) return;
+        errorMessage = null;
+        infoMessage = null;
+        isProcessing = true;
+
+        try
+        {
+            var res = await CheckoutService.CreateLinkAsync(preview.PackageId);
+            if (res.Success && res.Data != null && !string.IsNullOrWhiteSpace(res.Data.QrCode))
+            {
+                paymentLink = res.Data;
+                step = CheckoutStep.Qr;
+                StartAutoVerify();
+            }
+            else
+            {
+                errorMessage = res.Message ?? "Could not create the VietQR code.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+
+        isProcessing = false;
+    }
+
+    private async Task HandleVerifyPaid()
+    {
+        if (paymentLink == null || isProcessing) return;
+        errorMessage = null;
+        infoMessage = null;
+        isProcessing = true;
+
+        try
+        {
+            var res = await CheckoutService.CompleteAsync(paymentLink.OrderCode);
+            if (res.Success && res.Data != null)
+            {
+                StopAutoVerify();
+                CartService.NotifyCartChanged();
+                Navigation.NavigateTo($"checkout/success?orderId={res.Data.OrderId}&orderCode={paymentLink.OrderCode}");
+                return;
+            }
+
+            errorMessage = res.Message ?? "Payment has not been completed yet.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+
+        isProcessing = false;
+    }
+
+    private async Task HandleCancelOrder()
+    {
+        if (paymentLink == null || isProcessing) return;
+        StopAutoVerify();
+        await CancelOrderByCode(paymentLink.OrderCode);
+        paymentLink = null;
+        step = CheckoutStep.Summary;
+    }
+
+    private async Task CancelOrderByCode(long orderCode)
+    {
+        isProcessing = true;
+        try
+        {
+            var res = await CheckoutService.CancelAsync(orderCode);
+            infoMessage = res.Success
+                ? "Order cancelled. The package remains in your cart."
+                : res.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+        isProcessing = false;
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
+                userRole = isCoach ? "Coach" : "Trainee";
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+            else
+            {
+                Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
+            }
+        }
+        catch
+        {
+            userInitials = "U";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        StopAutoVerify();
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e) { headerSearchTerm = e.Value?.ToString(); }
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
+    private void ExecuteHeaderSearch() { }
+    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
+}

@@ -62,7 +62,7 @@
                         <th>Role</th>
                         <th>Status</th>
                         <th>Created Date</th>
-                        <th class="text-end" style="width: 100px;">Actions</th>
+                        <th class="text-end" style="width: 150px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -85,8 +85,28 @@
                             <td>
                                 @(u.CreatedAt?.ToString("MMM dd, yyyy") ?? "-")
                             </td>
-                            <td class="text-end">
-                                <button type="button" class="row-btn edit" @onclick="() => OpenEditStaffModal(u)" title="Edit staff account" id="@($"btn-edit-staff-{u.UserId}")">Edit</button>
+                            <td class="text-end" style="white-space: nowrap;">
+                                <button type="button" class="row-btn edit" disabled="@isLockingStaff" @onclick="() => OpenEditStaffModal(u)" title="Edit staff account" id="@($"btn-edit-staff-{u.UserId}")">Edit</button>
+                                @if (u.IsLocked)
+                                {
+                                    <button type="button" class="row-btn unlock" disabled="@isLockingStaff" @onclick="() => SetStaffLockStatusAsync(u, false)" title="Unlock staff account" id="@($"btn-unlock-staff-{u.UserId}")">
+                                        @if (lockingStaffId == u.UserId)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        }
+                                        Unlock
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="row-btn lock" disabled="@isLockingStaff" @onclick="() => SetStaffLockStatusAsync(u, true)" title="Lock staff account" id="@($"btn-lock-staff-{u.UserId}")">
+                                        @if (lockingStaffId == u.UserId)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        }
+                                        Lock
+                                    </button>
+                                }
                             </td>
                         </tr>
                     }
@@ -425,6 +445,10 @@
     private bool isCheckingEditEmail = false;
     private bool? isEditEmailAvailable;
     private string initialEmail = "";
+
+    // Lock Staff Account State (UC_34.3)
+    private bool isLockingStaff = false;
+    private Guid? lockingStaffId;
 
     protected override async Task OnInitializedAsync() => await LoadStaffAsync();
 
@@ -1085,6 +1109,34 @@
         if (left > 1) { yield return 1; if (left > 2) yield return -1; }
         for (var i = left; i <= right; i++) yield return i;
         if (right < total) { if (right < total - 1) yield return -1; yield return total; }
+    }
+
+    private async Task SetStaffLockStatusAsync(AdminUserDto staff, bool locked)
+    {
+        isLockingStaff = true;
+        lockingStaffId = staff.UserId;
+        try
+        {
+            var res = await UserService.SetUserLockStatusAsync(staff.UserId, locked);
+            if (res.Success)
+            {
+                toastMessage = res.Message ?? (locked ? $"Staff '{staff.FullName}' has been locked." : $"Staff '{staff.FullName}' has been unlocked.");
+                await LoadStaffAsync();
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to update staff lock status.";
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isLockingStaff = false;
+            lockingStaffId = null;
+        }
     }
 
     public void Dispose() { searchDebounceTimer?.Stop(); searchDebounceTimer?.Dispose(); }

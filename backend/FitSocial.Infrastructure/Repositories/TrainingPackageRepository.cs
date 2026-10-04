@@ -1,4 +1,4 @@
-using FitSocial.Domain.Entities;
+﻿using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -67,5 +67,19 @@ namespace FitSocial.Infrastructure.Repositories
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
         }
+        public async Task<IEnumerable<TrainingPackage>> GetPurchasedPackagesAsync(Guid traineeId, CancellationToken cancellationToken = default)
+        {
+            return await DbSet
+                .Include(x => x.Coach)
+                    .ThenInclude(c => c.Coach)
+                .Where(x => x.OrderDetails.Any(od =>
+                    od.Order.BuyerId == traineeId && 
+                    od.Order.OrderStatus == FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid))
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
+        }
+
+
+
     }
 }

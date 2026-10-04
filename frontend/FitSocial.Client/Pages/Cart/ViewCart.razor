@@ -86,37 +86,6 @@
             }
             else
             {
-                <!-- Header Card (Matching Reference UI) -->
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between gap-4">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-orange-100/70 text-[#EA580C] flex items-center justify-center flex-shrink-0">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <div class="flex items-center gap-2.5">
-                                <h1 class="text-2xl font-black text-gray-900 tracking-tight">Your Cart</h1>
-                                <span class="bg-orange-100 text-[#C2410C] text-xs font-bold px-3 py-1 rounded-full">
-                                    @summary.TotalItems @(summary.TotalItems > 1 ? "packages" : "package")
-                                </span>
-                            </div>
-                            <p class="text-sm text-gray-500 mt-0.5">
-                                Review your training regimen and service guarantees before proceeding to checkout
-                            </p>
-                        </div>
-                    </div>
-
-                    <button @onclick="PromptClearCart" class="flex items-center gap-1.5 text-gray-500 hover:text-red-600 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-red-50 transition cursor-pointer">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        <span>Clear all</span>
-                    </button>
-                </div>
-
                 @if (summary.IsCoach)
                 {
                     <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl text-sm flex items-center gap-2.5">
@@ -139,17 +108,46 @@
                     </div>
                 }
 
-                <!-- Two-Column Layout (Matching Reference UI) -->
+                <!-- Two-Column Layout -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    <!-- Left Column: Cart Items List (7 cols) -->
-                    <div class="lg:col-span-8 flex flex-col gap-5">
-                        @foreach (var item in summary.Items)
-                        {
-                            <div class="bg-white rounded-2xl shadow-sm border @(item.IsAvailable ? "border-gray-100" : "border-amber-200 bg-amber-50/20") overflow-hidden transition-all duration-200 hover:shadow-md relative">
-                                <!-- Top Accent Bar -->
-                                <div class="h-1.5 w-full bg-gradient-to-r from-[#FF8C00] via-[#FF5500] to-[#3B82F6]"></div>
+                    <!-- Left Column: Unified Cart Box -->
+                    <div class="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <!-- Compact "Your Cart" Header -->
+                        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 bg-white">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg bg-orange-100/70 text-[#EA580C] flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h2 class="text-lg font-black text-gray-900 tracking-tight">Your Cart</h2>
+                                        <span class="bg-orange-100 text-[#C2410C] text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                                            @summary.TotalItems @(summary.TotalItems > 1 ? "packages" : "package")
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-0.5">
+                                        Review your training regimen and service guarantees before proceeding to checkout
+                                    </p>
+                                </div>
+                            </div>
 
-                                <div class="p-6">
+                            <button @onclick="PromptClearCart" class="flex items-center gap-1.5 text-gray-400 hover:text-red-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span>Clear all</span>
+                            </button>
+                        </div>
+
+                        <!-- Cart Items List inside Unified Container -->
+                        <div class="divide-y divide-gray-100">
+                            @foreach (var item in summary.Items)
+                            {
+                                <div class="p-6 transition-all duration-200 @(!item.IsAvailable ? "bg-amber-50/20" : "")">
                                     <!-- Coach Header Row -->
                                     <div class="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
                                         <div class="flex items-center gap-3">
@@ -219,12 +217,6 @@
                                             <div class="text-2xl font-black text-[#EA580C] tracking-tight">
                                                 @item.Price.ToString("N0") <span class="text-base font-bold">VND</span>
                                             </div>
-                                            <span class="text-xs text-blue-600 font-semibold flex items-center justify-end gap-1 mt-0.5">
-                                                <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
-                                                </svg>
-                                                Flexible start date booking
-                                            </span>
                                         </div>
                                     </div>
 
@@ -326,22 +318,16 @@
                                         }
                                     </div>
                                 </div>
-                            </div>
-                        }
+                            }
+                        </div>
                     </div>
 
                     <!-- Right Column: Order Summary Card (5 cols - Matching Reference UI) -->
                     <aside class="lg:col-span-4 sticky top-24">
                         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-5">
-                            <!-- Card Header with Order ID -->
-                            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+                            <!-- Card Header -->
+                            <div class="pb-3 border-b border-gray-100">
                                 <h3 class="text-xl font-black text-gray-900 tracking-tight">Order Summary</h3>
-                                <div class="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-bold border border-blue-100">
-                                    <svg class="w-3.5 h-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span>Order ID: @summary.TemporaryOrderCode</span>
-                                </div>
                             </div>
 
                             <!-- Line Items -->
@@ -349,23 +335,6 @@
                                 <div class="flex items-center justify-between text-gray-600">
                                     <span>Subtotal (@summary.ValidItemsCount valid @(summary.ValidItemsCount > 1 ? "packages" : "package"))</span>
                                     <span class="font-bold text-gray-900">@summary.Subtotal.ToString("N0") VND</span>
-                                </div>
-
-                                <div class="flex items-center justify-between text-gray-600">
-                                    <span class="flex items-center gap-1">
-                                        Platform Service Fee
-                                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </span>
-                                    <span class="font-bold text-green-600">Free (0 VND)</span>
-                                </div>
-
-                                <div class="flex items-center justify-between text-gray-600">
-                                    <span>Trainee Protection Guarantee</span>
-                                    <span class="bg-blue-50 text-blue-600 font-bold text-xs px-2.5 py-0.5 rounded-full border border-blue-100">
-                                        Included
-                                    </span>
                                 </div>
                             </div>
 
@@ -376,7 +345,7 @@
                                 <div class="flex items-baseline justify-between mb-1">
                                     <div>
                                         <span class="block text-sm font-bold text-gray-800">Total Amount</span>
-                                        <span class="text-[11px] text-gray-400">(Includes VAT & Protection fee)</span>
+                                        <span class="text-[11px] text-gray-400">(Includes VAT)</span>
                                     </div>
                                     <div class="text-right">
                                         <span class="text-3xl font-black text-[#EA580C] tracking-tight block">
@@ -404,43 +373,6 @@
                                     </svg>
                                 }
                             </button>
-
-                            <!-- Secure Payment Partners (Matching Reference UI) -->
-                            <div class="pt-2">
-                                <span class="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block text-center mb-2.5">
-                                    SECURE PAYMENT PARTNERS
-                                </span>
-                                <div class="grid grid-cols-4 gap-2">
-                                    <div class="bg-gray-50 border border-gray-200 py-1.5 rounded-lg text-center font-black text-xs text-blue-700">PayOS</div>
-                                    <div class="bg-gray-50 border border-gray-200 py-1.5 rounded-lg text-center font-black text-xs text-red-600">VietQR</div>
-                                    <div class="bg-gray-50 border border-gray-200 py-1.5 rounded-lg text-center font-black text-xs text-pink-600">MoMo</div>
-                                    <div class="bg-gray-50 border border-gray-200 py-1.5 rounded-lg text-center font-black text-xs text-cyan-700">Napas</div>
-                                </div>
-                            </div>
-
-                            <!-- Trust Badges (Matching Reference UI) -->
-                            <div class="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-100 text-xs text-gray-600">
-                                <div class="flex items-start gap-2.5">
-                                    <svg class="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                    </svg>
-                                    <span>Bank-grade secure checkout via PayOS & VietQR bank QR code.</span>
-                                </div>
-
-                                <div class="flex items-start gap-2.5">
-                                    <svg class="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span>Instant electronic coaching contract activated immediately upon bank transfer confirmation.</span>
-                                </div>
-
-                                <div class="flex items-start gap-2.5">
-                                    <svg class="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                    <span>100% money-back guarantee if coach does not deliver agreed coaching services.</span>
-                                </div>
-                            </div>
                         </div>
                     </aside>
                 </div>

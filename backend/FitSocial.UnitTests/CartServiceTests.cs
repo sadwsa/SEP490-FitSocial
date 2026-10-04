@@ -190,7 +190,7 @@ public class CartServiceTests
 
         // Assert
         Assert.False(result.Success);
-        Assert.Equal("Gói tập không tồn tại.", result.Message);
+        Assert.Equal("Training package does not exist.", result.Message);
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public class CartServiceTests
 
         // Assert
         Assert.False(result.Success);
-        Assert.Equal("Gói tập này hiện đang tạm dừng nhận học viên.", result.Message);
+        Assert.Equal("This training package is currently suspended from taking trainees.", result.Message);
     }
 
     [Fact]
@@ -242,7 +242,7 @@ public class CartServiceTests
 
         // Assert
         Assert.False(result.Success);
-        Assert.Equal("Bạn không thể thêm gói tập do chính mình tạo vào giỏ hàng.", result.Message);
+        Assert.Equal("You cannot add your own training package to cart.", result.Message);
     }
 
     [Fact]

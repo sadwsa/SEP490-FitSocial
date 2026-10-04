@@ -1,0 +1,253 @@
+@page "/checkout/success"
+@layout EmptyLayout
+@inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Orders
+
+<PageTitle>Order Success - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
+                align-items: start !important;
+            }
+            .home-left-sidebar { justify-self: start !important; }
+            .home-center-feed { justify-self: center !important; width: 100% !important; max-width: 42rem !important; min-width: 0 !important; }
+            .home-right-sidebar { justify-self: center !important; }
+        }
+    </style>
+
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="cart" Class="home-left-sidebar" />
+
+        <!-- Center Column -->
+        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-10">
+            <h2 class="text-xl font-bold text-gray-800">Order Success</h2>
+            <div class="bg-white rounded-xl shadow-sm p-5 sm:p-8">
+                @if (isLoading)
+                {
+                    <div class="flex flex-col items-center justify-center py-14">
+                        <div class="w-10 h-10 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p class="text-gray-500 font-medium text-sm">Confirming your payment...</p>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(errorMessage) && order == null)
+                {
+                    <div class="bg-red-50 border border-red-200 text-red-700 p-6 rounded-xl text-center">
+                        <p class="font-bold mb-1">Payment not confirmed yet</p>
+                        <p class="text-sm mb-4">@errorMessage</p>
+                        <div class="flex items-center justify-center gap-3 flex-wrap">
+                            <a href="cart" class="px-5 py-2 bg-gray-100 text-sm font-semibold rounded-lg hover:bg-gray-200 transition">Back to Cart</a>
+                            <button @onclick="VerifyAgain" disabled="@isLoading" class="px-5 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white text-sm font-semibold rounded-lg hover:shadow-md transition cursor-pointer">Verify Again</button>
+                        </div>
+                    </div>
+                }
+                else if (order != null)
+                {
+                    <div class="flex flex-col items-center text-center">
+                        <div class="w-16 h-16 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-4">
+                            <svg class="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <h3 class="text-2xl font-black text-gray-900 mb-1">Payment Successful!</h3>
+                        <p class="text-sm text-gray-500 mb-6">Your training package is now active. The coach-trainee training contract has been generated.</p>
+
+                        <div class="w-full bg-gray-50/60 border border-gray-100 rounded-xl px-5 py-4 mb-6 flex flex-col gap-3 text-sm text-left">
+                            @{
+                                var detail = order.Details.FirstOrDefault();
+                            }
+                            <div class="flex items-start justify-between gap-4">
+                                <span class="text-gray-500 text-xs">Package</span>
+                                <span class="font-bold text-gray-900 text-xs text-right">@(detail?.PackageTitle ?? "Training Package")</span>
+                            </div>
+                            <div class="flex items-start justify-between gap-4">
+                                <span class="text-gray-500 text-xs">Coach</span>
+                                <span class="font-medium text-gray-900 text-xs text-right">@(order.CoachName ?? detail?.CoachName ?? "Coach")</span>
+                            </div>
+                            <div class="flex items-start justify-between gap-4">
+                                <span class="text-gray-500 text-xs">Total paid</span>
+                                <span class="font-black text-[#EA580C] text-sm">@((order.TotalAmount ?? 0).ToString("N0")) VND</span>
+                            </div>
+                            <div class="flex items-start justify-between gap-4">
+                                <span class="text-gray-500 text-xs">Order status</span>
+                                <span class="font-bold text-green-700 text-xs">@order.OrderStatus</span>
+                            </div>
+                            <div class="flex items-start justify-between gap-4">
+                                <span class="text-gray-500 text-xs">Order code</span>
+                                <span class="font-medium text-gray-900 text-xs">@OrderCode</span>
+                            </div>
+                            <div class="flex items-start justify-between gap-4">
+                                <span class="text-gray-500 text-xs">Purchased at</span>
+                                <span class="font-medium text-gray-900 text-xs">@(order.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "")</span>
+                            </div>
+                        </div>
+
+                        <div class="w-full flex flex-col sm:flex-row gap-3">
+                            <a href="training-packages" class="flex-1 py-3 bg-gray-100 text-center text-sm font-semibold text-gray-700 rounded-xl hover:bg-gray-200 transition">Browse More Packages</a>
+                            <a href="training-packages" class="flex-1 py-3 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white text-center text-sm font-bold rounded-xl shadow-md shadow-orange-500/25 hover:shadow-lg hover:-translate-y-0.5 transition-all">Open My Training Plan -&gt;</a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <!-- Right Sidebar (Empty) -->
+        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "orderId")]
+    public Guid? OrderId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "orderCode")]
+    public long? OrderCode { get; set; }
+
+    // PayOS appends these on gateway redirect
+    [SupplyParameterFromQuery(Name = "code")]
+    public string? PayOsCode { get; set; }
+
+    [SupplyParameterFromQuery(Name = "cancel")]
+    public bool? Cancelled { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? PayOsStatus { get; set; }
+
+    private OrderDto? order;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    private string? headerSearchTerm = "";
+    private string userName = "User";
+    private string userInitials = "U";
+    private string userRole = "Trainee";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+
+        if (Cancelled == true || string.Equals(PayOsStatus, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo($"checkout?cancel=true&orderCode={OrderCode}");
+            return;
+        }
+
+        await VerifyAgain();
+    }
+
+    private async Task VerifyAgain()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            // 1. Ask backend to verify with PayOS (idempotent; webhook may have done it already)
+            if (OrderCode.HasValue && OrderCode.Value > 0)
+            {
+                var complete = await CheckoutService.CompleteAsync(OrderCode.Value);
+                if (complete.Success && complete.Data != null)
+                {
+                    order = complete.Data;
+                }
+                else if (OrderId.HasValue && OrderId.Value != Guid.Empty)
+                {
+                    // Fall through to direct order fetch (e.g. webhook already completed)
+                    errorMessage = complete.Message;
+                }
+                else
+                {
+                    errorMessage = complete.Message ?? "Payment has not been completed yet.";
+                    isLoading = false;
+                    return;
+                }
+            }
+
+            // 2. Load full order details for the success screen
+            var targetId = order?.OrderId ?? OrderId;
+            if (order == null && targetId.HasValue && targetId.Value != Guid.Empty)
+            {
+                var res = await CheckoutService.GetOrderByIdAsync(targetId.Value);
+                if (res.Success && res.Data != null)
+                {
+                    order = res.Data;
+                    errorMessage = null;
+                }
+                else if (order == null)
+                {
+                    errorMessage = res.Message ?? errorMessage ?? "Order not found.";
+                }
+            }
+
+            if (order == null && string.IsNullOrEmpty(errorMessage))
+            {
+                errorMessage = "Missing order reference. Please go back and try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
+                userRole = isCoach ? "Coach" : "Trainee";
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+            else
+            {
+                Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
+            }
+        }
+        catch
+        {
+            userInitials = "U";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e) { headerSearchTerm = e.Value?.ToString(); }
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
+    private void ExecuteHeaderSearch() { }
+    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
+}

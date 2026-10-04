@@ -3,251 +3,606 @@
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
 @using FitSocial.Client.Models.SystemOperations
 @using FitSocial.Client.Services.SystemOperations
+@using FitSocial.Client.Models.SubscriptionPriceHistory
+@using FitSocial.Client.Services.SubscriptionPriceHistory
 @inject ISystemOperationsService SystemOps
+@inject ISubscriptionPriceHistoryApiService PriceHistoryApi
 @inject NavigationManager Navigation
 
 <PageTitle>Coach Subscription Plans - System Operations</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
-            <Authorized>
-                <h2 class="view-title">Coach Subscription Plans</h2>
-                <p class="view-sub">Manage and monitor coach subscription plans across the FitSocial platform.</p>
+    <Authorized>
+        <h2 class="view-title">Coach Subscription Plans</h2>
+        <p class="view-sub">Manage and monitor coach subscription plans and price change history across the FitSocial platform.</p>
 
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <div class="auth-alert error"><AppIcon Name="warning" /><span>@errorMessage</span></div>
-                }
-                @if (!string.IsNullOrEmpty(successMessage))
-                {
-                    <div class="auth-alert success"><AppIcon Name="check" /><span>@successMessage</span></div>
-                }
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="auth-alert error"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+        }
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="auth-alert success"><AppIcon Name="check" /><span>@successMessage</span></div>
+        }
 
-                <!-- Stats -->
-                <div class="stats-grid" style="display:grid; grid-template-columns: repeat(2,1fr); gap:12px; margin:16px 0;">
-                    <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
-                        <small class="muted">Total Plans</small><div style="font-size:22px; font-weight:700;">@data?.TotalPlans</div>
-                    </div>
-                    <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
-                        <small class="muted">Active Plans</small><div style="font-size:22px; font-weight:700; color:#16a34a;">@data?.ActivePlansCount</div>
+        <!-- Main Navigation Tabs -->
+        <div class="main-tabs">
+            <button type="button" class="main-tab-item @(activeTab == "plans" ? "active" : "")" @onclick='() => SwitchTab("plans")'>
+                <AppIcon Name="trophy" />
+                <span>Current Plans</span>
+                <span class="main-tab-badge">@(data?.TotalPlans ?? 0)</span>
+            </button>
+            <button type="button" class="main-tab-item @(activeTab == "price-history" ? "active" : "")" @onclick='() => SwitchTab("price-history")'>
+                <AppIcon Name="chart" />
+                <span>Price Change History</span>
+                <span class="main-tab-badge">@totalGlobalPriceChangesCount</span>
+            </button>
+        </div>
+
+        @if (activeTab == "plans")
+        {
+            <!-- Stats -->
+            <div class="stats-grid" style="display:grid; grid-template-columns: repeat(3,1fr); gap:12px; margin:16px 0;">
+                <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                    <small class="muted">Total Plans</small>
+                    <div style="font-size:22px; font-weight:700;">@data?.TotalPlans</div>
+                </div>
+                <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                    <small class="muted">Active Plans</small>
+                    <div style="font-size:22px; font-weight:700; color:#16a34a;">@data?.ActivePlansCount</div>
+                </div>
+                <div class="stat-card" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
+                    <small class="muted">Price Changes Logged</small>
+                    <div style="font-size:22px; font-weight:700; color:#ff5722;">@totalGlobalPriceChangesCount</div>
+                </div>
+            </div>
+
+            <div class="toolbar" style="display:flex; gap:8px; align-items:center; margin:12px 0; flex-wrap:wrap;">
+                <div class="search-wrap" style="flex:1; position:relative; min-width:180px;">
+                    <span class="search-icon" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8;"><AppIcon Name="search" /></span>
+                    <input value="@search" @oninput="OnSearchInput" class="toolbar-input" style="width:100%; padding-left:32px;" placeholder="Search currency or amount..." />
+                </div>
+                <select value="@statusFilter" @onchange="OnStatusFilterChanged" class="toolbar-select" style="min-width:140px;">
+                    <option value="">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+                <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="LoadAsync" disabled="@isLoading">
+                    <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
+                </button>
+                <button type="button" class="row-btn add" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="ToggleCreateForm">
+                    + Add New Plan
+                </button>
+            </div>
+
+            @if (showCreateForm)
+            {
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="ToggleCreateForm">
+                    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
+                        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <div>
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Create Coach Plan</h3>
+                                <p class="text-xs text-gray-400 mt-0.5">UC_37.1 • Price</p>
+                            </div>
+                            <button type="button" @onclick="ToggleCreateForm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
+                        </div>
+                        <div class="px-6 py-5 overflow-y-auto space-y-4 flex-1">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Amount (VND) *</label>
+                                <input type="number" @bind="createAmount" class="toolbar-input" placeholder="e.g. 5000" min="0" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Description</label>
+                                <input @bind="createDescription" class="toolbar-input" placeholder="e.g. Gói 3 tháng - Cơ bản" maxlength="500" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Image</label>
+                                <UploadBox Label="Plan Image" UploadTitle="Upload Plan Image" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="createImageUrl" />
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Duration (months)</label>
+                                    <input type="number" @bind="createDurationMonths" class="toolbar-input" placeholder="e.g. 12" min="1" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Training days</label>
+                                    <input type="number" @bind="createTrainingDays" class="toolbar-input" placeholder="e.g. 365" min="0" />
+                                </div>
+                            </div>
+                            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                <input type="checkbox" @bind="createIsActive" class="rounded" />
+                                <span>Active</span>
+                            </label>
+                            @if (!string.IsNullOrEmpty(createError))
+                            {
+                                <div class="auth-alert error"><AppIcon Name="warning" /><span>@createError</span></div>
+                            }
+                        </div>
+                        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
+                            <button type="button" @onclick="ToggleCreateForm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isCreating">Cancel</button>
+                            <button type="button" @onclick="HandleCreateAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-[#FF5500] hover:bg-[#E64A19] rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isCreating">
+                                @if (isCreating) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Creating...</span> } else { <span>Create</span> }
+                            </button>
+                        </div>
                     </div>
                 </div>
+            }
 
-                <div class="toolbar" style="display:flex; gap:8px; align-items:center; margin:12px 0; flex-wrap:wrap;">
-                    <div class="search-wrap" style="flex:1; position:relative; min-width:180px;">
-                        <span class="search-icon" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8;"><AppIcon Name="search" /></span>
-                        <input value="@search" @oninput="OnSearchInput" class="toolbar-input" style="width:100%; padding-left:32px;" placeholder="Search currency or amount..." />
+            @if (showEditForm)
+            {
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="CloseEditForm">
+                    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
+                        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <div>
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Edit Coach Plan</h3>
+                            </div>
+                            <button type="button" @onclick="CloseEditForm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
+                        </div>
+                        <div class="px-6 py-5 overflow-y-auto space-y-4 flex-1">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Amount (VND) *</label>
+                                <input type="number" @bind="editAmount" class="toolbar-input" placeholder="e.g. 5000" min="0" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Description *</label>
+                                <input @bind="editDescription" class="toolbar-input" placeholder="e.g. Gói 3 tháng - Cơ bản" maxlength="500" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Image</label>
+                                <UploadBox Label="Plan Image" UploadTitle="Upload Plan Image" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="editImageUrl" />
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Duration (months)</label>
+                                    <input type="number" @bind="editDurationMonths" class="toolbar-input" placeholder="e.g. 12" min="1" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Training days</label>
+                                    <input type="number" @bind="editTrainingDays" class="toolbar-input" placeholder="e.g. 365" min="0" />
+                                </div>
+                            </div>
+                            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                <input type="checkbox" @bind="editIsActive" class="rounded" />
+                                <span>Active</span>
+                            </label>
+                            @if (!string.IsNullOrEmpty(editError))
+                            {
+                                <div class="auth-alert error"><AppIcon Name="warning" /><span>@editError</span></div>
+                            }
+                        </div>
+                        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
+                            <button type="button" @onclick="CloseEditForm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isSaving">Cancel</button>
+                            <button type="button" @onclick="HandleUpdateAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-[#FF5500] hover:bg-[#E64A19] rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isSaving">
+                                @if (isSaving) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Saving...</span> } else { <span>Save</span> }
+                            </button>
+                        </div>
                     </div>
-                    <select value="@statusFilter" @onchange="OnStatusFilterChanged" class="toolbar-select" style="min-width:140px;">
-                        <option value="">All statuses</option>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                    <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="LoadAsync" disabled="@isLoading"><span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh</button>
-                    <button type="button" class="row-btn add" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="ToggleCreateForm">+ Add New Plan</button>
+                </div>
+            }
+
+            @if (showDeleteConfirm)
+            {
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="CloseDeleteConfirm">
+                    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
+                        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <div>
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Delete Coach Plan</h3>
+                            </div>
+                            <button type="button" @onclick="CloseDeleteConfirm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
+                        </div>
+                        <div class="px-6 py-5">
+                            <p class="text-sm text-gray-700">Are you sure you want to delete <strong>@deletePlanDescription</strong> (@deletePlanAmount)?</p>
+                            <p class="text-xs text-gray-400 mt-2">Plans with linked subscriptions or billing history are deactivated instead of deleted.</p>
+                            @if (!string.IsNullOrEmpty(deleteError))
+                            {
+                                <div class="auth-alert error mt-3"><AppIcon Name="warning" /><span>@deleteError</span></div>
+                            }
+                        </div>
+                        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
+                            <button type="button" @onclick="CloseDeleteConfirm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isDeleting">Cancel</button>
+                            <button type="button" @onclick="HandleDeleteAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isDeleting">
+                                @if (isDeleting) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Deleting...</span> } else { <span>Delete</span> }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (isLoading)
+            {
+                <div class="py-3 text-center muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading subscription plans...</div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Image</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Duration</th>
+                                <th>Training</th>
+                                <th>Subscribers</th>
+                                <th>Created</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (data?.Plans.Any() == true)
+                            {
+                                @foreach (var p in data.Plans)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(p.ImageUrl))
+                                            {
+                                                <img src="@p.ImageUrl" alt="Plan" style="width:48px; height:48px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb;" />
+                                            }
+                                            else
+                                            {
+                                                <div style="width:48px; height:48px; border-radius:8px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; border:1px solid #e5e7eb;"><AppIcon Name="trophy" /></div>
+                                            }
+                                        </td>
+                                        <td><span title="@p.Description">@(string.IsNullOrWhiteSpace(p.Description) ? "—" : p.Description)</span></td>
+                                        <td><strong>@((p.Amount ?? 0).ToString("N0")) @(p.Currency ?? "VND")</strong></td>
+                                        <td><small class="muted">@(p.SubscriptionDuration != null ? $"{p.SubscriptionDuration} months" : "—")</small></td>
+                                        <td><small class="muted">@(p.TrainingPackageDuration != null ? $"{p.TrainingPackageDuration} days" : "—")</small></td>
+                                        <td><span class="role-badge">@p.SubscriberCount total</span> <small class="muted">(@p.ActiveSubscriberCount active)</small></td>
+                                        <td><small>@(p.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</small></td>
+                                        <td>
+                                            @if (p.IsActive == true) { <span class="status-badge active">Active</span> } else { <span class="status-badge locked">Inactive</span> }
+                                        </td>
+                                        <td class="text-end whitespace-nowrap">
+                                            <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" title="View price history for this plan" @onclick="() => OpenPlanHistoryModal(p)">
+                                                <span class="btn-ic"><AppIcon Name="chart" /></span> Price History
+                                            </button>
+                                            <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="() => OpenEditForm(p)">
+                                                <AppIcon Name="pencil" /> Edit
+                                            </button>
+                                            <button type="button" class="row-btn lock" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="() => OpenDeleteConfirm(p)">
+                                                <AppIcon Name="trash" /> Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr><td colspan="9" class="text-center muted py-4">No subscription plans found.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+        else if (activeTab == "price-history")
+        {
+            <!-- Tab 2: Global Price Change Log -->
+            <div class="toolbar wrap" style="display:flex; gap:8px; align-items:center; margin:12px 0; flex-wrap:wrap;">
+                <div class="search-wrap" style="flex:1; position:relative; min-width:200px;">
+                    <span class="search-icon" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8;"><AppIcon Name="search" /></span>
+                    <input value="@historyKeyword" @oninput="OnHistoryKeywordInput" class="toolbar-input" style="width:100%; padding-left:32px;" placeholder="Search plan name..." />
                 </div>
 
-                @if (showCreateForm)
-                {
-                    <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="ToggleCreateForm">
-                        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
-                            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                                <div>
-                                    <h3 class="font-bold text-gray-900 text-lg leading-tight">Create Coach Plan</h3>
-                                    <p class="text-xs text-gray-400 mt-0.5">UC_37.1 • Price</p>
-                                </div>
-                                <button type="button" @onclick="ToggleCreateForm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
-                            </div>
-                            <div class="px-6 py-5 overflow-y-auto space-y-4 flex-1">
-                                    <div>
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Amount (VND) *</label>
-                                    <input type="number" @bind="createAmount" class="toolbar-input" placeholder="e.g. 5000" min="0" />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Description</label>
-                                    <input @bind="createDescription" class="toolbar-input" placeholder="e.g. Gói 3 tháng - Cơ bản" maxlength="500" />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Image</label>
-                                    <UploadBox Label="Plan Image" UploadTitle="Upload Plan Image" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="createImageUrl" />
-                                </div>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Duration (months)</label>
-                                        <input type="number" @bind="createDurationMonths" class="toolbar-input" placeholder="e.g. 12" min="1" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Training days</label>
-                                        <input type="number" @bind="createTrainingDays" class="toolbar-input" placeholder="e.g. 365" min="0" />
-                                    </div>
-                                </div>
-                                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                                    <input type="checkbox" @bind="createIsActive" class="rounded" />
-                                    <span>Active</span>
-                                </label>
-                                @if (!string.IsNullOrEmpty(createError))
-                                {
-                                    <div class="auth-alert error"><AppIcon Name="warning" /><span>@createError</span></div>
-                                }
-                            </div>
-                            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
-                                <button type="button" @onclick="ToggleCreateForm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isCreating">Cancel</button>
-                                <button type="button" @onclick="HandleCreateAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-[#FF5500] hover:bg-[#E64A19] rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isCreating">
-                                    @if (isCreating) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Creating...</span> } else { <span>Create</span> }
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                }
+                <select value="@(selectedPlanIdFilter?.ToString() ?? "")" @onchange="OnPlanFilterChangedAsync" class="toolbar-select" style="min-width:180px;">
+                    <option value="">All Plans</option>
+                    @if (data?.Plans != null)
+                    {
+                        @foreach (var plan in data.Plans)
+                        {
+                            <option value="@plan.PlanId.ToString()" selected="@(plan.PlanId == selectedPlanIdFilter)">
+                                @(string.IsNullOrWhiteSpace(plan.Description) ? "Plan " + (plan.Amount ?? 0).ToString("N0") + " " + (plan.Currency ?? "VND") : plan.Description)
+                            </option>
+                        }
+                    }
+                </select>
 
-                @if (showEditForm)
-                {
-                    <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="CloseEditForm">
-                        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
-                            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                                <div>
-                                    <h3 class="font-bold text-gray-900 text-lg leading-tight">Edit Coach Plan</h3>
-                                </div>
-                                <button type="button" @onclick="CloseEditForm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
-                            </div>
-                            <div class="px-6 py-5 overflow-y-auto space-y-4 flex-1">
-                                <div>
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Amount (VND) *</label>
-                                    <input type="number" @bind="editAmount" class="toolbar-input" placeholder="e.g. 5000" min="0" />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Description *</label>
-                                    <input @bind="editDescription" class="toolbar-input" placeholder="e.g. Gói 3 tháng - Cơ bản" maxlength="500" />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Image</label>
-                                    <UploadBox Label="Plan Image" UploadTitle="Upload Plan Image" UploadSubtitle="JPG, PNG (max 10MB)" @bind-Value="editImageUrl" />
-                                </div>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Duration (months)</label>
-                                        <input type="number" @bind="editDurationMonths" class="toolbar-input" placeholder="e.g. 12" min="1" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Training days</label>
-                                        <input type="number" @bind="editTrainingDays" class="toolbar-input" placeholder="e.g. 365" min="0" />
-                                    </div>
-                                </div>
-                                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                                    <input type="checkbox" @bind="editIsActive" class="rounded" />
-                                    <span>Active</span>
-                                </label>
-                                @if (!string.IsNullOrEmpty(editError))
-                                {
-                                    <div class="auth-alert error"><AppIcon Name="warning" /><span>@editError</span></div>
-                                }
-                            </div>
-                            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
-                                <button type="button" @onclick="CloseEditForm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isSaving">Cancel</button>
-                                <button type="button" @onclick="HandleUpdateAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-[#FF5500] hover:bg-[#E64A19] rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isSaving">
-                                    @if (isSaving) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Saving...</span> } else { <span>Save</span> }
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                }
+                <div style="display:flex; align-items:center; gap:4px;">
+                    <small class="muted" style="white-space:nowrap;">From:</small>
+                    <input type="date" value="@(historyFromDate?.ToString("yyyy-MM-dd"))" @onchange="OnFromDateChangedAsync" class="toolbar-input" style="width:140px; padding:6px 8px;" />
+                </div>
 
-                @if (showDeleteConfirm)
-                {
-                    <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="CloseDeleteConfirm">
-                        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
-                            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                                <div>
-                                    <h3 class="font-bold text-gray-900 text-lg leading-tight">Delete Coach Plan</h3>
-                                </div>
-                                <button type="button" @onclick="CloseDeleteConfirm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
-                            </div>
-                            <div class="px-6 py-5">
-                                <p class="text-sm text-gray-700">Are you sure you want to delete <strong>@deletePlanDescription</strong> (@deletePlanAmount)?</p>
-                                <p class="text-xs text-gray-400 mt-2">Plans with linked subscriptions or billing history are deactivated instead of deleted.</p>
-                                @if (!string.IsNullOrEmpty(deleteError))
-                                {
-                                    <div class="auth-alert error mt-3"><AppIcon Name="warning" /><span>@deleteError</span></div>
-                                }
-                            </div>
-                            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/80">
-                                <button type="button" @onclick="CloseDeleteConfirm" class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition" disabled="@isDeleting">Cancel</button>
-                                <button type="button" @onclick="HandleDeleteAsync" class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2" disabled="@isDeleting">
-                                    @if (isDeleting) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Deleting...</span> } else { <span>Delete</span> }
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                }
+                <div style="display:flex; align-items:center; gap:4px;">
+                    <small class="muted" style="white-space:nowrap;">To:</small>
+                    <input type="date" value="@(historyToDate?.ToString("yyyy-MM-dd"))" @onchange="OnToDateChangedAsync" class="toolbar-input" style="width:140px; padding:6px 8px;" />
+                </div>
 
-                @if (isLoading)
+                <button type="button" class="row-btn" @onclick="() => LoadPriceHistoryAsync(1)" disabled="@isLoadingHistory">
+                    <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
+                </button>
+
+                @if (!string.IsNullOrWhiteSpace(historyKeyword) || selectedPlanIdFilter.HasValue || historyFromDate.HasValue || historyToDate.HasValue)
                 {
-                    <div class="py-3 text-center muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading subscription plans...</div>
+                    <button type="button" class="row-btn" @onclick="ResetHistoryFiltersAsync">
+                        Clear Filters
+                    </button>
                 }
-                else
-                {
-                    <div class="table-wrap">
-                        <table class="data-table">
-                            <thead>
+            </div>
+
+            @if (selectedPlanIdFilter.HasValue || !string.IsNullOrWhiteSpace(historyKeyword) || historyFromDate.HasValue || historyToDate.HasValue)
+            {
+                <div style="display:flex; align-items:center; justify-content:space-between; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; margin-bottom:12px; font-size:0.84rem;">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span style="color:#64748b;">Filtering price history by:</span>
+                        @if (selectedPlanIdFilter.HasValue)
+                        {
+                            var filteredPlan = data?.Plans.FirstOrDefault(p => p.PlanId == selectedPlanIdFilter.Value);
+                            <span class="role-badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;">
+                                Plan: @(filteredPlan?.Description ?? ShortGuid(selectedPlanIdFilter.Value))
+                            </span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(historyKeyword))
+                        {
+                            <span class="role-badge" style="background:#f1f5f9; color:#475569;">Keyword: "@historyKeyword"</span>
+                        }
+                        @if (historyFromDate.HasValue || historyToDate.HasValue)
+                        {
+                            <span class="role-badge" style="background:#f1f5f9; color:#475569;">
+                                Date: @(historyFromDate?.ToString("dd/MM/yyyy") ?? "...") - @(historyToDate?.ToString("dd/MM/yyyy") ?? "...")
+                            </span>
+                        }
+                    </div>
+                    <button type="button" class="row-btn" style="padding:3px 10px; font-size:0.78rem;" @onclick="ResetHistoryFiltersAsync">
+                        Show All History (@totalGlobalPriceChangesCount)
+                    </button>
+                </div>
+            }
+
+            @if (isLoadingHistory)
+            {
+                <div class="py-4 text-center muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading price history...</div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Coach Plan</th>
+                                <th>Old Price</th>
+                                <th>New Price</th>
+                                <th>Change</th>
+                                <th>Adjustment Date</th>
+                                <th>Adjusted By</th>
+                                <th>Reason / Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (priceHistoryResult?.Items.Any() == true)
+                            {
+                                @foreach (var item in priceHistoryResult.Items)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div style="font-weight:700; color:#1e293b;">@item.PlanName</div>
+                                            <small class="muted">#@ShortGuid(item.PlanId)</small>
+                                        </td>
+                                        <td>
+                                            <span style="color:#64748b; font-weight:600;">@item.OldPrice.ToString("N0") VND</span>
+                                        </td>
+                                        <td>
+                                            <strong style="color:#0f172a;">@item.NewPrice.ToString("N0") VND</strong>
+                                        </td>
+                                        <td>
+                                            @if (item.PriceDifference > 0)
+                                            {
+                                                <span class="price-badge increase">
+                                                    ↑ +@item.PriceDifference.ToString("N0") VND (+@item.PercentageChange.ToString("0.00")%)
+                                                </span>
+                                            }
+                                            else if (item.PriceDifference < 0)
+                                            {
+                                                <span class="price-badge decrease">
+                                                    ↓ @item.PriceDifference.ToString("N0") VND (@item.PercentageChange.ToString("0.00")%)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="price-badge neutral">
+                                                    0 VND (0.00%)
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div style="font-size:0.82rem; font-weight:600;">@item.ChangedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                                        </td>
+                                        <td>
+                                            <div>
+                                                <strong>@(string.IsNullOrWhiteSpace(item.ChangedByName) ? "System Admin" : item.ChangedByName)</strong>
+                                                <br />
+                                                <small class="muted">@(item.ChangedByUserId.HasValue ? "#" + ShortGuid(item.ChangedByUserId.Value) : "Auto")</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span>@(string.IsNullOrWhiteSpace(item.Notes) ? "—" : item.Notes)</span>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
                                 <tr>
-                                    <th>Image</th>
-                                    <th>Description</th>
-                                    <th>Amount</th>
-                                    <th>Duration</th>
-                                    <th>Training</th>
-                                    <th>Subscribers</th>
-                                    <th>Created</th>
-                                    <th>Status</th>
-                                    <th class="text-end">Actions</th>
+                                    <td colspan="7" class="text-center muted py-4">
+                                        <div style="margin-bottom:8px;">No price change records found@(selectedPlanIdFilter.HasValue ? " for the selected plan." : " matching the filter.")</div>
+                                        @if (selectedPlanIdFilter.HasValue || !string.IsNullOrWhiteSpace(historyKeyword) || historyFromDate.HasValue || historyToDate.HasValue)
+                                        {
+                                            <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px;" @onclick="ResetHistoryFiltersAsync">
+                                                <AppIcon Name="refresh" /> Show all price change records (@totalGlobalPriceChangesCount)
+                                            </button>
+                                        }
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                @if (data?.Plans.Any() == true)
-                                {
-                                    @foreach (var p in data.Plans)
-                                    {
-                                        <tr>
-                                            <td>
-                                                @if (!string.IsNullOrEmpty(p.ImageUrl))
-                                                {
-                                                    <img src="@p.ImageUrl" alt="Plan" style="width:48px; height:48px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb;" />
-                                                }
-                                                else
-                                                {
-                                                    <div style="width:48px; height:48px; border-radius:8px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; border:1px solid #e5e7eb;"><AppIcon Name="trophy" /></div>
-                                                }
-                                            </td>
-                                            <td><span title="@p.Description">@(string.IsNullOrWhiteSpace(p.Description) ? "—" : p.Description)</span></td>
-                                            <td><strong>@((p.Amount ?? 0).ToString("N0")) @(p.Currency ?? "VND")</strong></td>
-                                    <td><small class="muted">@(p.SubscriptionDuration != null ? $"{p.SubscriptionDuration} months" : "—")</small></td>
-                                            <td><small class="muted">@(p.TrainingPackageDuration != null ? $"{p.TrainingPackageDuration} days" : "—")</small></td>
-                                            <td><span class="role-badge">@p.SubscriberCount total</span> <small class="muted">(@p.ActiveSubscriberCount active)</small></td>
-                                            <td><small>@(p.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</small></td>
-                                            <td>
-                                                @if (p.IsActive == true) { <span class="status-badge active">Active</span> } else { <span class="status-badge locked">Inactive</span> }
-                                            </td>
-                                            <td class="text-end whitespace-nowrap">
-                                                <button type="button" class="row-btn" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="() => OpenEditForm(p)"><AppIcon Name="pencil" /> Edit</button>
-                                                <button type="button" class="row-btn lock" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" @onclick="() => OpenDeleteConfirm(p)"><AppIcon Name="trash" /> Delete</button>
-                                            </td>
-                                        </tr>
-                                    }
-                                }
-                                else
-                                {
-                                    <tr><td colspan="9" class="text-center muted py-4">No subscription plans found.</td></tr>
-                                }
-                            </tbody>
-                        </table>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Controls -->
+                <div class="pagination-container" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:14px;">
+                    <div class="pagination-info" style="font-size:0.8rem; color:#64748b;">
+                        @if (priceHistoryResult != null && priceHistoryResult.TotalCount > 0)
+                        {
+                            var start = (historyPageIndex - 1) * historyPageSize + 1;
+                            var end = Math.Min(historyPageIndex * historyPageSize, priceHistoryResult.TotalCount);
+                            <span>Showing <strong>@start–@end</strong> of <strong>@priceHistoryResult.TotalCount</strong> records</span>
+                            @if (selectedPlanIdFilter.HasValue || !string.IsNullOrWhiteSpace(historyKeyword) || historyFromDate.HasValue || historyToDate.HasValue)
+                            {
+                                <span class="ms-1 text-muted">(filtered from @totalGlobalPriceChangesCount total)</span>
+                            }
+                        }
+                        else
+                        {
+                            <span>0 records@(selectedPlanIdFilter.HasValue || !string.IsNullOrWhiteSpace(historyKeyword) || historyFromDate.HasValue || historyToDate.HasValue ? $" (filtered from {totalGlobalPriceChangesCount} total)" : "")</span>
+                        }
                     </div>
 
-                }
-            </Authorized>
-            <NotAuthorized>
-                <div class="auth-alert error"><AppIcon Name="warning" /><span>You do not have access.</span></div>
-            </NotAuthorized>
-        </AuthorizeView>
+                    @if (priceHistoryResult != null && priceHistoryResult.TotalPages > 1)
+                    {
+                        <div class="pagination-controls" style="display:flex; align-items:center; gap:5px;">
+                            <button type="button" class="page-btn" disabled="@(!priceHistoryResult.HasPreviousPage)" @onclick="() => GoToHistoryPageAsync(historyPageIndex - 1)">‹ Prev</button>
+                            @for (int i = 1; i <= priceHistoryResult.TotalPages; i++)
+                            {
+                                var pNum = i;
+                                if (pNum == 1 || pNum == priceHistoryResult.TotalPages || Math.Abs(pNum - historyPageIndex) <= 1)
+                                {
+                                    <button type="button" class="page-btn @(pNum == historyPageIndex ? "active" : "")" @onclick="() => GoToHistoryPageAsync(pNum)">@pNum</button>
+                                }
+                                else if (pNum == 2 && historyPageIndex > 3)
+                                {
+                                    <span class="page-dots">…</span>
+                                }
+                                else if (pNum == priceHistoryResult.TotalPages - 1 && historyPageIndex < priceHistoryResult.TotalPages - 2)
+                                {
+                                    <span class="page-dots">…</span>
+                                }
+                            }
+                            <button type="button" class="page-btn" disabled="@(!priceHistoryResult.HasNextPage)" @onclick="() => GoToHistoryPageAsync(historyPageIndex + 1)">Next ›</button>
+                        </div>
+                    }
+
+                    <div class="page-size-selector" style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#64748b;">
+                        <span>Per page:</span>
+                        <select value="@historyPageSize" @onchange="OnHistoryPageSizeChangedAsync" class="page-size-select" style="padding:4px 8px; border-radius:6px; border:1px solid #cbd5e1;">
+                            <option value="10">10 / page</option>
+                            <option value="20">20 / page</option>
+                            <option value="50">50 / page</option>
+                        </select>
+                    </div>
+                </div>
+            }
+        }
+
+        <!-- Single Plan Price History Modal (Drawer/Modal on Row Click) -->
+        @if (showPlanHistoryModal && selectedPlanForModal != null)
+        {
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm" @onclick="ClosePlanHistoryModal">
+                <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
+                    <!-- Modal Header -->
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Price Change History</h3>
+                                <span class="status-badge active" style="font-size:0.72rem;">@(selectedPlanForModal.Currency ?? "VND")</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">
+                                Plan: <strong>@(string.IsNullOrWhiteSpace(selectedPlanForModal.Description) ? "Coach Plan" : selectedPlanForModal.Description)</strong>
+                                • Current Price: <strong style="color:#ff5722;">@((selectedPlanForModal.Amount ?? 0).ToString("N0")) @(selectedPlanForModal.Currency ?? "VND")</strong>
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @onclick="() => ViewInGlobalTab(selectedPlanForModal)" class="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 transition">
+                                @(modalPlanHistoryResult?.Items?.Any() == true ? "Filter in Global Log" : "View All Global Logs")
+                            </button>
+                            <button type="button" @onclick="ClosePlanHistoryModal" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
+                        </div>
+                    </div>
+
+                    <!-- Modal Body -->
+                    <div class="px-6 py-4 overflow-y-auto space-y-4 flex-1">
+                        @if (isLoadingModalHistory)
+                        {
+                            <div class="py-5 text-center muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading plan price history...</div>
+                        }
+                        else if (modalPlanHistoryResult?.Items.Any() == true)
+                        {
+                            <div class="table-wrap">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Old Price</th>
+                                            <th>New Price</th>
+                                            <th>Change</th>
+                                            <th>Adjustment Date</th>
+                                            <th>Adjusted By</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in modalPlanHistoryResult.Items)
+                                        {
+                                            <tr>
+                                                <td><span style="color:#64748b; font-weight:600;">@item.OldPrice.ToString("N0") VND</span></td>
+                                                <td><strong style="color:#0f172a;">@item.NewPrice.ToString("N0") VND</strong></td>
+                                                <td>
+                                                    @if (item.PriceDifference > 0)
+                                                    {
+                                                        <span class="price-badge increase">
+                                                            ↑ +@item.PriceDifference.ToString("N0") VND (+@item.PercentageChange.ToString("0.00")%)
+                                                        </span>
+                                                    }
+                                                    else if (item.PriceDifference < 0)
+                                                    {
+                                                        <span class="price-badge decrease">
+                                                            ↓ @item.PriceDifference.ToString("N0") VND (@item.PercentageChange.ToString("0.00")%)
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="price-badge neutral">0 VND (0.00%)</span>
+                                                    }
+                                                </td>
+                                                <td><small>@item.ChangedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small></td>
+                                                <td><small>@(item.ChangedByName ?? "Admin")</small></td>
+                                                <td><small class="muted">@(item.Notes ?? "—")</small></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-6">
+                                <div style="width:48px; height:48px; border-radius:50%; background:#f1f5f9; display:inline-flex; align-items:center; justify-content:center; color:#94a3b8; margin-bottom:8px;">
+                                    <AppIcon Name="doc" />
+                                </div>
+                                <h4 class="font-bold text-gray-700 text-sm">No Price Change History</h4>
+                                <p class="text-xs text-gray-500 mt-1">This plan has kept its original price since creation.</p>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="flex items-center justify-end px-6 py-3 border-t border-gray-100 bg-gray-50/80">
+                        <button type="button" @onclick="ClosePlanHistoryModal" class="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-200/60 rounded-xl transition">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <div class="auth-alert error"><AppIcon Name="warning" /><span>You do not have access.</span></div>
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
+    private string activeTab = "plans"; // "plans" | "price-history"
+
+    // Tab 1 state: Plans
     private CoachSubscriptionPlansResponseDto? data;
     private bool isLoading = true;
     private string? errorMessage;
@@ -257,6 +612,7 @@
 
     private string? successMessage;
 
+    // Create plan form
     private bool showCreateForm = false;
     private decimal? createAmount = null;
     private string createCurrency = "VND";
@@ -268,6 +624,7 @@
     private string? createError;
     private bool isCreating = false;
 
+    // Delete plan confirm
     private bool showDeleteConfirm = false;
     private Guid deletePlanId = Guid.Empty;
     private string? deletePlanDescription;
@@ -275,6 +632,7 @@
     private string? deleteError;
     private bool isDeleting = false;
 
+    // Edit plan form
     private bool showEditForm = false;
     private Guid editPlanId = Guid.Empty;
     private decimal? editAmount = null;
@@ -286,22 +644,70 @@
     private string? editError;
     private bool isSaving = false;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    // Tab 2 state: Global Price History
+    private int totalGlobalPriceChangesCount = 0;
+    private PagedResult<SubscriptionPriceHistoryDto>? priceHistoryResult;
+    private bool isLoadingHistory = false;
+    private string historyKeyword = "";
+    private Guid? selectedPlanIdFilter = null;
+    private DateTime? historyFromDate = null;
+    private DateTime? historyToDate = null;
+    private int historyPageIndex = 1;
+    private int historyPageSize = 10;
+    private System.Timers.Timer? historyDebounce;
+
+    // Single Plan Modal State
+    private bool showPlanHistoryModal = false;
+    private CoachSubscriptionPlanDto? selectedPlanForModal;
+    private PagedResult<SubscriptionPriceHistoryDto>? modalPlanHistoryResult;
+    private bool isLoadingModalHistory = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        await LoadGlobalPriceHistoryCountAsync();
+        await LoadPriceHistoryAsync(1);
+    }
+
+    private async Task SwitchTab(string tab)
+    {
+        activeTab = tab;
+        if (tab == "price-history" && priceHistoryResult == null)
+        {
+            await LoadPriceHistoryAsync(1);
+        }
+    }
 
     private async Task LoadAsync()
     {
         isLoading = true;
         errorMessage = null;
-        successMessage = null;
         try
         {
             bool? isActive = statusFilter switch { "active" => true, "inactive" => false, _ => null };
-            var res = await SystemOps.GetCoachSubscriptionPlansAsync(isActive, string.IsNullOrWhiteSpace(search) ? null : search, 1, 20);
+            var res = await SystemOps.GetCoachSubscriptionPlansAsync(isActive, string.IsNullOrWhiteSpace(search) ? null : search, 1, 50);
             if (res.Success && res.Data != null) data = res.Data;
             else errorMessage = res.Message ?? "Failed to load plans.";
         }
         catch (Exception ex) { errorMessage = ex.Message; }
         finally { isLoading = false; }
+    }
+
+    private async Task LoadGlobalPriceHistoryCountAsync()
+    {
+        try
+        {
+            var req = new GetPriceHistoryFilterRequest { PageIndex = 1, PageSize = 1 };
+            var res = await PriceHistoryApi.GetPriceHistoryAsync(req);
+            if (res.Success && res.Data != null)
+            {
+                totalGlobalPriceChangesCount = res.Data.TotalCount;
+            }
+        }
+        catch
+        {
+            // Fallback: keep previous or 0
+        }
     }
 
     private void OnSearchInput(ChangeEventArgs e)
@@ -360,6 +766,8 @@
             {
                 ToggleCreateForm();
                 await LoadAsync();
+                await LoadGlobalPriceHistoryCountAsync();
+                await LoadPriceHistoryAsync(1);
                 successMessage = res.Message ?? "Subscription plan created successfully.";
             }
             else createError = res.Message ?? "Failed to create plan.";
@@ -396,6 +804,8 @@
             {
                 CloseDeleteConfirm();
                 await LoadAsync();
+                await LoadGlobalPriceHistoryCountAsync();
+                await LoadPriceHistoryAsync(1);
                 successMessage = res.Message ?? "Subscription plan deleted successfully.";
             }
             else deleteError = res.Message ?? "Failed to delete plan.";
@@ -451,11 +861,189 @@
             {
                 CloseEditForm();
                 await LoadAsync();
+                await LoadGlobalPriceHistoryCountAsync();
+                await LoadPriceHistoryAsync(1);
                 successMessage = res.Message ?? "Subscription plan updated successfully.";
             }
             else editError = res.Message ?? "Failed to update plan.";
         }
         catch (Exception ex) { editError = ex.Message; }
         finally { isSaving = false; }
+    }
+
+    // Price History Methods
+    private async Task LoadPriceHistoryAsync(int page = 1)
+    {
+        isLoadingHistory = true;
+        historyPageIndex = page;
+        try
+        {
+            var req = new GetPriceHistoryFilterRequest
+            {
+                Keyword = string.IsNullOrWhiteSpace(historyKeyword) ? null : historyKeyword.Trim(),
+                PlanId = selectedPlanIdFilter,
+                FromDate = historyFromDate,
+                ToDate = historyToDate,
+                PageIndex = historyPageIndex,
+                PageSize = historyPageSize
+            };
+
+            var res = await PriceHistoryApi.GetPriceHistoryAsync(req);
+            if (res.Success && res.Data != null)
+            {
+                priceHistoryResult = res.Data;
+                if (!selectedPlanIdFilter.HasValue && string.IsNullOrWhiteSpace(historyKeyword) && !historyFromDate.HasValue && !historyToDate.HasValue)
+                {
+                    totalGlobalPriceChangesCount = res.Data.TotalCount;
+                }
+            }
+            else
+            {
+                priceHistoryResult = new PagedResult<SubscriptionPriceHistoryDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load price history: " + ex.Message;
+        }
+        finally
+        {
+            isLoadingHistory = false;
+        }
+    }
+
+    private void OnHistoryKeywordInput(ChangeEventArgs e)
+    {
+        historyKeyword = e.Value?.ToString() ?? "";
+        historyDebounce?.Stop(); historyDebounce?.Dispose();
+        historyDebounce = new System.Timers.Timer(400) { AutoReset = false };
+        historyDebounce.Elapsed += async (_, _) => { await InvokeAsync(() => LoadPriceHistoryAsync(1)); await InvokeAsync(StateHasChanged); };
+        historyDebounce.Start();
+    }
+
+    private async Task OnPlanFilterChangedAsync(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (Guid.TryParse(val, out var g))
+        {
+            selectedPlanIdFilter = g;
+        }
+        else
+        {
+            selectedPlanIdFilter = null;
+        }
+        await LoadPriceHistoryAsync(1);
+    }
+
+    private async Task OnFromDateChangedAsync(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        {
+            historyFromDate = dt;
+        }
+        else
+        {
+            historyFromDate = null;
+        }
+        await LoadPriceHistoryAsync(1);
+    }
+
+    private async Task OnToDateChangedAsync(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        {
+            historyToDate = dt;
+        }
+        else
+        {
+            historyToDate = null;
+        }
+        await LoadPriceHistoryAsync(1);
+    }
+
+    private async Task ResetHistoryFiltersAsync()
+    {
+        historyKeyword = "";
+        selectedPlanIdFilter = null;
+        historyFromDate = null;
+        historyToDate = null;
+        await LoadPriceHistoryAsync(1);
+    }
+
+    private async Task GoToHistoryPageAsync(int page)
+    {
+        if (page < 1) return;
+        await LoadPriceHistoryAsync(page);
+    }
+
+    private async Task OnHistoryPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var ps))
+        {
+            historyPageSize = ps;
+            await LoadPriceHistoryAsync(1);
+        }
+    }
+
+    // Modal Methods
+    private async Task OpenPlanHistoryModal(CoachSubscriptionPlanDto plan)
+    {
+        selectedPlanForModal = plan;
+        showPlanHistoryModal = true;
+        isLoadingModalHistory = true;
+        modalPlanHistoryResult = null;
+
+        try
+        {
+            var req = new GetPriceHistoryFilterRequest
+            {
+                PlanId = plan.PlanId,
+                PageIndex = 1,
+                PageSize = 20
+            };
+            var res = await PriceHistoryApi.GetPriceHistoryAsync(req);
+            if (res.Success && res.Data != null)
+            {
+                modalPlanHistoryResult = res.Data;
+            }
+        }
+        catch
+        {
+            modalPlanHistoryResult = new PagedResult<SubscriptionPriceHistoryDto>();
+        }
+        finally
+        {
+            isLoadingModalHistory = false;
+        }
+    }
+
+    private void ClosePlanHistoryModal()
+    {
+        showPlanHistoryModal = false;
+        selectedPlanForModal = null;
+        modalPlanHistoryResult = null;
+    }
+
+    private async Task ViewInGlobalTab(CoachSubscriptionPlanDto plan)
+    {
+        ClosePlanHistoryModal();
+        // If this plan has price history records, filter by it.
+        // If this plan has no price history, do not filter so user sees all system logs!
+        if (modalPlanHistoryResult != null && modalPlanHistoryResult.TotalCount > 0)
+        {
+            selectedPlanIdFilter = plan.PlanId;
+        }
+        else
+        {
+            selectedPlanIdFilter = null;
+        }
+        activeTab = "price-history";
+        await LoadPriceHistoryAsync(1);
+    }
+
+    private static string ShortGuid(Guid guid)
+    {
+        var s = guid.ToString();
+        return s.Length > 8 ? s[..8] : s;
     }
 }

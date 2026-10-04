@@ -1,4 +1,4 @@
-using FitSocial.Application.DTOs.Common;
+﻿using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPackage;
 using FitSocial.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -110,5 +110,19 @@ namespace FitSocial.API.Controllers
 
             return Ok(ApiResponseDto<bool>.Ok(true, "Package soft deleted successfully"));
         }
+        [HttpGet("purchased")]
+        [Authorize] // Bất kỳ user nào đăng nhập đều có thể lấy danh sách họ đã mua
+        public async Task<IActionResult> GetPurchasedPackages()
+        {
+            var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdString, out var currentUserId))
+            {
+                return Unauthorized(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Fail("Invalid token or user ID"));
+            }
+
+            var packages = await _service.GetPurchasedPackagesAsync(currentUserId);
+            return Ok(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Ok(packages));
+        }
+
     }
 }

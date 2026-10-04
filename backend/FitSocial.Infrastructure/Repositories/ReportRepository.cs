@@ -122,4 +122,13 @@ public class ReportRepository : Repository<Report>, IReportRepository
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.ReportId == reportId, cancellationToken);
     }
+
+    public Task<int> CountUnresolvedAgainstUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return DbSet.CountAsync(r =>
+            r.ReportedUserId == userId
+            && r.Status != null
+            && (r.Status.ToUpper() == "PENDING" || r.Status.ToUpper() == "REVIEWED"),
+            cancellationToken);
+    }
 }

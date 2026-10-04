@@ -1,4 +1,4 @@
-using FitSocial.Application.DTOs.Coach;
+﻿using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Coaches;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPackage;
@@ -18,15 +18,23 @@ public class CoachService : ICoachService
     private readonly ICoachProfileRepository _coachProfiles;
     private readonly ILocationRepository _locationRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IReviewRepository _reviewRepository;
+    private readonly IOrderRepository _orderRepository;
+
+
 
     public CoachService(
         ICoachProfileRepository coachProfiles,
         ILocationRepository locationRepository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+          IReviewRepository reviewRepository,
+        IOrderRepository orderRepository)
     {
         _coachProfiles = coachProfiles;
         _locationRepository = locationRepository;
         _unitOfWork = unitOfWork;
+        _reviewRepository = reviewRepository;
+        _orderRepository = orderRepository;
     }
 
     public async Task<ApiResponseDto<List<TopCoachDto>>> GetTopCoachesAsync(int count = 3, CancellationToken cancellationToken = default)
@@ -183,4 +191,69 @@ public class CoachService : ICoachService
 
         return await GetCoachDetailsAsync(coachId, cancellationToken);
     }
+
+    public async Task<ApiResponseDto<bool>> SubmitReviewAsync(Guid coachId, Guid traineeId, CreateReviewDto dto, CancellationToken cancellationToken = default)
+    {
+        // 1. Kiểm tra xem Coach có tồn tại không
+        var coach = await _coachProfiles.GetByIdAsync(coachId, cancellationToken);
+        if (coach == null) throw new NotFoundException("Coach not found.");
+
+        // 2. Lấy danh sách các đơn hàng của Trainee này
+        var orders = await _orderRepository.GetOrdersByBuyerIdAsync(traineeId, cancellationToken);
+
+        // 3. Kiểm tra xem có đơn hàng nào mua của Coach này và đã thanh toán (PAID) hay chưa
+        bool hasPurchased = orders.Any(o => o.CoachId == coachId && o.OrderStatus == FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid);
+        if (!hasPurchased)
+        {
+            throw new ValidationException("You can only review a coach if you have purchased their training package.");
+        }
+
+        // 4. Tạo Review
+        var review = new FitSocial.Domain.Entities.Review
+        {
+            ReviewId = Guid.NewGuid(),
+            CoachId = coachId,
+            TraineeId = traineeId,
+            Rating = dto.Rating,
+            Comment = dto.Comment,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _reviewRepository.AddAsync(review);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<bool>.Ok(true, "Review submitted successfully.");
+    }
+    public async Task<ApiResponseDto<bool>> UpdateReviewAsync(Guid reviewId, Guid traineeId, FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto, CancellationToken cancellationToken = default)
+    {
+        var review = await _reviewRepository.GetByIdAsync(reviewId, cancellationToken);
+        if (review == null) throw new NotFoundException("Review not found.");
+
+        // Chặn không cho phép sửa review của người khác
+        if (review.TraineeId != traineeId) throw new UnauthorizedAccessException("You can only edit your own review.");
+
+        review.Rating = dto.Rating;
+        review.Comment = dto.Comment;
+        review.UpdatedAt = DateTime.UtcNow;
+
+        _reviewRepository.Update(review);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<bool>.Ok(true, "Review updated successfully.");
+    }
+
+    public async Task<ApiResponseDto<bool>> DeleteReviewAsync(Guid reviewId, Guid traineeId, CancellationToken cancellationToken = default)
+    {
+        var review = await _reviewRepository.GetByIdAsync(reviewId, cancellationToken);
+        if (review == null) throw new NotFoundException("Review not found.");
+
+        // Chặn không cho phép xóa review của người khác
+        if (review.TraineeId != traineeId) throw new UnauthorizedAccessException("You can only delete your own review.");
+
+        _reviewRepository.Remove(review);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<bool>.Ok(true, "Review deleted successfully.");
+    }
+
 }

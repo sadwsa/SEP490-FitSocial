@@ -99,13 +99,6 @@
                     <table class="locations-table">
                         <thead>
                             <tr>
-                                <th class="col-check">
-                                    <input type="checkbox"
-                                           class="table-checkbox"
-                                           checked="@isAllSelected"
-                                           @onchange="ToggleSelectAll"
-                                           aria-label="Select all rows" />
-                                </th>
                                 <th class="col-id">LOCATION ID</th>
                                 <th class="col-name">LOCATION NAME</th>
                                 <th class="col-address">ADDRESS</th>
@@ -116,7 +109,7 @@
                             @if (!isLoading && string.IsNullOrWhiteSpace(errorMessage) && !pagedResult.Items.Any())
                             {
                                 <tr>
-                                    <td colspan="5" class="empty-state-cell">
+                                    <td colspan="4" class="empty-state-cell">
                                         <div class="empty-state">
                                             <span class="empty-icon"><AppIcon Name="location" /></span>
                                             <p class="empty-title">
@@ -138,15 +131,7 @@
                                     index++;
                                     var displayIndex = (currentPage - 1) * pageSize + index;
                                     var displayIndexString = (100 + displayIndex).ToString();
-                                    var isRowSelected = selectedLocationIds.Contains(item.LocationId);
-                                    <tr class="location-row @(isRowSelected ? "row-selected" : "")">
-                                        <td class="col-check">
-                                            <input type="checkbox"
-                                                   class="row-checkbox"
-                                                   checked="@isRowSelected"
-                                                   @onchange="(e) => ToggleSelectRow(item.LocationId, e)"
-                                                   aria-label="Select row" />
-                                        </td>
+                                    <tr class="location-row">
                                         <td class="col-id">
                                             <span class="loc-id">#@displayIndexString</span>
                                         </td>
@@ -542,7 +527,6 @@
     private string? toastMessage;
     private System.Timers.Timer? debounceTimer;
     private System.Threading.CancellationTokenSource? toastCts;
-    private HashSet<Guid> selectedLocationIds = new();
 
     // Create Modal state (UC_35.1)
     private bool showCreateModal = false;
@@ -572,8 +556,6 @@
     private bool showWarningModal = false;
     private string warningLocationName = "";
     private string warningMessage = "";
-
-    private bool isAllSelected => pagedResult.Items.Any() && pagedResult.Items.All(i => selectedLocationIds.Contains(i.LocationId));
 
     protected override async Task OnInitializedAsync()
     {
@@ -618,38 +600,6 @@
             pageSize = newSize;
             currentPage = 1;
             await LoadLocationsAsync(1);
-        }
-    }
-
-    private void ToggleSelectAll(ChangeEventArgs e)
-    {
-        var isChecked = e.Value is bool b && b;
-        if (isChecked)
-        {
-            foreach (var item in pagedResult.Items)
-            {
-                selectedLocationIds.Add(item.LocationId);
-            }
-        }
-        else
-        {
-            foreach (var item in pagedResult.Items)
-            {
-                selectedLocationIds.Remove(item.LocationId);
-            }
-        }
-    }
-
-    private void ToggleSelectRow(Guid id, ChangeEventArgs e)
-    {
-        var isChecked = e.Value is bool b && b;
-        if (isChecked)
-        {
-            selectedLocationIds.Add(id);
-        }
-        else
-        {
-            selectedLocationIds.Remove(id);
         }
     }
 

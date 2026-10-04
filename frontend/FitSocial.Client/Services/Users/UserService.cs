@@ -24,7 +24,8 @@ public interface IUserService
         int pageNumber = 1,
         int pageSize = 10);
     Task<ApiResponse<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequest request);
-    Task<ApiResponse<bool>> CheckEmailExistsAsync(string email);
+    Task<ApiResponse<AdminUserDto>> UpdateStaffAccountAsync(Guid userId, UpdateStaffAccountRequest request);
+    Task<ApiResponse<bool>> CheckEmailExistsAsync(string email, Guid? excludingUserId = null);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
     Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
     Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
@@ -231,13 +232,46 @@ public class UserService : IUserService
         }
     }
 
-    public async Task<ApiResponse<bool>> CheckEmailExistsAsync(string email)
+    public async Task<ApiResponse<AdminUserDto>> UpdateStaffAccountAsync(Guid userId, UpdateStaffAccountRequest request)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _httpClient.PutAsJsonAsync($"admin/staff/{userId}", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AdminUserDto>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Failed to update staff account (Status: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> CheckEmailExistsAsync(string email, Guid? excludingUserId = null)
     {
         try
         {
             await AttachBearerTokenAsync();
             var encodedEmail = Uri.EscapeDataString(email?.Trim() ?? string.Empty);
-            var response = await _httpClient.GetAsync($"admin/staff/check-email?email={encodedEmail}");
+            var url = $"admin/staff/check-email?email={encodedEmail}";
+            if (excludingUserId.HasValue)
+            {
+                url += $"&excludingUserId={excludingUserId.Value}";
+            }
+            var response = await _httpClient.GetAsync(url);
             var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
             if (response.IsSuccessStatusCode && result != null)
             {

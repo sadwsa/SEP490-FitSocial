@@ -533,6 +533,23 @@
     color: #15803d;
 }
 
+.row-btn.edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 5px 14px;
+    border-color: #cbd5e1;
+    color: #0284c7;
+    background: #ffffff;
+}
+
+.row-btn.edit:hover {
+    background: #f0f9ff;
+    border-color: #0284c7;
+    color: #0369a1;
+}
+
 .row-btn.add {
     border-color: var(--primary-color);
     color: #fff;

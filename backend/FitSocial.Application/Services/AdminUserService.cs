@@ -237,7 +237,102 @@ public class AdminUserService : IAdminUserService
         }
     }
 
-    public async Task<ApiResponseDto<bool>> CheckEmailExistsAsync(string email, CancellationToken cancellationToken = default)
+    public async Task<ApiResponseDto<AdminUserDto>> UpdateStaffAccountAsync(
+        Guid userId,
+        UpdateStaffAccountRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (request == null)
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Request cannot be null.");
+            }
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user == null)
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Staff account not found.");
+            }
+
+            if (!string.Equals(user.RoleCode, RoleConstants.Staff, StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("User is not a staff member.");
+            }
+
+            var trimmedFullName = request.FullName?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmedFullName) || trimmedFullName.Length < 2)
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Full name must be at least 2 characters.");
+            }
+
+            if (trimmedFullName.Any(char.IsDigit))
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Full name cannot contain numbers.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Email))
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Email is required.");
+            }
+
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+            if (await _userRepository.ExistsByEmailAsync(normalizedEmail, userId, cancellationToken))
+            {
+                return ApiResponseDto<AdminUserDto>.Fail("Email is already registered.");
+            }
+
+            var trimmedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmedPhone))
+            {
+                if (trimmedPhone.Any(char.IsLetter))
+                {
+                    return ApiResponseDto<AdminUserDto>.Fail("Phone number cannot contain letters.");
+                }
+
+                if (!System.Text.RegularExpressions.Regex.IsMatch(trimmedPhone, @"^0\d{9}$"))
+                {
+                    return ApiResponseDto<AdminUserDto>.Fail("Phone number must be a valid 10-digit number starting with 0.");
+                }
+
+                if (await _userRepository.ExistsByPhoneAsync(trimmedPhone, userId, cancellationToken))
+                {
+                    return ApiResponseDto<AdminUserDto>.Fail("Phone number is already registered.");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Password))
+            {
+                if (request.Password.Length < 6)
+                {
+                    return ApiResponseDto<AdminUserDto>.Fail("Password must be at least 6 characters.");
+                }
+
+                if (request.Password != request.ConfirmPassword)
+                {
+                    return ApiResponseDto<AdminUserDto>.Fail("Passwords do not match.");
+                }
+
+                user.PasswordHash = _passwordHasher.HashPassword(request.Password);
+                user.TokenVersion++;
+            }
+
+            user.FullName = trimmedFullName;
+            user.Email = normalizedEmail;
+            user.PhoneNumber = trimmedPhone;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return ApiResponseDto<AdminUserDto>.Ok(MapToAdminDto(user), "Staff account updated successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<AdminUserDto>.Fail($"Error updating staff account: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<bool>> CheckEmailExistsAsync(string email, Guid? excludingUserId = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -247,7 +342,9 @@ public class AdminUserService : IAdminUserService
             }
 
             var normalizedEmail = email.Trim().ToLowerInvariant();
-            var exists = await _userRepository.ExistsByEmailAsync(normalizedEmail, cancellationToken);
+            var exists = excludingUserId.HasValue
+                ? await _userRepository.ExistsByEmailAsync(normalizedEmail, excludingUserId.Value, cancellationToken)
+                : await _userRepository.ExistsByEmailAsync(normalizedEmail, cancellationToken);
             return ApiResponseDto<bool>.Ok(exists, exists ? "Email is already registered." : "Email is available.");
         }
         catch (Exception ex)

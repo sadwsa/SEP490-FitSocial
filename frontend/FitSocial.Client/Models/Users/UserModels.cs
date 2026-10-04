@@ -28,6 +28,15 @@ public class CreateStaffAccountRequest
     public string ConfirmPassword { get; set; } = string.Empty;
 }
 
+public class UpdateStaffAccountRequest
+{
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
+    public string? Password { get; set; }
+    public string? ConfirmPassword { get; set; }
+}
+
 /// <summary>
 /// Profile model for the currently logged-in user (Trainee or Coach).
 /// Does not expose internal UserId or certificate information.

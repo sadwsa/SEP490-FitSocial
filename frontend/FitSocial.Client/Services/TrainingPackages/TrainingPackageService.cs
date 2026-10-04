@@ -48,4 +48,9 @@ public class TrainingPackageService : ITrainingPackageService
         var query = queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : "";
         return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}{query}");
     }
+    public async Task<FitSocial.Client.Models.Common.ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync()
+    {
+        return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}/purchased");
+    }
+
 }

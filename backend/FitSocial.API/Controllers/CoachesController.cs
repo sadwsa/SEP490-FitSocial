@@ -1,4 +1,4 @@
-using FitSocial.Application.DTOs.Coach;
+﻿using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Coaches;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Interfaces;
@@ -180,4 +180,41 @@ public class CoachesController : ControllerBase
         var result = await _bankAccountService.DeleteAccountAsync(currentUserId, bankId, cancellationToken);
         return Ok(result);
     }
+
+    [HttpPost("{id}/reviews")]
+    [Authorize(Roles = "TRAINEE")] // Chỉ Trainee mới được đánh giá
+    public async Task<IActionResult> SubmitReview(Guid id, [FromBody] FitSocial.Application.DTOs.Coaches.CreateReviewDto dto)
+    {
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdString, out var traineeId))
+        {
+            return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token or user ID"));
+        }
+
+        var result = await _coachService.SubmitReviewAsync(id, traineeId, dto);
+        return Ok(result);
+    }
+    [HttpPut("reviews/{reviewId}")]
+    [Authorize(Roles = "TRAINEE")]
+    public async Task<IActionResult> UpdateReview(Guid reviewId, [FromBody] FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto)
+    {
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdString, out var traineeId)) return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token"));
+
+        var result = await _coachService.UpdateReviewAsync(reviewId, traineeId, dto);
+        return Ok(result);
+    }
+
+    [HttpDelete("reviews/{reviewId}")]
+    [Authorize(Roles = "TRAINEE")]
+    public async Task<IActionResult> DeleteReview(Guid reviewId)
+    {
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdString, out var traineeId)) return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token"));
+
+        var result = await _coachService.DeleteReviewAsync(reviewId, traineeId);
+        return Ok(result);
+    }
+
+
 }

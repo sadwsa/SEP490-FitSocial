@@ -104,6 +104,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ISubscriptionPriceHistoryRepository, SubscriptionPriceHistoryRepository>();
+        services.AddScoped<IReviewRepository, ReviewRepository>();
 
         return services;
 

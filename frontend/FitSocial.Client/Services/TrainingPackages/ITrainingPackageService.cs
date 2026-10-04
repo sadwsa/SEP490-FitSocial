@@ -14,4 +14,6 @@ public interface ITrainingPackageService
     Task<ApiResponse<TrainingPackageResponseDto>> CreatePackageAsync(CreateTrainingPackageDto dto);
     Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPackagesByCoachIdAsync(Guid coachId);
     Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetAllPackagesAsync(string? searchKeyword = null, decimal? maxPrice = null, Guid? coachId = null);
+    Task<FitSocial.Client.Models.Common.ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync();
+
 }

@@ -21,6 +21,9 @@
             <button type="button" class="side-item @(IsActive("/admin/users") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/users")'>
                 <AppIcon Name="person" /><span>User Accounts</span>
             </button>
+            <button type="button" class="side-item @(IsActive("/admin/coach-applications") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-applications")'>
+                <AppIcon Name="doc" /><span>Coach Applications</span>
+            </button>
             <button type="button" class="side-item @(IsActive("/admin/coach-subscription-plans") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-subscription-plans")'>
                 <AppIcon Name="trophy" /><span>Coach Registration Plans</span>
             </button>

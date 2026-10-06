@@ -212,16 +212,21 @@
                         }
                         else
                         {
-                            <!-- Single Trainee Enrollment Policy -->
+                            <!-- Single Trainee Enrollment Policy (1 Package Max 1) -->
                             <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/70 p-4 rounded-xl border border-gray-100">
                                 <div>
-                                    <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-0.5">Enrollment Policy</h6>
-                                    <p class="text-xs text-gray-400">1-on-1 personalized training curriculum (Single seat enrollment)</p>
+                                    <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-0.5">Quantity</h6>
+                                    <p class="text-xs text-gray-400">1-on-1 coaching package applies to a single trainee</p>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center gap-1.5 bg-orange-100/70 text-[#C2410C] text-xs font-bold px-3 py-1.5 rounded-xl">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                        Quantity: 1 Package
+                                <div class="flex items-center gap-3">
+                                    <div class="inline-flex items-center gap-2 bg-white border border-gray-200 px-3.5 py-2 rounded-xl shadow-xs">
+                                        <svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                        </svg>
+                                        <span class="text-xs font-bold text-gray-800">1 Package (Max 1)</span>
+                                    </div>
+                                    <span class="text-xs text-gray-500">
+                                        Total: <span class="font-bold text-[#FF5500]">@(package.Price.ToString("N0")) VND</span>
                                     </span>
                                 </div>
                             </div>
@@ -292,6 +297,12 @@
         <!-- Right Sidebar (Empty) -->
         <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
     </div>
+
+    <!-- Package Already In Cart Modal Notification -->
+    <PackageAlreadyInCartModal IsOpen="@showAlreadyInCartModal"
+                               PackageTitle="@package?.Title"
+                               OnClose="() => showAlreadyInCartModal = false"
+                               OnViewCart="NavigateToCart" />
 </div>
 
 @code {
@@ -311,6 +322,7 @@
     private bool isAddingToCart = false;
     private int cartCount = 0;
     private bool isAuthenticated = false;
+    private bool showAlreadyInCartModal = false;
 
     // Toast state
     private string? toastSuccessMessage;
@@ -435,22 +447,37 @@
         isAddingToCart = true;
         try
         {
-            var request = new FitSocial.Client.Models.Cart.AddToCartRequestDto
+            var dto = new AddToCartDto
             {
                 PackageId = package.PackageId,
                 Quantity = 1
             };
 
-            var response = await CartService.AddToCartAsync(request);
+            var response = await CartService.AddToCartAsync(dto);
             if (response.Success)
             {
                 inCart = true;
-                cartCount += 1;
+                var countRes = await CartService.GetCartCountAsync();
+                if (countRes.Success)
+                {
+                    cartCount = countRes.Data;
+                }
+                else
+                {
+                    cartCount++;
+                }
                 ShowSuccessToast(response.Message ?? "Added to cart successfully!");
             }
             else
             {
-                ShowErrorToast(response.Message ?? "Failed to add product to cart.");
+                if (FitSocial.Client.Services.Cart.CartService.IsAlreadyInCartError(response.Message))
+                {
+                    showAlreadyInCartModal = true;
+                }
+                else
+                {
+                    ShowErrorToast(response.Message ?? "Failed to add product to cart.");
+                }
             }
         }
         catch (Exception ex)
@@ -550,13 +577,13 @@
         isAddingToCart = true;
         try
         {
-            var request = new FitSocial.Client.Models.Cart.AddToCartRequestDto
+            var dto = new AddToCartDto
             {
                 PackageId = package.PackageId,
                 Quantity = 1
             };
 
-            var response = await CartService.AddToCartAsync(request);
+            var response = await CartService.AddToCartAsync(dto);
             if (response.Success)
             {
                 inCart = true;
@@ -565,7 +592,14 @@
             }
             else
             {
-                ShowErrorToast(response.Message ?? "Failed to proceed to checkout.");
+                if (FitSocial.Client.Services.Cart.CartService.IsAlreadyInCartError(response.Message))
+                {
+                    showAlreadyInCartModal = true;
+                }
+                else
+                {
+                    ShowErrorToast(response.Message ?? "Failed to proceed to checkout.");
+                }
             }
         }
         catch (Exception ex)
@@ -576,5 +610,11 @@
         {
             isAddingToCart = false;
         }
+    }
+
+    private void NavigateToCart()
+    {
+        showAlreadyInCartModal = false;
+        Navigation.NavigateTo("cart");
     }
 }

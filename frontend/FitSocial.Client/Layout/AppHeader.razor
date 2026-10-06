@@ -393,7 +393,6 @@
     {
         CartService.OnCartChanged += HandleCartChanged;
 
-        if (string.IsNullOrWhiteSpace(UserName) || string.IsNullOrWhiteSpace(UserInitials))
         try
         {
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -404,6 +403,12 @@
                 if (string.IsNullOrWhiteSpace(UserName) || string.IsNullOrWhiteSpace(UserInitials) || string.IsNullOrWhiteSpace(UserAvatarUrl))
                 {
                     await LoadCurrentUserAsync();
+                }
+
+                // Tự động tải số lượng giỏ hàng nếu chưa được truyền qua parameter
+                if (!CartCount.HasValue)
+                {
+                    await LoadCartCountAsync();
                 }
 
                 // Tải danh sách thông báo tin nhắn và kết nối SignalR Hub

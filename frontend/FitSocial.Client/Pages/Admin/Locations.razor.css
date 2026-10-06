@@ -169,6 +169,7 @@
 }
 
 .search-input-box {
+    position: relative;
     display: flex;
     align-items: center;
     background: #f3f6fb;
@@ -189,10 +190,15 @@
 }
 
 .search-icon {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
     color: #64748b;
     display: flex;
     align-items: center;
     flex-shrink: 0;
+    pointer-events: auto;
 }
 
 .search-icon ::deep svg {

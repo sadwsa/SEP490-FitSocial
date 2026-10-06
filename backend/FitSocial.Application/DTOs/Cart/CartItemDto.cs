@@ -7,10 +7,15 @@ namespace FitSocial.Application.DTOs.Cart
         public Guid CartId { get; set; }
         public Guid PackageId { get; set; }
         public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
         public int? DurationDays { get; set; }
         public string DurationLabel { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public int Quantity { get; set; } = 1;
+        public short? SessionCount { get; set; }
+        public short? MinAge { get; set; }
+        public string? TargetAudience { get; set; }
+        public string? ThumbnailUrl { get; set; }
         public Guid CoachId { get; set; }
         public string CoachName { get; set; } = string.Empty;
         public string? CoachAvatarUrl { get; set; }

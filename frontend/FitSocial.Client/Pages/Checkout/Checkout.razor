@@ -143,18 +143,6 @@
                     {
                         <h3 class="font-bold text-gray-900 mb-6">Training Package Order Summary</h3>
 
-                        @if (cartItems.Count > 1)
-                        {
-                            <div class="mb-5">
-                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-2">Select package to pay (@cartItems.Count in cart)</label>
-                                <select value="@selectedPackageId" @onchange="OnSelectPackageChanged" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#FF5500]">
-                                    @foreach (var c in cartItems)
-                                    {
-                                        <option value="@c.PackageId">@c.Title — @c.Price.ToString("N0") VND (@c.CoachName)</option>
-                                    }
-                                </select>
-                            </div>
-                        }
 
                         <div class="flex items-start justify-between gap-4 mb-2">
                             <p class="font-bold text-gray-900 text-sm">@preview.PackageTitle (@preview.DurationDays Days)</p>
@@ -355,6 +343,12 @@
             if (PackageId.HasValue && PackageId.Value != Guid.Empty)
             {
                 selectedPackageId = PackageId.Value;
+                var cartRes = await CartService.GetCartAsync();
+                if (cartRes.Success && cartRes.Data != null)
+                {
+                    cartItems = cartRes.Data.Items.Where(i => i.IsAvailable).ToList();
+                }
+
                 var res = await CheckoutService.PrepareAsync(selectedPackageId);
                 if (res.Success && res.Data != null)
                 {

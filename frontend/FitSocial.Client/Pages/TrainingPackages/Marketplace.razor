@@ -388,6 +388,12 @@
             </div>
         </aside>
     </div>
+
+    <!-- Package Already In Cart Modal Notification -->
+    <PackageAlreadyInCartModal IsOpen="@showAlreadyInCartModal"
+                               PackageTitle="@alreadyInCartPackageTitle"
+                               OnClose="() => showAlreadyInCartModal = false"
+                               OnViewCart="NavigateToCart" />
 </div>
 
 @code {
@@ -397,6 +403,8 @@
 
     private bool isLoading = true;
     private Guid? addingPackageId = null;
+    private bool showAlreadyInCartModal = false;
+    private string? alreadyInCartPackageTitle;
 
     // Filter states
     private string searchKeyword = "";
@@ -605,29 +613,46 @@
 
         if (cartPackageIds.Contains(pkg.PackageId))
         {
-            ShowErrorToast("This package is already in your cart. You cannot purchase multiple quantities.");
+            alreadyInCartPackageTitle = pkg.Title;
+            showAlreadyInCartModal = true;
             return;
         }
 
         addingPackageId = pkg.PackageId;
         try
         {
-            var request = new FitSocial.Client.Models.Cart.AddToCartRequestDto
+            var dto = new FitSocial.Client.Models.Cart.AddToCartDto
             {
                 PackageId = pkg.PackageId,
                 Quantity = 1 // Single quantity rule
             };
 
-            var res = await CartService.AddToCartAsync(request);
+            var res = await CartService.AddToCartAsync(dto);
             if (res.Success)
             {
                 cartPackageIds.Add(pkg.PackageId);
-                headerCartCount++;
+                var countRes = await CartService.GetCartCountAsync();
+                if (countRes.Success)
+                {
+                    headerCartCount = countRes.Data;
+                }
+                else
+                {
+                    headerCartCount++;
+                }
                 ShowSuccessToast("Training package added to your cart!");
             }
             else
             {
-                ShowErrorToast(res.Message ?? "Failed to add package to cart.");
+                if (FitSocial.Client.Services.Cart.CartService.IsAlreadyInCartError(res.Message))
+                {
+                    alreadyInCartPackageTitle = pkg.Title;
+                    showAlreadyInCartModal = true;
+                }
+                else
+                {
+                    ShowErrorToast(res.Message ?? "Failed to add package to cart.");
+                }
             }
         }
         catch (Exception ex)
@@ -638,6 +663,12 @@
         {
             addingPackageId = null;
         }
+    }
+
+    private void NavigateToCart()
+    {
+        showAlreadyInCartModal = false;
+        Navigation.NavigateTo("cart");
     }
 
     private void ShowSuccessToast(string message)

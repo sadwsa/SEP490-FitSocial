@@ -1,4 +1,4 @@
-﻿using FitSocial.Application.DTOs.Coach;
+using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Coaches;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPackage;
@@ -256,4 +256,152 @@ public class CoachService : ICoachService
         return ApiResponseDto<bool>.Ok(true, "Review deleted successfully.");
     }
 
+    public async Task<ApiResponseDto<CoachApplicationListResponseDto>> GetCoachApplicationsAsync(
+        string? search = null,
+        string? status = null,
+        int? minExperience = null,
+        int? maxExperience = null,
+        string? sortBy = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var (items, totalCount) = await _coachProfiles.GetPagedCoachApplicationsAsync(
+                search, status, minExperience, maxExperience, sortBy, pageNumber, pageSize, cancellationToken);
+
+            var countsDict = await _coachProfiles.GetCoachApplicationStatusCountsAsync(cancellationToken);
+
+            var dtos = items.Select(c => new CoachApplicationItemDto
+            {
+                CoachId = c.CoachId,
+                FullName = c.Coach?.FullName,
+                Email = c.Coach?.Email,
+                PhoneNumber = c.Coach?.PhoneNumber,
+                AvatarUrl = c.Coach?.AvatarUrl,
+                ExperienceYears = c.ExperienceYears,
+                Bio = c.Bio,
+                IdentityCardUrl = c.IdentityCardUrl,
+                CertificateUrl = c.CertificateUrl,
+                CertificatesCount = c.CoachCertificates?.Count ?? 0,
+                ApprovalStatus = string.IsNullOrWhiteSpace(c.ApprovalStatus) ? "PENDING" : c.ApprovalStatus,
+                Status = c.Status,
+                CreatedAt = c.Coach?.CreatedAt ?? c.UpdatedAt,
+                UpdatedAt = c.UpdatedAt,
+                ApprovedByName = c.ApprovedByNavigation?.FullName,
+                Locations = c.Locations?.Select(l => l.LocationName).ToList() ?? new List<string>()
+            }).ToList();
+
+            var pagedResult = PagedResultDto<CoachApplicationItemDto>.Create(dtos, totalCount, pageNumber, pageSize);
+            var statusCounts = new CoachApplicationStatusCountsDto
+            {
+                All = countsDict.GetValueOrDefault("all", 0),
+                Pending = countsDict.GetValueOrDefault("pending", 0),
+                Approved = countsDict.GetValueOrDefault("approved", 0),
+                Rejected = countsDict.GetValueOrDefault("rejected", 0)
+            };
+
+            var response = new CoachApplicationListResponseDto
+            {
+                Applications = pagedResult,
+                StatusCounts = statusCounts
+            };
+
+            return ApiResponseDto<CoachApplicationListResponseDto>.Ok(response, "Coach application requests retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<CoachApplicationListResponseDto>.Fail($"Error retrieving coach applications: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<CoachApplicationDetailDto>> GetCoachApplicationDetailsAsync(
+        Guid coachId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var c = await _coachProfiles.GetCoachApplicationDetailsAsync(coachId, cancellationToken);
+            if (c == null)
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail("Coach application not found.");
+            }
+
+            var latestEkyc = c.CoachEkycVerifications?.OrderByDescending(e => e.CreatedAt).FirstOrDefault();
+
+            var detail = new CoachApplicationDetailDto
+            {
+                CoachId = c.CoachId,
+                FullName = c.Coach?.FullName,
+                Email = c.Coach?.Email,
+                PhoneNumber = c.Coach?.PhoneNumber,
+                AvatarUrl = c.Coach?.AvatarUrl,
+                Gender = c.Coach?.Gender,
+                DateOfBirth = c.Coach?.DateOfBirth,
+                ExperienceYears = c.ExperienceYears,
+                Bio = c.Bio,
+                IdentityCardUrl = c.IdentityCardUrl,
+                CertificateUrl = c.CertificateUrl,
+                CertificatesCount = c.CoachCertificates?.Count ?? 0,
+                ApprovalStatus = string.IsNullOrWhiteSpace(c.ApprovalStatus) ? "PENDING" : c.ApprovalStatus,
+                Status = c.Status,
+                CreatedAt = c.Coach?.CreatedAt ?? c.UpdatedAt,
+                UpdatedAt = c.UpdatedAt,
+                ApprovedByName = c.ApprovedByNavigation?.FullName,
+                Locations = c.Locations?.Select(l => l.LocationName).ToList() ?? new List<string>(),
+                Certificates = c.CoachCertificates?.Select(cert => new CoachCertificateDetailDto
+                {
+                    CertificateId = cert.CertificateId,
+                    CertificateName = cert.CertificateName,
+                    CertificateUrl = cert.CertificateUrl,
+                    IssuedBy = cert.IssuedBy,
+                    IssuedDate = cert.IssuedDate,
+                    ExpiryDate = cert.ExpiryDate,
+                    VerificationStatus = cert.VerificationStatus
+                }).ToList() ?? new List<CoachCertificateDetailDto>(),
+                Ekyc = latestEkyc == null ? null : new CoachApplicationEkycDto
+                {
+                    FullNameOnCard = latestEkyc.FullNameOnCard,
+                    DateOfBirthOnCard = latestEkyc.DateOfBirthOnCard,
+                    Sex = latestEkyc.Sex,
+                    FrontCardUrl = latestEkyc.FrontCardUrl,
+                    BackCardUrl = latestEkyc.BackCardUrl,
+                    FaceImageUrl = latestEkyc.FaceImageUrl,
+                    LivenessScore = latestEkyc.LivenessScore,
+                    FaceMatchConfidence = latestEkyc.FaceMatchConfidence,
+                    VerificationStatus = latestEkyc.VerificationStatus,
+                    FailureReason = latestEkyc.FailureReason,
+                    CreatedAt = latestEkyc.CreatedAt
+                }
+            };
+
+            return ApiResponseDto<CoachApplicationDetailDto>.Ok(detail, "Coach application details retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<CoachApplicationDetailDto>.Fail($"Error retrieving coach application details: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<CoachApplicationStatusCountsDto>> GetCoachApplicationStatusCountsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var countsDict = await _coachProfiles.GetCoachApplicationStatusCountsAsync(cancellationToken);
+            var statusCounts = new CoachApplicationStatusCountsDto
+            {
+                All = countsDict.GetValueOrDefault("all", 0),
+                Pending = countsDict.GetValueOrDefault("pending", 0),
+                Approved = countsDict.GetValueOrDefault("approved", 0),
+                Rejected = countsDict.GetValueOrDefault("rejected", 0)
+            };
+            return ApiResponseDto<CoachApplicationStatusCountsDto>.Ok(statusCounts);
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<CoachApplicationStatusCountsDto>.Fail($"Error retrieving status counts: {ex.Message}");
+        }
+    }
 }

@@ -1,0 +1,731 @@
+@page "/admin/coach-applications"
+@layout AdminLayout
+@attribute [Authorize(Roles = "STAFF,ADMIN")]
+@implements IDisposable
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.Coaches
+@using FitSocial.Client.Services.Coaches
+@inject ICoachService CoachService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Coach Application Requests - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="STAFF,ADMIN">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert @(isErrorToast ? "error" : "info")" role="alert">
+                <AppIcon Name="@(isErrorToast ? "warning" : "info")" />
+                <span class="alert-text">@toastMessage</span>
+                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
+            </div>
+        }
+
+        <div class="view-header">
+            <div class="title-with-badge">
+                <h2 class="view-title">Coach Application Requests</h2>
+                <span class="badge-pending-pill">
+                    <span class="pill-dot"></span>
+                    @statusCounts.Pending Pending Review
+                </span>
+            </div>
+            <p class="view-sub">Review and verify coach application submissions across the FitSocial platform.</p>
+        </div>
+
+        <!-- Status Filter Tabs (Matching Mockup) -->
+        <div class="cat-tabs-bar">
+            <button type="button" class="tab-btn @(currentStatusFilter == "ALL" ? "active" : "")" @onclick='() => SetStatusFilterAsync("ALL")'>
+                <span class="tab-label">All Applications</span>
+                <span class="tab-count-pill">@statusCounts.All</span>
+            </button>
+            <button type="button" class="tab-btn @(currentStatusFilter == "PENDING" ? "active" : "")" @onclick='() => SetStatusFilterAsync("PENDING")'>
+                <span class="tab-label">Pending Review</span>
+                <span class="tab-count-pill">@statusCounts.Pending</span>
+            </button>
+            <button type="button" class="tab-btn @(currentStatusFilter == "APPROVED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("APPROVED")'>
+                <span class="tab-label">Approved</span>
+                <span class="tab-count-pill">@statusCounts.Approved</span>
+            </button>
+            <button type="button" class="tab-btn @(currentStatusFilter == "REJECTED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("REJECTED")'>
+                <span class="tab-label">Rejected</span>
+                <span class="tab-count-pill">@statusCounts.Rejected</span>
+            </button>
+        </div>
+
+        <!-- Toolbar: Search, Filters & Actions -->
+        <div class="toolbar">
+            <div class="search-wrap">
+                <span class="search-icon"><AppIcon Name="search" /></span>
+                <input value="@searchTerm"
+                       @oninput="OnSearchInput"
+                       @onkeydown="HandleSearchKeyDown"
+                       class="toolbar-input"
+                       placeholder="Search by applicant name, email, application ID (e.g. #APP-...)" />
+            </div>
+
+            <select value="@experienceFilter" @onchange="OnExperienceFilterChanged" class="toolbar-select">
+                <option value="">Experience: All Levels</option>
+                <option value="under_1">Experience: &lt; 1 Year</option>
+                <option value="1_3">Experience: 1 - 3 Years</option>
+                <option value="3_5">Experience: 3 - 5 Years</option>
+                <option value="over_5">Experience: 5+ Years</option>
+            </select>
+
+            <select value="@sortBy" @onchange="OnSortChanged" class="toolbar-select">
+                <option value="submission_desc">Sort: Submission (Newest first)</option>
+                <option value="submission_asc">Sort: Submission (Oldest first)</option>
+                <option value="exp_desc">Sort: Experience (Highest first)</option>
+                <option value="exp_asc">Sort: Experience (Lowest first)</option>
+                <option value="name_asc">Sort: Applicant Name (A-Z)</option>
+                <option value="name_desc">Sort: Applicant Name (Z-A)</option>
+            </select>
+
+            <button type="button" class="icon-refresh-btn" @onclick="LoadApplicationsAsync" disabled="@isLoading" title="Refresh">
+                <AppIcon Name="refresh" />
+            </button>
+        </div>
+
+        <!-- Loading Indicator -->
+        @if (isLoading)
+        {
+            <div class="py-4 text-center muted flex items-center justify-center gap-2">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Loading coach application requests...</span>
+            </div>
+        }
+
+        <!-- Applications Data Table -->
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"><input type="checkbox" aria-label="Select all" disabled /></th>
+                        <th>APPLICANT PROFILE</th>
+                        <th>COACH INFO</th>
+                        <th>SUBMITTED &amp; SLA</th>
+                        <th>STATUS</th>
+                        <th class="text-end">ACTIONS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var app in pagedApplications.Items)
+                    {
+                        <tr>
+                            <td>
+                                <input type="checkbox" aria-label="Select item" />
+                            </td>
+                            <td>
+                                <div class="applicant-profile-cell">
+                                    <div class="avatar-wrap">
+                                        @if (!string.IsNullOrWhiteSpace(app.AvatarUrl))
+                                        {
+                                            <img src="@app.AvatarUrl" alt="@app.FullName" class="applicant-avatar" />
+                                        }
+                                        else
+                                        {
+                                            <div class="avatar-fallback">@GetInitials(app.FullName)</div>
+                                        }
+                                    </div>
+                                    <div class="applicant-info">
+                                        <strong class="applicant-name">@(string.IsNullOrWhiteSpace(app.FullName) ? "Unnamed Applicant" : app.FullName)</strong>
+                                        <div class="applicant-email">@app.Email</div>
+                                        @if (!string.IsNullOrWhiteSpace(app.PhoneNumber))
+                                        {
+                                            <div class="applicant-phone">@app.PhoneNumber</div>
+                                        }
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="coach-info-cell">
+                                    <span class="exp-badge">@(app.ExperienceYears ?? 0) yrs experience</span>
+                                    @if (app.CertificatesCount > 0)
+                                    {
+                                        <span class="cert-count-pill">@app.CertificatesCount certs</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(app.Bio))
+                                    {
+                                        <div class="bio-snippet" title="@app.Bio">@Truncate(app.Bio, 65)</div>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                <div class="date-cell">
+                                    <div class="date-primary">@FormatSubmittedDate(app.CreatedAt)</div>
+                                    <div class="date-relative">@GetRelativeTime(app.CreatedAt)</div>
+                                </div>
+                            </td>
+                            <td>
+                                @if (string.Equals(app.ApprovalStatus, "APPROVED", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="status-badge approved">Approved</span>
+                                }
+                                else if (string.Equals(app.ApprovalStatus, "REJECTED", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="status-badge rejected">Rejected</span>
+                                }
+                                else
+                                {
+                                    <span class="status-badge pending">Pending Review</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button type="button" class="btn-review" @onclick="() => OpenDetailModal(app.CoachId)">
+                                    Review
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                    @if (!isLoading && !pagedApplications.Items.Any())
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center muted py-5">
+                                <div class="empty-state">
+                                    <AppIcon Name="doc" />
+                                    <p class="empty-title">No coach application requests found</p>
+                                    <p class="empty-sub">Try adjusting your filters or search term.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="pagination-container">
+            <div class="pagination-info">
+                @if (pagedApplications.TotalCount > 0)
+                {
+                    var start = (currentPage - 1) * pageSize + 1;
+                    var end = Math.Min(currentPage * pageSize, pagedApplications.TotalCount);
+                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedApplications.TotalCount</strong> applications</span>
+                }
+                else
+                {
+                    <span>0 applications</span>
+                }
+            </div>
+
+            @if (pagedApplications.TotalPages > 1)
+            {
+                <div class="pagination-controls">
+                    <button type="button" class="page-btn" disabled="@(!pagedApplications.HasPreviousPage)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Previous</button>
+                    @foreach (var p in GetVisiblePageNumbers())
+                    {
+                        if (p == -1)
+                        {
+                            <span class="page-dots">…</span>
+                        }
+                        else
+                        {
+                            var pageNum = p;
+                            <button type="button" class="page-btn @(pageNum == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pageNum)">@pageNum</button>
+                        }
+                    }
+                    <button type="button" class="page-btn" disabled="@(!pagedApplications.HasNextPage)" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
+                </div>
+            }
+
+            <div class="page-size-selector">
+                <span>Per page:</span>
+                <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
+                    <option value="10">10 / page</option>
+                    <option value="20">20 / page</option>
+                    <option value="50">50 / page</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Read-Only Review / Details Modal -->
+        @if (selectedDetail != null)
+        {
+            <div class="ca-modal-overlay" @onclick="CloseDetailModal">
+                <div class="ca-modal-dialog" @onclick:stopPropagation="true">
+                    <div class="ca-modal-header">
+                        <div>
+                            <h3 class="ca-modal-title">Coach Application Review</h3>
+                            <span class="ca-modal-sub">@selectedDetail.ApplicationCode • ID: @selectedDetail.CoachId</span>
+                        </div>
+                        <button type="button" class="ca-modal-close-btn" @onclick="CloseDetailModal">✕</button>
+                    </div>
+
+                    <div class="ca-modal-body">
+                        <!-- Summary Header Card -->
+                        <div class="detail-card applicant-card">
+                            <div class="detail-avatar-wrap">
+                                @if (!string.IsNullOrWhiteSpace(selectedDetail.AvatarUrl))
+                                {
+                                    <img src="@selectedDetail.AvatarUrl" alt="@selectedDetail.FullName" class="detail-avatar" />
+                                }
+                                else
+                                {
+                                    <div class="detail-avatar-fallback">@GetInitials(selectedDetail.FullName)</div>
+                                }
+                            </div>
+                            <div class="detail-meta">
+                                <h4 class="detail-name">@selectedDetail.FullName</h4>
+                                <div class="detail-meta-grid">
+                                    <div><strong>Email:</strong> @selectedDetail.Email</div>
+                                    <div><strong>Phone:</strong> @(selectedDetail.PhoneNumber ?? "Not provided")</div>
+                                    <div><strong>Gender:</strong> @(selectedDetail.Gender ?? "Not specified")</div>
+                                    <div><strong>Date of Birth:</strong> @(selectedDetail.DateOfBirth?.ToString("dd/MM/yyyy") ?? "Not specified")</div>
+                                    <div><strong>Submission Date:</strong> @(selectedDetail.CreatedAt?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</div>
+                                    <div><strong>Status:</strong>
+                                        <span class="status-badge @(selectedDetail.ApprovalStatus?.ToLowerInvariant() ?? "pending")">
+                                            @(selectedDetail.ApprovalStatus ?? "PENDING")
+                                        </span>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(selectedDetail.ApprovedByName))
+                                    {
+                                        <div><strong>Reviewed By:</strong> @selectedDetail.ApprovedByName</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Professional Background -->
+                        <div class="detail-card">
+                            <h5 class="section-heading">Professional Background</h5>
+                            <div class="detail-row">
+                                <span class="detail-label">Experience:</span>
+                                <span class="detail-value font-semibold">@(selectedDetail.ExperienceYears ?? 0) Years</span>
+                            </div>
+                            <div class="detail-row mt-2">
+                                <span class="detail-label">Biography / Motivation:</span>
+                                <p class="detail-bio">@(string.IsNullOrWhiteSpace(selectedDetail.Bio) ? "No biography provided." : selectedDetail.Bio)</p>
+                            </div>
+                            @if (selectedDetail.Locations.Any())
+                            {
+                                <div class="detail-row mt-2">
+                                    <span class="detail-label">Locations:</span>
+                                    <div class="tag-list">
+                                        @foreach (var loc in selectedDetail.Locations)
+                                        {
+                                            <span class="loc-tag">@loc</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Submitted Certificates -->
+                        <div class="detail-card">
+                            <h5 class="section-heading">
+                                Submitted Certificates
+                                <span class="badge-count">@selectedDetail.Certificates.Count</span>
+                            </h5>
+                            @if (selectedDetail.Certificates.Any())
+                            {
+                                <div class="cert-list">
+                                    @foreach (var cert in selectedDetail.Certificates)
+                                    {
+                                        <div class="cert-item">
+                                            <div class="cert-info">
+                                                <div class="cert-name">@(string.IsNullOrWhiteSpace(cert.CertificateName) ? "Certificate Document" : cert.CertificateName)</div>
+                                                <div class="cert-meta">
+                                                    Issued by: <strong>@(cert.IssuedBy ?? "N/A")</strong>
+                                                    @if (cert.IssuedDate.HasValue)
+                                                    {
+                                                        <span> • Issued: @cert.IssuedDate.Value.ToString("dd/MM/yyyy")</span>
+                                                    }
+                                                    @if (cert.ExpiryDate.HasValue)
+                                                    {
+                                                        <span> • Expires: @cert.ExpiryDate.Value.ToString("dd/MM/yyyy")</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="cert-actions">
+                                                <span class="cert-status @(cert.VerificationStatus?.ToLowerInvariant() ?? "pending")">@(cert.VerificationStatus ?? "PENDING")</span>
+                                                @if (!string.IsNullOrWhiteSpace(cert.CertificateUrl))
+                                                {
+                                                    <a href="@cert.CertificateUrl" target="_blank" rel="noopener noreferrer" class="view-link">View File ↗</a>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(selectedDetail.CertificateUrl))
+                            {
+                                <div class="cert-item">
+                                    <div class="cert-info">
+                                        <div class="cert-name">Certificate File</div>
+                                    </div>
+                                    <a href="@selectedDetail.CertificateUrl" target="_blank" rel="noopener noreferrer" class="view-link">View Certificate ↗</a>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted text-sm">No certificates submitted with this application.</p>
+                            }
+                        </div>
+
+                        <!-- Identity & eKYC Verification -->
+                        <div class="detail-card">
+                            <h5 class="section-heading">Identity Verification &amp; eKYC</h5>
+                            @if (selectedDetail.Ekyc != null)
+                            {
+                                var ekyc = selectedDetail.Ekyc;
+                                <div class="ekyc-grid">
+                                    <div><strong>Name on ID:</strong> @(ekyc.FullNameOnCard ?? "N/A")</div>
+                                    <div><strong>DOB on ID:</strong> @(ekyc.DateOfBirthOnCard?.ToString("dd/MM/yyyy") ?? "N/A")</div>
+                                    <div><strong>Gender:</strong> @(ekyc.Sex ?? "N/A")</div>
+                                    <div><strong>Verification Status:</strong> <span class="status-badge @(ekyc.VerificationStatus?.ToLowerInvariant() ?? "pending")">@(ekyc.VerificationStatus ?? "COMPLETED")</span></div>
+                                    @if (ekyc.LivenessScore.HasValue)
+                                    {
+                                        <div><strong>Liveness Score:</strong> @ekyc.LivenessScore.Value.ToString("P1")</div>
+                                    }
+                                    @if (ekyc.FaceMatchConfidence.HasValue)
+                                    {
+                                        <div><strong>Face Match Confidence:</strong> @ekyc.FaceMatchConfidence.Value.ToString("P1")</div>
+                                    }
+                                </div>
+
+                                <div class="id-images-row">
+                                    @if (!string.IsNullOrWhiteSpace(ekyc.FrontCardUrl))
+                                    {
+                                        <div class="id-img-box">
+                                            <span class="id-img-label">Front ID Card</span>
+                                            <a href="@ekyc.FrontCardUrl" target="_blank" rel="noopener noreferrer">
+                                                <img src="@ekyc.FrontCardUrl" alt="Front ID" class="id-thumb" />
+                                            </a>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(ekyc.BackCardUrl))
+                                    {
+                                        <div class="id-img-box">
+                                            <span class="id-img-label">Back ID Card</span>
+                                            <a href="@ekyc.BackCardUrl" target="_blank" rel="noopener noreferrer">
+                                                <img src="@ekyc.BackCardUrl" alt="Back ID" class="id-thumb" />
+                                            </a>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(ekyc.FaceImageUrl))
+                                    {
+                                        <div class="id-img-box">
+                                            <span class="id-img-label">Live Face Photo</span>
+                                            <a href="@ekyc.FaceImageUrl" target="_blank" rel="noopener noreferrer">
+                                                <img src="@ekyc.FaceImageUrl" alt="Live Face" class="id-thumb" />
+                                            </a>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(selectedDetail.IdentityCardUrl))
+                            {
+                                <div class="id-img-box">
+                                    <span class="id-img-label">ID Card</span>
+                                    <a href="@selectedDetail.IdentityCardUrl" target="_blank" rel="noopener noreferrer" class="view-link">
+                                        View ID Card Document ↗
+                                    </a>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted text-sm">No identity card documents submitted.</p>
+                            }
+                        </div>
+
+                    </div>
+
+                    <div class="ca-modal-footer">
+                        <button type="button" class="ca-btn-close-modal" @onclick="CloseDetailModal">Close</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <div class="auth-alert error" role="alert">
+            <AppIcon Name="warning" />
+            <span>You do not have permission to view Coach Application Requests. Requires STAFF or ADMIN role.</span>
+        </div>
+        <button type="button" class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/login")'>Go to sign in</button>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string? toastMessage;
+    private bool isErrorToast;
+    private string searchTerm = "";
+    private string currentStatusFilter = "PENDING";
+    private string experienceFilter = "";
+    private string sortBy = "submission_desc";
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private bool isLoading = false;
+
+    private PagedResult<CoachApplicationItemDto> pagedApplications = new();
+    private CoachApplicationStatusCountsDto statusCounts = new();
+    private CoachApplicationDetailDto? selectedDetail;
+    private System.Timers.Timer? debounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadApplicationsAsync();
+    }
+
+    private async Task LoadApplicationsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            int? minExp = null;
+            int? maxExp = null;
+
+            switch (experienceFilter)
+            {
+                case "under_1":
+                    minExp = 0;
+                    maxExp = 0;
+                    break;
+                case "1_3":
+                    minExp = 1;
+                    maxExp = 3;
+                    break;
+                case "3_5":
+                    minExp = 3;
+                    maxExp = 5;
+                    break;
+                case "over_5":
+                    minExp = 5;
+                    maxExp = null;
+                    break;
+            }
+
+            var res = await CoachService.GetCoachApplicationsAsync(
+                search: searchTerm,
+                status: currentStatusFilter,
+                minExperience: minExp,
+                maxExperience: maxExp,
+                sortBy: sortBy,
+                pageNumber: currentPage,
+                pageSize: pageSize);
+
+            if (res.Success && res.Data != null)
+            {
+                pagedApplications = res.Data.Applications;
+                statusCounts = res.Data.StatusCounts;
+
+                if (pagedApplications.TotalPages > 0 && currentPage > pagedApplications.TotalPages)
+                {
+                    currentPage = pagedApplications.TotalPages;
+                    await LoadApplicationsAsync();
+                    return;
+                }
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to load coach applications.";
+                isErrorToast = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error: {ex.Message}";
+            isErrorToast = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SetStatusFilterAsync(string status)
+    {
+        if (currentStatusFilter == status) return;
+        currentStatusFilter = status;
+        currentPage = 1;
+        await LoadApplicationsAsync();
+    }
+
+    private async Task OnExperienceFilterChanged(ChangeEventArgs e)
+    {
+        experienceFilter = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await LoadApplicationsAsync();
+    }
+
+    private async Task OnSortChanged(ChangeEventArgs e)
+    {
+        sortBy = e.Value?.ToString() ?? "submission_desc";
+        currentPage = 1;
+        await LoadApplicationsAsync();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+        debounceTimer = new System.Timers.Timer(400) { AutoReset = false };
+        debounceTimer.Elapsed += async (_, _) =>
+        {
+            currentPage = 1;
+            await InvokeAsync(LoadApplicationsAsync);
+            await InvokeAsync(StateHasChanged);
+        };
+        debounceTimer.Start();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            debounceTimer?.Stop();
+            currentPage = 1;
+            await LoadApplicationsAsync();
+        }
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        if (page < 1 || (pagedApplications.TotalPages > 0 && page > pagedApplications.TotalPages) || page == currentPage)
+            return;
+
+        currentPage = page;
+        await LoadApplicationsAsync();
+    }
+
+    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var newSize) && newSize > 0)
+        {
+            pageSize = newSize;
+            currentPage = 1;
+            await LoadApplicationsAsync();
+        }
+    }
+
+    private IEnumerable<int> GetVisiblePageNumbers()
+    {
+        var total = pagedApplications.TotalPages;
+        if (total <= 1) yield break;
+
+        var current = currentPage;
+        var delta = 2;
+        var left = Math.Max(1, current - delta);
+        var right = Math.Min(total, current + delta);
+
+        if (left > 1)
+        {
+            yield return 1;
+            if (left > 2) yield return -1;
+        }
+
+        for (var i = left; i <= right; i++)
+        {
+            yield return i;
+        }
+
+        if (right < total)
+        {
+            if (right < total - 1) yield return -1;
+            yield return total;
+        }
+    }
+
+    private async Task OpenDetailModal(Guid coachId)
+    {
+        isLoading = true;
+        try
+        {
+            var res = await CoachService.GetCoachApplicationDetailsAsync(coachId);
+            if (res.Success && res.Data != null)
+            {
+                selectedDetail = res.Data;
+                await SetBodyScrollLockAsync(true);
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to load application details.";
+                isErrorToast = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error loading details: {ex.Message}";
+            isErrorToast = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CloseDetailModal()
+    {
+        selectedDetail = null;
+        await SetBodyScrollLockAsync(false);
+    }
+
+    private async Task SetBodyScrollLockAsync(bool isLocked)
+    {
+        try
+        {
+            var overflowStyle = isLocked ? "hidden" : "";
+            await JS.InvokeVoidAsync("eval", $"document.body.style.overflow = '{overflowStyle}';");
+        }
+        catch
+        {
+            // Ignore JS exceptions during teardown or prerender
+        }
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "C";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][..1].ToUpperInvariant();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+
+    private static string FormatSubmittedDate(DateTime? dt)
+    {
+        if (!dt.HasValue) return "N/A";
+        var local = dt.Value.ToLocalTime();
+        var today = DateTime.Today;
+
+        if (local.Date == today)
+        {
+            return $"Today, {local:hh:mm tt}";
+        }
+        if (local.Date == today.AddDays(-1))
+        {
+            return $"Yesterday, {local:hh:mm tt}";
+        }
+        if (local.Date >= today.AddDays(-6))
+        {
+            var days = (today - local.Date).Days;
+            return $"{days} Days Ago";
+        }
+        return local.ToString("MMM dd, yyyy");
+    }
+
+    private static string GetRelativeTime(DateTime? dt)
+    {
+        if (!dt.HasValue) return "";
+        var span = DateTime.UtcNow - dt.Value.ToUniversalTime();
+
+        if (span.TotalMinutes < 1) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        var days = (int)span.TotalDays;
+        return $"{days}d ago";
+    }
+
+    private static string Truncate(string text, int max)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length <= max) return text;
+        return text[..max] + "…";
+    }
+
+    public void Dispose()
+    {
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+        _ = SetBodyScrollLockAsync(false);
+    }
+}

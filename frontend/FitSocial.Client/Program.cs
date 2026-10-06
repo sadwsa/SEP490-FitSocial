@@ -21,6 +21,7 @@ using FitSocial.Client.Services.Cart;
 using FitSocial.Client.Services.SystemOperations;
 using FitSocial.Client.Services.Reports;
 using FitSocial.Client.Services.SubscriptionPriceHistory;
+using FitSocial.Client.Services.Analytics;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -65,5 +66,6 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<FitSocial.Client.Services.Payouts.IPayoutService, FitSocial.Client.Services.Payouts.PayoutApiService>();
 builder.Services.AddScoped<FitSocial.Client.Services.BankAccounts.IBankAccountService, FitSocial.Client.Services.BankAccounts.BankAccountApiService>();
 builder.Services.AddScoped<ISubscriptionPriceHistoryApiService, SubscriptionPriceHistoryApiService>();
+builder.Services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
 
 await builder.Build().RunAsync();

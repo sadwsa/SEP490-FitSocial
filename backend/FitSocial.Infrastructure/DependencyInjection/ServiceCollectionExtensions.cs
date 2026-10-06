@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICoachDashboardService, CoachDashboardService>();
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<ISubscriptionPriceHistoryService, SubscriptionPriceHistoryService>();
+        services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
         return services;
     }
 
@@ -105,6 +106,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ISubscriptionPriceHistoryRepository, SubscriptionPriceHistoryRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
+        services.AddScoped<IRevenueAnalyticsRepository, RevenueAnalyticsRepository>();
 
         return services;
 

@@ -1,0 +1,674 @@
+@page "/admin/revenue"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN")]
+@using System.Globalization
+@using FitSocial.Client.Models.Analytics
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Services.Analytics
+@inject IRevenueAnalyticsService RevenueService
+@inject NavigationManager Navigation
+
+<PageTitle>Revenue Analytics - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN">
+    <Authorized>
+        <div class="revenue-view">
+            <!-- Header Row -->
+            <div class="header-row">
+                <div>
+                    <h1 class="view-title">
+                        <span>Revenue Analytics</span>
+                        <span class="title-badge">0% Commission Model</span>
+                    </h1>
+                    <p class="view-sub">Financial overview, Gross Merchandise Value (GMV), Direct Revenue, and Payout cash flows.</p>
+                </div>
+                <div class="header-actions">
+                    <button type="button" class="btn-secondary-action" @onclick="HandleExportCsvAsync" disabled="@(isExporting || isLoading)">
+                        <AppIcon Name="download" />
+                        <span>@(isExporting ? "Exporting..." : "Export CSV")</span>
+                    </button>
+                    <button type="button" class="btn-primary-action" @onclick="LoadDataAsync" disabled="@isLoading">
+                        <AppIcon Name="refresh" />
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(toastMessage))
+            {
+                <div class="auth-alert @toastType" role="alert">
+                    <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
+                    <span style="flex: 1;">@toastMessage</span>
+                    <button type="button" style="background:none; border:none; cursor:pointer;" @onclick="() => toastMessage = null">✕</button>
+                </div>
+            }
+
+            <!-- Filter Card -->
+            <div class="filter-card">
+                <div class="filter-row">
+                    <!-- Quick Presets -->
+                    <div class="quick-filter-group">
+                        <button type="button" class="quick-btn @(filter.QuickFilter == "TODAY" ? "active" : "")" @onclick='() => SetQuickFilter("TODAY")'>Today</button>
+                        <button type="button" class="quick-btn @(filter.QuickFilter == "7D" ? "active" : "")" @onclick='() => SetQuickFilter("7D")'>Last 7 Days</button>
+                        <button type="button" class="quick-btn @(filter.QuickFilter == "THIS_MONTH" ? "active" : "")" @onclick='() => SetQuickFilter("THIS_MONTH")'>This Month</button>
+                        <button type="button" class="quick-btn @(filter.QuickFilter == "LAST_MONTH" ? "active" : "")" @onclick='() => SetQuickFilter("LAST_MONTH")'>Last Month</button>
+                        <button type="button" class="quick-btn @(filter.QuickFilter == "THIS_YEAR" ? "active" : "")" @onclick='() => SetQuickFilter("THIS_YEAR")'>This Year</button>
+                    </div>
+
+                    <!-- Custom Range -->
+                    <div class="date-controls">
+                        <input type="date" class="date-input" value="@(customFromDate?.ToString("yyyy-MM-dd"))" @onchange="OnFromDateChanged" />
+                        <span style="color:#94a3b8; font-size:0.8rem;">to</span>
+                        <input type="date" class="date-input" value="@(customToDate?.ToString("yyyy-MM-dd"))" @onchange="OnToDateChanged" />
+                        
+                        <select class="granularity-select" value="@filter.Granularity" @onchange="OnGranularityChanged">
+                            <option value="DAILY">Daily</option>
+                            <option value="WEEKLY">Weekly</option>
+                            <option value="MONTHLY">Monthly</option>
+                        </select>
+
+                        <button type="button" class="btn-primary-action" @onclick="ApplyCustomFilter">Apply Filter</button>
+                    </div>
+                </div>
+            </div>
+
+            @if (isLoading && data == null)
+            {
+                <div class="empty-state">
+                    <p>Loading system revenue analytics...</p>
+                </div>
+            }
+            else if (data != null)
+            {
+                var ov = data.Overview;
+
+                <!-- KPI Grid -->
+                <div class="kpi-grid">
+                    <!-- 1. Total GMV -->
+                    <div class="kpi-card highlight">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Total GMV</span>
+                            <span class="kpi-badge @(ov.MoMGrowthRatePercentage >= 0 ? "up" : "down")">
+                                @(ov.MoMGrowthRatePercentage >= 0 ? "+" : "")@ov.MoMGrowthRatePercentage.ToString("F1")% MoM
+                            </span>
+                        </div>
+                        <div class="kpi-value">@FormatCurrency(ov.TotalGMV)</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-desc">Total platform merchandise volume</span>
+                            <span class="kpi-note">Trainee packages + Coach subscriptions</span>
+                        </div>
+                    </div>
+
+                    <!-- 2. Platform Direct Revenue -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">FitSocial Net Revenue</span>
+                            <span class="kpi-badge orange">100% Retained</span>
+                        </div>
+                        <div class="kpi-value text-orange">@FormatCurrency(ov.PlatformDirectRevenue)</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-desc">Direct SaaS revenue from Coach subscriptions</span>
+                            <span class="kpi-note">0% platform commission on packages</span>
+                        </div>
+                    </div>
+
+                    <!-- 3. Trainee Packages GMV -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Coach Gross Volume</span>
+                            <span class="kpi-badge info">Escrow Funds</span>
+                        </div>
+                        <div class="kpi-value">@FormatCurrency(ov.TraineePackagesGMV)</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-desc">100% allocated to Coaches via monthly Payouts</span>
+                            <span class="kpi-note">FitSocial holds escrow safely</span>
+                        </div>
+                    </div>
+
+                    <!-- 4. Total Coach Payouts -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Processed Payouts</span>
+                            <span class="kpi-badge up">Disbursed</span>
+                        </div>
+                        <div class="kpi-value text-green">@FormatCurrency(ov.TotalCoachPayouts)</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-desc">Total earnings transferred to Coach bank accounts</span>
+                            <span class="kpi-note">Status: PROCESSED</span>
+                        </div>
+                    </div>
+
+                    <!-- 5. Approved Refunds -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Approved Refunds</span>
+                            <span class="kpi-badge down">Deduction</span>
+                        </div>
+                        <div class="kpi-value text-red">@FormatCurrency(ov.TotalApprovedRefunds)</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-desc">Disbursed refunds deducted from Coach payouts</span>
+                            <span class="kpi-note">Status: APPROVED</span>
+                        </div>
+                    </div>
+
+                    <!-- 6. AOV & Order Counts -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Avg Order Value (AOV)</span>
+                            <span class="kpi-badge info">@ov.CompletedOrdersCount Paid Orders</span>
+                        </div>
+                        <div class="kpi-value">@FormatCurrency(ov.AverageOrderValue)</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-desc">@ov.CompletedOrdersCount successful of @ov.TotalOrdersCount total orders</span>
+                            <span class="kpi-note">Conversion: @(ov.TotalOrdersCount > 0 ? (ov.CompletedOrdersCount * 100.0 / ov.TotalOrdersCount).ToString("F1") : "0")%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Grid -->
+                <div class="charts-grid">
+                    <!-- Time Series Line/Area Chart -->
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title">GMV & Revenue Dynamics (@filter.Granularity)</h3>
+                            <div class="chart-legend">
+                                <span class="legend-item"><span class="legend-dot" style="background:#FF5500;"></span> Total GMV</span>
+                                <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span> Trainee Packages</span>
+                                <span class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> Coach Plans</span>
+                                <span class="legend-item"><span class="legend-dot" style="background:#ef4444;"></span> Refunds</span>
+                            </div>
+                        </div>
+
+                        <div class="svg-chart-container">
+                            @if (data.TimeSeries.Count > 0)
+                            {
+                                var pts = data.TimeSeries;
+                                var maxGmv = Math.Max(1000000m, pts.Max(p => Math.Max(p.TotalGMV, p.ApprovedRefunds)));
+                                var w = 800.0;
+                                var h = 200.0;
+                                var padBottom = 25.0;
+                                var padTop = 15.0;
+                                var chartH = h - padBottom - padTop;
+                                var stepX = pts.Count > 1 ? (w - 40.0) / (pts.Count - 1) : 0;
+
+                                // Build polyline points
+                                var totalPoints = string.Join(" ", pts.Select((p, idx) => {
+                                    var x = 20.0 + idx * stepX;
+                                    var y = padTop + chartH - ((double)(p.TotalGMV / maxGmv) * chartH);
+                                    return $"{x:F1},{y:F1}";
+                                }));
+
+                                var packagePoints = string.Join(" ", pts.Select((p, idx) => {
+                                    var x = 20.0 + idx * stepX;
+                                    var y = padTop + chartH - ((double)(p.TraineePackageGMV / maxGmv) * chartH);
+                                    return $"{x:F1},{y:F1}";
+                                }));
+
+                                var coachPoints = string.Join(" ", pts.Select((p, idx) => {
+                                    var x = 20.0 + idx * stepX;
+                                    var y = padTop + chartH - ((double)(p.CoachSubscriptionRevenue / maxGmv) * chartH);
+                                    return $"{x:F1},{y:F1}";
+                                }));
+
+                                var refundPoints = string.Join(" ", pts.Select((p, idx) => {
+                                    var x = 20.0 + idx * stepX;
+                                    var y = padTop + chartH - ((double)(p.ApprovedRefunds / maxGmv) * chartH);
+                                    return $"{x:F1},{y:F1}";
+                                }));
+
+                                <svg class="svg-chart" viewBox="0 0 800 220" preserveAspectRatio="none">
+                                    <defs>
+                                        <linearGradient id="gmvAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#FF5500" stop-opacity="0.25" />
+                                            <stop offset="100%" stop-color="#FF5500" stop-opacity="0.0" />
+                                        </linearGradient>
+                                    </defs>
+
+                                    <!-- Grid Lines -->
+                                    <line x1="20" y1="@(padTop)" x2="780" y2="@(padTop)" stroke="#f1f5f9" stroke-dasharray="3,3" />
+                                    <line x1="20" y1="@(padTop + chartH * 0.5)" x2="780" y2="@(padTop + chartH * 0.5)" stroke="#f1f5f9" stroke-dasharray="3,3" />
+                                    <line x1="20" y1="@(padTop + chartH)" x2="780" y2="@(padTop + chartH)" stroke="#e2e8f0" />
+
+                                    <!-- Area Fill for Total GMV -->
+                                    @if (pts.Count > 1)
+                                    {
+                                        var firstX = 20.0;
+                                        var lastX = 20.0 + (pts.Count - 1) * stepX;
+                                        var baseY = padTop + chartH;
+                                        var areaPath = $"M {firstX},{baseY} L {totalPoints} L {lastX},{baseY} Z";
+                                        <path d="@areaPath" fill="url(#gmvAreaGrad)" />
+                                    }
+
+                                    <!-- Lines -->
+                                    <polyline fill="none" stroke="#FF5500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="@totalPoints" />
+                                    <polyline fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-dasharray="4,2" points="@packagePoints" />
+                                    <polyline fill="none" stroke="#10b981" stroke-width="1.8" points="@coachPoints" />
+                                    <polyline fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="2,2" points="@refundPoints" />
+
+                                    <!-- Circles & Interactive Markers -->
+                                    @for (int i = 0; i < pts.Count; i++)
+                                    {
+                                        var p = pts[i];
+                                        var cx = 20.0 + i * stepX;
+                                        var cy = padTop + chartH - ((double)(p.TotalGMV / maxGmv) * chartH);
+
+                                        <circle cx="@cx" cy="@cy" r="4" fill="#ffffff" stroke="#FF5500" stroke-width="2"
+                                                style="cursor:pointer;"
+                                                @onmouseover="() => hoveredPoint = p"
+                                                @onmouseout="() => hoveredPoint = null" />
+
+                                        <!-- X-axis Labels (sample every few if too many) -->
+                                        @if (pts.Count <= 14 || i % Math.Ceiling(pts.Count / 10.0) == 0 || i == pts.Count - 1)
+                                        {
+                                            @:<text x="@cx" y="@(h - 5)" font-size="10" fill="#64748b" text-anchor="middle">@p.PeriodLabel</text>
+                                        }
+                                    }
+                                </svg>
+
+                                @if (hoveredPoint != null)
+                                {
+                                    <div class="chart-tooltip">
+                                        <strong>@hoveredPoint.PeriodLabel (@hoveredPoint.Date.ToString("dd/MM/yyyy"))</strong><br />
+                                        GMV: @FormatCurrency(hoveredPoint.TotalGMV)<br />
+                                        Gói tập: @FormatCurrency(hoveredPoint.TraineePackageGMV)<br />
+                                        Thuê bao Coach: @FormatCurrency(hoveredPoint.CoachSubscriptionRevenue)<br />
+                                        Hoàn tiền: @FormatCurrency(hoveredPoint.ApprovedRefunds)
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="empty-state">No transaction points recorded in this timeframe.</div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Donut Chart: Breakdown -->
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title">Revenue Breakdown</h3>
+                        </div>
+
+                        <div class="donut-wrap">
+                            <div class="donut-svg-box">
+                                @{
+                                    var bd = data.Breakdown;
+                                    var circ = 2 * Math.PI * 55; // ~345.57
+                                    var pkgStroke = (bd.TraineePackagePercentage / 100.0) * circ;
+                                    var coachStroke = (bd.CoachSubscriptionPercentage / 100.0) * circ;
+                                }
+                                <svg width="170" height="170" viewBox="0 0 170 170" style="transform: rotate(-90deg);">
+                                    <!-- Base Circle -->
+                                    <circle cx="85" cy="85" r="55" fill="none" stroke="#f1f5f9" stroke-width="24" />
+                                    
+                                    <!-- Trainee Package Segment (Blue) -->
+                                    <circle cx="85" cy="85" r="55" fill="none" stroke="#3b82f6" stroke-width="24"
+                                            stroke-dasharray="@pkgStroke.ToString("F1") @circ.ToString("F1")"
+                                            stroke-dashoffset="0" />
+
+                                    <!-- Coach Plan Segment (Orange) -->
+                                    <circle cx="85" cy="85" r="55" fill="none" stroke="#FF5500" stroke-width="24"
+                                            stroke-dasharray="@coachStroke.ToString("F1") @circ.ToString("F1")"
+                                            stroke-dashoffset="@((-pkgStroke).ToString("F1"))" />
+                                </svg>
+                                <div class="donut-center-text">
+                                    <span class="donut-center-label">Platform GMV</span>
+                                    <span class="donut-center-val">@FormatCurrencyCompact(ov.TotalGMV)</span>
+                                </div>
+                            </div>
+
+                            <div class="breakdown-list">
+                                <div class="breakdown-row">
+                                    <div class="breakdown-left">
+                                        <span class="legend-dot" style="background:#3b82f6;"></span>
+                                        <span>Gói tập Trainee (Coach GMV)</span>
+                                    </div>
+                                    <div class="breakdown-val">@data.Breakdown.TraineePackagePercentage.ToString("F1")%</div>
+                                </div>
+                                <div class="breakdown-row">
+                                    <div class="breakdown-left">
+                                        <span class="legend-dot" style="background:#FF5500;"></span>
+                                        <span>Gói Coach (Platform Direct)</span>
+                                    </div>
+                                    <div class="breakdown-val">@data.Breakdown.CoachSubscriptionPercentage.ToString("F1")%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabbed Tables Section -->
+                <div class="tables-card">
+                    <div class="table-tabs">
+                        <button type="button" class="table-tab @(activeTableTab == "COACHES" ? "active" : "")" @onclick='() => activeTableTab = "COACHES"'>
+                            Top Grossing Coaches (@data.TopCoaches.Count)
+                        </button>
+                        <button type="button" class="table-tab @(activeTableTab == "PACKAGES" ? "active" : "")" @onclick='() => activeTableTab = "PACKAGES"'>
+                            Top Selling Packages (@data.TopPackages.Count)
+                        </button>
+                        <button type="button" class="table-tab @(activeTableTab == "PLANS" ? "active" : "")" @onclick='() => activeTableTab = "PLANS"'>
+                            Coach Subscription Plans Performance (@data.SubscriptionPlanStats.Count)
+                        </button>
+                    </div>
+
+                    @if (activeTableTab == "COACHES")
+                    {
+                        @if (data.TopCoaches.Count == 0)
+                        {
+                            <div class="empty-state">No coach sales registered for this period.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="analytics-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50px;">Rank</th>
+                                            <th>Coach</th>
+                                            <th>Email</th>
+                                            <th style="text-align: right;">Gross Package Sales</th>
+                                            <th style="text-align: center;">Orders Sold</th>
+                                            <th style="text-align: right;">Processed Payouts</th>
+                                            <th style="text-align: right;">Refunds</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (int i = 0; i < data.TopCoaches.Count; i++)
+                                        {
+                                            var c = data.TopCoaches[i];
+                                            var rankClass = i == 0 ? "gold" : i == 1 ? "silver" : i == 2 ? "bronze" : "";
+                                            <tr>
+                                                <td><span class="rank-pill @rankClass">@(i + 1)</span></td>
+                                                <td>
+                                                    <div class="coach-cell">
+                                                        @if (!string.IsNullOrWhiteSpace(c.AvatarUrl))
+                                                        {
+                                                            <img src="@c.AvatarUrl" class="coach-avatar" alt="@c.CoachName" />
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="avatar-placeholder">@(string.IsNullOrWhiteSpace(c.CoachName) ? "C" : c.CoachName[0].ToString().ToUpper())</div>
+                                                        }
+                                                        <strong>@c.CoachName</strong>
+                                                    </div>
+                                                </td>
+                                                <td style="color:#64748b;">@c.CoachEmail</td>
+                                                <td style="text-align: right; font-weight: 700; color: #ea580c;">@FormatCurrency(c.GrossSales)</td>
+                                                <td style="text-align: center; font-weight: 600;">@c.CompletedOrdersCount</td>
+                                                <td style="text-align: right; color: #059669; font-weight: 600;">@FormatCurrency(c.TotalPayouts)</td>
+                                                <td style="text-align: right; color: #dc2626;">@FormatCurrency(c.RefundAmount)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                    else if (activeTableTab == "PACKAGES")
+                    {
+                        @if (data.TopPackages.Count == 0)
+                        {
+                            <div class="empty-state">No training package purchases in this period.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="analytics-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50px;">Rank</th>
+                                            <th>Training Package</th>
+                                            <th>Coach</th>
+                                            <th style="text-align: right;">Unit Price</th>
+                                            <th style="text-align: center;">Sales Count</th>
+                                            <th style="text-align: right;">Total Gross Revenue</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (int i = 0; i < data.TopPackages.Count; i++)
+                                        {
+                                            var pkg = data.TopPackages[i];
+                                            var rankClass = i == 0 ? "gold" : i == 1 ? "silver" : i == 2 ? "bronze" : "";
+                                            <tr>
+                                                <td><span class="rank-pill @rankClass">@(i + 1)</span></td>
+                                                <td><strong>@pkg.Title</strong></td>
+                                                <td style="color:#64748b;">@pkg.CoachName</td>
+                                                <td style="text-align: right;">@FormatCurrency(pkg.Price)</td>
+                                                <td style="text-align: center; font-weight: 700;">@pkg.TotalSold</td>
+                                                <td style="text-align: right; font-weight: 700; color: #ea580c;">@FormatCurrency(pkg.TotalRevenue)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                    else if (activeTableTab == "PLANS")
+                    {
+                        @if (data.SubscriptionPlanStats.Count == 0)
+                        {
+                            <div class="empty-state">No coach subscription plans configured or purchased.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="analytics-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50px;">#</th>
+                                            <th>Subscription Tier</th>
+                                            <th style="text-align: center;">Duration</th>
+                                            <th style="text-align: right;">Plan Price</th>
+                                            <th style="text-align: center;">Subscribers Count</th>
+                                            <th style="text-align: right;">FitSocial Direct Revenue</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (int i = 0; i < data.SubscriptionPlanStats.Count; i++)
+                                        {
+                                            var plan = data.SubscriptionPlanStats[i];
+                                            <tr>
+                                                <td>@(i + 1)</td>
+                                                <td><strong>@plan.Description</strong></td>
+                                                <td style="text-align: center;"><span class="kpi-badge info">@plan.DurationDays days</span></td>
+                                                <td style="text-align: right;">@FormatCurrency(plan.Price)</td>
+                                                <td style="text-align: center; font-weight: 700;">@plan.SubscribersCount</td>
+                                                <td style="text-align: right; font-weight: 800; color: #059669;">@FormatCurrency(plan.TotalRevenue)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="auth-alert error" role="alert">
+            <AppIcon Name="warning" />
+            <span>Access denied. You must be an Administrator to view Revenue Analytics.</span>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private RevenueAnalyticsFilterModel filter = new()
+    {
+        QuickFilter = "THIS_MONTH",
+        Granularity = "DAILY"
+    };
+
+    private DateTime? customFromDate;
+    private DateTime? customToDate;
+    private bool isLoading = false;
+    private bool isExporting = false;
+    private string activeTableTab = "COACHES";
+    private string? toastMessage;
+    private string toastType = "info";
+
+    private FullRevenueAnalyticsResponseModel? data;
+    private RevenueTimeSeriesPointModel? hoveredPoint;
+
+    private readonly CultureInfo viCulture = CultureInfo.GetCultureInfo("vi-VN");
+
+    protected override async Task OnInitializedAsync()
+    {
+        var now = DateTime.UtcNow;
+        customFromDate = new DateTime(now.Year, now.Month, 1);
+        customToDate = now;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        toastMessage = null;
+        try
+        {
+            var res = await RevenueService.GetRevenueOverviewAsync(filter);
+            if (res.Success && res.Data != null)
+            {
+                data = res.Data;
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to load revenue analytics.";
+                toastType = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error loading analytics: {ex.Message}";
+            toastType = "error";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SetQuickFilter(string q)
+    {
+        filter.QuickFilter = q;
+        filter.FromDate = null;
+        filter.ToDate = null;
+
+        var now = DateTime.UtcNow;
+        if (q == "TODAY")
+        {
+            customFromDate = now.Date;
+            customToDate = now;
+            filter.Granularity = "DAILY";
+        }
+        else if (q == "7D")
+        {
+            customFromDate = now.Date.AddDays(-6);
+            customToDate = now;
+            filter.Granularity = "DAILY";
+        }
+        else if (q == "THIS_MONTH")
+        {
+            customFromDate = new DateTime(now.Year, now.Month, 1);
+            customToDate = now;
+            filter.Granularity = "DAILY";
+        }
+        else if (q == "LAST_MONTH")
+        {
+            var lm = now.AddMonths(-1);
+            customFromDate = new DateTime(lm.Year, lm.Month, 1);
+            customToDate = new DateTime(lm.Year, lm.Month, DateTime.DaysInMonth(lm.Year, lm.Month));
+            filter.Granularity = "DAILY";
+        }
+        else if (q == "THIS_YEAR")
+        {
+            customFromDate = new DateTime(now.Year, 1, 1);
+            customToDate = now;
+            filter.Granularity = "MONTHLY";
+        }
+
+        await LoadDataAsync();
+    }
+
+    private void OnFromDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        {
+            customFromDate = dt;
+        }
+    }
+
+    private void OnToDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        {
+            customToDate = dt;
+        }
+    }
+
+    private void OnGranularityChanged(ChangeEventArgs e)
+    {
+        filter.Granularity = e.Value?.ToString() ?? "DAILY";
+    }
+
+    private async Task ApplyCustomFilter()
+    {
+        if (customFromDate.HasValue && customToDate.HasValue && customFromDate > customToDate)
+        {
+            toastMessage = "From date cannot be after To date.";
+            toastType = "error";
+            return;
+        }
+
+        filter.QuickFilter = ""; // Clear preset
+        filter.FromDate = customFromDate;
+        filter.ToDate = customToDate;
+        await LoadDataAsync();
+    }
+
+    private async Task HandleExportCsvAsync()
+    {
+        isExporting = true;
+        toastMessage = null;
+        try
+        {
+            var success = await RevenueService.ExportRevenueCsvAsync(filter);
+            if (success)
+            {
+                toastMessage = "Revenue report CSV generated and downloaded successfully.";
+                toastType = "info";
+            }
+            else
+            {
+                toastMessage = "Could not export CSV. Please try again.";
+                toastType = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Export error: {ex.Message}";
+            toastType = "error";
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private string FormatCurrency(decimal amount)
+    {
+        return $"{amount.ToString("N0", viCulture)} ₫";
+    }
+
+    private string FormatCurrencyCompact(decimal amount)
+    {
+        if (amount >= 1_000_000_000)
+            return $"{(amount / 1_000_000_000m):F1}B ₫";
+        if (amount >= 1_000_000)
+            return $"{(amount / 1_000_000m):F1}M ₫";
+        if (amount >= 1_000)
+            return $"{(amount / 1_000m):F0}K ₫";
+        return $"{amount:N0} ₫";
+    }
+}

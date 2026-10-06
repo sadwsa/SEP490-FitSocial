@@ -29,6 +29,23 @@
         </div>
     }
 
+    <!-- Floating Error Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastErrorMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-red-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-red-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            <span>@toastErrorMessage</span>
+            <button type="button" @onclick="() => toastErrorMessage = null"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer">
+                &times;
+            </button>
+        </div>
+    }
+
     <AppHeader SearchTerm="@headerSearchTerm"
                OnSearchInput="HandleHeaderSearchInput"
                OnSearchKeyUp="HandleHeaderSearchKeyUp"
@@ -256,6 +273,12 @@
             </div>
         </div>
     }
+
+    <!-- Package Already In Cart Modal Notification -->
+    <PackageAlreadyInCartModal IsOpen="@showAlreadyInCartModal"
+                               PackageTitle="@alreadyInCartPackageTitle"
+                               OnClose="() => showAlreadyInCartModal = false"
+                               OnViewCart="NavigateToCart" />
 </div>
 
 @code {
@@ -280,6 +303,9 @@
     private string userRole = "Trainee";
     private int headerCartCount = 0;
     private string? toastSuccessMessage;
+    private string? toastErrorMessage;
+    private bool showAlreadyInCartModal = false;
+    private string? alreadyInCartPackageTitle;
     private Guid? addingPackageId;
 
     protected override async Task OnInitializedAsync()
@@ -309,6 +335,7 @@
     {
         addingPackageId = pkg.PackageId;
         toastSuccessMessage = null;
+        toastErrorMessage = null;
         try
         {
             var response = await CartService.AddToCartAsync(new FitSocial.Client.Models.Cart.AddToCartRequestDto
@@ -329,17 +356,49 @@
             }
             else
             {
-                errorMessage = response.Message ?? "Failed to add to cart.";
+                if (IsAlreadyInCartError(response.Message))
+                {
+                    alreadyInCartPackageTitle = pkg.Title;
+                    showAlreadyInCartModal = true;
+                }
+                else
+                {
+                    toastErrorMessage = response.Message ?? "Failed to add to cart.";
+                    _ = Task.Delay(4000).ContinueWith(_ =>
+                    {
+                        toastErrorMessage = null;
+                        InvokeAsync(StateHasChanged);
+                    });
+                }
             }
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
+            toastErrorMessage = ex.Message;
+            _ = Task.Delay(4000).ContinueWith(_ =>
+            {
+                toastErrorMessage = null;
+                InvokeAsync(StateHasChanged);
+            });
         }
         finally
         {
             addingPackageId = null;
         }
+    }
+
+    private void NavigateToCart()
+    {
+        showAlreadyInCartModal = false;
+        Navigation.NavigateTo("cart");
+    }
+
+    private static bool IsAlreadyInCartError(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return false;
+        return message.Contains("already in your cart", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("already in cart", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("already exists", StringComparison.OrdinalIgnoreCase);
     }
     
     private void ToggleCreateForm()

@@ -127,34 +127,21 @@
                             </div>
                         </div>
 
-                        <!-- Quantity Selector -->
+                        <!-- Package Commitment & Quantity -->
                         <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/70 p-4 rounded-xl border border-gray-100">
                             <div>
                                 <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-0.5">Quantity</h6>
-                                <p class="text-xs text-gray-400">Select number of packages to add</p>
+                                <p class="text-xs text-gray-400">1-on-1 coaching package applies to a single trainee</p>
                             </div>
                             <div class="flex items-center gap-3">
-                                <div class="inline-flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs">
-                                    <button type="button"
-                                            @onclick="DecrementQuantity"
-                                            disabled="@(quantity <= 1 || isAddingToCart)"
-                                            class="px-3.5 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition cursor-pointer font-bold text-base select-none"
-                                            aria-label="Decrease quantity">
-                                        &minus;
-                                    </button>
-                                    <span class="px-4 py-2 text-sm font-bold text-gray-800 min-w-12 text-center select-none">
-                                        @quantity
-                                    </span>
-                                    <button type="button"
-                                            @onclick="IncrementQuantity"
-                                            disabled="@isAddingToCart"
-                                            class="px-3.5 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition cursor-pointer font-bold text-base select-none"
-                                            aria-label="Increase quantity">
-                                        &#43;
-                                    </button>
+                                <div class="inline-flex items-center gap-2 bg-white border border-gray-200 px-3.5 py-2 rounded-xl shadow-xs">
+                                    <svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="text-xs font-bold text-gray-800">1 Package (Max 1)</span>
                                 </div>
                                 <span class="text-xs text-gray-500">
-                                    Subtotal: <span class="font-bold text-[#FF5500]">@((package.Price * quantity).ToString("N0")) VNĐ</span>
+                                    Total: <span class="font-bold text-[#FF5500]">@(package.Price.ToString("N0")) VNĐ</span>
                                 </span>
                             </div>
                         </div>
@@ -205,6 +192,12 @@
         <!-- Right Sidebar (Empty) -->
         <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
     </div>
+
+    <!-- Package Already In Cart Modal Notification -->
+    <PackageAlreadyInCartModal IsOpen="@showAlreadyInCartModal"
+                               PackageTitle="@package?.Title"
+                               OnClose="() => showAlreadyInCartModal = false"
+                               OnViewCart="NavigateToCart" />
 </div>
 
 @code {
@@ -220,6 +213,7 @@
     private bool isAddingToCart = false;
     private int cartCount = 0;
     private bool isAuthenticated = false;
+    private bool showAlreadyInCartModal = false;
 
     // Toast state
     private string? toastSuccessMessage;
@@ -327,18 +321,33 @@
             var request = new FitSocial.Client.Models.Cart.AddToCartRequestDto
             {
                 PackageId = package.PackageId,
-                Quantity = quantity
+                Quantity = 1
             };
 
             var response = await CartService.AddToCartAsync(request);
             if (response.Success)
             {
-                cartCount += quantity;
+                var countRes = await CartService.GetCartCountAsync();
+                if (countRes.Success)
+                {
+                    cartCount = countRes.Data;
+                }
+                else
+                {
+                    cartCount++;
+                }
                 ShowSuccessToast(response.Message ?? "Added to cart successfully!");
             }
             else
             {
-                ShowErrorToast(response.Message ?? "Failed to add product to cart.");
+                if (IsAlreadyInCartError(response.Message))
+                {
+                    showAlreadyInCartModal = true;
+                }
+                else
+                {
+                    ShowErrorToast(response.Message ?? "Failed to add product to cart.");
+                }
             }
         }
         catch (Exception ex)
@@ -429,7 +438,7 @@
             var request = new FitSocial.Client.Models.Cart.AddToCartRequestDto
             {
                 PackageId = package.PackageId,
-                Quantity = quantity
+                Quantity = 1
             };
 
             var response = await CartService.AddToCartAsync(request);
@@ -440,7 +449,14 @@
             }
             else
             {
-                ShowErrorToast(response.Message ?? "Failed to proceed to cart.");
+                if (IsAlreadyInCartError(response.Message))
+                {
+                    showAlreadyInCartModal = true;
+                }
+                else
+                {
+                    ShowErrorToast(response.Message ?? "Failed to proceed to cart.");
+                }
             }
         }
         catch (Exception ex)
@@ -451,5 +467,19 @@
         {
             isAddingToCart = false;
         }
+    }
+
+    private void NavigateToCart()
+    {
+        showAlreadyInCartModal = false;
+        Navigation.NavigateTo("cart");
+    }
+
+    private static bool IsAlreadyInCartError(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return false;
+        return message.Contains("already in your cart", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("already in cart", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("already exists", StringComparison.OrdinalIgnoreCase);
     }
 }

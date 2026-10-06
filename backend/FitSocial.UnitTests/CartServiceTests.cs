@@ -82,7 +82,7 @@ public class CartServiceTests
     }
 
     [Fact]
-    public async Task AddToCartAsync_SecondTimeAddingSameProduct_ShouldReturnExistingItem()
+    public async Task AddToCartAsync_SecondTimeAddingSameProduct_ShouldReturnFail()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -104,14 +104,14 @@ public class CartServiceTests
             CartId = Guid.NewGuid(),
             UserId = userId,
             PackageId = packageId,
-            Quantity = 2,
+            Quantity = 1,
             CreatedAt = DateTime.UtcNow.AddMinutes(-10)
         };
 
         var dto = new AddToCartDto
         {
             PackageId = packageId,
-            Quantity = 3
+            Quantity = 1
         };
 
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
@@ -124,10 +124,56 @@ public class CartServiceTests
 
         // Assert
         Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("already in your cart", result.Message, StringComparison.OrdinalIgnoreCase);
+        _mockCartRepo.Verify(r => r.AddAsync(It.IsAny<Cart>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AddToCartAsync_DifferentPackage_ShouldSuccessfullyAddWithQuantityOne()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var packageId2 = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+
+        var package2 = new TrainingPackage
+        {
+            PackageId = packageId2,
+            CoachId = coachId,
+            Title = "60-Day Muscle Building",
+            Price = 900000,
+            DurationDays = 60,
+            IsActive = true
+        };
+
+        var dto = new AddToCartDto
+        {
+            PackageId = packageId2,
+            Quantity = 3 // Even if requested quantity is 3, enforced to 1
+        };
+
+        _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(package2);
+        _mockCartRepo.Setup(r => r.GetCartItemAsync(userId, packageId2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Cart?)null);
+        _mockCartRepo.Setup(r => r.AddAsync(It.IsAny<Cart>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.NotNull(result);
         Assert.True(result.Success);
         Assert.NotNull(result.Data);
-        Assert.Equal(2, result.Data.Quantity);
-        _mockCartRepo.Verify(r => r.AddAsync(It.IsAny<Cart>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal(packageId2, result.Data.PackageId);
+        Assert.Equal(1, result.Data.Quantity);
+        _mockCartRepo.Verify(r => r.AddAsync(It.Is<Cart>(c => c.UserId == userId && c.PackageId == packageId2 && c.Quantity == 1), It.IsAny<CancellationToken>()), Times.Once);
+        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

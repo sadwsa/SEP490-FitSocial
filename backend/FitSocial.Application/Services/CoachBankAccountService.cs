@@ -130,6 +130,32 @@ public class CoachBankAccountService : ICoachBankAccountService
         return ApiResponseDto<bool>.Ok(true, "Bank account deleted successfully.");
     }
 
+    public async Task<ApiResponseDto<List<CoachPaymentAccountListItemDto>>> GetAllPaymentAccountsAsync(
+        string? searchTerm, string? bankCode, bool? defaultOnly, CancellationToken cancellationToken = default)
+    {
+        var accounts = await _bankRepository.ListAllWithCoachAsync(searchTerm, bankCode, defaultOnly, cancellationToken);
+        var dtos = accounts.Select(b =>
+        {
+            var plainNumber = _encryptionService.Decrypt(b.EncryptedAccountNumber) ?? string.Empty;
+            return new CoachPaymentAccountListItemDto
+            {
+                BankId = b.BankId,
+                CoachId = b.CoachId,
+                CoachName = b.Coach?.Coach?.FullName ?? b.Coach?.Coach?.Email ?? "Coach",
+                CoachEmail = b.Coach?.Coach?.Email,
+                BankName = b.BankName,
+                BankCode = b.BankCode,
+                AccountName = b.AccountName,
+                MaskedAccountNumber = MaskAccountNumber(plainNumber),
+                AccountNumber = plainNumber,
+                Branch = b.Branch,
+                IsDefault = b.IsDefault ?? false,
+                CreatedAt = b.CreatedAt
+            };
+        }).ToList();
+        return ApiResponseDto<List<CoachPaymentAccountListItemDto>>.Ok(dtos, "Payment accounts retrieved successfully.");
+    }
+
     private CoachBankAccountDto MapToDto(CoachBankAccount b)
     {
         var plainAccountNumber = _encryptionService.Decrypt(b.EncryptedAccountNumber) ?? string.Empty;

@@ -1,0 +1,234 @@
+@page "/admin/payment-accounts"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.BankAccounts
+@using FitSocial.Client.Services.BankAccounts
+@inject IBankAccountService BankAccountService
+
+<PageTitle>Payment Accounts - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert @toastType" role="alert">
+                <span class="flex-1">@toastMessage</span>
+                <button type="button" class="ml-2 font-bold cursor-pointer opacity-70 hover:opacity-100" @onclick="() => toastMessage = null">✕</button>
+            </div>
+        }
+
+        <h2 class="view-title">Coach Payment Accounts</h2>
+        <p class="view-sub">Bank accounts coaches registered for payouts (UC-36)</p>
+
+        <!-- Summary chips -->
+        <div class="stat-row">
+            <div class="stat-card">
+                <span class="stat-num">@accounts.Count</span>
+                <span class="stat-label">Total accounts</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-num">@accounts.Select(a => a.CoachId).Distinct().Count()</span>
+                <span class="stat-label">Coaches with account</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-num">@accounts.Count(a => a.IsDefault)</span>
+                <span class="stat-label">Default accounts</span>
+            </div>
+        </div>
+
+        <!-- Toolbar: search + filters -->
+        <div class="toolbar">
+            <div class="search-wrap grow">
+                <span class="search-icon">⌕</span>
+                <input value="@searchTerm"
+                       @oninput="OnSearchInput"
+                       @onkeydown="HandleSearchKeyDown"
+                       class="toolbar-input"
+                       placeholder="Search coach name, email, account holder, bank..." />
+            </div>
+            <select value="@bankFilter" @onchange="OnBankFilterChanged" class="toolbar-select">
+                <option value="">All banks</option>
+                @foreach (var b in bankOptions)
+                {
+                    <option value="@b">@b</option>
+                }
+            </select>
+            <label class="check-wrap" title="Only payout-ready (default) accounts">
+                <input type="checkbox" checked="@defaultOnly" @onchange="OnDefaultOnlyChanged" />
+                <span>Default only</span>
+            </label>
+            <button type="button" class="row-btn" @onclick="LoadAsync" disabled="@isLoading">↻ Refresh</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="py-4 text-center muted">Loading payment accounts...</div>
+        }
+        else if (accounts.Count == 0)
+        {
+            <div class="empty-box">
+                <p class="font-bold">No payment accounts found</p>
+                <p class="text-sm">Coaches can add bank accounts from their profile; they appear here for payout verification.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Coach</th>
+                            <th>Bank</th>
+                            <th>Account holder</th>
+                            <th>Account number</th>
+                            <th>Branch</th>
+                            <th>Default</th>
+                            <th>Added</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in accounts)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="font-semibold">@a.CoachName</div>
+                                    <div class="muted-sm">@a.CoachEmail</div>
+                                </td>
+                                <td>
+                                    <div class="font-semibold">@(a.BankName ?? a.BankCode ?? "—")</div>
+                                    @if (!string.IsNullOrWhiteSpace(a.BankCode))
+                                    {
+                                        <div class="muted-sm">@a.BankCode</div>
+                                    }
+                                </td>
+                                <td>@(a.AccountName ?? "—")</td>
+                                <td>
+                                    <span class="acct-num"><code>@(revealedIds.Contains(a.BankId) ? a.AccountNumber : a.MaskedAccountNumber)</code></span>
+                                    <button type="button" class="eye-btn" title="@(revealedIds.Contains(a.BankId) ? "Hide full number" : "Show full number")" @onclick="() => ToggleReveal(a.BankId)">
+                                        <AppIcon Name="@(revealedIds.Contains(a.BankId) ? "eye-slash" : "eye")" />
+                                    </button>
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(a.Branch) ? "—" : a.Branch)</td>
+                                <td>
+                                    @if (a.IsDefault)
+                                    {
+                                        <span class="status-pill done">Default</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted-sm">—</span>
+                                    }
+                                </td>
+                                <td class="muted-sm">@a.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private List<CoachPaymentAccount> accounts = new();
+    private HashSet<Guid> revealedIds = new();
+    private List<string> bankOptions = new();
+    private bool isLoading = true;
+    private string searchTerm = "";
+    private string bankFilter = "";
+    private bool defaultOnly = false;
+    private string? toastMessage;
+    private string toastType = "info";
+    private System.Threading.CancellationTokenSource? searchCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var res = await BankAccountService.GetAllAsync(
+            string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+            string.IsNullOrWhiteSpace(bankFilter) ? null : bankFilter,
+            defaultOnly ? true : null);
+        if (res.Success && res.Data != null)
+        {
+            accounts = res.Data;
+            if (bankOptions.Count == 0)
+            {
+                bankOptions = accounts
+                    .Select(a => a.BankCode ?? "")
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Distinct()
+                    .OrderBy(c => c)
+                    .ToList();
+            }
+        }
+        else
+        {
+            toastMessage = res.Message ?? "Failed to load payment accounts.";
+            toastType = "error";
+        }
+        isLoading = false;
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        searchCts?.Cancel();
+        searchCts?.Dispose();
+        searchCts = new System.Threading.CancellationTokenSource();
+        var token = searchCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(450, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(LoadAsync);
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch { }
+        }, token);
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            searchCts?.Cancel();
+            await LoadAsync();
+        }
+    }
+
+    private async Task OnBankFilterChanged(ChangeEventArgs e)
+    {
+        bankFilter = e.Value?.ToString() ?? "";
+        await LoadAsync();
+    }
+
+    private async Task OnDefaultOnlyChanged(ChangeEventArgs e)
+    {
+        if (bool.TryParse(e.Value?.ToString(), out var v))
+        {
+            defaultOnly = v;
+        }
+        else
+        {
+            defaultOnly = !defaultOnly;
+        }
+        await LoadAsync();
+    }
+
+    private void ToggleReveal(Guid bankId)
+    {
+        if (!revealedIds.Remove(bankId))
+        {
+            revealedIds.Add(bankId);
+        }
+    }
+}

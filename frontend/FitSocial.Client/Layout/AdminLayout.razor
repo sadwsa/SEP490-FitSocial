@@ -78,7 +78,7 @@
         <div class="side-foot">
             <AuthorizeView Roles="ADMIN,STAFF">
                 <Authorized>
-                    <div class="side-user">
+                    <div class="side-user side-user-link" @onclick='() => Navigation.NavigateTo("/admin/change-password")' title="Change password">
                         <strong>@context.User.Identity?.Name</strong>
                         <small>@string.Join(", ", AppRoles.All.Where(r => context.User.IsInRole(r))) • @(isAdmin ? "ADMIN" : "STAFF")</small>
                     </div>

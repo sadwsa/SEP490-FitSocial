@@ -22,6 +22,63 @@ public class ApiClient
         _authService = authService;
     }
 
+    /// <summary>
+    /// Reads the backend error message without deserializing the whole
+    /// ApiResponse&lt;T&gt;. Needed because e.g. ApiResponse&lt;bool&gt; fails
+    /// to deserialize when the backend sends "data": null, which used to
+    /// swallow real messages into a generic "API Error: ..." string.
+    /// </summary>
+    private static ApiResponse<T> ErrorFrom<T>(string errorJson, HttpStatusCode status)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(errorJson);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                string? message = null;
+                foreach (var name in new[] { "message", "Message" })
+                {
+                    if (root.TryGetProperty(name, out var prop) && prop.ValueKind == JsonValueKind.String)
+                    {
+                        message = prop.GetString();
+                        if (!string.IsNullOrWhiteSpace(message)) break;
+                        message = null;
+                    }
+                }
+
+                var errors = new List<string>();
+                foreach (var name in new[] { "errors", "Errors" })
+                {
+                    if (root.TryGetProperty(name, out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in arr.EnumerateArray())
+                        {
+                            if (el.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(el.GetString()))
+                            {
+                                errors.Add(el.GetString()!);
+                            }
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    return new ApiResponse<T> { Success = false, Message = message, Errors = errors };
+                }
+            }
+        }
+        catch { }
+
+        return new ApiResponse<T> { Success = false, Message = $"API Error: {status}" };
+    }
+
+    private static ApiResponse ErrorFrom(string errorJson, HttpStatusCode status)
+    {
+        var typed = ErrorFrom<object>(errorJson, status);
+        return new ApiResponse { Success = false, Message = typed.Message, Errors = typed.Errors };
+    }
+
     private async Task AttachBearerTokenAsync()
     {
         var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
@@ -99,19 +156,16 @@ public class ApiClient
             try
             {
                 var errorJson = await response.Content.ReadAsStringAsync();
-                var errorResponse = JsonSerializer.Deserialize<ApiResponse<T>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
-                {
-                    return errorResponse;
-                }
+                return ErrorFrom<T>(errorJson, response.StatusCode);
             }
-            catch { }
-
-            return new ApiResponse<T>
+            catch
             {
-                Success = false,
-                Message = $"API Error: {response.StatusCode}"
-            };
+                return new ApiResponse<T>
+                {
+                    Success = false,
+                    Message = $"API Error: {response.StatusCode}"
+                };
+            }
         }
         catch (Exception ex)
         {
@@ -163,19 +217,16 @@ public class ApiClient
             try
             {
                 var errorJson = await response.Content.ReadAsStringAsync();
-                var errorResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
-                {
-                    return errorResponse;
-                }
+                return ErrorFrom<TResult>(errorJson, response.StatusCode);
             }
-            catch { }
-
-            return new ApiResponse<TResult>
+            catch
             {
-                Success = false,
-                Message = $"API Error: {response.StatusCode}"
-            };
+                return new ApiResponse<TResult>
+                {
+                    Success = false,
+                    Message = $"API Error: {response.StatusCode}"
+                };
+            }
         }
         catch (Exception ex)
         {
@@ -227,19 +278,16 @@ public class ApiClient
             try
             {
                 var errorJson = await response.Content.ReadAsStringAsync();
-                var errorResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
-                {
-                    return errorResponse;
-                }
+                return ErrorFrom<TResult>(errorJson, response.StatusCode);
             }
-            catch { }
-
-            return new ApiResponse<TResult>
+            catch
             {
-                Success = false,
-                Message = $"API Error: {response.StatusCode}"
-            };
+                return new ApiResponse<TResult>
+                {
+                    Success = false,
+                    Message = $"API Error: {response.StatusCode}"
+                };
+            }
         }
         catch (Exception ex)
         {
@@ -271,21 +319,17 @@ public class ApiClient
 
             try
             {
-                var errorResponse = await response.Content.ReadFromJsonAsync<ApiResponse<TResult>>();
-                if (errorResponse != null)
-                {
-                    return errorResponse;
-                }
+                var errorJson = await response.Content.ReadAsStringAsync();
+                return ErrorFrom<TResult>(errorJson, response.StatusCode);
             }
             catch
             {
+                return new ApiResponse<TResult>
+                {
+                    Success = false,
+                    Message = $"API Error: {response.StatusCode}"
+                };
             }
-
-            return new ApiResponse<TResult>
-            {
-                Success = false,
-                Message = $"API Error: {response.StatusCode}"
-            };
         }
         catch (Exception ex)
         {
@@ -318,19 +362,16 @@ public class ApiClient
             try
             {
                 var errorJson = await response.Content.ReadAsStringAsync();
-                var errorResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
-                {
-                    return errorResponse;
-                }
+                return ErrorFrom<TResult>(errorJson, response.StatusCode);
             }
-            catch { }
-
-            return new ApiResponse<TResult>
+            catch
             {
-                Success = false,
-                Message = $"API Error: {response.StatusCode}"
-            };
+                return new ApiResponse<TResult>
+                {
+                    Success = false,
+                    Message = $"API Error: {response.StatusCode}"
+                };
+            }
         }
         catch (Exception ex)
         {
@@ -382,19 +423,16 @@ public class ApiClient
             try
             {
                 var errorJson = await response.Content.ReadAsStringAsync();
-                var errorResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(errorJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (errorResponse != null && !string.IsNullOrWhiteSpace(errorResponse.Message))
-                {
-                    return errorResponse;
-                }
+                return ErrorFrom<TResult>(errorJson, response.StatusCode);
             }
-            catch { }
-
-            return new ApiResponse<TResult>
+            catch
             {
-                Success = false,
-                Message = $"API Error: {response.StatusCode}"
-            };
+                return new ApiResponse<TResult>
+                {
+                    Success = false,
+                    Message = $"API Error: {response.StatusCode}"
+                };
+            }
         }
         catch (Exception ex)
         {

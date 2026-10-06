@@ -11,6 +11,7 @@ public interface IPaymentGatewayService
 {
     Task<ApiResponse<List<PaymentGatewayConfig>>> GetAllAsync();
     Task<ApiResponse<PaymentGatewayConfig>> CreateAsync(CreatePaymentGatewayConfig request);
+    Task<ApiResponse<PaymentGatewayConfig>> UpdateAsync(Guid gatewayId, UpdatePaymentGatewayConfig request);
     Task<ApiResponse<bool>> ActivateAsync(Guid gatewayId);
     Task<ApiResponse<bool>> DeactivateAsync(Guid gatewayId);
 }
@@ -32,6 +33,11 @@ public class PaymentGatewayApiService : IPaymentGatewayService
     public Task<ApiResponse<PaymentGatewayConfig>> CreateAsync(CreatePaymentGatewayConfig request)
     {
         return _apiClient.PostAsync<CreatePaymentGatewayConfig, PaymentGatewayConfig>("paymentgatewayconfigs", request);
+    }
+
+    public Task<ApiResponse<PaymentGatewayConfig>> UpdateAsync(Guid gatewayId, UpdatePaymentGatewayConfig request)
+    {
+        return _apiClient.PutAsync<UpdatePaymentGatewayConfig, PaymentGatewayConfig>($"paymentgatewayconfigs/{gatewayId}", request);
     }
 
     public Task<ApiResponse<bool>> ActivateAsync(Guid gatewayId)

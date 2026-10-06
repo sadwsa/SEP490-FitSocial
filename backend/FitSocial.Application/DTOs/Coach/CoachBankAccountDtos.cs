@@ -14,6 +14,7 @@ public class CoachBankAccountDto
     public string? MaskedAccountNumber { get; set; }
     public string? Branch { get; set; }
     public bool? IsDefault { get; set; }
+    public bool? IsActive { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
@@ -59,5 +60,6 @@ public class CoachPaymentAccountListItemDto
     public string AccountNumber { get; set; } = string.Empty;
     public string? Branch { get; set; }
     public bool IsDefault { get; set; }
+    public bool IsActive { get; set; }
     public DateTime? CreatedAt { get; set; }
 }

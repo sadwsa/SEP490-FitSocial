@@ -62,6 +62,7 @@
                         <th>Role</th>
                         <th>Status</th>
                         <th>Created Date</th>
+                        <th class="text-end" style="width: 100px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -84,11 +85,14 @@
                             <td>
                                 @(u.CreatedAt?.ToString("MMM dd, yyyy") ?? "-")
                             </td>
+                            <td class="text-end">
+                                <button type="button" class="row-btn edit" @onclick="() => OpenEditStaffModal(u)" title="Edit staff account" id="@($"btn-edit-staff-{u.UserId}")">Edit</button>
+                            </td>
                         </tr>
                     }
                     @if (!isLoadingStaff && !pagedStaff.Items.Any())
                     {
-                        <tr><td colspan="5" class="text-center muted py-4">No staff accounts match.</td></tr>
+                        <tr><td colspan="6" class="text-center muted py-4">No staff accounts match.</td></tr>
                     }
                 </tbody>
             </table>
@@ -238,6 +242,116 @@
             </div>
         }
 
+        @if (showEditStaffModal)
+        {
+            <div class="modal-overlay" style="z-index: 1100;" @onclick="CloseEditStaffModal">
+                <div class="modal-card" style="display: flex; flex-direction: column; max-height: 90vh; overflow: hidden;" @onclick:stopPropagation="true">
+                    <div class="modal-header" style="flex-shrink: 0;">
+                        <div>
+                            <h3>Edit Staff Account</h3>
+                            <small class="text-muted">Update staff member information</small>
+                        </div>
+                        <button type="button" class="modal-close-btn" @onclick="CloseEditStaffModal" title="Close" disabled="@isSubmittingEdit">✕</button>
+                    </div>
+                    <form class="modal-form" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;" autocomplete="off" @onsubmit="HandleUpdateStaffAsync" @onsubmit:preventDefault>
+                        <div class="modal-body" style="flex: 1; min-height: 0; overflow-y: auto;">
+                            @if (!string.IsNullOrEmpty(editErrorMessage))
+                            {
+                                <div class="auth-alert error" role="alert">
+                                    <AppIcon Name="warning" />
+                                    <span>@editErrorMessage</span>
+                                </div>
+                            }
+
+                            <div class="form-group">
+                                <label class="form-label" for="edit-staff-fullname">Full Name <span class="text-danger">*</span></label>
+                                <input id="edit-staff-fullname"
+                                       value="@editStaffModel.FullName"
+                                       @oninput="OnEditFullNameInput"
+                                       @onblur="OnEditFullNameBlur"
+                                       class="toolbar-input @(editNameHasError ? "input-error" : "")"
+                                       placeholder="e.g. John Doe"
+                                       autocomplete="off"
+                                       disabled="@isSubmittingEdit" />
+                                @if (!string.IsNullOrEmpty(editNameErrorMessage))
+                                {
+                                    <small class="field-error-text" style="color: #dc2626; font-size: 0.72rem; margin-top: 3px; display: block;">@editNameErrorMessage</small>
+                                }
+                            </div>
+
+                            <div class="form-group">
+                                <div class="email-label-row">
+                                    <label class="form-label" for="edit-staff-email">Email Address <span class="text-danger">*</span></label>
+                                    @if (isCheckingEditEmail)
+                                    {
+                                        <span class="email-status-text muted">
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>Checking...
+                                        </span>
+                                    }
+                                    else if (isEditEmailAvailable == true)
+                                    {
+                                        <span class="email-status-text success">✓ Email is available</span>
+                                    }
+                                    else if (isEditEmailAvailable == false)
+                                    {
+                                        <span class="email-status-text danger">✕ Email already in use</span>
+                                    }
+                                </div>
+                                <input id="edit-staff-email" type="email" @bind="editStaffModel.Email" @onblur="OnEditEmailBlurAsync" class="toolbar-input @(isEditEmailAvailable == false ? "input-error" : isEditEmailAvailable == true ? "input-success" : "")" placeholder="e.g. staff@gmail.com" autocomplete="off" disabled="@isSubmittingEdit" />
+                                <small class="form-hint">Enter the staff member's email address.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="edit-staff-phone">Phone Number <small class="text-muted">(Optional)</small></label>
+                                <input id="edit-staff-phone"
+                                       type="tel"
+                                       inputmode="numeric"
+                                       maxlength="10"
+                                       onkeydown="return (event.ctrlKey || event.metaKey || ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter'].includes(event.key) || (event.key >= '0' && event.key <= '9'))"
+                                       onpaste="setTimeout(() => { this.value = this.value.replace(/\D/g, '').slice(0, 10); }, 0)"
+                                       value="@editStaffModel.PhoneNumber"
+                                       @oninput="OnEditPhoneNumberInput"
+                                       @onblur="OnEditPhoneNumberBlur"
+                                       class="toolbar-input @(editPhoneHasError ? "input-error" : "")"
+                                       placeholder="e.g. 0901234567"
+                                       autocomplete="off"
+                                       disabled="@isSubmittingEdit" />
+                                @if (!string.IsNullOrEmpty(editPhoneErrorMessage))
+                                {
+                                    <small class="field-error-text" style="color: #dc2626; font-size: 0.72rem; margin-top: 3px; display: block;">@editPhoneErrorMessage</small>
+                                }
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="edit-staff-password">New Password <small class="text-muted">(Leave blank to keep unchanged)</small></label>
+                                <input id="edit-staff-password" type="password" @bind="editStaffModel.Password" class="toolbar-input" placeholder="Leave blank to keep current password" autocomplete="new-password" disabled="@isSubmittingEdit" />
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="edit-staff-confirm-password">Confirm New Password</label>
+                                <input id="edit-staff-confirm-password" type="password" @bind="editStaffModel.ConfirmPassword" class="toolbar-input" placeholder="Re-enter new password" autocomplete="new-password" disabled="@isSubmittingEdit" />
+                            </div>
+
+                        </div>
+                        <div class="modal-footer" style="flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 14px 20px; border-top: 1px solid #e2e8f0; background: #f8fafc;">
+                            <button type="button" class="btn-modal-cancel" style="display: inline-flex; align-items: center; justify-content: center; height: 38px; min-width: 90px; padding: 0 18px; border-radius: 8px; border: 1.5px solid #cbd5e1; background: #ffffff; color: #475569; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.15s ease;" @onclick="CloseEditStaffModal" disabled="@isSubmittingEdit">Cancel</button>
+                            <button type="submit" class="btn-modal-submit" style="display: inline-flex; align-items: center; justify-content: center; height: 38px; min-width: 120px; padding: 0 22px; border-radius: 8px; border: 1.5px solid #ff5722; background: #ff5722; color: #ffffff; font-weight: 600; font-size: 0.85rem; cursor: pointer; box-shadow: 0 2px 4px rgba(255,87,34,0.25); transition: all 0.15s ease;" disabled="@isSubmittingEdit" id="btn-submit-edit-staff">
+                                @if (isSubmittingEdit)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                    <span>Saving...</span>
+                                }
+                                else
+                                {
+                                    <span>Save Changes</span>
+                                }
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
+
         @if (showEmailExistsModal)
         {
             <div class="modal-overlay alert-overlay" style="z-index: 1200;" @onclick="CloseEmailExistsModal">
@@ -257,7 +371,7 @@
                                 The email address <strong>@conflictEmail</strong> has already been registered and used in the system.
                             </p>
                             <p class="alert-message-sub">
-                                Please enter a different email address to create this staff account.
+                                Please enter a different email address for this staff account.
                             </p>
                         </div>
                     </div>
@@ -297,6 +411,20 @@
     private string? nameErrorMessage;
     private bool phoneHasError = false;
     private string? phoneErrorMessage;
+
+    // Edit Staff Modal State (UC_34.2)
+    private bool showEditStaffModal = false;
+    private bool isSubmittingEdit = false;
+    private Guid editingStaffId;
+    private UpdateStaffAccountRequest editStaffModel = new();
+    private string? editErrorMessage;
+    private bool editNameHasError = false;
+    private string? editNameErrorMessage;
+    private bool editPhoneHasError = false;
+    private string? editPhoneErrorMessage;
+    private bool isCheckingEditEmail = false;
+    private bool? isEditEmailAvailable;
+    private string initialEmail = "";
 
     protected override async Task OnInitializedAsync() => await LoadStaffAsync();
 
@@ -584,6 +712,310 @@
         finally
         {
             isSubmitting = false;
+        }
+    }
+
+    private void OpenEditStaffModal(AdminUserDto staff)
+    {
+        editingStaffId = staff.UserId;
+        initialEmail = staff.Email ?? "";
+        editStaffModel = new UpdateStaffAccountRequest
+        {
+            FullName = staff.FullName ?? "",
+            Email = staff.Email ?? "",
+            PhoneNumber = staff.PhoneNumber,
+            Password = null,
+            ConfirmPassword = null
+        };
+        editErrorMessage = null;
+        editNameHasError = false;
+        editNameErrorMessage = null;
+        editPhoneHasError = false;
+        editPhoneErrorMessage = null;
+        isCheckingEditEmail = false;
+        isEditEmailAvailable = null;
+        showEditStaffModal = true;
+    }
+
+    private void CloseEditStaffModal()
+    {
+        if (isSubmittingEdit) return;
+        showEditStaffModal = false;
+        editErrorMessage = null;
+        editNameHasError = false;
+        editNameErrorMessage = null;
+        editPhoneHasError = false;
+        editPhoneErrorMessage = null;
+        isCheckingEditEmail = false;
+        isEditEmailAvailable = null;
+    }
+
+    private void OnEditFullNameInput(ChangeEventArgs e)
+    {
+        editStaffModel.FullName = e.Value?.ToString() ?? "";
+        ValidateEditFullName();
+    }
+
+    private void OnEditFullNameBlur()
+    {
+        ValidateEditFullName();
+    }
+
+    private bool ValidateEditFullName()
+    {
+        if (string.IsNullOrWhiteSpace(editStaffModel.FullName))
+        {
+            editNameHasError = false;
+            editNameErrorMessage = null;
+            return false;
+        }
+
+        var name = editStaffModel.FullName.Trim();
+        if (name.Any(char.IsDigit))
+        {
+            editNameHasError = true;
+            editNameErrorMessage = "Full name cannot contain numbers.";
+            return false;
+        }
+
+        editNameHasError = false;
+        editNameErrorMessage = null;
+        return true;
+    }
+
+    private void OnEditPhoneNumberInput(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString() ?? "";
+        var digitsOnly = new string(raw.Where(char.IsDigit).ToArray());
+        if (digitsOnly.Length > 10)
+        {
+            digitsOnly = digitsOnly.Substring(0, 10);
+        }
+        editStaffModel.PhoneNumber = digitsOnly;
+        ValidateEditPhoneNumber();
+    }
+
+    private void OnEditPhoneNumberBlur()
+    {
+        ValidateEditPhoneNumber();
+    }
+
+    private bool ValidateEditPhoneNumber()
+    {
+        if (string.IsNullOrWhiteSpace(editStaffModel.PhoneNumber))
+        {
+            editPhoneHasError = false;
+            editPhoneErrorMessage = null;
+            return true;
+        }
+
+        var phone = editStaffModel.PhoneNumber.Trim();
+        if (phone.Any(char.IsLetter))
+        {
+            editPhoneHasError = true;
+            editPhoneErrorMessage = "Phone number cannot contain letters.";
+            return false;
+        }
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^0\d{9}$"))
+        {
+            editPhoneHasError = true;
+            editPhoneErrorMessage = "Phone number must be a valid 10-digit number starting with 0 (e.g. 0901234567).";
+            return false;
+        }
+
+        editPhoneHasError = false;
+        editPhoneErrorMessage = null;
+        return true;
+    }
+
+    private async Task OnEditEmailBlurAsync()
+    {
+        if (string.IsNullOrWhiteSpace(editStaffModel.Email))
+        {
+            isEditEmailAvailable = null;
+            return;
+        }
+
+        if (string.Equals(editStaffModel.Email.Trim(), initialEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            isEditEmailAvailable = true;
+            return;
+        }
+
+        if (editStaffModel.Email.Contains('@') && editStaffModel.Email.Contains('.'))
+        {
+            await CheckEditEmailAvailabilityAsync(showPopupOnConflict: true);
+        }
+    }
+
+    private async Task<bool> CheckEditEmailAvailabilityAsync(bool showPopupOnConflict = true)
+    {
+        var email = editStaffModel.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@') || !email.Contains('.'))
+        {
+            isEditEmailAvailable = null;
+            return false;
+        }
+
+        if (string.Equals(email, initialEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            isEditEmailAvailable = true;
+            return true;
+        }
+
+        isCheckingEditEmail = true;
+        try
+        {
+            var res = await UserService.CheckEmailExistsAsync(email, excludingUserId: editingStaffId);
+            if (res.Success)
+            {
+                var isAlreadyUsed = res.Data;
+                isEditEmailAvailable = !isAlreadyUsed;
+
+                if (isAlreadyUsed)
+                {
+                    conflictEmail = email;
+                    if (showPopupOnConflict)
+                    {
+                        showEmailExistsModal = true;
+                    }
+                    return false;
+                }
+
+                return true;
+            }
+            else
+            {
+                isEditEmailAvailable = null;
+                return true;
+            }
+        }
+        catch
+        {
+            isEditEmailAvailable = null;
+            return true;
+        }
+        finally
+        {
+            isCheckingEditEmail = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleUpdateStaffAsync()
+    {
+        editErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(editStaffModel.FullName) || editStaffModel.FullName.Trim().Length < 2)
+        {
+            editNameHasError = true;
+            editNameErrorMessage = "Please enter a valid full name (at least 2 characters).";
+            editErrorMessage = editNameErrorMessage;
+            return;
+        }
+
+        if (editStaffModel.FullName.Any(char.IsDigit))
+        {
+            editNameHasError = true;
+            editNameErrorMessage = "Full name cannot contain numbers.";
+            editErrorMessage = editNameErrorMessage;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(editStaffModel.Email))
+        {
+            editErrorMessage = "Email address is required.";
+            return;
+        }
+
+        if (!editStaffModel.Email.Contains('@') || !editStaffModel.Email.Contains('.'))
+        {
+            editErrorMessage = "Please enter a valid email address.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editStaffModel.PhoneNumber))
+        {
+            var phone = editStaffModel.PhoneNumber.Trim();
+            if (phone.Any(char.IsLetter))
+            {
+                editPhoneHasError = true;
+                editPhoneErrorMessage = "Phone number cannot contain letters.";
+                editErrorMessage = editPhoneErrorMessage;
+                return;
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^0\d{9}$"))
+            {
+                editPhoneHasError = true;
+                editPhoneErrorMessage = "Phone number must be a valid 10-digit number starting with 0 (e.g. 0901234567).";
+                editErrorMessage = editPhoneErrorMessage;
+                return;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(editStaffModel.Password))
+        {
+            if (editStaffModel.Password.Length < 6)
+            {
+                editErrorMessage = "Password must be at least 6 characters long.";
+                return;
+            }
+
+            if (editStaffModel.Password != editStaffModel.ConfirmPassword)
+            {
+                editErrorMessage = "Passwords do not match.";
+                return;
+            }
+        }
+
+        // Check email availability if changed
+        if (!string.Equals(editStaffModel.Email.Trim(), initialEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            var emailAvailable = await CheckEditEmailAvailabilityAsync(showPopupOnConflict: true);
+            if (!emailAvailable && isEditEmailAvailable == false)
+            {
+                return;
+            }
+        }
+
+        isSubmittingEdit = true;
+        try
+        {
+            var res = await UserService.UpdateStaffAccountAsync(editingStaffId, editStaffModel);
+            if (res.Success)
+            {
+                showEditStaffModal = false;
+                editStaffModel = new();
+                isEditEmailAvailable = null;
+                toastMessage = res.Message ?? "Staff account updated successfully!";
+                await LoadStaffAsync();
+            }
+            else
+            {
+                if (res.Message != null && (
+                    res.Message.Contains("already registered", StringComparison.OrdinalIgnoreCase) ||
+                    res.Message.Contains("already in use", StringComparison.OrdinalIgnoreCase) ||
+                    res.Message.Contains("Email is already", StringComparison.OrdinalIgnoreCase)))
+                {
+                    isEditEmailAvailable = false;
+                    conflictEmail = editStaffModel.Email;
+                    showEmailExistsModal = true;
+                }
+                else
+                {
+                    editErrorMessage = res.Message ?? "Failed to update staff account.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            editErrorMessage = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isSubmittingEdit = false;
         }
     }
 

@@ -86,6 +86,30 @@ public class AdminUsersController : ControllerBase
     }
 
     /// <summary>
+    /// Update an existing staff account (Admin only - UC_34.2)
+    /// </summary>
+    [HttpPut("staff/{userId:guid}")]
+    [HttpPut("~/api/admin/staff/{userId:guid}")]
+    [Authorize(Roles = RoleConstants.Admin)]
+    [ProducesResponseType(typeof(ApiResponseDto<AdminUserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<AdminUserDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateStaff([FromRoute] Guid userId, [FromBody] UpdateStaffAccountRequestDto request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+            return BadRequest(ApiResponseDto<AdminUserDto>.Fail(string.Join("; ", errors)));
+        }
+
+        var result = await _adminUserService.UpdateStaffAccountAsync(userId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Check whether an email is already registered in the system (Admin only)
     /// </summary>
     [HttpGet("check-email")]
@@ -93,14 +117,14 @@ public class AdminUsersController : ControllerBase
     [Authorize(Roles = RoleConstants.Admin)]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> CheckEmail([FromQuery] string email, CancellationToken cancellationToken)
+    public async Task<IActionResult> CheckEmail([FromQuery] string email, [FromQuery] Guid? excludingUserId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(email))
         {
             return BadRequest(ApiResponseDto<bool>.Fail("Email query parameter is required."));
         }
 
-        var result = await _adminUserService.CheckEmailExistsAsync(email, cancellationToken);
+        var result = await _adminUserService.CheckEmailExistsAsync(email, excludingUserId, cancellationToken);
         if (!result.Success)
         {
             return BadRequest(result);

@@ -17,6 +17,13 @@ public class UserRepository : Repository<User>, IUserRepository
         return DbSet.AnyAsync(u => u.Email.ToLower() == normalizedEmail, cancellationToken);
     }
 
+    public Task<bool> ExistsByEmailAsync(string normalizedEmail, Guid? excludingUserId, CancellationToken cancellationToken = default)
+    {
+        return DbSet.AnyAsync(
+            u => u.Email.ToLower() == normalizedEmail && (excludingUserId == null || u.UserId != excludingUserId),
+            cancellationToken);
+    }
+
     public Task<bool> ExistsByPhoneAsync(string phoneNumber, Guid? excludingUserId = null, CancellationToken cancellationToken = default)
     {
         return DbSet.AnyAsync(

@@ -22,7 +22,7 @@
                 <AppIcon Name="person" /><span>User Accounts</span>
             </button>
             <button type="button" class="side-item @(IsActive("/admin/coach-subscription-plans") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-subscription-plans")'>
-                <AppIcon Name="trophy" /><span>Coach Plans</span>
+                <AppIcon Name="trophy" /><span>Coach Registration Plans</span>
             </button>
             <button type="button" class="side-item @(IsActive("/admin/locations") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/locations")'>
                 <AppIcon Name="location" /><span>Locations & Facilities</span>
@@ -33,12 +33,12 @@
             <button type="button" class="side-item @(IsActive("/admin/payouts") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payouts")'>
                 <AppIcon Name="chart" /><span>Coach Payouts</span>
             </button>
-            <button type="button" class="side-item @(IsActive("/admin/payment-accounts") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payment-accounts")'>
-                <AppIcon Name="briefcase" /><span>Payment Accounts</span>
-            </button>
 
             <AuthorizeView Roles="ADMIN">
                 <Authorized>
+                    <button type="button" class="side-item @(IsActive("/admin/payment-gateways") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payment-gateways")'>
+                        <AppIcon Name="shield" /><span>Payment Gateways</span>
+                    </button>
                     <button type="button" class="side-item @(IsActive("/admin/revenue") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/revenue")'>
                         <AppIcon Name="chart" /><span>Revenue Analytics</span>
                     </button>

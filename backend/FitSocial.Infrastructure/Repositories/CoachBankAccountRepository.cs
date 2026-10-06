@@ -39,39 +39,4 @@ public class CoachBankAccountRepository : Repository<CoachBankAccount>, ICoachBa
             .ThenByDescending(b => b.CreatedAt)
             .ToListAsync(cancellationToken);
     }
-
-    public Task<List<CoachBankAccount>> ListAllWithCoachAsync(string? searchTerm, string? bankCode, bool? defaultOnly, CancellationToken cancellationToken = default)
-    {
-        var query = DbSet
-            .Include(b => b.Coach)
-                .ThenInclude(c => c.Coach)
-            .AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(bankCode))
-        {
-            var code = bankCode.Trim().ToUpperInvariant();
-            query = query.Where(b => b.BankCode != null && b.BankCode.ToUpper() == code);
-        }
-
-        if (defaultOnly == true)
-        {
-            query = query.Where(b => b.IsDefault == true);
-        }
-
-        if (!string.IsNullOrWhiteSpace(searchTerm))
-        {
-            var term = searchTerm.Trim().ToLower();
-            query = query.Where(b =>
-                (b.AccountName != null && b.AccountName.ToLower().Contains(term)) ||
-                (b.BankName != null && b.BankName.ToLower().Contains(term)) ||
-                (b.Coach != null && b.Coach.Coach != null && (
-                    (b.Coach.Coach.FullName != null && b.Coach.Coach.FullName.ToLower().Contains(term)) ||
-                    (b.Coach.Coach.Email != null && b.Coach.Coach.Email.ToLower().Contains(term)))));
-        }
-
-        return query
-            .OrderByDescending(b => b.CreatedAt)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-    }
 }

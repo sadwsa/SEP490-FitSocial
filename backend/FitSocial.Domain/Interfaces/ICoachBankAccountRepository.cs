@@ -15,9 +15,4 @@ public interface ICoachBankAccountRepository : IRepository<CoachBankAccount>
     /// UC-36.1: only active accounts can receive payouts.
     /// </summary>
     Task<List<CoachBankAccount>> ListActiveByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// UC-36: all coach payment accounts with coach user info for the admin list.
-    /// </summary>
-    Task<List<CoachBankAccount>> ListAllWithCoachAsync(string? searchTerm, string? bankCode, bool? defaultOnly, CancellationToken cancellationToken = default);
 }

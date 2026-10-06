@@ -120,6 +120,38 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         return ApiResponseDto<bool>.Ok(true, "Payment gateway config deactivated successfully.");
     }
 
+    public async Task<ApiResponseDto<bool>> ActivateConfigAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var config = await _configRepository.GetByIdAsync(id, cancellationToken);
+        if (config == null)
+        {
+            throw new NotFoundException("Payment gateway config not found.");
+        }
+
+        config.IsActive = true;
+        config.UpdatedAt = DateTime.UtcNow;
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<bool>.Ok(true, "Payment gateway config activated successfully.");
+    }
+
+    public async Task<ApiResponseDto<bool>> DeactivateConfigAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var config = await _configRepository.GetByIdAsync(id, cancellationToken);
+        if (config == null)
+        {
+            throw new NotFoundException("Payment gateway config not found.");
+        }
+
+        config.IsActive = false;
+        config.UpdatedAt = DateTime.UtcNow;
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<bool>.Ok(true, "Payment gateway config deactivated successfully.");
+    }
+
     private PaymentGatewayConfigDto MapToDto(PaymentGatewayConfig c)
     {
         string? plainApiKey = null;
@@ -148,7 +180,10 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             GatewayId = c.GatewayId,
             GatewayName = c.GatewayName,
             ClientId = c.ClientId,
+            ClientIdMasked = MaskKey(c.ClientId),
+            ApiKey = plainApiKey,
             ApiKeyMasked = MaskKey(plainApiKey),
+            ChecksumKey = plainChecksumKey,
             ChecksumKeyMasked = MaskKey(plainChecksumKey),
             WebhookUrl = c.WebhookUrl,
             IsActive = c.IsActive ?? true,

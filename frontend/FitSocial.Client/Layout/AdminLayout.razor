@@ -36,6 +36,9 @@
 
             <AuthorizeView Roles="ADMIN">
                 <Authorized>
+                    <button type="button" class="side-item @(IsActive("/admin/revenue") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/revenue")'>
+                        <AppIcon Name="chart" /><span>Revenue Analytics</span>
+                    </button>
                     <button type="button" class="side-item @(IsActive("/admin/staff") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/staff")'>
                         <AppIcon Name="person" /><span>Staff Accounts</span>
                     </button>

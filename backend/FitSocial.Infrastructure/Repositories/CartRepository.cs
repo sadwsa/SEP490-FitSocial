@@ -25,6 +25,8 @@ namespace FitSocial.Infrastructure.Repositories
                 .Include(c => c.Package)
                     .ThenInclude(p => p.Coach)
                         .ThenInclude(cp => cp.Reviews)
+                .Include(c => c.Package)
+                    .ThenInclude(p => p.Media)
                 .Where(c => c.UserId == userId)
                 .OrderByDescending(c => c.CreatedAt)
                 .AsNoTracking()

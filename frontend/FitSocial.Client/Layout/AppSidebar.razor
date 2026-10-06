@@ -23,15 +23,29 @@
             Friends
         </a>
 
-        <!-- My Packages / Training Packages -->
-        <a href="training-packages" class="@GetItemClass("packages")">
-            <svg class="w-5 h-5 @GetIconClass("packages")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <!-- Package List (Available to all users: Trainees, Coaches, Guests) -->
+        <a href="packages" class="@GetItemClass("package-list")">
+            <svg class="w-5 h-5 @GetIconClass("package-list")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
+                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z">
                 </path>
             </svg>
-            My Packages
+            Package List
         </a>
+
+        <AuthorizeView Roles="COACH">
+            <Authorized>
+                <!-- My Packages (Coach only: Manage and CRUD own packages) -->
+                <a href="training-packages" class="@GetItemClass("my-packages")">
+                    <svg class="w-5 h-5 @GetIconClass("my-packages")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
+                        </path>
+                    </svg>
+                    My Packages
+                </a>
+            </Authorized>
+        </AuthorizeView>
 
         <!-- Coaches List -->
         <a href="coaches" class="@GetItemClass("coaches")">
@@ -90,7 +104,16 @@
     {
         if (!string.IsNullOrWhiteSpace(ActiveItem))
         {
-            return string.Equals(ActiveItem, name, StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(ActiveItem, name, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (name == "package-list" && string.Equals(ActiveItem, "packages", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (name == "my-packages" && string.Equals(ActiveItem, "my-packages", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
         }
 
         var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri).ToLowerInvariant();
@@ -102,7 +125,8 @@
         {
             "home" => string.IsNullOrEmpty(rootSegment) || rootSegment == "home",
             "community" => rootSegment == "community",
-            "packages" => rootSegment == "training-packages" || rootSegment == "workouts",
+            "package-list" => rootSegment == "packages" || (rootSegment == "training-packages" && segments.Contains("marketplace")),
+            "my-packages" => rootSegment == "training-packages" && !segments.Contains("marketplace") && (segments.Length == 1 || segments.Contains("edit")),
             "coaches" => rootSegment == "coaches",
             "coach-dashboard" => rootSegment == "coach" && (segments.Length == 1 || segments.Contains("dashboard")),
             "messages" => rootSegment == "messages",

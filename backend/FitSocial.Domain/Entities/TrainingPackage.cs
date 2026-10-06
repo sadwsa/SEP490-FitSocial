@@ -32,4 +32,6 @@ public partial class TrainingPackage
     public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
 
     public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
+
+    public virtual ICollection<TrainingPackageMedium> Media { get; set; } = new List<TrainingPackageMedium>();
 }

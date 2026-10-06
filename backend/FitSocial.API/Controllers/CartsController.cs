@@ -14,6 +14,7 @@ namespace FitSocial.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("api/cart")]
     [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
     public class CartsController : ControllerBase
     {
@@ -26,7 +27,9 @@ namespace FitSocial.API.Controllers
 
         private bool TryGetCurrentUserId(out Guid userId)
         {
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("sub")?.Value
+                ?? User.FindFirst("userId")?.Value;
             return Guid.TryParse(userIdStr, out userId);
         }
 
@@ -71,6 +74,7 @@ namespace FitSocial.API.Controllers
         /// Add a training package to the cart
         /// </summary>
         [HttpPost]
+        [HttpPost("items")]
         [ProducesResponseType(typeof(ApiResponseDto<CartItemDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> AddToCart([FromBody] AddToCartDto dto, CancellationToken cancellationToken)
         {

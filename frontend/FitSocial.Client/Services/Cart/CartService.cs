@@ -42,14 +42,12 @@ namespace FitSocial.Client.Services.Cart
             return response;
         }
 
-        public async Task<ApiResponse<CartItemDto>> AddToCartAsync(AddToCartRequestDto request)
+        public static bool IsAlreadyInCartError(string? message)
         {
-            var dto = new AddToCartDto
-            {
-                PackageId = request.PackageId ?? request.ProductId ?? Guid.Empty,
-                Quantity = request.Quantity
-            };
-            return await AddToCartAsync(dto);
+            if (string.IsNullOrWhiteSpace(message)) return false;
+            return message.Contains("already in your cart", StringComparison.OrdinalIgnoreCase) ||
+                   message.Contains("already in cart", StringComparison.OrdinalIgnoreCase) ||
+                   message.Contains("already exists", StringComparison.OrdinalIgnoreCase);
         }
 
         public async Task<ApiResponse<bool>> RemoveCartItemAsync(Guid cartId)

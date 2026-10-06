@@ -14,4 +14,14 @@ public interface IPaymentGatewayConfigService
     Task<ApiResponseDto<PaymentGatewayConfigDto>> CreateConfigAsync(Guid adminUserId, CreatePaymentGatewayConfigDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponseDto<PaymentGatewayConfigDto>> UpdateConfigAsync(Guid id, Guid adminUserId, UpdatePaymentGatewayConfigDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponseDto<bool>> DeleteConfigAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC-36.1: Admin activates a payment gateway configuration.
+    /// </summary>
+    Task<ApiResponseDto<bool>> ActivateConfigAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC-36.1: Admin deactivates a payment gateway configuration.
+    /// </summary>
+    Task<ApiResponseDto<bool>> DeactivateConfigAsync(Guid id, CancellationToken cancellationToken = default);
 }

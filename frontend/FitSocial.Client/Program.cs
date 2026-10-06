@@ -63,7 +63,7 @@ builder.Services.AddScoped<ICoachDashboardService, CoachDashboardService>();
 builder.Services.AddScoped<ISystemOperationsService, SystemOperationsService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<FitSocial.Client.Services.Payouts.IPayoutService, FitSocial.Client.Services.Payouts.PayoutApiService>();
-builder.Services.AddScoped<FitSocial.Client.Services.BankAccounts.IBankAccountService, FitSocial.Client.Services.BankAccounts.BankAccountApiService>();
+builder.Services.AddScoped<FitSocial.Client.Services.PaymentGateways.IPaymentGatewayService, FitSocial.Client.Services.PaymentGateways.PaymentGatewayApiService>();
 builder.Services.AddScoped<ISubscriptionPriceHistoryApiService, SubscriptionPriceHistoryApiService>();
 
 await builder.Build().RunAsync();

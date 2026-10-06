@@ -68,6 +68,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenBlacklistService, TokenBlacklistService>();
         services.AddScoped<IPaymentGateway, PayOSGateway>();
         services.AddScoped<IBankTransferGateway, PayOSPayoutGateway>();
+        services.AddScoped<IPaymentGatewayCredentialProvider, DbPaymentGatewayCredentialProvider>();
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<INotificationService, NotificationService>();
 

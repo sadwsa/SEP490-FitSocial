@@ -7,15 +7,15 @@ namespace FitSocial.Infrastructure.Services;
 
 /// <summary>
 /// UC-23.1: real disbursement via PayOS Payout API (POST /v1/payouts).
-/// Requires the payout channel to be activated on the PayOS dashboard
-/// (Settings → Profile → Kênh chi) with its own credentials:
-/// PayOS:PayoutClientId / PayOS:PayoutApiKey / PayOS:PayoutChecksumKey
-/// (falls back to the collection keys PayOS:ClientId/ApiKey/ChecksumKey).
+/// Credentials resolve from the admin-managed PaymentGatewayConfigs table
+/// first ("PayOS-Payout" row, else "PayOS" row, else the single active row),
+/// falling back to appsettings (PayOS:Payout* then PayOS:*).
 /// Funding comes from the merchant's payout source (e.g. Bao Kim wallet).
 /// </summary>
 public class PayOSPayoutGateway : IBankTransferGateway
 {
     private readonly IConfiguration _configuration;
+    private readonly IPaymentGatewayCredentialProvider _credentials;
 
     /// <summary>Bank code (or 6-digit BIN) → NAPAS BIN used by PayOS ToBin.</summary>
     private static readonly Dictionary<string, string> BankBins = new(StringComparer.OrdinalIgnoreCase)
@@ -53,13 +53,24 @@ public class PayOSPayoutGateway : IBankTransferGateway
         ["CAKE"] = "970443",
     };
 
-    public PayOSPayoutGateway(IConfiguration configuration)
+    public PayOSPayoutGateway(IConfiguration configuration, IPaymentGatewayCredentialProvider? credentials = null)
     {
         _configuration = configuration;
+        _credentials = credentials!;
     }
 
-    private PayOSClient CreateClient()
+    private async Task<PayOSClient> CreateClientAsync(CancellationToken cancellationToken = default)
     {
+        if (_credentials != null)
+        {
+            var dbCreds = await _credentials.GetDbCredentialsAsync(["PayOS-Payout", "PayOS"], cancellationToken)
+                ?? await _credentials.GetSingleActiveCredentialsAsync(cancellationToken);
+            if (dbCreds != null)
+            {
+                return new PayOSClient(dbCreds.ClientId, dbCreds.ApiKey, dbCreds.ChecksumKey);
+            }
+        }
+
         var clientId = _configuration["PayOS:PayoutClientId"];
         var apiKey = _configuration["PayOS:PayoutApiKey"];
         var checksumKey = _configuration["PayOS:PayoutChecksumKey"];
@@ -100,7 +111,7 @@ public class PayOSPayoutGateway : IBankTransferGateway
         PayOSClient client;
         try
         {
-            client = CreateClient();
+            client = await CreateClientAsync(cancellationToken);
         }
         catch (Exception ex)
         {

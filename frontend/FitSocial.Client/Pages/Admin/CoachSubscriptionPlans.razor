@@ -9,12 +9,12 @@
 @inject ISubscriptionPriceHistoryApiService PriceHistoryApi
 @inject NavigationManager Navigation
 
-<PageTitle>Coach Subscription Plans - System Operations</PageTitle>
+<PageTitle>Coach Registration Plans - System Operations</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
-        <h2 class="view-title">Coach Subscription Plans</h2>
-        <p class="view-sub">Manage and monitor coach subscription plans and price change history across the FitSocial platform.</p>
+        <h2 class="view-title">Coach Registration Plans</h2>
+        <p class="view-sub">Subscription packages coaches purchase to register and activate their coach account (not training plans).</p>
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
@@ -81,7 +81,7 @@
                     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
                         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                             <div>
-                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Create Coach Plan</h3>
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Create Registration Plan</h3>
                                 <p class="text-xs text-gray-400 mt-0.5">UC_37.1 • Price</p>
                             </div>
                             <button type="button" @onclick="ToggleCreateForm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
@@ -134,7 +134,7 @@
                     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
                         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                             <div>
-                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Edit Coach Plan</h3>
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Edit Registration Plan</h3>
                             </div>
                             <button type="button" @onclick="CloseEditForm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
                         </div>
@@ -186,7 +186,7 @@
                     <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 flex flex-col" @onclick:stopPropagation="true">
                         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                             <div>
-                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Delete Coach Plan</h3>
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">Delete Registration Plan</h3>
                             </div>
                             <button type="button" @onclick="CloseDeleteConfirm" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xl leading-none">&times;</button>
                         </div>
@@ -275,6 +275,53 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Plans Pagination Controls -->
+                @if (data != null && data.TotalPlans > 0)
+                {
+                    var plansTotalPages = Math.Max(1, (int)Math.Ceiling(data.TotalPlans / (double)plansPageSize));
+                    var plansStart = (plansPageIndex - 1) * plansPageSize + 1;
+                    var plansEnd = Math.Min(plansPageIndex * plansPageSize, data.TotalPlans);
+                    <div class="pagination-container" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:14px;">
+                        <div class="pagination-info" style="font-size:0.8rem; color:#64748b;">
+                            <span>Showing <strong>@plansStart–@plansEnd</strong> of <strong>@data.TotalPlans</strong> plans</span>
+                        </div>
+
+                        @if (plansTotalPages > 1)
+                        {
+                            <div class="pagination-controls" style="display:flex; align-items:center; gap:5px;">
+                                <button type="button" class="page-btn" disabled="@(plansPageIndex <= 1)" @onclick="() => GoToPlansPageAsync(plansPageIndex - 1)">‹ Prev</button>
+                                @for (int i = 1; i <= plansTotalPages; i++)
+                                {
+                                    var pNum = i;
+                                    if (pNum == 1 || pNum == plansTotalPages || Math.Abs(pNum - plansPageIndex) <= 1)
+                                    {
+                                        <button type="button" class="page-btn @(pNum == plansPageIndex ? "active" : "")" @onclick="() => GoToPlansPageAsync(pNum)">@pNum</button>
+                                    }
+                                    else if (pNum == 2 && plansPageIndex > 3)
+                                    {
+                                        <span class="page-dots">…</span>
+                                    }
+                                    else if (pNum == plansTotalPages - 1 && plansPageIndex < plansTotalPages - 2)
+                                    {
+                                        <span class="page-dots">…</span>
+                                    }
+                                }
+                                <button type="button" class="page-btn" disabled="@(plansPageIndex >= plansTotalPages)" @onclick="() => GoToPlansPageAsync(plansPageIndex + 1)">Next ›</button>
+                            </div>
+                        }
+
+                        <div class="page-size-selector" style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#64748b;">
+                            <span>Per page:</span>
+                            <select value="@plansPageSize" @onchange="OnPlansPageSizeChangedAsync" class="page-size-select" style="padding:4px 8px; border-radius:6px; border:1px solid #cbd5e1;">
+                                <option value="5">5 / page</option>
+                                <option value="10">10 / page</option>
+                                <option value="20">20 / page</option>
+                                <option value="50">50 / page</option>
+                            </select>
+                        </div>
+                    </div>
+                }
             }
         }
         else if (activeTab == "price-history")
@@ -360,7 +407,7 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Coach Plan</th>
+                                <th>Registration Plan</th>
                                 <th>Old Price</th>
                                 <th>New Price</th>
                                 <th>Change</th>
@@ -608,6 +655,8 @@
     private string? errorMessage;
     private string search = "";
     private string statusFilter = "";
+    private int plansPageIndex = 1;
+    private int plansPageSize = 10;
     private System.Timers.Timer? debounce;
 
     private string? successMessage;
@@ -685,7 +734,7 @@
         try
         {
             bool? isActive = statusFilter switch { "active" => true, "inactive" => false, _ => null };
-            var res = await SystemOps.GetCoachSubscriptionPlansAsync(isActive, string.IsNullOrWhiteSpace(search) ? null : search, 1, 50);
+            var res = await SystemOps.GetCoachSubscriptionPlansAsync(isActive, string.IsNullOrWhiteSpace(search) ? null : search, plansPageIndex, plansPageSize);
             if (res.Success && res.Data != null) data = res.Data;
             else errorMessage = res.Message ?? "Failed to load plans.";
         }
@@ -713,6 +762,7 @@
     private void OnSearchInput(ChangeEventArgs e)
     {
         search = e.Value?.ToString() ?? "";
+        plansPageIndex = 1;
         debounce?.Stop(); debounce?.Dispose();
         debounce = new System.Timers.Timer(400) { AutoReset = false };
         debounce.Elapsed += async (_, _) => { await InvokeAsync(LoadAsync); await InvokeAsync(StateHasChanged); };
@@ -722,6 +772,24 @@
     private async Task OnStatusFilterChanged(ChangeEventArgs e)
     {
         statusFilter = e.Value?.ToString() ?? "";
+        plansPageIndex = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoToPlansPageAsync(int page)
+    {
+        var totalPages = Math.Max(1, (int)Math.Ceiling((data?.TotalPlans ?? 0) / (double)plansPageSize));
+        plansPageIndex = Math.Clamp(page, 1, totalPages);
+        await LoadAsync();
+    }
+
+    private async Task OnPlansPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            plansPageSize = size;
+        }
+        plansPageIndex = 1;
         await LoadAsync();
     }
 

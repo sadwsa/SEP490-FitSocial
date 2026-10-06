@@ -20,6 +20,11 @@ public partial class CoachBankAccount
 
     public bool? IsDefault { get; set; } = false;
 
+    /// <summary>
+    /// UC-36.1: only active accounts can receive payouts.
+    /// </summary>
+    public bool? IsActive { get; set; } = true;
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

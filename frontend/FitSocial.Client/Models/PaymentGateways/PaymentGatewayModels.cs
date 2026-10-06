@@ -1,9 +1,9 @@
-using System;
-using System.ComponentModel.DataAnnotations;
+namespace FitSocial.Client.Models.PaymentGateways;
 
-namespace FitSocial.Application.DTOs.PaymentGateway;
-
-public class PaymentGatewayConfigDto
+/// <summary>
+/// UC-36: one row of the admin payment gateway configs list (keys masked).
+/// </summary>
+public class PaymentGatewayConfig
 {
     public Guid GatewayId { get; set; }
     public string? GatewayName { get; set; }
@@ -19,46 +19,15 @@ public class PaymentGatewayConfigDto
     public DateTime? UpdatedAt { get; set; }
 }
 
-public class CreatePaymentGatewayConfigDto
+/// <summary>
+/// UC-36.2: payload for admin creating a payment gateway configuration.
+/// </summary>
+public class CreatePaymentGatewayConfig
 {
-    [Required]
-    [StringLength(50)]
     public string GatewayName { get; set; } = string.Empty;
-
-    [Required]
-    [StringLength(255)]
     public string ClientId { get; set; } = string.Empty;
-
-    [Required]
-    [StringLength(500)]
     public string ApiKey { get; set; } = string.Empty;
-
-    [Required]
-    [StringLength(500)]
     public string ChecksumKey { get; set; } = string.Empty;
-
-    [StringLength(2048)]
     public string? WebhookUrl { get; set; }
-
     public bool IsActive { get; set; } = true;
-}
-
-public class UpdatePaymentGatewayConfigDto
-{
-    [StringLength(50)]
-    public string? GatewayName { get; set; }
-
-    [StringLength(255)]
-    public string? ClientId { get; set; }
-
-    [StringLength(500)]
-    public string? ApiKey { get; set; }
-
-    [StringLength(500)]
-    public string? ChecksumKey { get; set; }
-
-    [StringLength(2048)]
-    public string? WebhookUrl { get; set; }
-
-    public bool? IsActive { get; set; }
 }

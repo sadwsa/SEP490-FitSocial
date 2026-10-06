@@ -31,3 +31,17 @@ public class CreatePaymentGatewayConfig
     public string? WebhookUrl { get; set; }
     public bool IsActive { get; set; } = true;
 }
+
+/// <summary>
+/// UC-36.3: payload for admin updating a payment gateway configuration.
+/// Null key fields mean "keep current".
+/// </summary>
+public class UpdatePaymentGatewayConfig
+{
+    public string? GatewayName { get; set; }
+    public string? ClientId { get; set; }
+    public string? ApiKey { get; set; }
+    public string? ChecksumKey { get; set; }
+    public string? WebhookUrl { get; set; }
+    public bool? IsActive { get; set; }
+}

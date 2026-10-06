@@ -1,4 +1,4 @@
-﻿using FitSocial.Application.DTOs.Coach;
+using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Coaches;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Interfaces;
@@ -216,5 +216,65 @@ public class CoachesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// UC_29: Get coach application requests for Staff and Admin.
+    /// Supports basic viewing, searching, filtering, and pagination.
+    /// </summary>
+    [HttpGet("applications")]
+    [HttpGet("~/api/admin/coach-applications")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationListResponseDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCoachApplications(
+        [FromQuery] string? search,
+        [FromQuery] string? status,
+        [FromQuery] int? minExperience,
+        [FromQuery] int? maxExperience,
+        [FromQuery] string? sortBy,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _coachService.GetCoachApplicationsAsync(
+            search, status, minExperience, maxExperience, sortBy, pageNumber, pageSize, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
 
+    /// <summary>
+    /// UC_29: Get status counts of coach applications (Staff/Admin).
+    /// </summary>
+    [HttpGet("applications/status-counts")]
+    [HttpGet("~/api/admin/coach-applications/status-counts")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationStatusCountsDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCoachApplicationStatusCounts(CancellationToken cancellationToken = default)
+    {
+        var result = await _coachService.GetCoachApplicationStatusCountsAsync(cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC_29: Get detailed coach application request for Staff and Admin review (read-only).
+    /// </summary>
+    [HttpGet("applications/{coachId:guid}")]
+    [HttpGet("~/api/admin/coach-applications/{coachId:guid}")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCoachApplicationDetails(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        var result = await _coachService.GetCoachApplicationDetailsAsync(coachId, cancellationToken);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+        return Ok(result);
+    }
 }

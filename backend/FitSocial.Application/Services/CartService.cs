@@ -199,20 +199,7 @@ namespace FitSocial.Application.Services
                 var existing = await _cartRepository.GetCartItemAsync(userId, dto.PackageId, cancellationToken);
                 if (existing != null)
                 {
-                    var existingDto = new CartItemDto
-                    {
-                        CartId = existing.CartId,
-                        PackageId = existing.PackageId,
-                        Title = package.Title ?? "Training Package",
-                        Price = package.Price ?? 0,
-                        Quantity = existing.Quantity,
-                        CoachId = package.CoachId,
-                        CoachName = package.Coach?.Coach?.FullName ?? "Coach",
-                        CoachAvatarUrl = package.Coach?.Coach?.AvatarUrl,
-                        IsActive = package.IsActive ?? true,
-                        IsAvailable = true
-                    };
-                    return ApiResponseDto<CartItemDto>.Ok(existingDto, "This training package is already in your cart.");
+                    return ApiResponseDto<CartItemDto>.Fail("This training package is already in your shopping cart. Each package can only be added once.");
                 }
 
                 var newCart = new Cart
@@ -220,7 +207,7 @@ namespace FitSocial.Application.Services
                     CartId = Guid.NewGuid(),
                     UserId = userId,
                     PackageId = dto.PackageId,
-                    Quantity = dto.Quantity > 0 ? dto.Quantity : 1,
+                    Quantity = 1, // Each personalized training package is added with quantity 1
                     CreatedAt = DateTime.UtcNow
                 };
 

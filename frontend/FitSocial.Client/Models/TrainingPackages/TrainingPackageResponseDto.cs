@@ -1,6 +1,18 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace FitSocial.Client.Models.TrainingPackages;
+
+public class TrainingPackageMediaDto
+{
+    public Guid MediaId { get; set; }
+    public Guid PackageId { get; set; }
+    public string MediaUrl { get; set; } = string.Empty;
+    public string? MediaType { get; set; } = "IMAGE";
+    public short? SortOrder { get; set; } = 0;
+    public DateTime? CreatedAt { get; set; }
+}
 
 public class TrainingPackageResponseDto
 {
@@ -16,4 +28,8 @@ public class TrainingPackageResponseDto
     public string? TargetAudience { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    public List<TrainingPackageMediaDto> Media { get; set; } = new();
+    public List<string> ImageUrls => Media?.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).ToList() ?? new List<string>();
+    public string? ThumbnailUrl => ImageUrls.FirstOrDefault();
 }

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace FitSocial.Application.DTOs.TrainingPackage
 {
@@ -17,5 +19,9 @@ namespace FitSocial.Application.DTOs.TrainingPackage
         public string? TargetAudience { get; set; }
         public bool? IsActive { get; set; }
         public DateTime? CreatedAt { get; set; }
+
+        public List<TrainingPackageMediaDto> Media { get; set; } = new();
+        public List<string> ImageUrls => Media.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).ToList();
+        public string? ThumbnailUrl => ImageUrls.FirstOrDefault();
     }
 }

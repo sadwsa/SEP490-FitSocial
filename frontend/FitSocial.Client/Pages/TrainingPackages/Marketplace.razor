@@ -1,0 +1,699 @@
+@page "/packages"
+@page "/training-packages/marketplace"
+@layout EmptyLayout
+@inject ITrainingPackageService PackageService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject FitSocial.Client.Services.Cart.ICartService CartService
+@inject IJSRuntime JS
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.TrainingPackages
+@using System.Security.Claims
+
+<PageTitle>Package List - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <!-- Floating Success Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-emerald-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <span>@toastSuccessMessage</span>
+            <button type="button" @onclick="() => toastSuccessMessage = null"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer">
+                &times;
+            </button>
+        </div>
+    }
+
+    <!-- Floating Error Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastErrorMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-rose-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-rose-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            <span>@toastErrorMessage</span>
+            <button type="button" @onclick="() => toastErrorMessage = null"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer">
+                &times;
+            </button>
+        </div>
+    }
+
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               CartCount="@headerCartCount"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 48rem) minmax(18rem, 1fr) !important;
+                align-items: start !important;
+            }
+
+            .home-left-sidebar { justify-self: start !important; }
+            .home-center-feed { justify-self: end !important; width: 100% !important; max-width: 48rem !important; min-width: 0 !important; }
+            .home-right-sidebar { justify-self: center !important; }
+        }
+    </style>
+
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="package-list" />
+
+        <!-- Center Column -->
+        <section class="home-center-feed w-full max-w-3xl flex flex-col gap-5 min-w-0 pb-16">
+            <!-- Hero Banner -->
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-orange-600 via-[#FF5500] to-amber-500 p-6 sm:p-8 text-white shadow-md">
+                <div class="relative z-10 max-w-xl">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold text-white mb-3">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        Training Marketplace
+                    </span>
+                    <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white mb-2">Explore Training Packages</h1>
+                    <p class="text-sm text-orange-100 leading-relaxed">
+                        Discover verified personal coaching programs tailored to your fitness targets. Filter by duration, sessions, or budget and enroll directly.
+                    </p>
+                </div>
+                <!-- Decorative background elements -->
+                <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="absolute right-12 top-6 text-white/15 hidden sm:block pointer-events-none">
+                    <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                </div>
+            </div>
+
+            <!-- Comprehensive Filter Bar -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
+                <!-- Search row -->
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="relative flex-1">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                        <input type="text"
+                               @bind="searchKeyword"
+                               @bind:event="oninput"
+                               @bind:after="ApplyFilters"
+                               class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-transparent transition"
+                               placeholder="Search packages by title, target, or coach name..." />
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <!-- Sort select -->
+                        <select @bind="selectedSort"
+                                @bind:after="ApplyFilters"
+                                class="bg-gray-50 border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:bg-white transition">
+                            <option value="newest">Sort: Newest</option>
+                            <option value="price_asc">Price: Low to High</option>
+                            <option value="price_desc">Price: High to Low</option>
+                            <option value="sessions_desc">Sessions: Most First</option>
+                            <option value="duration_desc">Duration: Longest</option>
+                        </select>
+
+                        @if (HasActiveFilters)
+                        {
+                            <button type="button"
+                                    @onclick="ResetFilters"
+                                    class="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                    title="Clear all filters">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                <span>Reset</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Secondary Filter Pills Row -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+                    <!-- Price Range -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Price Range</label>
+                        <select @bind="priceFilter"
+                                @bind:after="ApplyFilters"
+                                class="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500]">
+                            <option value="all">All Prices</option>
+                            <option value="under_500k">Under 500,000 VND</option>
+                            <option value="500k_1m">500,000 - 1,000,000 VND</option>
+                            <option value="1m_2m">1,000,000 - 2,000,000 VND</option>
+                            <option value="above_2m">Over 2,000,000 VND</option>
+                        </select>
+                    </div>
+
+                    <!-- Session Count -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Sessions Count</label>
+                        <select @bind="sessionFilter"
+                                @bind:after="ApplyFilters"
+                                class="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500]">
+                            <option value="all">All Sessions</option>
+                            <option value="1_8">1 - 8 Sessions</option>
+                            <option value="9_16">9 - 16 Sessions</option>
+                            <option value="17_24">17 - 24 Sessions</option>
+                            <option value="25_plus">25+ Sessions</option>
+                        </select>
+                    </div>
+
+                    <!-- Duration Days -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Program Duration</label>
+                        <select @bind="durationFilter"
+                                @bind:after="ApplyFilters"
+                                class="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500]">
+                            <option value="all">All Durations</option>
+                            <option value="up_to_14">Up to 2 Weeks (≤14 days)</option>
+                            <option value="1_month">1 Month (15 - 30 days)</option>
+                            <option value="2_months">2 Months (31 - 60 days)</option>
+                            <option value="3_months_plus">3+ Months (>60 days)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Summary Bar -->
+            <div class="flex items-center justify-between px-1 text-sm text-gray-600">
+                <span class="font-medium">
+                    Showing <strong class="text-gray-900 font-bold">@filteredPackages.Count()</strong> coaching packages
+                </span>
+                <span class="text-xs text-gray-400">
+                    *Each package is a personalized 1-on-1 enrollment (Single seat per checkout)
+                </span>
+            </div>
+
+            <!-- Package Cards List / Grid -->
+            @if (isLoading)
+            {
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center flex flex-col items-center justify-center gap-3">
+                    <div class="w-10 h-10 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-sm font-semibold text-gray-500">Loading coaching packages marketplace...</p>
+                </div>
+            }
+            else if (!filteredPackages.Any())
+            {
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center flex flex-col items-center justify-center gap-3">
+                    <div class="w-16 h-16 rounded-2xl bg-orange-50 text-[#FF5500] flex items-center justify-center mx-auto mb-1">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <h3 class="text-base font-bold text-gray-800">No training packages match your filters</h3>
+                    <p class="text-xs text-gray-500 max-w-sm">Try broadening your search keywords, price limits, or duration settings to see more packages.</p>
+                    @if (HasActiveFilters)
+                    {
+                        <button type="button" @onclick="ResetFilters" class="mt-2 px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white rounded-xl text-xs font-bold hover:shadow transition cursor-pointer">
+                            Reset All Filters
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    @foreach (var pkg in filteredPackages)
+                    {
+                        var isOwnPackage = currentUserId.HasValue && pkg.CoachId == currentUserId.Value;
+                        var inCart = cartPackageIds.Contains(pkg.PackageId);
+                        var coverImg = pkg.ImageUrls?.FirstOrDefault();
+
+                        <div class="bg-white rounded-2xl shadow-sm hover:shadow-md border border-gray-100 hover:border-orange-200 transition-all duration-300 flex flex-col overflow-hidden group">
+                            <!-- Image Card Top -->
+                            <div class="relative w-full h-44 bg-gradient-to-tr from-gray-900 to-gray-800 overflow-hidden">
+                                @if (!string.IsNullOrWhiteSpace(coverImg))
+                                {
+                                    <img src="@coverImg" alt="@pkg.Title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                }
+                                else
+                                {
+                                    <div class="w-full h-full flex items-center justify-center bg-gradient-to-tr from-orange-600/80 to-amber-500/80 text-white/40">
+                                        <svg class="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                    </div>
+                                }
+
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+
+                                <!-- Floating Badges Top -->
+                                <div class="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[11px] font-bold">
+                                        <svg class="w-3 h-3 text-[#FF8C00]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path></svg>
+                                        @pkg.DurationDays Days
+                                    </span>
+
+                                    @if (pkg.SessionCount.HasValue)
+                                    {
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FF5500]/90 backdrop-blur-md text-white text-[11px] font-black">
+                                            @pkg.SessionCount.Value Sessions
+                                        </span>
+                                    }
+                                </div>
+
+                                <!-- Coach Info on bottom of image -->
+                                <div class="absolute bottom-3 left-3 right-3 flex items-center gap-2 text-white">
+                                    <div class="w-7 h-7 rounded-full bg-white/30 backdrop-blur border border-white/50 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                                        @(string.IsNullOrWhiteSpace(pkg.CoachName) ? "C" : pkg.CoachName.Substring(0, 1).ToUpper())
+                                    </div>
+                                    <span class="text-xs font-bold drop-shadow line-clamp-1">
+                                        Coach: @pkg.CoachName
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Card Body -->
+                            <div class="p-5 flex-1 flex flex-col justify-between gap-4">
+                                <div>
+                                    <!-- Target audience pill if available -->
+                                    @if (!string.IsNullOrWhiteSpace(pkg.TargetAudience))
+                                    {
+                                        <div class="mb-2">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-semibold">
+                                                🎯 @pkg.TargetAudience
+                                            </span>
+                                        </div>
+                                    }
+
+                                    <!-- Title -->
+                                    <a href="/training-packages/@pkg.PackageId" class="text-base font-bold text-gray-900 hover:text-[#FF5500] transition line-clamp-1 block mb-1">
+                                        @pkg.Title
+                                    </a>
+
+                                    <!-- Description -->
+                                    <p class="text-xs text-gray-500 line-clamp-2 leading-relaxed">
+                                        @(string.IsNullOrWhiteSpace(pkg.Description) ? "Comprehensive personal coaching program tailored to help you accomplish peak fitness performance." : pkg.Description)
+                                    </p>
+                                </div>
+
+                                <!-- Pricing & Action Button -->
+                                <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+                                    <div>
+                                        <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Fee (Full Plan)</span>
+                                        <div class="text-lg font-black text-[#FF5500]">
+                                            @pkg.Price.ToString("N0") <span class="text-xs font-bold text-gray-500">VND</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center gap-1.5">
+                                        <a href="/training-packages/@pkg.PackageId"
+                                           class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                                            <span>Details</span>
+                                        </a>
+
+                                        @if (isOwnPackage)
+                                        {
+                                            <!-- Coach is creator: cannot buy own package -->
+                                            <a href="/training-packages/edit/@pkg.PackageId"
+                                               class="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                                <span>Your Package</span>
+                                            </a>
+                                        }
+                                        else if (inCart)
+                                        {
+                                            <!-- Already in cart: disable to prevent duplicates -->
+                                            <a href="cart"
+                                               class="px-3.5 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                                               title="Package already in cart. Click to view cart.">
+                                                <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                                <span>In Cart</span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <!-- Add to Cart (Quantity = 1) -->
+                                            <button type="button"
+                                                    @onclick="() => HandleAddToCart(pkg)"
+                                                    disabled="@(addingPackageId == pkg.PackageId)"
+                                                    class="px-3.5 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#E67E00] hover:to-[#E04B00] text-white rounded-xl text-xs font-bold shadow-xs hover:shadow transition-all duration-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                                                @if (addingPackageId == pkg.PackageId)
+                                                {
+                                                    <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block"></span>
+                                                    <span>Adding...</span>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"></path></svg>
+                                                    <span>Add to Cart</span>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        <!-- Right Sidebar (Filter Shortcuts / Why Us) -->
+        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                <h3 class="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+                    <span class="text-[#FF5500]">★</span> FitSocial Guarantee
+                </h3>
+                <ul class="space-y-3 text-xs text-gray-600">
+                    <li class="flex items-start gap-2">
+                        <svg class="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>100% Verified coaches with certified background</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>1-on-1 personalized training curriculum & nutrition plans</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>Escrow safety: Funds released upon fulfillment</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl border border-orange-100 p-5">
+                <h4 class="text-xs font-black uppercase tracking-wider text-[#FF5500] mb-1">Looking for a Coach?</h4>
+                <p class="text-xs text-gray-600 mb-3">Browse our verified coach directory to find coaches specializing in bodybuilding, yoga, cardio, or crossfit.</p>
+                <a href="coaches" class="inline-flex items-center gap-1.5 text-xs font-bold text-[#FF5500] hover:underline">
+                    <span>Explore Coaches Directory</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </a>
+            </div>
+        </aside>
+    </div>
+</div>
+
+@code {
+    private List<TrainingPackageResponseDto> allPackages = new();
+    private IEnumerable<TrainingPackageResponseDto> filteredPackages = new List<TrainingPackageResponseDto>();
+    private HashSet<Guid> cartPackageIds = new();
+
+    private bool isLoading = true;
+    private Guid? addingPackageId = null;
+
+    // Filter states
+    private string searchKeyword = "";
+    private string selectedSort = "newest";
+    private string priceFilter = "all";
+    private string sessionFilter = "all";
+    private string durationFilter = "all";
+
+    // Header & User states
+    private string? headerSearchTerm = "";
+    private string userName = "User";
+    private string userInitials = "U";
+    private string userRole = "Trainee";
+    private Guid? currentUserId = null;
+    private int headerCartCount = 0;
+    private string? toastSuccessMessage;
+    private string? toastErrorMessage;
+    private System.Threading.CancellationTokenSource? toastCts;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(searchKeyword) ||
+        selectedSort != "newest" ||
+        priceFilter != "all" ||
+        sessionFilter != "all" ||
+        durationFilter != "all";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        await LoadCartDataAsync();
+        await LoadPackagesAsync();
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
+                userRole = isCoach ? "Coach" : "Trainee";
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1 
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper() 
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+
+                var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? user.FindFirst("sub")?.Value
+                    ?? user.FindFirst("userId")?.Value;
+
+                if (Guid.TryParse(idClaim, out var uId))
+                {
+                    currentUserId = uId;
+                }
+            }
+        }
+        catch
+        {
+            userInitials = "U";
+        }
+    }
+
+    private async Task LoadCartDataAsync()
+    {
+        try
+        {
+            var cartRes = await CartService.GetCartAsync();
+            if (cartRes.Success && cartRes.Data != null)
+            {
+                headerCartCount = cartRes.Data.ValidItemsCount;
+                cartPackageIds = new HashSet<Guid>(cartRes.Data.Items.Select(i => i.PackageId));
+            }
+            else
+            {
+                var countRes = await CartService.GetCartCountAsync();
+                if (countRes.Success)
+                {
+                    headerCartCount = countRes.Data;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore cart failure
+        }
+    }
+
+    private async Task LoadPackagesAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var res = await PackageService.GetAllPackagesAsync();
+            if (res.Success && res.Data != null)
+            {
+                allPackages = res.Data.ToList();
+                ApplyFilters();
+            }
+            else
+            {
+                allPackages = new List<TrainingPackageResponseDto>();
+                filteredPackages = allPackages;
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowErrorToast($"Error loading packages: {ex.Message}");
+            allPackages = new List<TrainingPackageResponseDto>();
+            filteredPackages = allPackages;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        IEnumerable<TrainingPackageResponseDto> query = allPackages;
+
+        // Keyword filter
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+        {
+            var kw = searchKeyword.Trim().ToLower();
+            query = query.Where(p =>
+                (p.Title != null && p.Title.ToLower().Contains(kw)) ||
+                (p.Description != null && p.Description.ToLower().Contains(kw)) ||
+                (p.CoachName != null && p.CoachName.ToLower().Contains(kw)) ||
+                (p.TargetAudience != null && p.TargetAudience.ToLower().Contains(kw)));
+        }
+
+        // Price Filter
+        query = priceFilter switch
+        {
+            "under_500k" => query.Where(p => p.Price < 500000),
+            "500k_1m" => query.Where(p => p.Price >= 500000 && p.Price <= 1000000),
+            "1m_2m" => query.Where(p => p.Price >= 1000000 && p.Price <= 2000000),
+            "above_2m" => query.Where(p => p.Price > 2000000),
+            _ => query
+        };
+
+        // Session Count Filter
+        query = sessionFilter switch
+        {
+            "1_8" => query.Where(p => p.SessionCount.HasValue && p.SessionCount.Value >= 1 && p.SessionCount.Value <= 8),
+            "9_16" => query.Where(p => p.SessionCount.HasValue && p.SessionCount.Value >= 9 && p.SessionCount.Value <= 16),
+            "17_24" => query.Where(p => p.SessionCount.HasValue && p.SessionCount.Value >= 17 && p.SessionCount.Value <= 24),
+            "25_plus" => query.Where(p => p.SessionCount.HasValue && p.SessionCount.Value >= 25),
+            _ => query
+        };
+
+        // Duration Days Filter
+        query = durationFilter switch
+        {
+            "up_to_14" => query.Where(p => p.DurationDays <= 14),
+            "1_month" => query.Where(p => p.DurationDays >= 15 && p.DurationDays <= 30),
+            "2_months" => query.Where(p => p.DurationDays >= 31 && p.DurationDays <= 60),
+            "3_months_plus" => query.Where(p => p.DurationDays > 60),
+            _ => query
+        };
+
+        // Sort By
+        query = selectedSort switch
+        {
+            "price_asc" => query.OrderBy(p => p.Price),
+            "price_desc" => query.OrderByDescending(p => p.Price),
+            "sessions_desc" => query.OrderByDescending(p => p.SessionCount ?? 0),
+            "duration_desc" => query.OrderByDescending(p => p.DurationDays),
+            _ => query.OrderByDescending(p => p.CreatedAt)
+        };
+
+        filteredPackages = query.ToList();
+    }
+
+    private void ResetFilters()
+    {
+        searchKeyword = "";
+        selectedSort = "newest";
+        priceFilter = "all";
+        sessionFilter = "all";
+        durationFilter = "all";
+        ApplyFilters();
+    }
+
+    private async Task HandleAddToCart(TrainingPackageResponseDto pkg)
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
+            return;
+        }
+
+        if (currentUserId.HasValue && pkg.CoachId == currentUserId.Value)
+        {
+            ShowErrorToast("You cannot add your own training package to your cart.");
+            return;
+        }
+
+        if (cartPackageIds.Contains(pkg.PackageId))
+        {
+            ShowErrorToast("This package is already in your cart. You cannot purchase multiple quantities.");
+            return;
+        }
+
+        addingPackageId = pkg.PackageId;
+        try
+        {
+            var request = new FitSocial.Client.Models.Cart.AddToCartRequestDto
+            {
+                PackageId = pkg.PackageId,
+                Quantity = 1 // Single quantity rule
+            };
+
+            var res = await CartService.AddToCartAsync(request);
+            if (res.Success)
+            {
+                cartPackageIds.Add(pkg.PackageId);
+                headerCartCount++;
+                ShowSuccessToast("Training package added to your cart!");
+            }
+            else
+            {
+                ShowErrorToast(res.Message ?? "Failed to add package to cart.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowErrorToast($"Error: {ex.Message}");
+        }
+        finally
+        {
+            addingPackageId = null;
+        }
+    }
+
+    private void ShowSuccessToast(string message)
+    {
+        toastErrorMessage = null;
+        toastSuccessMessage = message;
+        ScheduleToastDismiss();
+    }
+
+    private void ShowErrorToast(string message)
+    {
+        toastSuccessMessage = null;
+        toastErrorMessage = message;
+        ScheduleToastDismiss();
+    }
+
+    private void ScheduleToastDismiss()
+    {
+        toastCts?.Cancel();
+        toastCts?.Dispose();
+        toastCts = new System.Threading.CancellationTokenSource();
+        var token = toastCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(4000, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        toastSuccessMessage = null;
+                        toastErrorMessage = null;
+                        StateHasChanged();
+                    });
+                }
+            }
+            catch { }
+        });
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e) => headerSearchTerm = e.Value?.ToString();
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { if (e.Key == "Enter") ExecuteHeaderSearch(); }
+    private void ClearHeaderSearch() { headerSearchTerm = ""; }
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login", true);
+    }
+    private void ExecuteHeaderSearch()
+    {
+        if (!string.IsNullOrWhiteSpace(headerSearchTerm))
+        {
+            searchKeyword = headerSearchTerm;
+            ApplyFilters();
+        }
+    }
+}

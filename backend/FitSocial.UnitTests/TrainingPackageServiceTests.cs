@@ -109,4 +109,35 @@ public class TrainingPackageServiceTests
         Assert.Equal((short)16, result.MinAge);
         Assert.Equal("Beginners", result.TargetAudience);
     }
+
+    [Fact]
+    public async Task CreatePackageAsync_WithImageUrls_ShouldCreateMediaEntities()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var dto = new CreateTrainingPackageDto
+        {
+            Title = "Yoga Essentials",
+            Price = 500000,
+            DurationDays = 30,
+            ImageUrls = new List<string> { "https://res.cloudinary.com/demo/image1.jpg", "https://res.cloudinary.com/demo/image2.jpg" }
+        };
+
+        TrainingPackage? capturedPackage = null;
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TrainingPackage>(), It.IsAny<CancellationToken>()))
+            .Callback<TrainingPackage, CancellationToken>((pkg, _) => capturedPackage = pkg)
+            .Returns(Task.CompletedTask);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.CreatePackageAsync(coachId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.NotNull(capturedPackage);
+        Assert.Equal(2, capturedPackage.Media.Count);
+        Assert.Contains(capturedPackage.Media, m => m.MediaUrl == "https://res.cloudinary.com/demo/image1.jpg");
+        Assert.Contains(capturedPackage.Media, m => m.MediaUrl == "https://res.cloudinary.com/demo/image2.jpg");
+    }
 }

@@ -82,7 +82,7 @@ public class CartServiceTests
     }
 
     [Fact]
-    public async Task AddToCartAsync_SecondTimeAddingSameProduct_ShouldReturnExistingItem()
+    public async Task AddToCartAsync_SecondTimeAddingSameProduct_ShouldReturnFail()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -104,14 +104,14 @@ public class CartServiceTests
             CartId = Guid.NewGuid(),
             UserId = userId,
             PackageId = packageId,
-            Quantity = 2,
+            Quantity = 1,
             CreatedAt = DateTime.UtcNow.AddMinutes(-10)
         };
 
         var dto = new AddToCartDto
         {
             PackageId = packageId,
-            Quantity = 3
+            Quantity = 1
         };
 
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
@@ -124,9 +124,8 @@ public class CartServiceTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.NotNull(result.Data);
-        Assert.Equal(2, result.Data.Quantity);
+        Assert.False(result.Success);
+        Assert.Contains("already in your shopping cart", result.Message);
         _mockCartRepo.Verify(r => r.AddAsync(It.IsAny<Cart>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

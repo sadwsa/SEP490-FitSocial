@@ -338,6 +338,15 @@ CREATE TABLE TrainingPackages (
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE TrainingPackageMedia (
+    MediaID UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    PackageID UUID REFERENCES TrainingPackages(PackageID) ON DELETE CASCADE,
+    MediaUrl VARCHAR(2048),
+    MediaType VARCHAR(20) DEFAULT 'IMAGE',
+    SortOrder SMALLINT DEFAULT 0,
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE Orders (
     OrderID UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     BuyerID UUID REFERENCES Users(UserID),

@@ -43,4 +43,26 @@ public class CoachBankAccountsController : ControllerBase
         var result = await _bankAccountService.GetAllPaymentAccountsAsync(search, bankCode, defaultOnly, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// UC-36.1: activates a coach payment account.
+    /// </summary>
+    [HttpPut("{bankId:guid}/activate")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Activate(Guid bankId, CancellationToken cancellationToken = default)
+    {
+        var result = await _bankAccountService.ActivateAsync(bankId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC-36.1: deactivates a coach payment account (it can no longer receive payouts).
+    /// </summary>
+    [HttpPut("{bankId:guid}/deactivate")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Deactivate(Guid bankId, CancellationToken cancellationToken = default)
+    {
+        var result = await _bankAccountService.DeactivateAsync(bankId, cancellationToken);
+        return Ok(result);
+    }
 }

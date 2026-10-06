@@ -75,6 +75,7 @@ public class CoachBankAccountService : ICoachBankAccountService
             EncryptedAccountNumber = _encryptionService.Encrypt(dto.AccountNumber.Trim()),
             Branch = string.IsNullOrWhiteSpace(dto.Branch) ? null : dto.Branch.Trim(),
             IsDefault = isDefault,
+            IsActive = true,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -92,6 +93,11 @@ public class CoachBankAccountService : ICoachBankAccountService
         if (targetAccount == null)
         {
             throw new NotFoundException("Bank account not found.");
+        }
+
+        if (targetAccount.IsActive == false)
+        {
+            throw new ValidationException("An inactive bank account cannot be set as default.");
         }
 
         foreach (var acc in accounts)
@@ -150,10 +156,62 @@ public class CoachBankAccountService : ICoachBankAccountService
                 AccountNumber = plainNumber,
                 Branch = b.Branch,
                 IsDefault = b.IsDefault ?? false,
+                IsActive = b.IsActive != false,
                 CreatedAt = b.CreatedAt
             };
         }).ToList();
         return ApiResponseDto<List<CoachPaymentAccountListItemDto>>.Ok(dtos, "Payment accounts retrieved successfully.");
+    }
+
+    /// <summary>
+    /// UC-36.1: Admin/Staff activates a coach payment account.
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> ActivateAsync(Guid bankId, CancellationToken cancellationToken = default)
+    {
+        var account = await _bankRepository.GetByIdAsync(bankId, cancellationToken);
+        if (account == null)
+        {
+            throw new NotFoundException("Bank account not found.");
+        }
+
+        account.IsActive = true;
+        account.UpdatedAt = DateTime.UtcNow;
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponseDto<bool>.Ok(true, "Payment account activated.");
+    }
+
+    /// <summary>
+    /// UC-36.1: Admin/Staff deactivates a coach payment account.
+    /// A deactivated account can no longer receive payouts. If it was the
+    /// default, the most recent remaining active account is promoted.
+    /// </summary>
+    public async Task<ApiResponseDto<bool>> DeactivateAsync(Guid bankId, CancellationToken cancellationToken = default)
+    {
+        var account = await _bankRepository.GetByIdAsync(bankId, cancellationToken);
+        if (account == null)
+        {
+            throw new NotFoundException("Bank account not found.");
+        }
+
+        account.IsActive = false;
+        account.UpdatedAt = DateTime.UtcNow;
+
+        if (account.IsDefault == true)
+        {
+            account.IsDefault = false;
+            var nextDefault = (await _bankRepository.ListActiveByCoachIdAsync(account.CoachId, cancellationToken))
+                .Where(a => a.BankId != bankId)
+                .OrderByDescending(a => a.CreatedAt)
+                .FirstOrDefault();
+            if (nextDefault != null)
+            {
+                nextDefault.IsDefault = true;
+                nextDefault.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponseDto<bool>.Ok(true, "Payment account deactivated.");
     }
 
     private CoachBankAccountDto MapToDto(CoachBankAccount b)
@@ -172,6 +230,7 @@ public class CoachBankAccountService : ICoachBankAccountService
             MaskedAccountNumber = masked,
             Branch = b.Branch,
             IsDefault = b.IsDefault,
+            IsActive = b.IsActive,
             CreatedAt = b.CreatedAt,
             UpdatedAt = b.UpdatedAt
         };

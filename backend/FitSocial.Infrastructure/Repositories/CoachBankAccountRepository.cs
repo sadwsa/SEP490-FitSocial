@@ -31,6 +31,15 @@ public class CoachBankAccountRepository : Repository<CoachBankAccount>, ICoachBa
             .FirstOrDefaultAsync(b => b.CoachId == coachId && b.IsDefault == true, cancellationToken);
     }
 
+    public Task<List<CoachBankAccount>> ListActiveByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        return DbSet
+            .Where(b => b.CoachId == coachId && b.IsActive != false)
+            .OrderByDescending(b => b.IsDefault)
+            .ThenByDescending(b => b.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<List<CoachBankAccount>> ListAllWithCoachAsync(string? searchTerm, string? bankCode, bool? defaultOnly, CancellationToken cancellationToken = default)
     {
         var query = DbSet

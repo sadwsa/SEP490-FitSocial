@@ -10,6 +10,8 @@ namespace FitSocial.Client.Services.BankAccounts;
 public interface IBankAccountService
 {
     Task<ApiResponse<List<CoachPaymentAccount>>> GetAllAsync(string? search = null, string? bankCode = null, bool? defaultOnly = null);
+    Task<ApiResponse<bool>> ActivateAsync(Guid bankId);
+    Task<ApiResponse<bool>> DeactivateAsync(Guid bankId);
 }
 
 public class BankAccountApiService : IBankAccountService
@@ -29,5 +31,15 @@ public class BankAccountApiService : IBankAccountService
         if (defaultOnly == true) query.Add("defaultOnly=true");
         var endpoint = "coach-bank-accounts" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
         return _apiClient.GetAsync<List<CoachPaymentAccount>>(endpoint);
+    }
+
+    public Task<ApiResponse<bool>> ActivateAsync(Guid bankId)
+    {
+        return _apiClient.PutAsync<bool>($"coach-bank-accounts/{bankId}/activate");
+    }
+
+    public Task<ApiResponse<bool>> DeactivateAsync(Guid bankId)
+    {
+        return _apiClient.PutAsync<bool>($"coach-bank-accounts/{bankId}/deactivate");
     }
 }

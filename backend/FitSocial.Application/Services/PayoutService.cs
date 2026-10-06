@@ -69,7 +69,7 @@ public class PayoutService : IPayoutService
         foreach (var p in payouts)
         {
             var reportCount = await _reports.CountUnresolvedAgainstUserAsync(p.CoachId, cancellationToken);
-            var banks = await _bankAccounts.ListByCoachIdAsync(p.CoachId, cancellationToken);
+            var banks = await _bankAccounts.ListActiveByCoachIdAsync(p.CoachId, cancellationToken);
             var refundTotal = p.PayoutItems.Sum(i => i.RefundAdjustment ?? 0);
 
             var dto = new PayoutHistoryItemDto
@@ -378,7 +378,7 @@ public class PayoutService : IPayoutService
             return ApiResponseDto<PayoutDetailDto>.Fail("Payout record not found.");
         }
 
-        var banks = await _bankAccounts.ListByCoachIdAsync(payout.CoachId, cancellationToken);
+        var banks = await _bankAccounts.ListActiveByCoachIdAsync(payout.CoachId, cancellationToken);
         var bank = banks.FirstOrDefault(b => b.IsDefault == true) ?? banks.FirstOrDefault();
         var reportCount = await _reports.CountUnresolvedAgainstUserAsync(payout.CoachId, cancellationToken);
         var refundTotal = payout.PayoutItems.Sum(i => i.RefundAdjustment ?? 0);
@@ -463,8 +463,8 @@ public class PayoutService : IPayoutService
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Payout has no positive disbursement balance.");
         }
 
-        // 23.1.E1 Missing or Inactive Coach Payment Account
-        var banks = await _bankAccounts.ListByCoachIdAsync(payout.CoachId, cancellationToken);
+        // 23.1.E1 Missing or Inactive Coach Payment Account (UC-36.1: inactive excluded)
+        var banks = await _bankAccounts.ListActiveByCoachIdAsync(payout.CoachId, cancellationToken);
         var bank = banks.FirstOrDefault(b => b.IsDefault == true) ?? banks.FirstOrDefault();
         if (bank == null)
         {

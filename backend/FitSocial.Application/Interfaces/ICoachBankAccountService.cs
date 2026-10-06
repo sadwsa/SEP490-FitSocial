@@ -15,7 +15,17 @@ public interface ICoachBankAccountService
     Task<ApiResponseDto<bool>> DeleteAccountAsync(Guid coachId, Guid bankId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// UC-36: Admin list of all coach payment accounts (masked numbers only).
+    /// UC-36: Admin list of all coach payment accounts.
     /// </summary>
     Task<ApiResponseDto<List<CoachPaymentAccountListItemDto>>> GetAllPaymentAccountsAsync(string? searchTerm, string? bankCode, bool? defaultOnly, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC-36.1: Admin/Staff activates a coach payment account.
+    /// </summary>
+    Task<ApiResponseDto<bool>> ActivateAsync(Guid bankId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC-36.1: Admin/Staff deactivates a coach payment account.
+    /// </summary>
+    Task<ApiResponseDto<bool>> DeactivateAsync(Guid bankId, CancellationToken cancellationToken = default);
 }

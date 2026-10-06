@@ -23,6 +23,8 @@ public interface IUserService
         bool? isLocked = null,
         int pageNumber = 1,
         int pageSize = 10);
+    Task<ApiResponse<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequest request);
+    Task<ApiResponse<bool>> CheckEmailExistsAsync(string email);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
     Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
     Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
@@ -189,6 +191,63 @@ public class UserService : IUserService
             {
                 Success = false,
                 Message = $"Failed to update lock status (Status: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequest request)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _httpClient.PostAsJsonAsync("admin/staff", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AdminUserDto>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Failed to create staff account (Status: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> CheckEmailExistsAsync(string email)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var encodedEmail = Uri.EscapeDataString(email?.Trim() ?? string.Empty);
+            var response = await _httpClient.GetAsync($"admin/staff/check-email?email={encodedEmail}");
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (response.IsSuccessStatusCode && result != null)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Failed to check email availability (Status: {response.StatusCode})"
             };
         }
         catch (Exception ex)

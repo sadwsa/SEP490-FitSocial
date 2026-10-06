@@ -494,19 +494,29 @@
 }
 
 .row-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
     font-size: 0.74rem;
     font-weight: 600;
     border-radius: 7px;
-    padding: 5px 11px;
+    padding: 5px 12px;
     cursor: pointer;
     background: #fff;
     border: 1px solid #cbd5e1;
     color: #475569;
     margin-left: 6px;
     white-space: nowrap;
+    transition: all 0.15s ease;
 }
 
-.row-btn:hover {
+.row-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.row-btn:hover:not(:disabled) {
     border-color: var(--primary-color);
     color: var(--primary-color);
 }
@@ -514,9 +524,10 @@
 .row-btn.lock {
     border-color: #fecaca;
     color: #b91c1c;
+    background: #fff;
 }
 
-.row-btn.lock:hover {
+.row-btn.lock:hover:not(:disabled) {
     background: #fef2f2;
     border-color: #b91c1c;
     color: #b91c1c;
@@ -525,9 +536,10 @@
 .row-btn.unlock {
     border-color: #bbf7d0;
     color: #15803d;
+    background: #fff;
 }
 
-.row-btn.unlock:hover {
+.row-btn.unlock:hover:not(:disabled) {
     background: #f0fdf4;
     border-color: #15803d;
     color: #15803d;
@@ -544,7 +556,7 @@
     background: #ffffff;
 }
 
-.row-btn.edit:hover {
+.row-btn.edit:hover:not(:disabled) {
     background: #f0f9ff;
     border-color: #0284c7;
     color: #0369a1;

@@ -17,6 +17,13 @@ public class UserRepository : Repository<User>, IUserRepository
         return DbSet.AnyAsync(u => u.Email.ToLower() == normalizedEmail, cancellationToken);
     }
 
+    public Task<bool> ExistsByEmailAsync(string normalizedEmail, Guid? excludingUserId, CancellationToken cancellationToken = default)
+    {
+        return DbSet.AnyAsync(
+            u => u.Email.ToLower() == normalizedEmail && (excludingUserId == null || u.UserId != excludingUserId),
+            cancellationToken);
+    }
+
     public Task<bool> ExistsByPhoneAsync(string phoneNumber, Guid? excludingUserId = null, CancellationToken cancellationToken = default)
     {
         return DbSet.AnyAsync(
@@ -108,6 +115,13 @@ public class UserRepository : Repository<User>, IUserRepository
                 .ThenInclude(cp => cp!.Locations)
             .Include(u => u.CoachProfileCoach)
                 .ThenInclude(cp => cp!.Reviews)
+            .FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
+    }
+
+    public Task<User?> GetUserForUpdateAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return DbSet
+            .Include(u => u.CoachProfileCoach)
             .FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
     }
 }

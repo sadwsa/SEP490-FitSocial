@@ -21,8 +21,11 @@
             <button type="button" class="side-item @(IsActive("/admin/users") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/users")'>
                 <AppIcon Name="person" /><span>User Accounts</span>
             </button>
+            <button type="button" class="side-item @(IsActive("/admin/coach-applications") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-applications")'>
+                <AppIcon Name="doc" /><span>Coach Applications</span>
+            </button>
             <button type="button" class="side-item @(IsActive("/admin/coach-subscription-plans") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-subscription-plans")'>
-                <AppIcon Name="trophy" /><span>Coach Plans</span>
+                <AppIcon Name="trophy" /><span>Coach Registration Plans</span>
             </button>
             <button type="button" class="side-item @(IsActive("/admin/locations") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/locations")'>
                 <AppIcon Name="location" /><span>Locations & Facilities</span>
@@ -33,9 +36,18 @@
             <button type="button" class="side-item @(IsActive("/admin/payouts") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payouts")'>
                 <AppIcon Name="chart" /><span>Coach Payouts</span>
             </button>
+            <button type="button" class="side-item @(IsActive("/admin/refunds") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/refunds")'>
+                <AppIcon Name="shield" /><span>Refund Requests</span>
+            </button>
 
             <AuthorizeView Roles="ADMIN">
                 <Authorized>
+                    <button type="button" class="side-item @(IsActive("/admin/payment-gateways") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payment-gateways")'>
+                        <AppIcon Name="shield" /><span>Payment Gateways</span>
+                    </button>
+                    <button type="button" class="side-item @(IsActive("/admin/revenue") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/revenue")'>
+                        <AppIcon Name="chart" /><span>Revenue Analytics</span>
+                    </button>
                     <button type="button" class="side-item @(IsActive("/admin/staff") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/staff")'>
                         <AppIcon Name="person" /><span>Staff Accounts</span>
                     </button>
@@ -57,6 +69,10 @@
                 </Authorized>
             </AuthorizeView>
 
+            <button type="button" class="side-item @(IsActive("/admin/profile") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/profile")'>
+                <AppIcon Name="person" /><span>Profile</span>
+            </button>
+
             <AuthorizeView Roles="STAFF">
                 <Authorized>
                     @if (!isAdmin)
@@ -72,7 +88,7 @@
         <div class="side-foot">
             <AuthorizeView Roles="ADMIN,STAFF">
                 <Authorized>
-                    <div class="side-user">
+                    <div class="side-user side-user-link" @onclick='() => Navigation.NavigateTo("/admin/profile")' title="View Profile">
                         <strong>@context.User.Identity?.Name</strong>
                         <small>@string.Join(", ", AppRoles.All.Where(r => context.User.IsInRole(r))) • @(isAdmin ? "ADMIN" : "STAFF")</small>
                     </div>

@@ -94,4 +94,26 @@ public class PaymentGatewayConfigsController : ControllerBase
         var result = await _configService.DeleteConfigAsync(id, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// UC-36.1: Admin activates a payment gateway configuration.
+    /// </summary>
+    [HttpPut("{id:guid}/activate")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ActivateConfig(Guid id, CancellationToken cancellationToken = default)
+    {
+        var result = await _configService.ActivateConfigAsync(id, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC-36.1: Admin deactivates a payment gateway configuration.
+    /// </summary>
+    [HttpPut("{id:guid}/deactivate")]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeactivateConfig(Guid id, CancellationToken cancellationToken = default)
+    {
+        var result = await _configService.DeactivateConfigAsync(id, cancellationToken);
+        return Ok(result);
+    }
 }

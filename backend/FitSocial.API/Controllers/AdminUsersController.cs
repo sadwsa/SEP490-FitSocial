@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -57,6 +58,77 @@ public class AdminUsersController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var result = await _adminUserService.GetStaffUsersAsync(search, isLocked, pageNumber, pageSize, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Create a new staff account (Admin only - UC_34.1)
+    /// </summary>
+    [HttpPost("staff")]
+    [HttpPost("~/api/admin/staff")]
+    [Authorize(Roles = RoleConstants.Admin)]
+    [ProducesResponseType(typeof(ApiResponseDto<AdminUserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<AdminUserDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateStaff([FromBody] CreateStaffAccountRequestDto request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+            return BadRequest(ApiResponseDto<AdminUserDto>.Fail(string.Join("; ", errors)));
+        }
+
+        var result = await _adminUserService.CreateStaffAccountAsync(request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Update an existing staff account (Admin only - UC_34.2)
+    /// </summary>
+    [HttpPut("staff/{userId:guid}")]
+    [HttpPut("~/api/admin/staff/{userId:guid}")]
+    [Authorize(Roles = RoleConstants.Admin)]
+    [ProducesResponseType(typeof(ApiResponseDto<AdminUserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<AdminUserDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateStaff([FromRoute] Guid userId, [FromBody] UpdateStaffAccountRequestDto request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+            return BadRequest(ApiResponseDto<AdminUserDto>.Fail(string.Join("; ", errors)));
+        }
+
+        var result = await _adminUserService.UpdateStaffAccountAsync(userId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Check whether an email is already registered in the system (Admin only)
+    /// </summary>
+    [HttpGet("check-email")]
+    [HttpGet("~/api/admin/staff/check-email")]
+    [Authorize(Roles = RoleConstants.Admin)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CheckEmail([FromQuery] string email, [FromQuery] Guid? excludingUserId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return BadRequest(ApiResponseDto<bool>.Fail("Email query parameter is required."));
+        }
+
+        var result = await _adminUserService.CheckEmailExistsAsync(email, excludingUserId, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
         return Ok(result);
     }
 

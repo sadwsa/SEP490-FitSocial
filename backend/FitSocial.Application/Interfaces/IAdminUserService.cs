@@ -27,4 +27,9 @@ public interface IAdminUserService
     Task<ApiResponseDto<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked, Guid? adminId = null, CancellationToken cancellationToken = default);
 
     Task<ApiResponseDto<AdminUserDto>> WarnUserAsync(Guid userId, string? reason = null, Guid? staffId = null, CancellationToken cancellationToken = default);
+
+    Task<ApiResponseDto<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequestDto request, CancellationToken cancellationToken = default);
+    Task<ApiResponseDto<AdminUserDto>> UpdateStaffAccountAsync(Guid userId, UpdateStaffAccountRequestDto request, CancellationToken cancellationToken = default);
+
+    Task<ApiResponseDto<bool>> CheckEmailExistsAsync(string email, Guid? excludingUserId = null, CancellationToken cancellationToken = default);
 }

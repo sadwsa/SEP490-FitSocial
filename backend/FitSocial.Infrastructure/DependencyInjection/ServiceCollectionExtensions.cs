@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICoachDashboardService, CoachDashboardService>();
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<ISubscriptionPriceHistoryService, SubscriptionPriceHistoryService>();
+        services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
         return services;
     }
 
@@ -68,6 +69,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenBlacklistService, TokenBlacklistService>();
         services.AddScoped<IPaymentGateway, PayOSGateway>();
         services.AddScoped<IBankTransferGateway, PayOSPayoutGateway>();
+        services.AddScoped<IPaymentGatewayCredentialProvider, DbPaymentGatewayCredentialProvider>();
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<INotificationService, NotificationService>();
 
@@ -105,6 +107,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ISubscriptionPriceHistoryRepository, SubscriptionPriceHistoryRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
+        services.AddScoped<IRevenueAnalyticsRepository, RevenueAnalyticsRepository>();
 
         return services;
 

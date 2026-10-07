@@ -112,6 +112,18 @@
     color: #94a3b8;
 }
 
+.side-user-link {
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 6px 8px;
+    margin: 0 -8px 4px;
+    transition: background 0.15s ease;
+}
+
+.side-user-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .side-logout {
     width: 100%;
     margin-top: 8px;

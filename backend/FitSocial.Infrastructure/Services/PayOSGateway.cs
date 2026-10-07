@@ -7,18 +7,33 @@ namespace FitSocial.Infrastructure.Services;
 
 /// <summary>
 /// VietQR payment gateway via PayOS SDK.
+/// Credentials resolve from the admin-managed PaymentGatewayConfigs table
+/// first ("PayOS" row, else the single active row), falling back to the
+/// PayOS section of appsettings.
 /// </summary>
 public class PayOSGateway : IPaymentGateway
 {
     private readonly IConfiguration _configuration;
+    private readonly IPaymentGatewayCredentialProvider _credentials;
 
-    public PayOSGateway(IConfiguration configuration)
+    public PayOSGateway(IConfiguration configuration, IPaymentGatewayCredentialProvider? credentials = null)
     {
         _configuration = configuration;
+        _credentials = credentials!;
     }
 
-    private PayOSClient CreateClient()
+    private async Task<PayOSClient> CreateClientAsync(CancellationToken cancellationToken = default)
     {
+        if (_credentials != null)
+        {
+            var dbCreds = await _credentials.GetDbCredentialsAsync(["PayOS"], cancellationToken)
+                ?? await _credentials.GetSingleActiveCredentialsAsync(cancellationToken);
+            if (dbCreds != null)
+            {
+                return new PayOSClient(dbCreds.ClientId, dbCreds.ApiKey, dbCreds.ChecksumKey);
+            }
+        }
+
         var clientId = _configuration["PayOS:ClientId"];
         var apiKey = _configuration["PayOS:ApiKey"];
         var checksumKey = _configuration["PayOS:ChecksumKey"];
@@ -36,7 +51,7 @@ public class PayOSGateway : IPaymentGateway
     public async Task<PaymentLinkInfo> CreatePaymentLinkAsync(
         long orderCode, decimal amount, string description, string returnUrl, string cancelUrl)
     {
-        var client = CreateClient();
+        var client = await CreateClientAsync();
 
         var request = new CreatePaymentLinkRequest
         {
@@ -61,7 +76,7 @@ public class PayOSGateway : IPaymentGateway
 
     public async Task<GatewayPaymentStatus> GetPaymentStatusAsync(long orderCode)
     {
-        var client = CreateClient();
+        var client = await CreateClientAsync();
 
         var info = await client.PaymentRequests.GetAsync(orderCode);
         var paid = info != null

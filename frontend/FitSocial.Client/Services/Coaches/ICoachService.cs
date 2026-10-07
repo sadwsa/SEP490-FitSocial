@@ -14,5 +14,24 @@ public interface ICoachService
 
     Task<FitSocial.Client.Models.Common.ApiResponse<bool>> DeleteReviewAsync(Guid reviewId);
 
+    Task<ApiResponse<CoachApplicationListResponseDto>> GetCoachApplicationsAsync(
+        string? search = null,
+        string? status = null,
+        int? minExperience = null,
+        int? maxExperience = null,
+        string? sortBy = null,
+        int pageNumber = 1,
+        int pageSize = 10);
 
+    Task<ApiResponse<CoachApplicationDetailDto>> GetCoachApplicationDetailsAsync(Guid coachId);
+
+    Task<ApiResponse<CoachApplicationStatusCountsDto>> GetCoachApplicationStatusCountsAsync();
+
+    Task<ApiResponse<CoachApplicationDetailDto>> ApproveCoachApplicationAsync(
+        Guid coachId,
+        ApproveCoachApplicationRequestModel? request = null);
+
+    Task<ApiResponse<CoachApplicationDetailDto>> RejectCoachApplicationAsync(
+        Guid coachId,
+        RejectCoachApplicationRequestModel? request = null);
 }

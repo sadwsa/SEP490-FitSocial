@@ -233,6 +233,7 @@ public partial class FitSocialDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
             entity.Property(e => e.IsDefault).HasDefaultValue(false);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
@@ -1196,7 +1197,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.ApprovedAmount).HasPrecision(18, 2);
             entity.Property(e => e.Reason).HasColumnType("text");
             entity.Property(e => e.EvidenceUrls).HasColumnType("text");
-            entity.Property(e => e.Status).HasMaxLength(30);
+            entity.Property(e => e.Status).HasMaxLength(30).IsConcurrencyToken();
             entity.Property(e => e.ReviewedBy).HasColumnName("ReviewedBy");
             entity.Property(e => e.ReviewedAt).HasColumnType("timestamp without time zone");
             entity.Property(e => e.StaffNote).HasColumnType("text");

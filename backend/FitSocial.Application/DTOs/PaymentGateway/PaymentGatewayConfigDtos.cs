@@ -8,7 +8,10 @@ public class PaymentGatewayConfigDto
     public Guid GatewayId { get; set; }
     public string? GatewayName { get; set; }
     public string? ClientId { get; set; }
+    public string? ClientIdMasked { get; set; }
+    public string? ApiKey { get; set; }
     public string? ApiKeyMasked { get; set; }
+    public string? ChecksumKey { get; set; }
     public string? ChecksumKeyMasked { get; set; }
     public string? WebhookUrl { get; set; }
     public bool IsActive { get; set; }

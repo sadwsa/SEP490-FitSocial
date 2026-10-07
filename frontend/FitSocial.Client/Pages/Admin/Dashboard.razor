@@ -60,6 +60,11 @@
             </button>
             <AuthorizeView Roles="ADMIN" Context="adminContext">
                 <Authorized>
+                    <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/revenue")'>
+                        <AppIcon Name="chart" />
+                        <div><strong>Revenue Analytics</strong><small>Platform GMV &amp; financial metrics</small></div>
+                        <span>→</span>
+                    </button>
                     <button type="button" class="shortcut" @onclick='() => Navigation.NavigateTo("/admin/staff")'>
                         <AppIcon Name="person" />
                         <div><strong>Staff accounts</strong><small>View staff directory</small></div>

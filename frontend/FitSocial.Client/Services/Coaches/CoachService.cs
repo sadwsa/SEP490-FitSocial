@@ -50,6 +50,25 @@ public class CoachService : ICoachService
     {
         return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/reviews/{reviewId}");
     }
+    public async Task<ApiResponse<List<CoachBankAccountDto>>> GetBankAccountsAsync()
+    {
+        return await _apiClient.GetAsync<List<CoachBankAccountDto>>($"{BaseEndpoint}/bank-accounts");
+    }
+
+    public async Task<ApiResponse<CoachBankAccountDto>> AddBankAccountAsync(CreateCoachBankAccountDto dto)
+    {
+        return await _apiClient.PostAsync<CreateCoachBankAccountDto, CoachBankAccountDto>($"{BaseEndpoint}/bank-accounts", dto);
+    }
+
+    public async Task<ApiResponse<bool>> SetDefaultBankAccountAsync(Guid bankId)
+    {
+        return await _apiClient.PutAsync<object, bool>($"{BaseEndpoint}/bank-accounts/{bankId}/default", new { });
+    }
+
+    public async Task<ApiResponse<bool>> DeleteBankAccountAsync(Guid bankId)
+    {
+        return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/bank-accounts/{bankId}");
+    }
 
 
 }

@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using FitSocial.Client.Models.Coaches;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Services.Http;
@@ -22,4 +22,11 @@ public class CoachDashboardService : ICoachDashboardService
     {
         return await _apiClient.GetAsync<CoachDashboardMetricsDto>(OverviewEndpoint);
     }
+    // Thêm method này vào class CoachDashboardService
+    public async Task<ApiResponse<CoachDashboardDto>> GetAnalyticsAsync(Guid coachId)
+    {
+        // Gọi endpoint API backend mà chúng ta đã thiết kế ở bước trước
+        return await _apiClient.GetAsync<CoachDashboardDto>($"analytics/coach/{coachId}");
+    }
+
 }

@@ -68,6 +68,14 @@
         }
         else
         {
+
+            <!-- Wallet History -->
+            <a href="/wallet/history" class="relative p-2 text-gray-600 hover:bg-orange-50 hover:text-[#FF5500] rounded-full transition block" title="Wallet History">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                </svg>
+            </a>
+
             <!-- Shopping Cart -->
             <a href="cart" class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition block" title="Shopping Cart">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,6 +292,16 @@
                         </svg>
                         Change Password
                     </a>
+                    @if (EffectiveUserRole == "Coach")
+                    {
+                        <a href="/coach/payout-account" @onclick="CloseProfileMenu"
+                           class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                            </svg>
+                            Payout Account
+                        </a>
+                    }
 
                     <hr class="my-1 border-gray-100" />
 

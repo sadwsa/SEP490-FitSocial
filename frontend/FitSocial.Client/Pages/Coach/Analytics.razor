@@ -1,0 +1,429 @@
+@page "/coach/analytics"
+@layout EmptyLayout
+@attribute [Authorize(Roles = "COACH")]
+@inject ICoachDashboardService DashboardService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Coaches
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Services.Coaches
+@using System.Security.Claims
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Web
+
+<PageTitle>Advanced Analytics - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 52rem) minmax(14rem, 1fr) !important;
+                align-items: start !important;
+            }
+
+            .home-left-sidebar {
+                justify-self: start !important;
+            }
+
+            .home-center-feed {
+                justify-self: center !important;
+                width: 100% !important;
+                max-width: 52rem !important;
+                min-width: 0 !important;
+            }
+        }
+
+        /* Smooth Entrance Animations & Glassmorphism */
+        @@keyframes slideUpFade {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .delay-100 {
+            animation-delay: 100ms;
+        }
+
+        .delay-200 {
+            animation-delay: 200ms;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+        }
+
+        /* Dynamic Chart Bar Hover */
+        .chart-bar {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+            .chart-bar:hover {
+                transform: scaleY(1.05);
+                filter: brightness(1.15);
+            }
+    </style>
+
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Sidebar -->
+        <AppSidebar ActiveItem="coach-analytics" />
+
+        <!-- Main Content -->
+        <section class="home-center-feed w-full flex flex-col gap-6 min-w-0 pb-12">
+
+            <!-- Page Header -->
+            <div class="flex items-center justify-between animate-fade-in">
+                <div>
+                    <h1 class="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-500">
+                        Advanced Analytics
+                    </h1>
+                    <p class="text-slate-500 text-sm mt-1">Deep dive into your revenue, retention, and top clients.</p>
+                </div>
+                <button @onclick="LoadAnalyticsAsync" class="p-2.5 rounded-2xl bg-white shadow-sm hover:shadow-md border border-slate-200 text-slate-600 transition-all hover:rotate-180 duration-500" title="Refresh">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.03 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
+
+            @if (isLoading)
+            {
+                <!-- Loading Skeletons -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 animate-fade-in">
+                    @for (int i = 0; i < 3; i++)
+                    {
+                        <div class="h-32 glass-card rounded-3xl animate-pulse"></div>
+                    }
+                </div>
+                <div class="h-96 glass-card rounded-3xl animate-pulse mt-4"></div>
+            }
+            else if (errorMessage != null)
+            {
+                <div class="p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 flex items-center gap-3">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                    @errorMessage
+                </div>
+            }
+            else if (analytics != null)
+            {
+                <!-- KPI Highlight Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 animate-fade-in delay-100">
+
+                    <!-- KPI: Total Revenue -->
+                    <div class="relative overflow-hidden glass-card rounded-3xl p-6 hover:-translate-y-1.5 transition-transform duration-300 group cursor-default">
+                        <div class="absolute -right-6 -top-6 w-32 h-32 bg-emerald-100 rounded-full blur-3xl group-hover:bg-emerald-200 transition-colors duration-500"></div>
+                        <div class="relative z-10">
+                            <div class="flex items-center justify-between mb-4">
+                                <span class="text-slate-500 font-bold text-xs uppercase tracking-widest">Total Revenue</span>
+                                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center text-emerald-600 shadow-inner">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                </div>
+                            </div>
+                            <h3 class="text-3xl font-black text-slate-800 tracking-tight">@FormatCurrency(analytics.TotalRevenue)</h3>
+                        </div>
+                    </div>
+
+                    <!-- KPI: Total Orders -->
+                    <div class="relative overflow-hidden glass-card rounded-3xl p-6 hover:-translate-y-1.5 transition-transform duration-300 group cursor-default">
+                        <div class="absolute -right-6 -top-6 w-32 h-32 bg-blue-100 rounded-full blur-3xl group-hover:bg-blue-200 transition-colors duration-500"></div>
+                        <div class="relative z-10">
+                            <div class="flex items-center justify-between mb-4">
+                                <span class="text-slate-500 font-bold text-xs uppercase tracking-widest">Total Orders</span>
+                                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center text-blue-600 shadow-inner">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                                </div>
+                            </div>
+                            <h3 class="text-3xl font-black text-slate-800 tracking-tight">@analytics.TotalOrders</h3>
+                        </div>
+                    </div>
+
+                    <!-- KPI: Retention Rate -->
+                    <div class="relative overflow-hidden glass-card rounded-3xl p-6 hover:-translate-y-1.5 transition-transform duration-300 group cursor-default">
+                        <div class="absolute -right-6 -top-6 w-32 h-32 bg-purple-100 rounded-full blur-3xl group-hover:bg-purple-200 transition-colors duration-500"></div>
+                        <div class="relative z-10">
+                            <div class="flex items-center justify-between mb-4">
+                                <span class="text-slate-500 font-bold text-xs uppercase tracking-widest">Retention Rate</span>
+                                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center text-purple-600 shadow-inner">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                                </div>
+                            </div>
+                            <div class="flex items-baseline gap-1">
+                                <h3 class="text-3xl font-black text-slate-800 tracking-tight">@analytics.RetentionRate</h3>
+                                <span class="text-xl font-bold text-slate-500">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Content Charts & Lists Grid -->
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 animate-fade-in delay-200 mt-2">
+
+                    <!-- Dữ liệu an toàn -->
+                    @{
+                        var safeStats = analytics.MonthlyStats ?? new List<MonthlyStatDto>();
+                        var safeTrainees = analytics.TopTrainees ?? new List<TopTraineeDto>();
+
+                        var maxRev = safeStats.Any() ? safeStats.Max(m => m.Revenue) : 0m;
+                        if (maxRev <= 0m) maxRev = 1m;
+                    }
+
+                    <!-- Left: CSS Bar Chart (6 Months) -->
+                    <div class="xl:col-span-7 glass-card rounded-3xl p-6 sm:p-8 flex flex-col justify-between">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">Revenue Growth</h2>
+                                <p class="text-sm text-slate-500 mt-1">Performance over the last 6 months</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-[#FF5500] to-[#FF8C00]"></span>
+                                <span class="text-xs font-semibold text-slate-500">Revenue (VND)</span>
+                            </div>
+                        </div>
+
+                        <!-- Chart Body Container with explicit height -->
+                        <div class="w-full h-64 flex flex-col justify-between pt-2">
+
+                            <!-- Bar Area (flex-1 fills vertical space above labels) -->
+                            <div class="relative flex-1 w-full flex items-end justify-between gap-2 sm:gap-4 px-2 pb-1">
+
+                                <!-- Grid Background Lines -->
+                                <div class="absolute inset-0 flex flex-col justify-between pointer-events-none z-0">
+                                    <div class="w-full border-t border-slate-200/50"></div>
+                                    <div class="w-full border-t border-slate-200/50 border-dashed"></div>
+                                    <div class="w-full border-t border-slate-200/50 border-dashed"></div>
+                                    <div class="w-full border-t border-slate-200/70"></div>
+                                </div>
+
+                                <!-- Columns -->
+                                @foreach (var stat in safeStats)
+                                {
+                                    var pct = (maxRev > 0 && stat.Revenue > 0)
+                                        ? (double)(stat.Revenue / maxRev * 100)
+                                        : 0;
+
+                                    var heightPct = stat.Revenue > 0 ? Math.Max(8.0, Math.Min(100.0, pct)) : 0;
+                                    var heightStyle = $"{heightPct.ToString("F1", CultureInfo.InvariantCulture)}%";
+
+                                    <div class="flex-1 h-full flex flex-col justify-end items-center group relative z-10">
+
+                                        <!-- Floating Tooltip on Hover -->
+                                        <div class="opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-bold py-1.5 px-3 rounded-xl shadow-2xl whitespace-nowrap z-30 flex flex-col items-center">
+                                            <span>@FormatCurrency(stat.Revenue)</span>
+                                            <span class="text-[10px] text-orange-300 font-normal">@stat.TotalOrders Orders</span>
+                                            <div class="w-2 h-2 bg-slate-900 rotate-45 -mb-1 mt-0.5"></div>
+                                        </div>
+
+                                        <!-- Column Track Container -->
+                                        <div class="w-full max-w-[48px] h-full flex items-end justify-center rounded-xl bg-slate-100/50 hover:bg-orange-50/50 transition-colors p-1">
+                                            @if (stat.Revenue > 0)
+                                            {
+                                                <!-- Dynamic Filled Bar -->
+                                                <div class="w-full rounded-lg bg-gradient-to-t from-[#FF5500] to-[#FF8C00] transition-all duration-500 ease-out chart-bar cursor-pointer"
+                                                     style="height: @heightStyle; box-shadow: 0 -4px 12px 0 rgba(255, 85, 0, 0.3);">
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <!-- Zero Revenue Baseline Pill Marker -->
+                                                <div class="w-full h-1.5 rounded-full bg-slate-200/80 group-hover:bg-slate-300 transition-colors" title="0 đ">
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Month Labels Row -->
+                            <div class="flex items-center justify-between gap-2 sm:gap-4 px-2 pt-2.5 border-t border-slate-200/70">
+                                @foreach (var stat in safeStats)
+                                {
+                                    <div class="flex-1 text-center">
+                                        <span class="text-xs font-bold text-slate-500 block truncate tracking-tight">@stat.Month</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Top 5 Trainees List -->
+                    <div class="xl:col-span-5 glass-card rounded-3xl p-6 sm:p-8">
+                        <h2 class="text-xl font-extrabold text-slate-800 tracking-tight mb-1">Top Trainees</h2>
+                        <p class="text-sm text-slate-500 mb-6">Most loyal and highest spending clients</p>
+
+                        <div class="flex flex-col gap-3">
+                            @if (!safeTrainees.Any())
+                            {
+                                <div class="text-center py-10 bg-slate-50/50 rounded-2xl border border-slate-100 border-dashed">
+                                    <span class="text-slate-400 font-medium text-sm">No purchase data available yet.</span>
+                                </div>
+                            }
+                            else
+                            {
+                                int rank = 1;
+                                @foreach (var trainee in safeTrainees)
+                                {
+                                    <div class="flex items-center gap-4 p-3.5 hover:bg-white rounded-2xl transition-all duration-300 group border border-transparent hover:border-slate-100 hover:shadow-sm">
+
+                                        <!-- Avatar & Rank Crown -->
+                                        <div class="relative w-12 h-12 flex-shrink-0">
+                                            <div class="w-full h-full rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center font-extrabold text-slate-600 text-lg shadow-inner group-hover:from-orange-50 group-hover:to-orange-100 transition-colors">
+                                                @(string.IsNullOrEmpty(trainee.TraineeName) ? "T" : trainee.TraineeName.FirstOrDefault())
+                                            </div>
+                                            @if (rank == 1)
+                                            {
+                                                <div class="absolute -top-2.5 -right-2 text-2xl filter drop-shadow-md animate-bounce" style="animation-duration: 2s;">👑</div>
+                                            }
+                                        </div>
+
+                                        <!-- Trainee Name & Orders -->
+                                        <div class="flex-1 min-w-0">
+                                            <h4 class="font-bold text-slate-800 truncate group-hover:text-[#FF5500] transition-colors">@trainee.TraineeName</h4>
+                                            <p class="text-xs font-semibold text-slate-400 mt-0.5">@trainee.TotalOrders Packages</p>
+                                        </div>
+
+                                        <!-- Total Spent Amount -->
+                                        <div class="text-right flex-shrink-0">
+                                            <div class="font-black text-slate-800 text-lg">@FormatCurrency(trainee.TotalSpent)</div>
+                                            <div class="text-[10px] uppercase font-bold text-emerald-500 tracking-wider">Total Spent</div>
+                                        </div>
+                                    </div>
+                                    rank++;
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </section>
+
+        <!-- Empty Space To Align 3 Col Layout -->
+        <aside class="home-right-sidebar hidden lg:flex w-56 flex-shrink-0 flex-col gap-4"></aside>
+    </div>
+</div>
+
+@code {
+    private CoachDashboardDto? analytics;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private Guid currentCoachId;
+
+    // Header State Management
+    private string? headerSearchTerm = "";
+    private string userName = "Coach";
+    private string userInitials = "C";
+    private string userRole = "Coach";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        if (currentCoachId != Guid.Empty)
+        {
+            await LoadAnalyticsAsync();
+        }
+        else
+        {
+            isLoading = false;
+            errorMessage = "Unable to identify current Coach ID from session.";
+        }
+    }
+
+    private async Task LoadAnalyticsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        StateHasChanged();
+        await Task.Delay(150);
+
+        try
+        {
+            var response = await DashboardService.GetAnalyticsAsync(currentCoachId);
+            if (response.Success && response.Data != null)
+            {
+                analytics = response.Data;
+            }
+            else
+            {
+                errorMessage = response.Message ?? "Failed to load advanced analytics.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "Network connection error while fetching analytics.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var idStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (Guid.TryParse(idStr, out var id))
+                {
+                    currentCoachId = id;
+                }
+
+                userName = user.FindFirst(ClaimTypes.Name)?.Value
+                           ?? user.FindFirst("name")?.Value
+                           ?? "Coach";
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts[0].Substring(0, 1).ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            // fallback
+        }
+    }
+
+    private string FormatCurrency(decimal amount)
+    {
+        return $"{amount:N0} đ";
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e) => headerSearchTerm = e.Value?.ToString();
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
+    private void ExecuteHeaderSearch() { }
+    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
+}

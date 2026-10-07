@@ -1,0 +1,254 @@
+﻿@page "/wallet/history"
+@layout EmptyLayout
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Transactions
+@using FitSocial.Client.Services.Transactions
+@using System.Security.Claims
+@inject ITransactionService TransactionService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Transaction History - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 46rem) minmax(18rem, 1fr) !important;
+                align-items: start !important;
+            }
+
+            .home-left-sidebar {
+                justify-self: start !important;
+            }
+
+            .home-center-feed {
+                justify-self: end !important;
+                width: 100% !important;
+                max-width: 46rem !important;
+                min-width: 0 !important;
+            }
+
+            .home-right-sidebar {
+                justify-self: center !important;
+            }
+        }
+    </style>
+
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="wallet-history" />
+
+        <!-- Center Column -->
+        <section class="home-center-feed w-full max-w-3xl flex flex-col gap-4 min-w-0 pb-10">
+            <!-- Header Section -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex justify-between items-center gap-4">
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800">Transaction History</h1>
+                    <p class="text-xs text-gray-500 mt-0.5">Track your payments and account activations</p>
+                </div>
+            </div>
+
+            <!-- Transaction List Container -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                @if (isLoading)
+                {
+                    <div class="flex flex-col items-center justify-center py-16">
+                        <div class="w-9 h-9 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p class="text-sm text-gray-500 font-medium">Loading your transactions...</p>
+                    </div>
+                }
+                else if (transactions == null || !transactions.Any())
+                {
+                    <div class="p-12 text-center flex flex-col items-center justify-center border-t border-gray-100">
+                        <div class="w-16 h-16 mb-4 text-orange-200">
+                            <!-- Icon Wallet Outline -->
+                            <svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                        </div>
+                        <h4 class="font-bold text-gray-800 text-lg mb-1">No transactions found</h4>
+                        <p class="text-sm text-gray-500 mb-6">You haven't made any transactions yet.</p>
+                    </div>
+                }
+                else
+                {
+                    <ul class="divide-y divide-gray-100">
+                        @foreach (var tx in transactions)
+                        {
+                            <li class="p-5 hover:bg-orange-50/40 transition duration-200 ease-in-out border-t border-gray-100">
+                                <div class="flex items-center justify-between">
+                                    <!-- Left: Icon & Details -->
+                                    <div class="flex items-center flex-1 min-w-0">
+                                        <div class="flex-shrink-0 mr-4">
+                                            <div class="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF5500]">
+                                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                            </div>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-bold text-gray-800 truncate">
+                                                @tx.Description
+                                            </p>
+                                            <p class="text-xs text-gray-400 mt-1">
+                                                @tx.Date.ToLocalTime().ToString("MMM dd, yyyy HH:mm") 
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Right: Amount & Status -->
+                                    <div class="ml-4 flex flex-col items-end flex-shrink-0 text-right">
+                                        <p class="text-sm font-bold @(tx.Amount < 0 ? "text-red-500" : "text-emerald-500") whitespace-nowrap">
+                                            @(tx.Amount > 0 ? "+" : "")@(tx.Amount.ToString("N0")) @tx.Currency
+                                        </p>
+                                        <div class="mt-1.5">
+                                            @if (tx.Status == "COMPLETED")
+                                            {
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 uppercase tracking-wider">
+                                                    Completed
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold border border-gray-200 uppercase tracking-wider">
+                                                    @tx.Status
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+
+                    <!-- Pagination -->
+                    @if (totalPages > 1)
+                    {
+                        <div class="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <button @onclick="PreviousPage" disabled="@(!hasPrevious)" class="px-4 py-2 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 hover:text-[#FF5500] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer">
+                                Previous
+                            </button>
+                            <span class="text-sm font-semibold text-gray-500">Page @currentPage of @totalPages</span>
+                            <button @onclick="NextPage" disabled="@(!hasNext)" class="px-4 py-2 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 hover:text-[#FF5500] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer">
+                                Next
+                            </button>
+                        </div>
+                    }
+                }
+            </div>
+        </section>
+
+        <!-- Right Sidebar (Empty) -->
+        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
+    </div>
+</div>
+
+@code {
+    private List<TransactionHistoryDto> transactions = new();
+    private bool isLoading = true;
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool hasNext = false;
+    private bool hasPrevious = false;
+
+    // Header state (Required for AppHeader)
+    private string? headerSearchTerm = "";
+    private string userName = "User";
+    private string userInitials = "U";
+    private string userRole = "Trainee";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+
+        var filter = new TransactionFilterDto
+        {
+            PageIndex = currentPage,
+            PageSize = pageSize
+        };
+
+        var result = await TransactionService.GetMyTransactionsAsync(filter);
+        if (result != null)
+        {
+            transactions = result.Items;
+            totalPages = result.TotalPages;
+            hasNext = result.HasNextPage;
+            hasPrevious = result.HasPreviousPage;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task PreviousPage()
+    {
+        if (hasPrevious)
+        {
+            currentPage--;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (hasNext)
+        {
+            currentPage++;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
+                userRole = isCoach ? "Coach" : "Trainee";
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            userInitials = "U";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e) => headerSearchTerm = e.Value?.ToString();
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
+    private void ExecuteHeaderSearch() { }
+    private void ClearHeaderSearch() => headerSearchTerm = string.Empty;
+}

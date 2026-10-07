@@ -84,13 +84,6 @@ public class CoachService : ICoachService
     }
 
 
-        queryParts.Add($"pageNumber={pageNumber}");
-        queryParts.Add($"pageSize={pageSize}");
-
-        var queryString = "?" + string.Join("&", queryParts);
-        return await _apiClient.GetAsync<CoachApplicationListResponseDto>($"{BaseEndpoint}/applications{queryString}");
-    }
-
     public async Task<ApiResponse<CoachApplicationDetailDto>> GetCoachApplicationDetailsAsync(Guid coachId)
     {
         return await _apiClient.GetAsync<CoachApplicationDetailDto>($"{BaseEndpoint}/applications/{coachId}");

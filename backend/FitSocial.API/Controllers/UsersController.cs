@@ -89,23 +89,15 @@ public class UsersController : ControllerBase
     /// Only accessible by STAFF and ADMIN roles.
     /// Retains existing data for blank/empty fields; validates and updates new data.
     /// </summary>
-    [HttpPut("me/profile")]
     [HttpPut("~/api/admin/users/me/profile")]
     [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
     [ProducesResponseType(typeof(ApiResponseDto<StaffAdminOwnProfileDto>), StatusCodes.Status200OK)]
-    /// Updates the profile of the currently authenticated Trainee or Coach user (UC_05.1).
-    /// Uses authenticated claims to guarantee users can only update their own profile.
-    /// </summary>
-    [HttpPut("me/profile")]
-    [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
-    [ProducesResponseType(typeof(ApiResponseDto<UserProfileDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> UpdateOwnProfile([FromBody] UpdateStaffAdminProfileRequestDto request)
-    public async Task<IActionResult> UpdateOwnProfile([FromBody] UpdateOwnProfileRequestDto request)
+    public async Task<IActionResult> UpdateStaffAdminProfile([FromBody] UpdateStaffAdminProfileRequestDto request)
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                           ?? User.FindFirst("sub")?.Value
@@ -119,6 +111,31 @@ public class UsersController : ControllerBase
         }
 
         var result = await _userService.UpdateStaffAdminProfileAsync(userId, request, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Updates the profile of the currently authenticated Trainee or Coach user (UC_05.1).
+    /// Uses authenticated claims to guarantee users can only update their own profile.
+    /// </summary>
+    [HttpPut("me/profile")]
+    [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
+    [ProducesResponseType(typeof(ApiResponseDto<UserProfileDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateOwnProfile([FromBody] UpdateOwnProfileRequestDto request)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                          ?? User.FindFirst("sub")?.Value
+                          ?? User.FindFirst("nameid")?.Value
+                          ?? User.FindFirst("id")?.Value
+                          ?? User.FindFirst("uid")?.Value;
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
             return Unauthorized(ApiResponseDto<object>.Fail("Invalid user identity claim."));
         }
 

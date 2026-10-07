@@ -20,9 +20,6 @@ public class UserService : IUserService
     private readonly IUnitOfWork? _unitOfWork;
 
     public UserService(IUserRepository userRepository, IUnitOfWork? unitOfWork = null)
-    private readonly IUnitOfWork _unitOfWork;
-
-    public UserService(IUserRepository userRepository, IUnitOfWork unitOfWork = null!)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
@@ -178,9 +175,6 @@ public class UserService : IUserService
     public async Task<ApiResponseDto<StaffAdminOwnProfileDto>> UpdateStaffAdminProfileAsync(
         Guid userId,
         UpdateStaffAdminProfileRequestDto request,
-    public async Task<ApiResponseDto<UserProfileDto>> UpdateOwnProfileAsync(
-        Guid userId,
-        UpdateOwnProfileRequestDto request,
         CancellationToken cancellationToken = default)
     {
         if (request == null)
@@ -192,10 +186,6 @@ public class UserService : IUserService
         if (user == null)
         {
             throw new NotFoundException("Staff or Admin profile could not be found.");
-        var user = await _userRepository.GetUserForUpdateAsync(userId, cancellationToken);
-        if (user == null)
-        {
-            throw new NotFoundException("User profile could not be found.");
         }
 
         if (user.IsLocked == true)
@@ -214,6 +204,141 @@ public class UserService : IUserService
         // Field có nhập -> validate nghiêm ngặt; nếu hợp lệ mới cập nhật.
 
         // 1. FullName
+        if (!string.IsNullOrWhiteSpace(request.FullName))
+        {
+            var trimmedFullName = request.FullName.Trim();
+            if (trimmedFullName.Length < 2 || trimmedFullName.Length > 100)
+            {
+                throw new ValidationException("Full name must be between 2 and 100 characters.");
+            }
+
+            if (trimmedFullName.Any(char.IsDigit))
+            {
+                throw new ValidationException("Full name cannot contain numbers.");
+            }
+
+            user.FullName = trimmedFullName;
+        }
+
+        // 2. DateOfBirth
+        if (request.DateOfBirth.HasValue)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (request.DateOfBirth.Value > today)
+            {
+                throw new ValidationException("Date of birth cannot be in the future.");
+            }
+
+            if (request.DateOfBirth.Value.Year < 1900)
+            {
+                throw new ValidationException("Date of birth is invalid.");
+            }
+
+            user.DateOfBirth = request.DateOfBirth.Value;
+        }
+
+        // 3. Gender
+        if (!string.IsNullOrWhiteSpace(request.Gender))
+        {
+            var g = request.Gender.Trim();
+            if (string.Equals(g, "Male", StringComparison.OrdinalIgnoreCase))
+            {
+                user.Gender = "Male";
+            }
+            else if (string.Equals(g, "Female", StringComparison.OrdinalIgnoreCase))
+            {
+                user.Gender = "Female";
+            }
+            else if (string.Equals(g, "Other", StringComparison.OrdinalIgnoreCase))
+            {
+                user.Gender = "Other";
+            }
+            else
+            {
+                throw new ValidationException("Gender must be Male, Female, or Other.");
+            }
+        }
+
+        // 4. PhoneNumber
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+        {
+            var trimmedPhone = request.PhoneNumber.Trim();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(trimmedPhone, @"^0\d{9}$"))
+            {
+                throw new ValidationException("Phone number must be a valid 10-digit number starting with 0.");
+            }
+
+            if (await _userRepository.ExistsByPhoneAsync(trimmedPhone, userId, cancellationToken))
+            {
+                throw new ConflictException("Phone number is already registered by another account.");
+            }
+
+            user.PhoneNumber = trimmedPhone;
+        }
+
+        // 5. Avatar (accept Avatar or AvatarUrl)
+        var avatarInput = !string.IsNullOrWhiteSpace(request.Avatar) ? request.Avatar : request.AvatarUrl;
+        if (!string.IsNullOrWhiteSpace(avatarInput))
+        {
+            var trimmedAvatar = avatarInput.Trim();
+            if (trimmedAvatar.Equals("[REMOVE]", StringComparison.OrdinalIgnoreCase) ||
+                trimmedAvatar.Equals("REMOVE", StringComparison.OrdinalIgnoreCase))
+            {
+                user.AvatarUrl = null;
+            }
+            else
+            {
+                if (trimmedAvatar.Length > 2048)
+                {
+                    throw new ValidationException("Avatar URL must not exceed 2048 characters.");
+                }
+                user.AvatarUrl = trimmedAvatar;
+            }
+        }
+
+        user.UpdatedAt = DateTime.UtcNow;
+
+        _userRepository.Update(user);
+        if (_unitOfWork != null)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        var profileDto = new StaffAdminOwnProfileDto
+        {
+            Avatar = user.AvatarUrl,
+            FullName = user.FullName ?? string.Empty,
+            DateOfBirth = user.DateOfBirth,
+            Gender = user.Gender,
+            PhoneNumber = user.PhoneNumber,
+            Email = user.Email,
+            Role = role
+        };
+
+        return ApiResponseDto<StaffAdminOwnProfileDto>.Ok(profileDto, "Profile updated successfully.");
+    }
+
+    public async Task<ApiResponseDto<UserProfileDto>> UpdateOwnProfileAsync(
+        Guid userId,
+        UpdateOwnProfileRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+        {
+            throw new ValidationException("Request cannot be null.");
+        }
+
+        var user = await _userRepository.GetUserForUpdateAsync(userId, cancellationToken);
+        if (user == null)
+        {
+            throw new NotFoundException("User profile could not be found.");
+        }
+
+        if (user.IsLocked == true)
+        {
+            throw new ForbiddenException("This account has been locked. Please contact support.");
+        }
+
         var role = user.RoleCode?.Trim().ToUpperInvariant() ?? RoleConstants.Trainee;
         if (role != RoleConstants.Trainee && role != RoleConstants.Coach)
         {
@@ -237,7 +362,6 @@ public class UserService : IUserService
             user.FullName = trimmedFullName;
         }
 
-        // 2. DateOfBirth
         // Validate & Update DateOfBirth: only if provided
         if (request.DateOfBirth.HasValue)
         {
@@ -255,7 +379,6 @@ public class UserService : IUserService
             user.DateOfBirth = request.DateOfBirth.Value;
         }
 
-        // 3. Gender
         // Validate & Update Gender: only if provided and not empty
         if (!string.IsNullOrWhiteSpace(request.Gender))
         {
@@ -278,7 +401,6 @@ public class UserService : IUserService
             }
         }
 
-        // 4. PhoneNumber
         // Validate & Update PhoneNumber: only if provided and not empty
         if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
         {
@@ -296,11 +418,6 @@ public class UserService : IUserService
             user.PhoneNumber = trimmedPhone;
         }
 
-        // 5. Avatar (accept Avatar or AvatarUrl)
-        var avatarInput = !string.IsNullOrWhiteSpace(request.Avatar) ? request.Avatar : request.AvatarUrl;
-        if (!string.IsNullOrWhiteSpace(avatarInput))
-        {
-            var trimmedAvatar = avatarInput.Trim();
         // Validate & Update AvatarUrl:
         if (!string.IsNullOrWhiteSpace(request.AvatarUrl))
         {
@@ -357,18 +474,6 @@ public class UserService : IUserService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        var profileDto = new StaffAdminOwnProfileDto
-        {
-            Avatar = user.AvatarUrl,
-            FullName = user.FullName ?? string.Empty,
-            DateOfBirth = user.DateOfBirth,
-            Gender = user.Gender,
-            PhoneNumber = user.PhoneNumber,
-            Email = user.Email,
-            Role = role
-        };
-
-        return ApiResponseDto<StaffAdminOwnProfileDto>.Ok(profileDto, "Profile updated successfully.");
         // Return updated UserProfileDto
         if (role == RoleConstants.Coach)
         {

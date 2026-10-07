@@ -333,54 +333,6 @@ public class CoachService : ICoachService
             }
 
             var detail = MapToCoachApplicationDetailDto(c);
-            var latestEkyc = c.CoachEkycVerifications?.OrderByDescending(e => e.CreatedAt).FirstOrDefault();
-
-            var detail = new CoachApplicationDetailDto
-            {
-                CoachId = c.CoachId,
-                FullName = c.Coach?.FullName,
-                Email = c.Coach?.Email,
-                PhoneNumber = c.Coach?.PhoneNumber,
-                AvatarUrl = c.Coach?.AvatarUrl,
-                Gender = c.Coach?.Gender,
-                DateOfBirth = c.Coach?.DateOfBirth,
-                ExperienceYears = c.ExperienceYears,
-                Bio = c.Bio,
-                IdentityCardUrl = c.IdentityCardUrl,
-                CertificateUrl = c.CertificateUrl,
-                CertificatesCount = c.CoachCertificates?.Count ?? 0,
-                ApprovalStatus = string.IsNullOrWhiteSpace(c.ApprovalStatus) ? "PENDING" : c.ApprovalStatus,
-                Status = c.Status,
-                CreatedAt = c.Coach?.CreatedAt ?? c.UpdatedAt,
-                UpdatedAt = c.UpdatedAt,
-                ApprovedByName = c.ApprovedByNavigation?.FullName,
-                Locations = c.Locations?.Select(l => l.LocationName).ToList() ?? new List<string>(),
-                Certificates = c.CoachCertificates?.Select(cert => new CoachCertificateDetailDto
-                {
-                    CertificateId = cert.CertificateId,
-                    CertificateName = cert.CertificateName,
-                    CertificateUrl = cert.CertificateUrl,
-                    IssuedBy = cert.IssuedBy,
-                    IssuedDate = cert.IssuedDate,
-                    ExpiryDate = cert.ExpiryDate,
-                    VerificationStatus = cert.VerificationStatus
-                }).ToList() ?? new List<CoachCertificateDetailDto>(),
-                Ekyc = latestEkyc == null ? null : new CoachApplicationEkycDto
-                {
-                    FullNameOnCard = latestEkyc.FullNameOnCard,
-                    DateOfBirthOnCard = latestEkyc.DateOfBirthOnCard,
-                    Sex = latestEkyc.Sex,
-                    FrontCardUrl = latestEkyc.FrontCardUrl,
-                    BackCardUrl = latestEkyc.BackCardUrl,
-                    FaceImageUrl = latestEkyc.FaceImageUrl,
-                    LivenessScore = latestEkyc.LivenessScore,
-                    FaceMatchConfidence = latestEkyc.FaceMatchConfidence,
-                    VerificationStatus = latestEkyc.VerificationStatus,
-                    FailureReason = latestEkyc.FailureReason,
-                    CreatedAt = latestEkyc.CreatedAt
-                }
-            };
-
             return ApiResponseDto<CoachApplicationDetailDto>.Ok(detail, "Coach application details retrieved successfully.");
         }
         catch (Exception ex)

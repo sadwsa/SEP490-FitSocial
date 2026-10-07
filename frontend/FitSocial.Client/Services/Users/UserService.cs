@@ -65,7 +65,7 @@ public class UserService : IUserService
 
     public async Task<ApiResponse<StaffAdminOwnProfileDto>> UpdateStaffAdminOwnProfileAsync(UpdateStaffAdminProfileRequest request)
     {
-        return await _apiClient.PutAsync<UpdateStaffAdminProfileRequest, StaffAdminOwnProfileDto>("users/me/profile", request);
+        return await _apiClient.PutAsync<UpdateStaffAdminProfileRequest, StaffAdminOwnProfileDto>("admin/users/me/profile", request);
     }
 
     public async Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId)

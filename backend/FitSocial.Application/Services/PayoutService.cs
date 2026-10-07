@@ -463,6 +463,14 @@ public class PayoutService : IPayoutService
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Payout has no positive disbursement balance.");
         }
 
+        // Mutual Consistency: If any order in this cycle has been refunded, block payout and require regeneration
+        var hasRefundedOrder = payout.PayoutItems.Any(i =>
+            (i.GrossAmount ?? 0) > 0 && i.Order != null && string.Equals(i.Order.OrderStatus, PaymentConstants.OrderStatusRefunded, StringComparison.OrdinalIgnoreCase));
+        if (hasRefundedOrder)
+        {
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail("One or more orders in this payout cycle have been refunded. Please regenerate the payout cycle before processing.");
+        }
+
         // 23.1.E1 Missing or Inactive Coach Payment Account (UC-36.1: inactive excluded)
         var banks = await _bankAccounts.ListActiveByCoachIdAsync(payout.CoachId, cancellationToken);
         var bank = banks.FirstOrDefault(b => b.IsDefault == true) ?? banks.FirstOrDefault();

@@ -14,7 +14,10 @@ public static class PaymentConstants
     public const string OrderStatusCancelled = "CANCELLED";
     public const string OrderStatusFailed = "FAILED";
 
+    public const string OrderStatusRefunded = "REFUNDED";
+
     public const string PaymentStatusPending = "PENDING";
     public const string PaymentStatusSuccess = "SUCCESS";
     public const string PaymentStatusFailed = "FAILED";
+    public const string PaymentStatusRefunded = "REFUNDED";
 }

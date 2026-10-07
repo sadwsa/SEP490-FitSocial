@@ -36,6 +36,9 @@
             <button type="button" class="side-item @(IsActive("/admin/payouts") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payouts")'>
                 <AppIcon Name="chart" /><span>Coach Payouts</span>
             </button>
+            <button type="button" class="side-item @(IsActive("/admin/refunds") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/refunds")'>
+                <AppIcon Name="shield" /><span>Refund Requests</span>
+            </button>
 
             <AuthorizeView Roles="ADMIN">
                 <Authorized>

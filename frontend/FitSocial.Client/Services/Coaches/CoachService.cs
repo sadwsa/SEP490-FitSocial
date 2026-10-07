@@ -92,4 +92,20 @@ public class CoachService : ICoachService
     {
         return await _apiClient.GetAsync<CoachApplicationStatusCountsDto>($"{BaseEndpoint}/applications/status-counts");
     }
+
+    public async Task<ApiResponse<CoachApplicationDetailDto>> ApproveCoachApplicationAsync(
+        Guid coachId,
+        ApproveCoachApplicationRequestModel? request = null)
+    {
+        return await _apiClient.PostAsync<ApproveCoachApplicationRequestModel, CoachApplicationDetailDto>(
+            $"{BaseEndpoint}/applications/{coachId}/approve", request ?? new ApproveCoachApplicationRequestModel());
+    }
+
+    public async Task<ApiResponse<CoachApplicationDetailDto>> RejectCoachApplicationAsync(
+        Guid coachId,
+        RejectCoachApplicationRequestModel? request = null)
+    {
+        return await _apiClient.PostAsync<RejectCoachApplicationRequestModel, CoachApplicationDetailDto>(
+            $"{BaseEndpoint}/applications/{coachId}/reject", request ?? new RejectCoachApplicationRequestModel());
+    }
 }

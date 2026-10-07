@@ -26,4 +26,12 @@ public interface ICoachService
     Task<ApiResponse<CoachApplicationDetailDto>> GetCoachApplicationDetailsAsync(Guid coachId);
 
     Task<ApiResponse<CoachApplicationStatusCountsDto>> GetCoachApplicationStatusCountsAsync();
+
+    Task<ApiResponse<CoachApplicationDetailDto>> ApproveCoachApplicationAsync(
+        Guid coachId,
+        ApproveCoachApplicationRequestModel? request = null);
+
+    Task<ApiResponse<CoachApplicationDetailDto>> RejectCoachApplicationAsync(
+        Guid coachId,
+        RejectCoachApplicationRequestModel? request = null);
 }

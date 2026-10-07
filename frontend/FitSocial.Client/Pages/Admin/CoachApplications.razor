@@ -171,9 +171,20 @@
                                 }
                             </td>
                             <td class="text-end">
-                                <button type="button" class="btn-review" @onclick="() => OpenDetailModal(app.CoachId)">
-                                    Review
-                                </button>
+                                <div class="actions-cell">
+                                    <button type="button" class="btn-review" @onclick="() => OpenDetailModal(app.CoachId)">
+                                        Review
+                                    </button>
+                                    @if (string.Equals(app.ApprovalStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <button type="button" class="btn-row-approve" @onclick="() => OpenApproveConfirm(app.CoachId, app.FullName, app.ApplicationCode)" title="Approve application">
+                                            Approve
+                                        </button>
+                                        <button type="button" class="btn-row-reject" @onclick="() => OpenRejectConfirm(app.CoachId, app.FullName, app.ApplicationCode)" title="Reject application">
+                                            Reject
+                                        </button>
+                                    }
+                                </div>
                             </td>
                         </tr>
                     }
@@ -431,7 +442,83 @@
                     </div>
 
                     <div class="ca-modal-footer">
+                        @if (string.Equals(selectedDetail.ApprovalStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <button type="button" class="ca-btn-modal-reject" @onclick="() => OpenRejectConfirm(selectedDetail.CoachId, selectedDetail.FullName, selectedDetail.ApplicationCode)">
+                                Reject
+                            </button>
+                            <button type="button" class="ca-btn-modal-approve" @onclick="() => OpenApproveConfirm(selectedDetail.CoachId, selectedDetail.FullName, selectedDetail.ApplicationCode)">
+                                Approve
+                            </button>
+                        }
                         <button type="button" class="ca-btn-close-modal" @onclick="CloseDetailModal">Close</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Confirmation Dialog for Approve / Reject (UC_29.1) -->
+        @if (showConfirmDialog)
+        {
+            <div class="ca-confirm-overlay" @onclick="CloseConfirmDialog">
+                <div class="ca-confirm-dialog" @onclick:stopPropagation="true">
+                    <div class="ca-confirm-header @(isRejecting ? "reject" : "approve")">
+                        <div class="ca-confirm-icon">
+                            @if (isRejecting)
+                            {
+                                <AppIcon Name="warning" />
+                            }
+                            else
+                            {
+                                <AppIcon Name="trophy" />
+                            }
+                        </div>
+                        <div class="ca-confirm-title-wrap">
+                            <h4 class="ca-confirm-title">@(isRejecting ? "Reject Coach Application" : "Approve Coach Application")</h4>
+                            <span class="ca-confirm-sub">@confirmTargetCode • @confirmTargetName</span>
+                        </div>
+                        <button type="button" class="ca-modal-close-btn ms-auto" @onclick="CloseConfirmDialog" disabled="@isProcessingAction">✕</button>
+                    </div>
+
+                    <div class="ca-confirm-body">
+                        @if (isRejecting)
+                        {
+                            <p class="ca-confirm-desc">
+                                Are you sure you want to reject the coach application for <strong>@confirmTargetName</strong>?
+                                The applicant account will remain locked and cannot sign in as a coach.
+                            </p>
+                            <div class="ca-confirm-field">
+                                <label class="ca-confirm-label" for="reject-reason">Rejection Reason (optional):</label>
+                                <textarea id="reject-reason" class="ca-confirm-textarea" @bind="actionReason" placeholder="Provide feedback or reasons for rejection..." rows="3" disabled="@isProcessingAction"></textarea>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="ca-confirm-desc">
+                                Are you sure you want to approve the coach application for <strong>@confirmTargetName</strong>?
+                                This will activate their coach profile, unlock their account, and grant Coach permissions on FitSocial.
+                            </p>
+                            <div class="ca-confirm-field">
+                                <label class="ca-confirm-label" for="approve-note">Approval Note (optional):</label>
+                                <input id="approve-note" type="text" class="ca-confirm-input" @bind="actionNote" placeholder="e.g. Verified certificates &amp; eKYC" disabled="@isProcessingAction" />
+                            </div>
+                        }
+                    </div>
+
+                    <div class="ca-confirm-footer">
+                        <button type="button" class="ca-btn-cancel" @onclick="CloseConfirmDialog" disabled="@isProcessingAction">Cancel</button>
+                        @if (isRejecting)
+                        {
+                            <button type="button" class="ca-btn-confirm-reject" @onclick="ExecuteRejectAsync" disabled="@isProcessingAction">
+                                @(isProcessingAction ? "Rejecting..." : "Confirm Reject")
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="ca-btn-confirm-approve" @onclick="ExecuteApproveAsync" disabled="@isProcessingAction">
+                                @(isProcessingAction ? "Approving..." : "Confirm Approve")
+                            </button>
+                        }
                     </div>
                 </div>
             </div>
@@ -658,7 +745,142 @@
     private async Task CloseDetailModal()
     {
         selectedDetail = null;
-        await SetBodyScrollLockAsync(false);
+        if (!showConfirmDialog)
+        {
+            await SetBodyScrollLockAsync(false);
+        }
+    }
+
+    // UC_29.1 Confirmation & Action methods
+    private bool showConfirmDialog;
+    private bool isRejecting;
+    private Guid confirmTargetCoachId;
+    private string? confirmTargetName;
+    private string? confirmTargetCode;
+    private string actionReason = "";
+    private string actionNote = "";
+    private bool isProcessingAction;
+
+    private async Task OpenApproveConfirm(Guid coachId, string? name, string? code)
+    {
+        confirmTargetCoachId = coachId;
+        confirmTargetName = name ?? "Applicant";
+        confirmTargetCode = code ?? "";
+        actionNote = "";
+        isRejecting = false;
+        showConfirmDialog = true;
+        await SetBodyScrollLockAsync(true);
+    }
+
+    private async Task OpenRejectConfirm(Guid coachId, string? name, string? code)
+    {
+        confirmTargetCoachId = coachId;
+        confirmTargetName = name ?? "Applicant";
+        confirmTargetCode = code ?? "";
+        actionReason = "";
+        isRejecting = true;
+        showConfirmDialog = true;
+        await SetBodyScrollLockAsync(true);
+    }
+
+    private async Task CloseConfirmDialog()
+    {
+        if (isProcessingAction) return;
+        showConfirmDialog = false;
+        if (selectedDetail == null)
+        {
+            await SetBodyScrollLockAsync(false);
+        }
+    }
+
+    private async Task ExecuteApproveAsync()
+    {
+        if (isProcessingAction) return;
+        isProcessingAction = true;
+        try
+        {
+            var request = new ApproveCoachApplicationRequestModel
+            {
+                Note = string.IsNullOrWhiteSpace(actionNote) ? null : actionNote.Trim()
+            };
+            var res = await CoachService.ApproveCoachApplicationAsync(confirmTargetCoachId, request);
+            if (res.Success)
+            {
+                toastMessage = res.Message ?? $"Coach application for {confirmTargetName} approved successfully.";
+                isErrorToast = false;
+                showConfirmDialog = false;
+
+                if (selectedDetail != null && selectedDetail.CoachId == confirmTargetCoachId)
+                {
+                    selectedDetail = res.Data;
+                }
+                else if (selectedDetail == null)
+                {
+                    await SetBodyScrollLockAsync(false);
+                }
+
+                await LoadApplicationsAsync();
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to approve coach application.";
+                isErrorToast = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error: {ex.Message}";
+            isErrorToast = true;
+        }
+        finally
+        {
+            isProcessingAction = false;
+        }
+    }
+
+    private async Task ExecuteRejectAsync()
+    {
+        if (isProcessingAction) return;
+        isProcessingAction = true;
+        try
+        {
+            var request = new RejectCoachApplicationRequestModel
+            {
+                Reason = string.IsNullOrWhiteSpace(actionReason) ? null : actionReason.Trim()
+            };
+            var res = await CoachService.RejectCoachApplicationAsync(confirmTargetCoachId, request);
+            if (res.Success)
+            {
+                toastMessage = res.Message ?? $"Coach application for {confirmTargetName} rejected.";
+                isErrorToast = false;
+                showConfirmDialog = false;
+
+                if (selectedDetail != null && selectedDetail.CoachId == confirmTargetCoachId)
+                {
+                    selectedDetail = res.Data;
+                }
+                else if (selectedDetail == null)
+                {
+                    await SetBodyScrollLockAsync(false);
+                }
+
+                await LoadApplicationsAsync();
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to reject coach application.";
+                isErrorToast = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Error: {ex.Message}";
+            isErrorToast = true;
+        }
+        finally
+        {
+            isProcessingAction = false;
+        }
     }
 
     private async Task SetBodyScrollLockAsync(bool isLocked)

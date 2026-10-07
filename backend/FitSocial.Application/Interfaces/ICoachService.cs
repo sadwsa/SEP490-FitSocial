@@ -46,4 +46,22 @@ public interface ICoachService
     /// </summary>
     Task<ApiResponseDto<CoachApplicationStatusCountsDto>> GetCoachApplicationStatusCountsAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_29.1: Approve a pending coach application (Staff/Admin).
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationDetailDto>> ApproveCoachApplicationAsync(
+        Guid coachId,
+        Guid approverId,
+        ApproveCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_29.1: Reject a pending coach application (Staff/Admin).
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationDetailDto>> RejectCoachApplicationAsync(
+        Guid coachId,
+        Guid rejectorId,
+        RejectCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default);
 }

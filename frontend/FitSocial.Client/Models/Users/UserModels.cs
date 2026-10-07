@@ -115,3 +115,16 @@ public class StaffAdminOwnProfileDto
     public bool IsStaff => string.Equals(Role, "STAFF", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// Request model for Staff or Admin updating their own profile (UC_35.1).
+/// </summary>
+public class UpdateStaffAdminProfileRequest
+{
+    public string? FullName { get; set; }
+    public string? Avatar { get; set; }
+    public string? AvatarUrl { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? PhoneNumber { get; set; }
+}
+

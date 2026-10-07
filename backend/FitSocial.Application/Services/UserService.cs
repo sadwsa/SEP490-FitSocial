@@ -17,6 +17,9 @@ namespace FitSocial.Application.Services;
 public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IUnitOfWork? _unitOfWork;
+
+    public UserService(IUserRepository userRepository, IUnitOfWork? unitOfWork = null)
     private readonly IUnitOfWork _unitOfWork;
 
     public UserService(IUserRepository userRepository, IUnitOfWork unitOfWork = null!)
@@ -172,6 +175,9 @@ public class UserService : IUserService
         return ApiResponseDto<StaffAdminOwnProfileDto>.Ok(profileDto, "Profile retrieved successfully.");
     }
 
+    public async Task<ApiResponseDto<StaffAdminOwnProfileDto>> UpdateStaffAdminProfileAsync(
+        Guid userId,
+        UpdateStaffAdminProfileRequestDto request,
     public async Task<ApiResponseDto<UserProfileDto>> UpdateOwnProfileAsync(
         Guid userId,
         UpdateOwnProfileRequestDto request,
@@ -182,6 +188,10 @@ public class UserService : IUserService
             throw new ValidationException("Request cannot be null.");
         }
 
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user == null)
+        {
+            throw new NotFoundException("Staff or Admin profile could not be found.");
         var user = await _userRepository.GetUserForUpdateAsync(userId, cancellationToken);
         if (user == null)
         {
@@ -193,6 +203,17 @@ public class UserService : IUserService
             throw new ForbiddenException("This account has been locked. Please contact support.");
         }
 
+        var role = user.RoleCode?.Trim().ToUpperInvariant();
+        if (!RoleConstants.IsAdminOrStaff(role))
+        {
+            throw new ForbiddenException("Access denied. Only Staff and Admin profiles are allowed.");
+        }
+
+        // Rule (UC_35.1):
+        // Field không nhập / để trống -> giữ nguyên dữ liệu cũ trong database.
+        // Field có nhập -> validate nghiêm ngặt; nếu hợp lệ mới cập nhật.
+
+        // 1. FullName
         var role = user.RoleCode?.Trim().ToUpperInvariant() ?? RoleConstants.Trainee;
         if (role != RoleConstants.Trainee && role != RoleConstants.Coach)
         {
@@ -216,6 +237,7 @@ public class UserService : IUserService
             user.FullName = trimmedFullName;
         }
 
+        // 2. DateOfBirth
         // Validate & Update DateOfBirth: only if provided
         if (request.DateOfBirth.HasValue)
         {
@@ -233,6 +255,7 @@ public class UserService : IUserService
             user.DateOfBirth = request.DateOfBirth.Value;
         }
 
+        // 3. Gender
         // Validate & Update Gender: only if provided and not empty
         if (!string.IsNullOrWhiteSpace(request.Gender))
         {
@@ -255,6 +278,7 @@ public class UserService : IUserService
             }
         }
 
+        // 4. PhoneNumber
         // Validate & Update PhoneNumber: only if provided and not empty
         if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
         {
@@ -272,6 +296,11 @@ public class UserService : IUserService
             user.PhoneNumber = trimmedPhone;
         }
 
+        // 5. Avatar (accept Avatar or AvatarUrl)
+        var avatarInput = !string.IsNullOrWhiteSpace(request.Avatar) ? request.Avatar : request.AvatarUrl;
+        if (!string.IsNullOrWhiteSpace(avatarInput))
+        {
+            var trimmedAvatar = avatarInput.Trim();
         // Validate & Update AvatarUrl:
         if (!string.IsNullOrWhiteSpace(request.AvatarUrl))
         {
@@ -328,6 +357,18 @@ public class UserService : IUserService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        var profileDto = new StaffAdminOwnProfileDto
+        {
+            Avatar = user.AvatarUrl,
+            FullName = user.FullName ?? string.Empty,
+            DateOfBirth = user.DateOfBirth,
+            Gender = user.Gender,
+            PhoneNumber = user.PhoneNumber,
+            Email = user.Email,
+            Role = role
+        };
+
+        return ApiResponseDto<StaffAdminOwnProfileDto>.Ok(profileDto, "Profile updated successfully.");
         // Return updated UserProfileDto
         if (role == RoleConstants.Coach)
         {

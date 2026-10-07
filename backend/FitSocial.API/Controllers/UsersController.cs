@@ -85,6 +85,14 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Updates the profile of the currently authenticated Staff or Admin user (UC_35.1).
+    /// Only accessible by STAFF and ADMIN roles.
+    /// Retains existing data for blank/empty fields; validates and updates new data.
+    /// </summary>
+    [HttpPut("me/profile")]
+    [HttpPut("~/api/admin/users/me/profile")]
+    [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponseDto<StaffAdminOwnProfileDto>), StatusCodes.Status200OK)]
     /// Updates the profile of the currently authenticated Trainee or Coach user (UC_05.1).
     /// Uses authenticated claims to guarantee users can only update their own profile.
     /// </summary>
@@ -96,6 +104,7 @@ public class UsersController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateOwnProfile([FromBody] UpdateStaffAdminProfileRequestDto request)
     public async Task<IActionResult> UpdateOwnProfile([FromBody] UpdateOwnProfileRequestDto request)
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -106,6 +115,10 @@ public class UsersController : ControllerBase
 
         if (!Guid.TryParse(userIdClaim, out var userId))
         {
+            return Unauthorized(ApiResponseDto<StaffAdminOwnProfileDto>.Fail("Invalid user identity claim."));
+        }
+
+        var result = await _userService.UpdateStaffAdminProfileAsync(userId, request, HttpContext.RequestAborted);
             return Unauthorized(ApiResponseDto<object>.Fail("Invalid user identity claim."));
         }
 

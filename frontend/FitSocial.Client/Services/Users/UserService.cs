@@ -30,6 +30,7 @@ public interface IUserService
     Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
     Task<ApiResponse<UserProfileModel>> UpdateOwnProfileAsync(UpdateOwnProfileRequest request);
     Task<ApiResponse<StaffAdminOwnProfileDto>> GetStaffAdminOwnProfileAsync();
+    Task<ApiResponse<StaffAdminOwnProfileDto>> UpdateStaffAdminOwnProfileAsync(UpdateStaffAdminProfileRequest request);
     Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
 }
 
@@ -60,6 +61,11 @@ public class UserService : IUserService
     public async Task<ApiResponse<StaffAdminOwnProfileDto>> GetStaffAdminOwnProfileAsync()
     {
         return await _apiClient.GetAsync<StaffAdminOwnProfileDto>("users/me/profile");
+    }
+
+    public async Task<ApiResponse<StaffAdminOwnProfileDto>> UpdateStaffAdminOwnProfileAsync(UpdateStaffAdminProfileRequest request)
+    {
+        return await _apiClient.PutAsync<UpdateStaffAdminProfileRequest, StaffAdminOwnProfileDto>("users/me/profile", request);
     }
 
     public async Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId)

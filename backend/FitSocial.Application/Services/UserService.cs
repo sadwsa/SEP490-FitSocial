@@ -17,10 +17,12 @@ namespace FitSocial.Application.Services;
 public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public UserService(IUserRepository userRepository)
+    public UserService(IUserRepository userRepository, IUnitOfWork unitOfWork = null!)
     {
         _userRepository = userRepository;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<ApiResponseDto<UserProfileDto>> GetOwnProfileAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -168,5 +170,198 @@ public class UserService : IUserService
         };
 
         return ApiResponseDto<StaffAdminOwnProfileDto>.Ok(profileDto, "Profile retrieved successfully.");
+    }
+
+    public async Task<ApiResponseDto<UserProfileDto>> UpdateOwnProfileAsync(
+        Guid userId,
+        UpdateOwnProfileRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+        {
+            throw new ValidationException("Request cannot be null.");
+        }
+
+        var user = await _userRepository.GetUserForUpdateAsync(userId, cancellationToken);
+        if (user == null)
+        {
+            throw new NotFoundException("User profile could not be found.");
+        }
+
+        if (user.IsLocked == true)
+        {
+            throw new ForbiddenException("This account has been locked. Please contact support.");
+        }
+
+        var role = user.RoleCode?.Trim().ToUpperInvariant() ?? RoleConstants.Trainee;
+        if (role != RoleConstants.Trainee && role != RoleConstants.Coach)
+        {
+            throw new ForbiddenException("Only Trainee and Coach profiles can be updated through this endpoint.");
+        }
+
+        // Validate & Update FullName: only if provided and not empty
+        if (!string.IsNullOrWhiteSpace(request.FullName))
+        {
+            var trimmedFullName = request.FullName.Trim();
+            if (trimmedFullName.Length < 2 || trimmedFullName.Length > 100)
+            {
+                throw new ValidationException("Full name must be between 2 and 100 characters.");
+            }
+
+            if (trimmedFullName.Any(char.IsDigit))
+            {
+                throw new ValidationException("Full name cannot contain numbers.");
+            }
+
+            user.FullName = trimmedFullName;
+        }
+
+        // Validate & Update DateOfBirth: only if provided
+        if (request.DateOfBirth.HasValue)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (request.DateOfBirth.Value > today)
+            {
+                throw new ValidationException("Date of birth cannot be in the future.");
+            }
+
+            if (request.DateOfBirth.Value.Year < 1900)
+            {
+                throw new ValidationException("Date of birth is invalid.");
+            }
+
+            user.DateOfBirth = request.DateOfBirth.Value;
+        }
+
+        // Validate & Update Gender: only if provided and not empty
+        if (!string.IsNullOrWhiteSpace(request.Gender))
+        {
+            var g = request.Gender.Trim();
+            if (string.Equals(g, "Male", StringComparison.OrdinalIgnoreCase))
+            {
+                user.Gender = "Male";
+            }
+            else if (string.Equals(g, "Female", StringComparison.OrdinalIgnoreCase))
+            {
+                user.Gender = "Female";
+            }
+            else if (string.Equals(g, "Other", StringComparison.OrdinalIgnoreCase))
+            {
+                user.Gender = "Other";
+            }
+            else
+            {
+                throw new ValidationException("Gender must be Male, Female, or Other.");
+            }
+        }
+
+        // Validate & Update PhoneNumber: only if provided and not empty
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+        {
+            var trimmedPhone = request.PhoneNumber.Trim();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(trimmedPhone, @"^0\d{9}$"))
+            {
+                throw new ValidationException("Phone number must be a valid 10-digit number starting with 0.");
+            }
+
+            if (await _userRepository.ExistsByPhoneAsync(trimmedPhone, userId, cancellationToken))
+            {
+                throw new ConflictException("Phone number is already registered by another account.");
+            }
+
+            user.PhoneNumber = trimmedPhone;
+        }
+
+        // Validate & Update AvatarUrl:
+        if (!string.IsNullOrWhiteSpace(request.AvatarUrl))
+        {
+            var trimmedAvatar = request.AvatarUrl.Trim();
+            if (trimmedAvatar.Equals("[REMOVE]", StringComparison.OrdinalIgnoreCase) ||
+                trimmedAvatar.Equals("REMOVE", StringComparison.OrdinalIgnoreCase))
+            {
+                user.AvatarUrl = null;
+            }
+            else
+            {
+                if (trimmedAvatar.Length > 2048)
+                {
+                    throw new ValidationException("Avatar URL must not exceed 2048 characters.");
+                }
+                user.AvatarUrl = trimmedAvatar;
+            }
+        }
+
+        user.UpdatedAt = DateTime.UtcNow;
+
+        // Coach-specific updates
+        if (role == RoleConstants.Coach)
+        {
+            var coachProfile = user.CoachProfileCoach;
+            if (coachProfile != null)
+            {
+                if (request.ExperienceYears.HasValue)
+                {
+                    if (request.ExperienceYears.Value < 0 || request.ExperienceYears.Value > 60)
+                    {
+                        throw new ValidationException("Years of experience must be between 0 and 60.");
+                    }
+                    coachProfile.ExperienceYears = request.ExperienceYears.Value;
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.Bio))
+                {
+                    var trimmedBio = request.Bio.Trim();
+                    if (trimmedBio.Length > 2000)
+                    {
+                        throw new ValidationException("Biography must not exceed 2000 characters.");
+                    }
+                    coachProfile.Bio = trimmedBio;
+                }
+
+                coachProfile.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        _userRepository.Update(user);
+        if (_unitOfWork != null)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        // Return updated UserProfileDto
+        if (role == RoleConstants.Coach)
+        {
+            var coachProfile = user.CoachProfileCoach;
+            var coachDto = new CoachProfileDto
+            {
+                FullName = user.FullName ?? string.Empty,
+                Email = user.Email,
+                AvatarUrl = user.AvatarUrl,
+                PhoneNumber = user.PhoneNumber,
+                DateOfBirth = user.DateOfBirth,
+                Gender = user.Gender,
+                Role = RoleConstants.Coach,
+                CreatedAt = user.CreatedAt,
+                Bio = coachProfile?.Bio,
+                ExperienceYears = coachProfile?.ExperienceYears,
+                ApprovalStatus = coachProfile?.ApprovalStatus ?? "PENDING"
+            };
+
+            return ApiResponseDto<UserProfileDto>.Ok(coachDto, "Profile updated successfully.");
+        }
+
+        var traineeDto = new TraineeProfileDto
+        {
+            FullName = user.FullName ?? string.Empty,
+            Email = user.Email,
+            AvatarUrl = user.AvatarUrl,
+            PhoneNumber = user.PhoneNumber,
+            DateOfBirth = user.DateOfBirth,
+            Gender = user.Gender,
+            Role = RoleConstants.Trainee,
+            CreatedAt = user.CreatedAt
+        };
+
+        return ApiResponseDto<UserProfileDto>.Ok(traineeDto, "Profile updated successfully.");
     }
 }

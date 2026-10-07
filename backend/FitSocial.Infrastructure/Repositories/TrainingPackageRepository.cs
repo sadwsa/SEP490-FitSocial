@@ -75,13 +75,16 @@ namespace FitSocial.Infrastructure.Repositories
 
         public async Task<IEnumerable<TrainingPackage>> GetPurchasedPackagesAsync(Guid traineeId, CancellationToken cancellationToken = default)
         {
+            var paidStatuses = new[] { FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+
             return await DbSet
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.Coach)
                 .Include(x => x.Media)
                 .Where(x => x.OrderDetails.Any(od =>
                     od.Order.BuyerId == traineeId && 
-                    od.Order.OrderStatus == FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid))
+                    od.Order.OrderStatus != null &&
+                    paidStatuses.Contains(od.Order.OrderStatus.ToUpper())))
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
         }

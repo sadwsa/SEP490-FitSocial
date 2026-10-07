@@ -185,6 +185,9 @@
                                         </button>
                                     }
                                 </div>
+                                <button type="button" class="btn-review" @onclick="() => OpenDetailModal(app.CoachId)">
+                                    Review
+                                </button>
                             </td>
                         </tr>
                     }
@@ -881,6 +884,7 @@
         {
             isProcessingAction = false;
         }
+        await SetBodyScrollLockAsync(false);
     }
 
     private async Task SetBodyScrollLockAsync(bool isLocked)

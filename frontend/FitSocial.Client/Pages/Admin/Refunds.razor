@@ -1,0 +1,787 @@
+@page "/admin/refunds"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.Refunds
+@using FitSocial.Client.Services.Refunds
+@inject IRefundService RefundService
+@inject NavigationManager Navigation
+
+<PageTitle>Refund Requests - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert @toastType" role="alert">
+                <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
+                <span class="alert-text">@toastMessage</span>
+                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
+            </div>
+        }
+
+        <div class="header-container">
+            <div>
+                <h2 class="view-title">Refund Requests</h2>
+                <p class="view-sub">Review and process trainee refund requests within the 7-day purchase policy</p>
+            </div>
+            <div class="header-policy-badge" title="7-day refund policy enforced">
+                <AppIcon Name="shield" />
+                <span>7-Day Policy Active</span>
+            </div>
+        </div>
+
+        <!-- Status Filter Tabs -->
+        <div class="cat-tabs mb-3">
+            <button type="button" class="cat-tab @(statusFilter == "" ? "active" : "")" @onclick='() => SetStatusFilterAsync("")'>
+                All Requests
+            </button>
+            <button type="button" class="cat-tab @(statusFilter == "PENDING" ? "active" : "")" @onclick='() => SetStatusFilterAsync("PENDING")'>
+                <span class="status-dot dot-pending"></span> Pending
+            </button>
+            <button type="button" class="cat-tab @(statusFilter == "APPROVED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("APPROVED")'>
+                <span class="status-dot dot-approved"></span> Approved
+            </button>
+            <button type="button" class="cat-tab @(statusFilter == "REJECTED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("REJECTED")'>
+                <span class="status-dot dot-rejected"></span> Rejected
+            </button>
+        </div>
+
+        <!-- Toolbar: Search, Date Filter & Actions -->
+        <div class="toolbar wrap">
+            <div class="search-wrap grow">
+                <span class="search-icon"><AppIcon Name="search" /></span>
+                <input value="@searchTerm"
+                       @oninput="OnSearchInput"
+                       @onkeydown="HandleSearchKeyDown"
+                       class="toolbar-input"
+                       placeholder="Search trainee name, email, package or order ID..." />
+            </div>
+
+            <div class="date-filter-group">
+                <label class="date-label">From:</label>
+                <input type="date" class="toolbar-input date-input" @bind="fromDateFilter" />
+                <label class="date-label">To:</label>
+                <input type="date" class="toolbar-input date-input" @bind="toDateFilter" />
+                <button type="button" class="row-btn-sm" @onclick="ApplyDateFilterAsync">Apply</button>
+                @if (fromDateFilter.HasValue || toDateFilter.HasValue)
+                {
+                    <button type="button" class="row-btn-sm btn-clear" @onclick="ClearDateFilterAsync">Clear</button>
+                }
+            </div>
+
+            <button type="button" class="row-btn" @onclick="LoadRefundRequestsAsync" disabled="@isLoading">
+                <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
+            </button>
+        </div>
+
+        <!-- Loading State -->
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <span>Loading refund requests...</span>
+            </div>
+        }
+        else if (pagedRefunds.Items.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="empty-icon"><AppIcon Name="shield" /></div>
+                <h3>No refund requests found</h3>
+                <p>No requests match the selected filters or search term.</p>
+            </div>
+        }
+        else
+        {
+            <!-- Refund Requests Table -->
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Request Reference</th>
+                            <th>Trainee</th>
+                            <th>Training Package</th>
+                            <th>Snapshot Amount</th>
+                            <th>Requested At</th>
+                            <th>Status</th>
+                            <th>Processed By</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in pagedRefunds.Items)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="req-id-cell">
+                                        <span class="ref-badge">@FormatReferenceCode(r)</span>
+                                        @if (!string.IsNullOrWhiteSpace(r.RefundTransactionRef))
+                                        {
+                                            <small class="text-muted" title="Transaction Reference">Tx: @r.RefundTransactionRef</small>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="user-cell">
+                                        <img src="@GetAvatar(r.RequestedByAvatarUrl, r.RequestedByName, r.RequestedByEmail)"
+                                             alt="@r.RequestedByName" class="user-avatar" />
+                                        <div class="user-meta">
+                                            <strong>@(r.RequestedByName ?? "Unknown Trainee")</strong>
+                                            <small class="text-muted">@r.RequestedByEmail</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="pkg-cell">
+                                        <strong>@(r.PackageTitle ?? "Training Package")</strong>
+                                        <small class="text-muted">
+                                            Coach: @(r.CoachName ?? "Assigned Coach") • @(r.PackageDurationDays.HasValue ? $"{r.PackageDurationDays} days" : "")
+                                        </small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="amount-cell">
+                                        <span class="amount-highlight">@FormatCurrency(r.RequestedAmount ?? 0)</span>
+                                        @if (r.ActualPaidAmount.HasValue && r.ActualPaidAmount != r.RequestedAmount)
+                                        {
+                                            <small class="text-muted">Paid: @FormatCurrency(r.ActualPaidAmount.Value)</small>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="date-cell">
+                                        <span>@FormatDate(r.RequestedAt ?? r.CreatedAt)</span>
+                                        <small class="text-muted">@FormatTime(r.RequestedAt ?? r.CreatedAt)</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    @switch (r.Status?.ToUpperInvariant())
+                                    {
+                                        case "PENDING":
+                                            <span class="badge badge-pending">
+                                                <span class="badge-dot dot-pending"></span> Pending
+                                            </span>
+                                            break;
+                                        case "APPROVED":
+                                            <span class="badge badge-approved">
+                                                <span class="badge-dot dot-approved"></span> Approved
+                                            </span>
+                                            break;
+                                        case "REJECTED":
+                                            <span class="badge badge-rejected">
+                                                <span class="badge-dot dot-rejected"></span> Rejected
+                                            </span>
+                                            break;
+                                        default:
+                                            <span class="badge badge-muted">@r.Status</span>
+                                            break;
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(r.ReviewedByName))
+                                    {
+                                        <div class="reviewer-cell">
+                                            <span>@r.ReviewedByName</span>
+                                            <small class="text-muted">@FormatDate(r.ReviewedAt)</small>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <div class="action-buttons">
+                                        <button type="button" class="btn-action btn-view" title="View Details" @onclick="() => OpenDetailModal(r)">
+                                            View
+                                        </button>
+                                        @if (string.Equals(r.Status, "PENDING", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <button type="button" class="btn-action btn-approve" title="Approve Refund" @onclick="() => OpenApproveModal(r)">
+                                                Approve
+                                            </button>
+                                            <button type="button" class="btn-action btn-reject" title="Reject Refund" @onclick="() => OpenRejectModal(r)">
+                                                Reject
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-bar">
+                <div class="pagination-info">
+                    Showing @(((pagedRefunds.PageNumber - 1) * pagedRefunds.PageSize) + 1) to
+                    @(Math.Min(pagedRefunds.PageNumber * pagedRefunds.PageSize, pagedRefunds.TotalCount)) of @pagedRefunds.TotalCount requests
+                </div>
+
+                <div class="pagination-controls">
+                    <button type="button" class="page-btn" disabled="@(!pagedRefunds.HasPreviousPage)" @onclick="() => ChangePageAsync(pagedRefunds.PageNumber - 1)">
+                        Previous
+                    </button>
+
+                    @for (int i = 1; i <= pagedRefunds.TotalPages; i++)
+                    {
+                        var pageIndex = i;
+                        if (i == 1 || i == pagedRefunds.TotalPages || (i >= pagedRefunds.PageNumber - 2 && i <= pagedRefunds.PageNumber + 2))
+                        {
+                            <button type="button" class="page-btn @(pagedRefunds.PageNumber == pageIndex ? "active" : "")" @onclick="() => ChangePageAsync(pageIndex)">
+                                @pageIndex
+                            </button>
+                        }
+                        else if (i == pagedRefunds.PageNumber - 3 || i == pagedRefunds.PageNumber + 3)
+                        {
+                            <span class="page-ellipsis">…</span>
+                        }
+                    }
+
+                    <button type="button" class="page-btn" disabled="@(!pagedRefunds.HasNextPage)" @onclick="() => ChangePageAsync(pagedRefunds.PageNumber + 1)">
+                        Next
+                    </button>
+
+                    <select class="page-size-select" value="@pageSize" @onchange="OnPageSizeChangedAsync">
+                        <option value="10">10 / page</option>
+                        <option value="20">20 / page</option>
+                        <option value="50">50 / page</option>
+                    </select>
+                </div>
+            </div>
+        }
+
+        <!-- DETAIL MODAL -->
+        @if (selectedRefund != null && isDetailModalOpen)
+        {
+            <div class="modal-backdrop" @onclick="CloseModals">
+                <div class="modal-card modal-lg" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <div>
+                            <h3 class="modal-title">Refund Request Details</h3>
+                            <span class="modal-subtitle">Reference: @FormatReferenceCode(selectedRefund)</span>
+                        </div>
+                        <button type="button" class="modal-close" @onclick="CloseModals">✕</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <!-- Trainee Section -->
+                        <div class="detail-section">
+                            <h4 class="section-title">Buyer (Trainee) Information</h4>
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Full Name</span>
+                                    <span class="detail-value">@(selectedRefund.RequestedByName ?? "—")</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Email / Account</span>
+                                    <span class="detail-value">@(selectedRefund.RequestedByEmail ?? "—")</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Account Role</span>
+                                    <span class="detail-value"><span class="badge badge-muted">Trainee</span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Training Package Snapshot Section -->
+                        <div class="detail-section">
+                            <h4 class="section-title">Training Package (Snapshot)</h4>
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Package Title</span>
+                                    <span class="detail-value font-bold">@(selectedRefund.PackageTitle ?? "Training Package")</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Seller / Coach</span>
+                                    <span class="detail-value">@(selectedRefund.CoachName ?? "—")</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Duration</span>
+                                    <span class="detail-value">@(selectedRefund.PackageDurationDays.HasValue ? $"{selectedRefund.PackageDurationDays} days" : "—")</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Purchase Date</span>
+                                    <span class="detail-value">@FormatDateTime(selectedRefund.PurchaseDate)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment & Financial Snapshot Section -->
+                        <div class="detail-section">
+                            <h4 class="section-title">Financial Transaction Snapshot</h4>
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Payment Method</span>
+                                    <span class="detail-value">Online Payment (VNPAY)</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Purchase Date</span>
+                                    <span class="detail-value">@FormatDateTime(selectedRefund.PurchaseDate)</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Original Paid Amount</span>
+                                    <span class="detail-value font-bold">@FormatCurrency(selectedRefund.ActualPaidAmount ?? selectedRefund.RequestedAmount ?? 0)</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Requested Refund Amount</span>
+                                    <span class="detail-value text-red font-bold">@FormatCurrency(selectedRefund.RequestedAmount ?? 0)</span>
+                                </div>
+                                @if (selectedRefund.ApprovedAmount.HasValue)
+                                {
+                                    <div class="detail-item full-width">
+                                        <span class="detail-label">Approved Refund Amount</span>
+                                        <span class="detail-value text-green font-bold text-lg">@FormatCurrency(selectedRefund.ApprovedAmount.Value)</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Refund Request Details -->
+                        <div class="detail-section">
+                            <h4 class="section-title">Reason & Supporting Evidence</h4>
+                            <div class="reason-box">
+                                <p>@selectedRefund.Reason</p>
+                            </div>
+
+                            @if (selectedRefund.EvidenceUrls != null && selectedRefund.EvidenceUrls.Any())
+                            {
+                                <div class="evidence-list mt-2">
+                                    <span class="detail-label">Attached Evidence (@selectedRefund.EvidenceUrls.Count):</span>
+                                    <div class="evidence-links">
+                                        @foreach (var (url, idx) in selectedRefund.EvidenceUrls.Select((u, i) => (u, i + 1)))
+                                        {
+                                            <a href="@url" target="_blank" rel="noopener noreferrer" class="evidence-link">
+                                                Evidence #@idx ↗
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Processing State -->
+                        <div class="detail-section">
+                            <h4 class="section-title">Processing Status</h4>
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Current Status</span>
+                                    <span class="detail-value">
+                                        @switch (selectedRefund.Status?.ToUpperInvariant())
+                                        {
+                                            case "PENDING":
+                                                <span class="badge badge-pending">Pending Review</span>
+                                                break;
+                                            case "APPROVED":
+                                                <span class="badge badge-approved">Approved & Refunded</span>
+                                                break;
+                                            case "REJECTED":
+                                                <span class="badge badge-rejected">Rejected</span>
+                                                break;
+                                            default:
+                                                <span class="badge badge-muted">@selectedRefund.Status</span>
+                                                break;
+                                        }
+                                    </span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Processed At</span>
+                                    <span class="detail-value">@FormatDateTime(selectedRefund.ReviewedAt)</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Transaction Ref</span>
+                                    <span class="detail-value">
+                                        @if (!string.IsNullOrEmpty(selectedRefund.RefundTransactionRef))
+                                        {
+                                            <code>@selectedRefund.RefundTransactionRef</code>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="modal-btn modal-btn-cancel" @onclick="CloseModals">Close</button>
+                        @if (string.Equals(selectedRefund.Status, "PENDING", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <button type="button" class="modal-btn modal-btn-reject" @onclick="() => OpenRejectModal(selectedRefund)">
+                                Reject Request
+                            </button>
+                            <button type="button" class="modal-btn modal-btn-approve" @onclick="() => OpenApproveModal(selectedRefund)">
+                                Approve Refund
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- APPROVE CONFIRMATION MODAL -->
+        @if (selectedRefund != null && isApproveModalOpen)
+        {
+            <div class="modal-backdrop" @onclick="CloseModals">
+                <div class="modal-card modal-md" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h3 class="modal-title text-emerald">Approve Refund Request</h3>
+                        <button type="button" class="modal-close" @onclick="CloseModals">✕</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="confirm-warning">
+                            <AppIcon Name="warning" />
+                            <div>
+                                <strong>Are you sure you want to approve this refund?</strong>
+                                <p>This action will mark the order as <strong>REFUNDED</strong>, cancel the trainee's active training plan enrollment, and record the financial refund. <strong>This action cannot be undone.</strong></p>
+                            </div>
+                        </div>
+
+                        <div class="confirm-summary">
+                            <div class="summary-row">
+                                <span>Trainee:</span>
+                                <strong>@(selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail)</strong>
+                            </div>
+                            <div class="summary-row">
+                                <span>Training Package:</span>
+                                <strong>@(selectedRefund.PackageTitle ?? "Training Package")</strong>
+                            </div>
+                            <div class="summary-row">
+                                <span>Refund Amount (Snapshot):</span>
+                                <strong class="text-emerald text-lg">@FormatCurrency(selectedRefund.RequestedAmount ?? 0)</strong>
+                            </div>
+                        </div>
+
+                        <div class="form-group mt-3">
+                            <label class="form-label">Optional Staff Note:</label>
+                            <textarea class="form-textarea" @bind="approvalNote" placeholder="Enter processing note or audit details..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="modal-btn modal-btn-cancel" @onclick="CloseModals" disabled="@isProcessing">
+                            Cancel
+                        </button>
+                        <button type="button" class="modal-btn modal-btn-approve" @onclick="ExecuteApproveAsync" disabled="@isProcessing">
+                            @if (isProcessing)
+                            {
+                                <span>Processing...</span>
+                            }
+                            else
+                            {
+                                <span>Confirm & Approve Refund</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- REJECT CONFIRMATION MODAL -->
+        @if (selectedRefund != null && isRejectModalOpen)
+        {
+            <div class="modal-backdrop" @onclick="CloseModals">
+                <div class="modal-card modal-md" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h3 class="modal-title text-rose">Reject Refund Request</h3>
+                        <button type="button" class="modal-close" @onclick="CloseModals">✕</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <p class="mb-3 text-secondary">
+                            Please provide a reason explaining why the refund request for <strong>@(selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail)</strong> is being rejected. This note will be sent to the trainee.
+                        </p>
+
+                        <div class="form-group">
+                            <label class="form-label">Rejection Reason / Note <span class="text-danger">*</span>:</label>
+                            <textarea class="form-textarea" @bind="rejectionNote" rows="4" placeholder="Explain the reason for rejecting this refund request..."></textarea>
+                            @if (rejectionNoteValidationFailed)
+                            {
+                                <small class="text-danger">Please enter a reason with at least 3 characters.</small>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="modal-btn modal-btn-cancel" @onclick="CloseModals" disabled="@isProcessing">
+                            Cancel
+                        </button>
+                        <button type="button" class="modal-btn modal-btn-reject" @onclick="ExecuteRejectAsync" disabled="@isProcessing">
+                            @if (isProcessing)
+                            {
+                                <span>Processing...</span>
+                            }
+                            else
+                            {
+                                <span>Reject Request</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private PagedResult<RefundRequestItem> pagedRefunds = new();
+    private bool isLoading = true;
+    private string statusFilter = "";
+    private string searchTerm = "";
+    private DateTime? fromDateFilter;
+    private DateTime? toDateFilter;
+    private int pageSize = 10;
+    private int currentPage = 1;
+
+    // Toast alert
+    private string? toastMessage;
+    private string toastType = "info";
+
+    // Modals
+    private RefundRequestItem? selectedRefund;
+    private bool isDetailModalOpen = false;
+    private bool isApproveModalOpen = false;
+    private bool isRejectModalOpen = false;
+    private bool isProcessing = false;
+
+    // Modal Form States
+    private string approvalNote = "";
+    private string rejectionNote = "";
+    private bool rejectionNoteValidationFailed = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRefundRequestsAsync();
+    }
+
+    private async Task LoadRefundRequestsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var query = new GetRefundRequestsQuery
+            {
+                PageNumber = currentPage,
+                PageSize = pageSize,
+                Status = string.IsNullOrWhiteSpace(statusFilter) ? null : statusFilter,
+                FromDate = fromDateFilter,
+                ToDate = toDateFilter,
+                SearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm
+            };
+
+            var response = await RefundService.GetPagedRefundRequestsAsync(query);
+            if (response.Success && response.Data != null)
+            {
+                pagedRefunds = response.Data;
+            }
+            else
+            {
+                ShowToast(response.Message ?? "Failed to load refund requests.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Error loading refund requests: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SetStatusFilterAsync(string status)
+    {
+        statusFilter = status;
+        currentPage = 1;
+        await LoadRefundRequestsAsync();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadRefundRequestsAsync();
+        }
+    }
+
+    private async Task ApplyDateFilterAsync()
+    {
+        currentPage = 1;
+        await LoadRefundRequestsAsync();
+    }
+
+    private async Task ClearDateFilterAsync()
+    {
+        fromDateFilter = null;
+        toDateFilter = null;
+        currentPage = 1;
+        await LoadRefundRequestsAsync();
+    }
+
+    private async Task ChangePageAsync(int newPage)
+    {
+        if (newPage < 1 || newPage > pagedRefunds.TotalPages) return;
+        currentPage = newPage;
+        await LoadRefundRequestsAsync();
+    }
+
+    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size))
+        {
+            pageSize = size;
+            currentPage = 1;
+            await LoadRefundRequestsAsync();
+        }
+    }
+
+    private void OpenDetailModal(RefundRequestItem item)
+    {
+        selectedRefund = item;
+        isDetailModalOpen = true;
+    }
+
+    private void OpenApproveModal(RefundRequestItem item)
+    {
+        selectedRefund = item;
+        approvalNote = "";
+        isApproveModalOpen = true;
+    }
+
+    private void OpenRejectModal(RefundRequestItem item)
+    {
+        selectedRefund = item;
+        rejectionNote = "";
+        rejectionNoteValidationFailed = false;
+        isRejectModalOpen = true;
+    }
+
+    private void CloseModals()
+    {
+        isDetailModalOpen = false;
+        isApproveModalOpen = false;
+        isRejectModalOpen = false;
+        selectedRefund = null;
+    }
+
+    private async Task ExecuteApproveAsync()
+    {
+        if (selectedRefund == null) return;
+
+        isProcessing = true;
+        try
+        {
+            var req = new ApproveRefundRequest
+            {
+                ApprovedAmount = selectedRefund.RequestedAmount,
+                StaffNote = string.IsNullOrWhiteSpace(approvalNote) ? null : approvalNote.Trim()
+            };
+
+            var response = await RefundService.ApproveRefundRequestAsync(selectedRefund.RefundRequestId, req);
+            if (response.Success)
+            {
+                ShowToast("Refund request approved and processed successfully.", "success");
+                CloseModals();
+                await LoadRefundRequestsAsync();
+            }
+            else
+            {
+                ShowToast(response.Message ?? "Failed to approve refund request.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast(ex.Message, "error");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task ExecuteRejectAsync()
+    {
+        if (selectedRefund == null) return;
+
+        if (string.IsNullOrWhiteSpace(rejectionNote) || rejectionNote.Trim().Length < 3)
+        {
+            rejectionNoteValidationFailed = true;
+            return;
+        }
+
+        rejectionNoteValidationFailed = false;
+        isProcessing = true;
+        try
+        {
+            var req = new RejectRefundRequest
+            {
+                StaffNote = rejectionNote.Trim()
+            };
+
+            var response = await RefundService.RejectRefundRequestAsync(selectedRefund.RefundRequestId, req);
+            if (response.Success)
+            {
+                ShowToast("Refund request rejected.", "info");
+                CloseModals();
+                await LoadRefundRequestsAsync();
+            }
+            else
+            {
+                ShowToast(response.Message ?? "Failed to reject refund request.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast(ex.Message, "error");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void ShowToast(string message, string type)
+    {
+        toastMessage = message;
+        toastType = type;
+    }
+
+    private static string FormatReferenceCode(RefundRequestItem? r)
+    {
+        if (r == null) return "—";
+        if (!string.IsNullOrWhiteSpace(r.RefundTransactionRef))
+        {
+            return r.RefundTransactionRef;
+        }
+        var year = (r.RequestedAt ?? r.CreatedAt ?? DateTime.UtcNow).Year;
+        var hash = Math.Abs(r.RefundRequestId.GetHashCode()) % 10000;
+        return $"#RF-{year}-{hash:D4}";
+    }
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
+
+    private static string FormatCurrency(decimal amount) => $"{amount:N0} VND";
+
+    private static string FormatDate(DateTime? dt) => dt.HasValue ? dt.Value.ToString("dd/MM/yyyy") : "—";
+
+    private static string FormatTime(DateTime? dt) => dt.HasValue ? dt.Value.ToString("HH:mm") : "";
+
+    private static string FormatDateTime(DateTime? dt) => dt.HasValue ? dt.Value.ToString("dd/MM/yyyy HH:mm") : "—";
+
+    private static string GetAvatar(string? avatarUrl, string? name, string? email)
+    {
+        if (!string.IsNullOrWhiteSpace(avatarUrl)) return avatarUrl;
+        var display = !string.IsNullOrWhiteSpace(name) ? name : (!string.IsNullOrWhiteSpace(email) ? email : "User");
+        return $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(display)}&background=ff5500&color=fff";
+    }
+}

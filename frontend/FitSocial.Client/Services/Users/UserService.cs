@@ -28,6 +28,7 @@ public interface IUserService
     Task<ApiResponse<bool>> CheckEmailExistsAsync(string email, Guid? excludingUserId = null);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
     Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
+    Task<ApiResponse<StaffAdminOwnProfileDto>> GetStaffAdminOwnProfileAsync();
     Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
 }
 
@@ -48,6 +49,11 @@ public class UserService : IUserService
     public async Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync()
     {
         return await _apiClient.GetAsync<UserProfileModel>("users/me/profile");
+    }
+
+    public async Task<ApiResponse<StaffAdminOwnProfileDto>> GetStaffAdminOwnProfileAsync()
+    {
+        return await _apiClient.GetAsync<StaffAdminOwnProfileDto>("users/me/profile");
     }
 
     public async Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId)

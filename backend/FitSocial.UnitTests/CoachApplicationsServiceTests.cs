@@ -201,4 +201,194 @@ public class CoachApplicationsServiceTests
         Assert.Equal(70, result.Data.Approved);
         Assert.Equal(10, result.Data.Rejected);
     }
+
+    [Fact]
+    public async Task ApproveCoachApplicationAsync_WhenPending_SuccessfullyApprovesAndUnlocksCoach()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var approverId = Guid.NewGuid();
+        var user = new User
+        {
+            UserId = coachId,
+            FullName = "Le Hoang Long",
+            Email = "long.le@fit.vn",
+            RoleCode = "TRAINEE",
+            IsLocked = true
+        };
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "PENDING",
+            Coach = user,
+            CoachCertificates = new List<CoachCertificate>
+            {
+                new CoachCertificate
+                {
+                    CertificateId = Guid.NewGuid(),
+                    CertificateName = "National Boxing Coach",
+                    VerificationStatus = "PENDING"
+                }
+            },
+            CoachEkycVerifications = new List<CoachEkycVerification>
+            {
+                new CoachEkycVerification
+                {
+                    EkycId = Guid.NewGuid(),
+                    VerificationStatus = "PENDING"
+                }
+            }
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _coachService.ApproveCoachApplicationAsync(
+            coachId, approverId, new FitSocial.Application.DTOs.Coach.ApproveCoachApplicationRequestDto { Note = "Valid credentials." });
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal("APPROVED", profile.ApprovalStatus);
+        Assert.Equal(approverId, profile.ApprovedBy);
+        Assert.False(user.IsLocked);
+        Assert.Equal("COACH", user.RoleCode);
+        Assert.Equal("APPROVED", profile.CoachCertificates.First().VerificationStatus);
+        Assert.Equal("APPROVED", profile.CoachEkycVerifications.First().VerificationStatus);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApproveCoachApplicationAsync_WhenAlreadyApproved_ReturnsFail()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var approverId = Guid.NewGuid();
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "APPROVED",
+            Coach = new User { UserId = coachId, FullName = "Already Approved" }
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+
+        // Act
+        var result = await _coachService.ApproveCoachApplicationAsync(coachId, approverId);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Contains("Only pending applications can be approved", result.Message);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApproveCoachApplicationAsync_WhenNotFound_ReturnsFail()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CoachProfile?)null);
+
+        // Act
+        var result = await _coachService.ApproveCoachApplicationAsync(coachId, Guid.NewGuid());
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Coach application not found.", result.Message);
+    }
+
+    [Fact]
+    public async Task RejectCoachApplicationAsync_WhenPending_SuccessfullyRejectsAndLeavesCoachLocked()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var rejectorId = Guid.NewGuid();
+        var user = new User
+        {
+            UserId = coachId,
+            FullName = "Vu Minh Chau",
+            Email = "chau.vu@gmail.com",
+            IsLocked = true
+        };
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "PENDING",
+            Coach = user,
+            CoachCertificates = new List<CoachCertificate>
+            {
+                new CoachCertificate
+                {
+                    CertificateId = Guid.NewGuid(),
+                    CertificateName = "Pilates Cert",
+                    VerificationStatus = "PENDING"
+                }
+            }
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _coachService.RejectCoachApplicationAsync(
+            coachId, rejectorId, new FitSocial.Application.DTOs.Coach.RejectCoachApplicationRequestDto { Reason = "Invalid ID card photo." });
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal("REJECTED", profile.ApprovalStatus);
+        Assert.Equal(rejectorId, profile.ApprovedBy);
+        Assert.True(user.IsLocked);
+        Assert.Equal("REJECTED", profile.CoachCertificates.First().VerificationStatus);
+        Assert.Equal("Invalid ID card photo.", profile.CoachCertificates.First().RejectedReason);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RejectCoachApplicationAsync_WhenAlreadyProcessed_ReturnsFail()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var rejectorId = Guid.NewGuid();
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "REJECTED",
+            Coach = new User { UserId = coachId, FullName = "Already Rejected" }
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+
+        // Act
+        var result = await _coachService.RejectCoachApplicationAsync(coachId, rejectorId);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Contains("Only pending applications can be rejected", result.Message);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RejectCoachApplicationAsync_WhenNotFound_ReturnsFail()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CoachProfile?)null);
+
+        // Act
+        var result = await _coachService.RejectCoachApplicationAsync(coachId, Guid.NewGuid());
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Coach application not found.", result.Message);
+    }
 }

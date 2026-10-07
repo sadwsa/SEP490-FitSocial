@@ -20,21 +20,22 @@ public class CoachService : ICoachService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IReviewRepository _reviewRepository;
     private readonly IOrderRepository _orderRepository;
-
-
+    private readonly INotificationRepository? _notificationRepository;
 
     public CoachService(
         ICoachProfileRepository coachProfiles,
         ILocationRepository locationRepository,
         IUnitOfWork unitOfWork,
-          IReviewRepository reviewRepository,
-        IOrderRepository orderRepository)
+        IReviewRepository reviewRepository,
+        IOrderRepository orderRepository,
+        INotificationRepository? notificationRepository = null)
     {
         _coachProfiles = coachProfiles;
         _locationRepository = locationRepository;
         _unitOfWork = unitOfWork;
         _reviewRepository = reviewRepository;
         _orderRepository = orderRepository;
+        _notificationRepository = notificationRepository;
     }
 
     public async Task<ApiResponseDto<List<TopCoachDto>>> GetTopCoachesAsync(int count = 3, CancellationToken cancellationToken = default)
@@ -328,6 +329,7 @@ public class CoachService : ICoachService
                 return ApiResponseDto<CoachApplicationDetailDto>.Fail("Coach application not found.");
             }
 
+            var detail = MapToCoachApplicationDetailDto(c);
             var latestEkyc = c.CoachEkycVerifications?.OrderByDescending(e => e.CreatedAt).FirstOrDefault();
 
             var detail = new CoachApplicationDetailDto
@@ -403,5 +405,247 @@ public class CoachService : ICoachService
         {
             return ApiResponseDto<CoachApplicationStatusCountsDto>.Fail($"Error retrieving status counts: {ex.Message}");
         }
+    }
+
+    public async Task<ApiResponseDto<CoachApplicationDetailDto>> ApproveCoachApplicationAsync(
+        Guid coachId,
+        Guid approverId,
+        ApproveCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var profile = await _coachProfiles.GetCoachApplicationDetailsAsync(coachId, cancellationToken);
+            if (profile == null)
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail("Coach application not found.");
+            }
+
+            var currentStatus = profile.ApprovalStatus?.Trim().ToUpperInvariant() ?? "PENDING";
+            if (currentStatus != "PENDING")
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail($"Only pending applications can be approved. Current status is {currentStatus}.");
+            }
+
+            var now = DateTime.UtcNow;
+
+            // 1. Update CoachProfile
+            profile.ApprovalStatus = "APPROVED";
+            profile.ApprovedBy = approverId;
+            profile.Status = "ACTIVE";
+            profile.UpdatedAt = now;
+
+            // 2. Update Coach User: unlock applicant and ensure coach role
+            if (profile.Coach != null)
+            {
+                profile.Coach.RoleCode = Domain.Constants.RoleConstants.Coach;
+                profile.Coach.IsLocked = false;
+                profile.Coach.LockedBy = null;
+                profile.Coach.UpdatedAt = now;
+            }
+
+            // 3. Update pending certificates
+            if (profile.CoachCertificates != null)
+            {
+                foreach (var cert in profile.CoachCertificates)
+                {
+                    if (string.IsNullOrWhiteSpace(cert.VerificationStatus) ||
+                        string.Equals(cert.VerificationStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cert.VerificationStatus = "APPROVED";
+                        cert.VerifiedBy = approverId;
+                        cert.VerifiedAt = now;
+                        cert.UpdatedAt = now;
+                    }
+                }
+            }
+
+            // 4. Update pending eKYC
+            if (profile.CoachEkycVerifications != null)
+            {
+                foreach (var ekyc in profile.CoachEkycVerifications)
+                {
+                    if (string.IsNullOrWhiteSpace(ekyc.VerificationStatus) ||
+                        string.Equals(ekyc.VerificationStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ekyc.VerificationStatus = "APPROVED";
+                        ekyc.UpdatedAt = now;
+                    }
+                }
+            }
+
+            // 5. In-app notification
+            if (_notificationRepository != null)
+            {
+                var notification = new Domain.Entities.Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = profile.CoachId,
+                    ActorId = approverId,
+                    Type = "COACH_APPLICATION_APPROVED",
+                    Description = string.IsNullOrWhiteSpace(request?.Note)
+                        ? "Congratulations! Your coach application has been approved. You can now access your coach dashboard."
+                        : $"Congratulations! Your coach application has been approved. Note: {request.Note}",
+                    CreatedAt = now,
+                    IsRead = false
+                };
+                await _notificationRepository.AddAsync(notification, cancellationToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var detail = MapToCoachApplicationDetailDto(profile);
+            return ApiResponseDto<CoachApplicationDetailDto>.Ok(detail, "Coach application approved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<CoachApplicationDetailDto>.Fail($"Error approving coach application: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponseDto<CoachApplicationDetailDto>> RejectCoachApplicationAsync(
+        Guid coachId,
+        Guid rejectorId,
+        RejectCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var profile = await _coachProfiles.GetCoachApplicationDetailsAsync(coachId, cancellationToken);
+            if (profile == null)
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail("Coach application not found.");
+            }
+
+            var currentStatus = profile.ApprovalStatus?.Trim().ToUpperInvariant() ?? "PENDING";
+            if (currentStatus != "PENDING")
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail($"Only pending applications can be rejected. Current status is {currentStatus}.");
+            }
+
+            var now = DateTime.UtcNow;
+
+            // 1. Update CoachProfile
+            profile.ApprovalStatus = "REJECTED";
+            profile.ApprovedBy = rejectorId;
+            profile.UpdatedAt = now;
+
+            // 2. Applicant User remains locked but not deleted
+            if (profile.Coach != null)
+            {
+                profile.Coach.IsLocked = true;
+                profile.Coach.UpdatedAt = now;
+            }
+
+            // 3. Update pending certificates
+            if (profile.CoachCertificates != null)
+            {
+                foreach (var cert in profile.CoachCertificates)
+                {
+                    if (string.IsNullOrWhiteSpace(cert.VerificationStatus) ||
+                        string.Equals(cert.VerificationStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cert.VerificationStatus = "REJECTED";
+                        cert.VerifiedBy = rejectorId;
+                        cert.VerifiedAt = now;
+                        cert.RejectedReason = request?.Reason;
+                        cert.UpdatedAt = now;
+                    }
+                }
+            }
+
+            // 4. Update pending eKYC
+            if (profile.CoachEkycVerifications != null)
+            {
+                foreach (var ekyc in profile.CoachEkycVerifications)
+                {
+                    if (string.IsNullOrWhiteSpace(ekyc.VerificationStatus) ||
+                        string.Equals(ekyc.VerificationStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ekyc.VerificationStatus = "REJECTED";
+                        ekyc.FailureReason = request?.Reason;
+                        ekyc.UpdatedAt = now;
+                    }
+                }
+            }
+
+            // 5. In-app notification
+            if (_notificationRepository != null)
+            {
+                var notification = new Domain.Entities.Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = profile.CoachId,
+                    ActorId = rejectorId,
+                    Type = "COACH_APPLICATION_REJECTED",
+                    Description = string.IsNullOrWhiteSpace(request?.Reason)
+                        ? "Your coach application has been rejected. Please check your email for details and resubmission instructions."
+                        : $"Your coach application has been rejected. Reason: {request.Reason}",
+                    CreatedAt = now,
+                    IsRead = false
+                };
+                await _notificationRepository.AddAsync(notification, cancellationToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var detail = MapToCoachApplicationDetailDto(profile);
+            return ApiResponseDto<CoachApplicationDetailDto>.Ok(detail, "Coach application rejected successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<CoachApplicationDetailDto>.Fail($"Error rejecting coach application: {ex.Message}");
+        }
+    }
+
+    private static CoachApplicationDetailDto MapToCoachApplicationDetailDto(Domain.Entities.CoachProfile c)
+    {
+        var latestEkyc = c.CoachEkycVerifications?.OrderByDescending(e => e.CreatedAt).FirstOrDefault();
+
+        return new CoachApplicationDetailDto
+        {
+            CoachId = c.CoachId,
+            FullName = c.Coach?.FullName,
+            Email = c.Coach?.Email,
+            PhoneNumber = c.Coach?.PhoneNumber,
+            AvatarUrl = c.Coach?.AvatarUrl,
+            Gender = c.Coach?.Gender,
+            DateOfBirth = c.Coach?.DateOfBirth,
+            ExperienceYears = c.ExperienceYears,
+            Bio = c.Bio,
+            IdentityCardUrl = c.IdentityCardUrl,
+            CertificateUrl = c.CertificateUrl,
+            CertificatesCount = c.CoachCertificates?.Count ?? 0,
+            ApprovalStatus = string.IsNullOrWhiteSpace(c.ApprovalStatus) ? "PENDING" : c.ApprovalStatus,
+            Status = c.Status,
+            CreatedAt = c.Coach?.CreatedAt ?? c.UpdatedAt,
+            UpdatedAt = c.UpdatedAt,
+            ApprovedByName = c.ApprovedByNavigation?.FullName,
+            Locations = c.Locations?.Select(l => l.LocationName).ToList() ?? new List<string>(),
+            Certificates = c.CoachCertificates?.Select(cert => new CoachCertificateDetailDto
+            {
+                CertificateId = cert.CertificateId,
+                CertificateName = cert.CertificateName,
+                CertificateUrl = cert.CertificateUrl,
+                IssuedBy = cert.IssuedBy,
+                IssuedDate = cert.IssuedDate,
+                ExpiryDate = cert.ExpiryDate,
+                VerificationStatus = cert.VerificationStatus
+            }).ToList() ?? new List<CoachCertificateDetailDto>(),
+            Ekyc = latestEkyc == null ? null : new CoachApplicationEkycDto
+            {
+                FullNameOnCard = latestEkyc.FullNameOnCard,
+                DateOfBirthOnCard = latestEkyc.DateOfBirthOnCard,
+                Sex = latestEkyc.Sex,
+                FrontCardUrl = latestEkyc.FrontCardUrl,
+                BackCardUrl = latestEkyc.BackCardUrl,
+                FaceImageUrl = latestEkyc.FaceImageUrl,
+                LivenessScore = latestEkyc.LivenessScore,
+                FaceMatchConfidence = latestEkyc.FaceMatchConfidence,
+                VerificationStatus = latestEkyc.VerificationStatus,
+                FailureReason = latestEkyc.FailureReason,
+                CreatedAt = latestEkyc.CreatedAt
+            }
+        };
     }
 }

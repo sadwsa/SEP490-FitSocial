@@ -1,9 +1,11 @@
-﻿@page "/coach/payout-account"
+@page "/coach/payout-account"
 @layout EmptyLayout
+@attribute [Authorize(Roles = "COACH")]
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Coaches
 @using FitSocial.Client.Services.Coaches
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @inject ICoachService CoachService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
@@ -11,7 +13,7 @@
 
 <PageTitle>Payout Account - FitSocial Coach</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
+<div class="min-h-screen bg-gray-100 text-gray-800 font-sans">
     <AppHeader SearchTerm="@headerSearchTerm"
                UserName="@userName"
                UserInitials="@userInitials"
@@ -22,87 +24,171 @@
         @@media (min-width: 1024px) {
             .home-3col-layout {
                 display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 46rem) minmax(18rem, 1fr) !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 48rem) minmax(16rem, 1fr) !important;
                 align-items: start !important;
-            }
-
-            .home-left-sidebar {
-                justify-self: start !important;
-            }
-
-            .home-center-feed {
-                justify-self: end !important;
-                width: 100% !important;
-                max-width: 46rem !important;
-                min-width: 0 !important;
-            }
-
-            .home-right-sidebar {
-                justify-self: center !important;
             }
         }
     </style>
 
-    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
-        <AppSidebar ActiveItem="payout-account" />
+    <div class="home-3col-layout max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 gap-6">
+        <aside class="home-left-sidebar hidden lg:block w-72 flex-shrink-0 sticky top-24">
+            <AppSidebar ActiveItem="payout-account" />
+        </aside>
 
-        <section class="home-center-feed w-full max-w-3xl flex flex-col gap-4 min-w-0 pb-10">
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-                <h1 class="text-xl font-bold text-gray-800">Payout Account</h1>
-                <p class="text-xs text-gray-500 mt-0.5">Manage your bank account to receive payouts from FitSocial.</p>
-            </div>
+        <section class="home-main-feed min-w-0">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+                <div class="flex items-center justify-between pb-6 border-b border-gray-100 mb-6">
+                    <div>
+                        <h1 class="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
+                            Payout Bank Account
+                        </h1>
+                        <p class="text-xs md:text-sm text-gray-500 mt-1">
+                            Connect your Vietnamese bank account to receive weekly earnings via NAPAS 24/7.
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-[#FF5500]">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                    </div>
+                </div>
 
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-medium">@errorMessage</div>
-            }
-            @if (!string.IsNullOrEmpty(successMessage))
-            {
-                <div class="bg-emerald-50 border border-emerald-200 text-emerald-600 px-4 py-3 rounded-xl text-sm font-medium">@successMessage</div>
-            }
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-3">
+                        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>@errorMessage</span>
+                    </div>
+                }
 
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div class="mb-6 p-4 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm flex items-start gap-3">
+                        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>@successMessage</span>
+                    </div>
+                }
+
                 @if (isLoading)
                 {
-                    <div class="flex flex-col items-center justify-center py-10">
-                        <div class="w-9 h-9 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-3"></div>
-                        <p class="text-sm text-gray-500 font-medium">Loading your account details...</p>
+                    <div class="flex flex-col items-center justify-center py-12">
+                        <div class="w-10 h-10 border-4 border-orange-200 border-t-[#FF5500] rounded-full animate-spin mb-4"></div>
+                        <p class="text-sm text-gray-500 font-medium">Loading payout details...</p>
                     </div>
                 }
                 else
                 {
-                    <h2 class="text-lg font-bold text-gray-800 mb-4">@(hasExistingAccount ? "Update Bank Account" : "Add Bank Account")</h2>
-                    <EditForm Model="accountForm" OnValidSubmit="HandleSaveAccount">
+                    <EditForm Model="@accountForm" OnValidSubmit="HandleSaveAccount">
                         <DataAnnotationsValidator />
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-700 mb-1">Bank Name</label>
-                                <InputText @bind-Value="accountForm.BankName" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5500]" placeholder="e.g. Vietcombank" />
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                            <!-- 1. Chọn Ngân Hàng (Searchable Combobox) -->
+                            <div class="md:col-span-2 relative">
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Bank Name <span class="text-red-500">*</span>
+                                </label>
+                                <div class="relative">
+                                    <input type="text"
+                                           class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#FF5500] transition"
+                                           placeholder="Type bank name or code (e.g. VCB, MB, Techcombank)..."
+                                           value="@bankSearchTerm"
+                                           @oninput="OnBankSearchInput"
+                                           @onfocus="() => isBankDropdownOpen = true" />
+                                    <div class="absolute right-3 top-3 text-gray-400 pointer-events-none">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                @if (isBankDropdownOpen && filteredBanks.Any())
+                                {
+                                    <div class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                                        @foreach (var bank in filteredBanks)
+                                        {
+                                            <button type="button"
+                                                    class="w-full text-left px-4 py-2.5 hover:bg-orange-50 flex items-center gap-3 border-b border-gray-50 last:border-b-0 transition"
+                                                    @onclick="() => SelectBank(bank)">
+                                                @if (!string.IsNullOrEmpty(bank.Logo))
+                                                {
+                                                    <img src="@bank.Logo" alt="@bank.ShortName" class="h-6 w-auto max-w-[40px] object-contain flex-shrink-0" />
+                                                }
+                                                <div class="flex flex-col min-w-0">
+                                                    <span class="text-sm font-bold text-gray-800">
+                                                        @bank.ShortName <span class="text-xs text-gray-400 font-normal">(@bank.Code)</span>
+                                                    </span>
+                                                    <span class="text-xs text-gray-500 truncate">@bank.Name</span>
+                                                </div>
+                                            </button>
+                                        }
+                                    </div>
+                                }
                                 <ValidationMessage For="@(() => accountForm.BankName)" class="text-red-500 text-xs mt-1" />
                             </div>
+
+                            <!-- 2. Mã BIN ngân hàng -->
                             <div>
-                                <label class="block text-xs font-semibold text-gray-700 mb-1">Bank Code (BIN)</label>
-                                <InputText @bind-Value="accountForm.BankCode" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5500]" placeholder="e.g. VCB" />
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Bank BIN Code
+                                </label>
+                                <input type="text"
+                                       value="@accountForm.BankCode"
+                                       readonly
+                                       class="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 cursor-not-allowed"
+                                       placeholder="Auto-filled on bank selection" />
                                 <ValidationMessage For="@(() => accountForm.BankCode)" class="text-red-500 text-xs mt-1" />
                             </div>
+
+                            <!-- 3. Số tài khoản -->
                             <div>
-                                <label class="block text-xs font-semibold text-gray-700 mb-1">Account Holder Name</label>
-                                <InputText @bind-Value="accountForm.AccountName" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5500] uppercase" placeholder="NGUYEN VAN A" />
-                                <ValidationMessage For="@(() => accountForm.AccountName)" class="text-red-500 text-xs mt-1" />
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-700 mb-1">Account Number</label>
-                                <InputText @bind-Value="accountForm.AccountNumber" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5500]" placeholder="Enter your account number" />
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Account Number <span class="text-red-500">*</span>
+                                </label>
+                                <InputText @bind-Value="accountForm.AccountNumber"
+                                           class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#FF5500] transition"
+                                           placeholder="Enter bank account number" />
                                 <ValidationMessage For="@(() => accountForm.AccountNumber)" class="text-red-500 text-xs mt-1" />
                             </div>
+
+                            <!-- 4. Tên chủ tài khoản -->
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Account Holder Name <span class="text-red-500">*</span>
+                                </label>
+                                <InputText @bind-Value="accountForm.AccountName"
+                                           class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#FF5500] transition"
+                                           placeholder="e.g. NGUYEN VAN A" />
+                                <ValidationMessage For="@(() => accountForm.AccountName)" class="text-red-500 text-xs mt-1" />
+                            </div>
+
+                            <!-- 5. Chi nhánh (Không bắt buộc) -->
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Branch <span class="text-gray-400 font-normal lowercase">(optional)</span>
+                                </label>
+                                <InputText @bind-Value="accountForm.Branch"
+                                           class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#FF5500] transition"
+                                           placeholder="e.g. Ba Dinh Branch, HCMC..." />
+                            </div>
                         </div>
-                        <div class="flex justify-end pt-2 border-t border-gray-100">
-                            <button type="submit" disabled="@isSubmitting" class="px-5 py-2.5 bg-[#FF5500] text-white rounded-xl text-sm font-bold hover:bg-[#e04a00] transition disabled:opacity-50 flex items-center gap-2">
+
+                        <!-- Submit Button -->
+                        <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+                            <span class="text-xs text-gray-400">
+                                * Account details are secured with AES encryption.
+                            </span>
+                            <button type="submit"
+                                    disabled="@isSubmitting"
+                                    class="px-6 py-2.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition duration-200 disabled:opacity-50 flex items-center gap-2">
                                 @if (isSubmitting)
                                 {
                                     <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                 }
-                                @(hasExistingAccount ? "Save Changes" : "Save Account")
+                                <span>@(hasExistingAccount ? "Save Changes" : "Save Account")</span>
                             </button>
                         </div>
                     </EditForm>
@@ -115,13 +201,21 @@
 </div>
 
 @code {
-    private CreateCoachBankAccountDto accountForm = new();
+    private CreateCoachBankAccountDto accountForm = new() { IsDefault = true };
     private bool isLoading = true;
     private bool isSubmitting = false;
     private bool hasExistingAccount = false;
+
     private string errorMessage = "";
     private string successMessage = "";
 
+    // Bank Dropdown State
+    private List<BankItemDto> allBanks = new();
+    private List<BankItemDto> filteredBanks = new();
+    private string bankSearchTerm = "";
+    private bool isBankDropdownOpen = false;
+
+    // Header State
     private string? headerSearchTerm = "";
     private string userName = "Coach";
     private string userInitials = "C";
@@ -130,7 +224,43 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadUserInfoAsync();
+        await LoadBankListAsync();
         await LoadBankAccountAsync();
+    }
+
+    private async Task LoadBankListAsync()
+    {
+        allBanks = await CoachService.GetVietnameseBanksAsync();
+        filteredBanks = allBanks;
+    }
+
+    private void OnBankSearchInput(ChangeEventArgs e)
+    {
+        bankSearchTerm = e.Value?.ToString() ?? "";
+        isBankDropdownOpen = true;
+
+        if (string.IsNullOrWhiteSpace(bankSearchTerm))
+        {
+            filteredBanks = allBanks;
+        }
+        else
+        {
+            var term = bankSearchTerm.Trim().ToLowerInvariant();
+            filteredBanks = allBanks.Where(b =>
+                b.ShortName.ToLowerInvariant().Contains(term) ||
+                b.Code.ToLowerInvariant().Contains(term) ||
+                b.Name.ToLowerInvariant().Contains(term) ||
+                b.Bin.Contains(term)
+            ).ToList();
+        }
+    }
+
+    private void SelectBank(BankItemDto bank)
+    {
+        accountForm.BankName = bank.ShortName;
+        accountForm.BankCode = bank.Bin;
+        bankSearchTerm = $"{bank.ShortName} ({bank.Code})";
+        isBankDropdownOpen = false;
     }
 
     private async Task LoadBankAccountAsync()
@@ -143,6 +273,7 @@
         {
             var existing = response.Data.First();
             hasExistingAccount = true;
+
             accountForm = new CreateCoachBankAccountDto
             {
                 BankName = existing.BankName ?? "",
@@ -152,6 +283,15 @@
                 Branch = existing.Branch,
                 IsDefault = true
             };
+
+            var matchedBank = allBanks.FirstOrDefault(b =>
+                b.Bin == existing.BankCode ||
+                b.ShortName.Equals(existing.BankName, StringComparison.OrdinalIgnoreCase) ||
+                b.Code.Equals(existing.BankCode, StringComparison.OrdinalIgnoreCase));
+
+            bankSearchTerm = matchedBank != null
+                ? $"{matchedBank.ShortName} ({matchedBank.Code})"
+                : existing.BankName ?? "";
         }
         else
         {
@@ -167,6 +307,11 @@
         isSubmitting = true;
         errorMessage = "";
         successMessage = "";
+
+        if (!string.IsNullOrWhiteSpace(accountForm.AccountName))
+        {
+            accountForm.AccountName = accountForm.AccountName.Trim().ToUpperInvariant();
+        }
 
         var response = await CoachService.AddBankAccountAsync(accountForm);
         if (response.Success)

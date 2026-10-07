@@ -364,4 +364,19 @@ public class CoachesController : ControllerBase
         }
         return Ok(result);
     }
+    /// <summary>
+    /// Looks up bank account holder name via NAPAS 24/7.
+    /// </summary>
+    [HttpGet("bank-accounts/lookup")]
+    [Authorize(Roles = "COACH")]
+    [ProducesResponseType(typeof(ApiResponseDto<string?>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> LookupBankAccount(
+        [FromQuery] string bin,
+        [FromQuery] string accountNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _bankAccountService.LookupAccountNameAsync(bin, accountNumber, cancellationToken);
+        return Ok(result);
+    }
+
 }

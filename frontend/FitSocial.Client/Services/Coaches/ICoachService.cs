@@ -9,15 +9,15 @@ public interface ICoachService
 {
     Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null);
     Task<ApiResponse<List<TopCoachDto>>> GetTopCoachesAsync(int count = 5);
-    Task<FitSocial.Client.Models.Common.ApiResponse<bool>> SubmitReviewAsync(Guid coachId, FitSocial.Client.Models.Coaches.CreateReviewDto dto);
-    Task<FitSocial.Client.Models.Common.ApiResponse<bool>> UpdateReviewAsync(Guid reviewId, FitSocial.Client.Models.Coaches.UpdateReviewDto dto);
+    Task<ApiResponse<bool>> SubmitReviewAsync(Guid coachId, FitSocial.Client.Models.Coaches.CreateReviewDto dto);
+    Task<ApiResponse<bool>> UpdateReviewAsync(Guid reviewId, FitSocial.Client.Models.Coaches.UpdateReviewDto dto);
 
-    Task<FitSocial.Client.Models.Common.ApiResponse<bool>> DeleteReviewAsync(Guid reviewId);
+    Task<ApiResponse<bool>> DeleteReviewAsync(Guid reviewId);
 
-    Task<FitSocial.Client.Models.Common.ApiResponse<List<CoachBankAccountDto>>> GetBankAccountsAsync();
-    Task<FitSocial.Client.Models.Common.ApiResponse<CoachBankAccountDto>> AddBankAccountAsync(CreateCoachBankAccountDto dto);
-    Task<FitSocial.Client.Models.Common.ApiResponse<bool>> SetDefaultBankAccountAsync(Guid bankId);
-    Task<FitSocial.Client.Models.Common.ApiResponse<bool>> DeleteBankAccountAsync(Guid bankId);
+    Task<ApiResponse<List<CoachBankAccountDto>>> GetBankAccountsAsync();
+    Task<ApiResponse<CoachBankAccountDto>> AddBankAccountAsync(CreateCoachBankAccountDto dto);
+    Task<ApiResponse<bool>> SetDefaultBankAccountAsync(Guid bankId);
+    Task<ApiResponse<bool>> DeleteBankAccountAsync(Guid bankId);
     Task<ApiResponse<CoachApplicationListResponseDto>> GetCoachApplicationsAsync(
         string? search = null,
         string? status = null,
@@ -43,4 +43,7 @@ public interface ICoachService
         Guid coachId,
         Guid certificateId,
         ReviewCertificateRequestModel request);
+    Task<List<BankItemDto>> GetVietnameseBanksAsync();
+    Task<ApiResponse<string?>> LookupAccountNameAsync(string bin, string accountNumber);
+
 }

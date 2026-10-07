@@ -1,14 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using Microsoft.Extensions.Configuration;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FitSocial.Application.Services;
 
@@ -18,17 +21,23 @@ public class CoachBankAccountService : ICoachBankAccountService
     private readonly ICoachProfileRepository _coachRepository;
     private readonly IEncryptionService _encryptionService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration? _configuration;
 
     public CoachBankAccountService(
         ICoachBankAccountRepository bankRepository,
         ICoachProfileRepository coachRepository,
         IEncryptionService encryptionService,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration? configuration = null)
     {
         _bankRepository = bankRepository;
         _coachRepository = coachRepository;
         _encryptionService = encryptionService;
         _unitOfWork = unitOfWork;
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
     }
 
     public async Task<ApiResponseDto<List<CoachBankAccountDto>>> GetAccountsAsync(Guid coachId, CancellationToken cancellationToken = default)
@@ -164,4 +173,63 @@ public class CoachBankAccountService : ICoachBankAccountService
         if (number.Length <= 4) return new string('*', number.Length);
         return new string('*', number.Length - 4) + number[^4..];
     }
+
+    public async Task<ApiResponseDto<string?>> LookupAccountNameAsync(string bin, string accountNumber, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(bin) || string.IsNullOrWhiteSpace(accountNumber))
+            return ApiResponseDto<string?>.Fail("Please provide bank BIN and account number.");
+
+        var clientId = _configuration?["VietQr:ClientId"];
+        var apiKey = _configuration?["VietQr:ApiKey"];
+
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(apiKey))
+        {
+            return ApiResponseDto<string?>.Fail("Automated lookup is unavailable without VietQR API keys. Please enter account holder name manually.");
+        }
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(6);
+
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.vietqr.io/v2/lookup");
+            request.Headers.Add("x-client-id", clientId.Trim());
+            request.Headers.Add("x-api-key", apiKey.Trim());
+            request.Content = JsonContent.Create(new
+            {
+                bin = bin.Trim(),
+                accountNumber = accountNumber.Trim()
+            });
+
+            var response = await client.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return ApiResponseDto<string?>.Fail("Automated lookup service is temporarily unavailable. Please enter account holder name manually.");
+            }
+
+            using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("code", out var code) && code.GetString() == "00")
+            {
+                if (root.TryGetProperty("data", out var data) && data.TryGetProperty("accountName", out var name))
+                {
+                    var accountName = name.GetString();
+                    if (!string.IsNullOrWhiteSpace(accountName))
+                        return ApiResponseDto<string?>.Ok(accountName.ToUpperInvariant(), "Account verified successfully.");
+                }
+            }
+
+            var desc = root.TryGetProperty("desc", out var descProp) ? descProp.GetString() : "Bank account not found or invalid account number.";
+            return ApiResponseDto<string?>.Fail(desc ?? "Bank account not found or invalid account number.");
+        }
+        catch
+        {
+            return ApiResponseDto<string?>.Fail("Automated lookup service is temporarily unavailable. Please enter account holder name manually.");
+        }
+    }
+
+
+
 }

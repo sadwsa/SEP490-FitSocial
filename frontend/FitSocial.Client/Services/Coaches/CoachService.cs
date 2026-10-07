@@ -1,8 +1,9 @@
-using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Coaches;
+using FitSocial.Client.Models.Common;
 using FitSocial.Client.Services.Http;
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 
 namespace FitSocial.Client.Services.Coaches;
@@ -11,7 +12,7 @@ public class CoachService : ICoachService
 {
     private readonly ApiClient _apiClient;
     private const string BaseEndpoint = "coaches";
-
+    private static List<BankItemDto>? _cachedBanks;
     public CoachService(ApiClient apiClient)
     {
         _apiClient = apiClient;
@@ -137,4 +138,35 @@ public class CoachService : ICoachService
         return await _apiClient.PostAsync<ReviewCertificateRequestModel, CoachApplicationDetailDto>(
             $"{BaseEndpoint}/applications/{coachId}/certificates/{certificateId}/review", request);
     }
+   
+    public async Task<List<BankItemDto>> GetVietnameseBanksAsync()
+    {
+        if (_cachedBanks != null && _cachedBanks.Any())
+        {
+            return _cachedBanks;
+        }
+
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var res = await http.GetFromJsonAsync<VietQrBanksResponse>("https://api.vietqr.io/v2/banks");
+            if (res?.Data?.Any() == true)
+            {
+                _cachedBanks = res.Data.OrderBy(b => b.ShortName).ToList();
+                return _cachedBanks;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching banks: {ex.Message}");
+        }
+
+        return new List<BankItemDto>();
+    }
+
+    public async Task<ApiResponse<string?>> LookupAccountNameAsync(string bin, string accountNumber)
+    {
+        return await _apiClient.GetAsync<string?>($"{BaseEndpoint}/bank-accounts/lookup?bin={Uri.EscapeDataString(bin)}&accountNumber={Uri.EscapeDataString(accountNumber)}");
+    }
+
 }

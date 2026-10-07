@@ -86,3 +86,21 @@ public class OtherUserProfileModel
     public bool IsTrainee => string.Equals(Role, "TRAINEE", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// Profile model for the currently logged-in Staff or Admin user.
+/// Strictly limited to the 7 core fields returned by GET /api/users/me/profile.
+/// </summary>
+public class StaffAdminOwnProfileDto
+{
+    public string? Avatar { get; set; }
+    public string? FullName { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Email { get; set; }
+    public string? Role { get; set; }
+
+    public bool IsAdmin => string.Equals(Role, "ADMIN", StringComparison.OrdinalIgnoreCase);
+    public bool IsStaff => string.Equals(Role, "STAFF", StringComparison.OrdinalIgnoreCase);
+}
+

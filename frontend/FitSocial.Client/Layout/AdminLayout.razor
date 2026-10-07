@@ -66,6 +66,10 @@
                 </Authorized>
             </AuthorizeView>
 
+            <button type="button" class="side-item @(IsActive("/admin/profile") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/profile")'>
+                <AppIcon Name="person" /><span>Profile</span>
+            </button>
+
             <AuthorizeView Roles="STAFF">
                 <Authorized>
                     @if (!isAdmin)
@@ -81,7 +85,7 @@
         <div class="side-foot">
             <AuthorizeView Roles="ADMIN,STAFF">
                 <Authorized>
-                    <div class="side-user side-user-link" @onclick='() => Navigation.NavigateTo("/admin/change-password")' title="Change password">
+                    <div class="side-user side-user-link" @onclick='() => Navigation.NavigateTo("/admin/profile")' title="View Profile">
                         <strong>@context.User.Identity?.Name</strong>
                         <small>@string.Join(", ", AppRoles.All.Where(r => context.User.IsInRole(r))) • @(isAdmin ? "ADMIN" : "STAFF")</small>
                     </div>

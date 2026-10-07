@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Users;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -23,12 +24,14 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the profile of the currently authenticated user (Trainee or Coach).
-    /// Returns role-specific information without exposing internal IDs or certificate data.
+    /// Gets the profile of the currently authenticated Staff or Admin user.
+    /// Only accessible by STAFF and ADMIN roles.
+    /// Returns 7 core profile fields without internal security details.
     /// </summary>
     [HttpGet("me/profile")]
-    [ProducesResponseType(typeof(ApiResponseDto<UserProfileDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [HttpGet("~/api/admin/users/me/profile")]
+    [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponseDto<StaffAdminOwnProfileDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
@@ -42,10 +45,10 @@ public class UsersController : ControllerBase
 
         if (!Guid.TryParse(userIdClaim, out var userId))
         {
-            return Unauthorized(ApiResponseDto<UserProfileDto>.Fail("Invalid user identity claim."));
+            return Unauthorized(ApiResponseDto<StaffAdminOwnProfileDto>.Fail("Invalid user identity claim."));
         }
 
-        var result = await _userService.GetOwnProfileAsync(userId, HttpContext.RequestAborted);
+        var result = await _userService.GetStaffAdminProfileAsync(userId, HttpContext.RequestAborted);
         return Ok(result);
     }
 

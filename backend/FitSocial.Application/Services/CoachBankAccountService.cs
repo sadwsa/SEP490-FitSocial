@@ -41,53 +41,32 @@ public class CoachBankAccountService : ICoachBankAccountService
     public async Task<ApiResponseDto<CoachBankAccountDto>> AddAccountAsync(Guid coachId, CreateCoachBankAccountDto dto, CancellationToken cancellationToken = default)
     {
         if (dto == null || string.IsNullOrWhiteSpace(dto.AccountNumber))
+        {
             throw new ValidationException("Account number is required.");
+        }
 
         var coach = await _coachRepository.GetByIdAsync(coachId, cancellationToken);
         if (coach == null)
+        {
             throw new NotFoundException("Coach profile not found.");
+        }
 
-        // Kiểm tra xem Coach đã có tài khoản chưa
         var existingAccounts = await _bankRepository.ListByCoachIdAsync(coachId, cancellationToken);
-        var existingAccount = existingAccounts.FirstOrDefault();
+
+        // If this is the first account or marked as default, make it default
+        var isDefault = dto.IsDefault || !existingAccounts.Any();
+
+        if (isDefault)
+        {
+            foreach (var acc in existingAccounts.Where(a => a.IsDefault == true))
+            {
+                acc.IsDefault = false;
+            }
+        }
 
         var now = DateTime.UtcNow;
-
-        if (existingAccount != null)
+        var newAccount = new CoachBankAccount
         {
-            // UPDATE: Đã có tài khoản thì cập nhật thông tin mới
-            existingAccount.BankName = dto.BankName.Trim();
-            existingAccount.BankCode = dto.BankCode.Trim().ToUpperInvariant();
-            existingAccount.AccountName = dto.AccountName.Trim().ToUpperInvariant();
-            existingAccount.EncryptedAccountNumber = _encryptionService.Encrypt(dto.AccountNumber.Trim());
-            existingAccount.Branch = string.IsNullOrWhiteSpace(dto.Branch) ? null : dto.Branch.Trim();
-            existingAccount.UpdatedAt = now;
-
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-            return ApiResponseDto<CoachBankAccountDto>.Ok(MapToDto(existingAccount), "Bank account updated successfully.");
-        }
-        else
-        {
-            // INSERT: Chưa có thì tạo mới
-            var newAccount = new CoachBankAccount
-            {
-                BankId = Guid.NewGuid(),
-                CoachId = coachId,
-                BankName = dto.BankName.Trim(),
-                BankCode = dto.BankCode.Trim().ToUpperInvariant(),
-                AccountName = dto.AccountName.Trim().ToUpperInvariant(),
-                EncryptedAccountNumber = _encryptionService.Encrypt(dto.AccountNumber.Trim()),
-                Branch = string.IsNullOrWhiteSpace(dto.Branch) ? null : dto.Branch.Trim(),
-                IsDefault = true, // Mặc định luôn là true vì chỉ có 1 tài khoản
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-
-            await _bankRepository.AddAsync(newAccount, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            return ApiResponseDto<CoachBankAccountDto>.Ok(MapToDto(newAccount), "Bank account added successfully.");
-        }
             BankId = Guid.NewGuid(),
             CoachId = coachId,
             BankName = dto.BankName.Trim(),
@@ -96,7 +75,6 @@ public class CoachBankAccountService : ICoachBankAccountService
             EncryptedAccountNumber = _encryptionService.Encrypt(dto.AccountNumber.Trim()),
             Branch = string.IsNullOrWhiteSpace(dto.Branch) ? null : dto.Branch.Trim(),
             IsDefault = isDefault,
-            IsActive = true,
             CreatedAt = now,
             UpdatedAt = now
         };

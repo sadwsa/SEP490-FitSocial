@@ -72,3 +72,14 @@ public class CoachApplicationListResponseDto
     public PagedResult<CoachApplicationItemDto> Applications { get; set; } = new();
     public CoachApplicationStatusCountsDto StatusCounts { get; set; } = new();
 }
+
+public class ApproveCoachApplicationRequestModel
+{
+    public string? Note { get; set; }
+}
+
+public class RejectCoachApplicationRequestModel
+{
+    public string? Reason { get; set; }
+}
+

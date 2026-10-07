@@ -277,4 +277,60 @@ public class CoachesController : ControllerBase
         }
         return Ok(result);
     }
+
+    /// <summary>
+    /// UC_29.1: Approve a pending coach application (Staff/Admin).
+    /// </summary>
+    [HttpPost("applications/{coachId:guid}/approve")]
+    [HttpPost("~/api/admin/coach-applications/{coachId:guid}/approve")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ApproveCoachApplication(
+        Guid coachId,
+        [FromBody] ApproveCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachApplicationDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _coachService.ApproveCoachApplicationAsync(coachId, currentUserId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC_29.1: Reject a pending coach application (Staff/Admin).
+    /// </summary>
+    [HttpPost("applications/{coachId:guid}/reject")]
+    [HttpPost("~/api/admin/coach-applications/{coachId:guid}/reject")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RejectCoachApplication(
+        Guid coachId,
+        [FromBody] RejectCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachApplicationDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _coachService.RejectCoachApplicationAsync(coachId, currentUserId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
 }

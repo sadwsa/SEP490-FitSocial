@@ -20,6 +20,9 @@ public class UserService : IUserService
     private readonly IUnitOfWork? _unitOfWork;
 
     public UserService(IUserRepository userRepository, IUnitOfWork? unitOfWork = null)
+    private readonly IUnitOfWork _unitOfWork;
+
+    public UserService(IUserRepository userRepository, IUnitOfWork unitOfWork = null!)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
@@ -175,6 +178,9 @@ public class UserService : IUserService
     public async Task<ApiResponseDto<StaffAdminOwnProfileDto>> UpdateStaffAdminProfileAsync(
         Guid userId,
         UpdateStaffAdminProfileRequestDto request,
+    public async Task<ApiResponseDto<UserProfileDto>> UpdateOwnProfileAsync(
+        Guid userId,
+        UpdateOwnProfileRequestDto request,
         CancellationToken cancellationToken = default)
     {
         if (request == null)
@@ -186,6 +192,10 @@ public class UserService : IUserService
         if (user == null)
         {
             throw new NotFoundException("Staff or Admin profile could not be found.");
+        var user = await _userRepository.GetUserForUpdateAsync(userId, cancellationToken);
+        if (user == null)
+        {
+            throw new NotFoundException("User profile could not be found.");
         }
 
         if (user.IsLocked == true)
@@ -204,6 +214,13 @@ public class UserService : IUserService
         // Field có nhập -> validate nghiêm ngặt; nếu hợp lệ mới cập nhật.
 
         // 1. FullName
+        var role = user.RoleCode?.Trim().ToUpperInvariant() ?? RoleConstants.Trainee;
+        if (role != RoleConstants.Trainee && role != RoleConstants.Coach)
+        {
+            throw new ForbiddenException("Only Trainee and Coach profiles can be updated through this endpoint.");
+        }
+
+        // Validate & Update FullName: only if provided and not empty
         if (!string.IsNullOrWhiteSpace(request.FullName))
         {
             var trimmedFullName = request.FullName.Trim();
@@ -221,6 +238,7 @@ public class UserService : IUserService
         }
 
         // 2. DateOfBirth
+        // Validate & Update DateOfBirth: only if provided
         if (request.DateOfBirth.HasValue)
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -238,6 +256,7 @@ public class UserService : IUserService
         }
 
         // 3. Gender
+        // Validate & Update Gender: only if provided and not empty
         if (!string.IsNullOrWhiteSpace(request.Gender))
         {
             var g = request.Gender.Trim();
@@ -260,6 +279,7 @@ public class UserService : IUserService
         }
 
         // 4. PhoneNumber
+        // Validate & Update PhoneNumber: only if provided and not empty
         if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
         {
             var trimmedPhone = request.PhoneNumber.Trim();
@@ -281,6 +301,10 @@ public class UserService : IUserService
         if (!string.IsNullOrWhiteSpace(avatarInput))
         {
             var trimmedAvatar = avatarInput.Trim();
+        // Validate & Update AvatarUrl:
+        if (!string.IsNullOrWhiteSpace(request.AvatarUrl))
+        {
+            var trimmedAvatar = request.AvatarUrl.Trim();
             if (trimmedAvatar.Equals("[REMOVE]", StringComparison.OrdinalIgnoreCase) ||
                 trimmedAvatar.Equals("REMOVE", StringComparison.OrdinalIgnoreCase))
             {
@@ -297,6 +321,35 @@ public class UserService : IUserService
         }
 
         user.UpdatedAt = DateTime.UtcNow;
+
+        // Coach-specific updates
+        if (role == RoleConstants.Coach)
+        {
+            var coachProfile = user.CoachProfileCoach;
+            if (coachProfile != null)
+            {
+                if (request.ExperienceYears.HasValue)
+                {
+                    if (request.ExperienceYears.Value < 0 || request.ExperienceYears.Value > 60)
+                    {
+                        throw new ValidationException("Years of experience must be between 0 and 60.");
+                    }
+                    coachProfile.ExperienceYears = request.ExperienceYears.Value;
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.Bio))
+                {
+                    var trimmedBio = request.Bio.Trim();
+                    if (trimmedBio.Length > 2000)
+                    {
+                        throw new ValidationException("Biography must not exceed 2000 characters.");
+                    }
+                    coachProfile.Bio = trimmedBio;
+                }
+
+                coachProfile.UpdatedAt = DateTime.UtcNow;
+            }
+        }
 
         _userRepository.Update(user);
         if (_unitOfWork != null)
@@ -316,5 +369,40 @@ public class UserService : IUserService
         };
 
         return ApiResponseDto<StaffAdminOwnProfileDto>.Ok(profileDto, "Profile updated successfully.");
+        // Return updated UserProfileDto
+        if (role == RoleConstants.Coach)
+        {
+            var coachProfile = user.CoachProfileCoach;
+            var coachDto = new CoachProfileDto
+            {
+                FullName = user.FullName ?? string.Empty,
+                Email = user.Email,
+                AvatarUrl = user.AvatarUrl,
+                PhoneNumber = user.PhoneNumber,
+                DateOfBirth = user.DateOfBirth,
+                Gender = user.Gender,
+                Role = RoleConstants.Coach,
+                CreatedAt = user.CreatedAt,
+                Bio = coachProfile?.Bio,
+                ExperienceYears = coachProfile?.ExperienceYears,
+                ApprovalStatus = coachProfile?.ApprovalStatus ?? "PENDING"
+            };
+
+            return ApiResponseDto<UserProfileDto>.Ok(coachDto, "Profile updated successfully.");
+        }
+
+        var traineeDto = new TraineeProfileDto
+        {
+            FullName = user.FullName ?? string.Empty,
+            Email = user.Email,
+            AvatarUrl = user.AvatarUrl,
+            PhoneNumber = user.PhoneNumber,
+            DateOfBirth = user.DateOfBirth,
+            Gender = user.Gender,
+            Role = RoleConstants.Trainee,
+            CreatedAt = user.CreatedAt
+        };
+
+        return ApiResponseDto<UserProfileDto>.Ok(traineeDto, "Profile updated successfully.");
     }
 }

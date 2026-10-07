@@ -8,5 +8,6 @@ public interface IOrderRepository : IRepository<Order>
     Task<List<Order>> GetOrdersByBuyerIdAsync(Guid buyerId, CancellationToken cancellationToken = default);
     Task<Order?> GetOrderByIdWithDetailsAsync(Guid orderId, CancellationToken cancellationToken = default);
     Task<bool> HasSoldTrainingPackageAsync(Guid coachId, CancellationToken cancellationToken = default);
+    Task<List<Order>> GetOrdersByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default);
 }
 

@@ -24,4 +24,5 @@ public interface IUserRepository : IRepository<User>
         CancellationToken cancellationToken = default);
     Task<User?> FindWithCoachProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<User?> FindUserProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<User?> GetUserForUpdateAsync(Guid userId, CancellationToken cancellationToken = default);
 }

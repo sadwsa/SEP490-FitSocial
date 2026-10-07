@@ -37,6 +37,17 @@ public class UpdateStaffAccountRequest
     public string? ConfirmPassword { get; set; }
 }
 
+public class UpdateOwnProfileRequest
+{
+    public string FullName { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Bio { get; set; }
+    public int? ExperienceYears { get; set; }
+}
+
 /// <summary>
 /// Profile model for the currently logged-in user (Trainee or Coach).
 /// Does not expose internal UserId or certificate information.

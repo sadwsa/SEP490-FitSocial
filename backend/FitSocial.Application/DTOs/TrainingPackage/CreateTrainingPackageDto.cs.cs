@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace FitSocial.Application.DTOs.TrainingPackage
 {
     public class CreateTrainingPackageDto
@@ -10,5 +12,6 @@ namespace FitSocial.Application.DTOs.TrainingPackage
         public short? MinAge { get; set; }
         public string? TargetAudience { get; set; }
         public bool IsActive { get; set; } = true;
+        public List<string> ImageUrls { get; set; } = new();
     }
 }

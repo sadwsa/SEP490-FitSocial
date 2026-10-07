@@ -56,8 +56,25 @@ namespace FitSocial.Application.Services
                 MinAge = dto.MinAge,
                 TargetAudience = dto.TargetAudience,
                 IsActive = dto.IsActive,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
             };
+
+            if (dto.ImageUrls != null && dto.ImageUrls.Count > 0)
+            {
+                short sortOrder = 0;
+                foreach (var url in dto.ImageUrls.Where(u => !string.IsNullOrWhiteSpace(u)))
+                {
+                    package.Media.Add(new TrainingPackageMedium
+                    {
+                        MediaId = Guid.Empty,
+                        PackageId = package.PackageId,
+                        MediaUrl = url.Trim(),
+                        MediaType = "IMAGE",
+                        SortOrder = sortOrder++,
+                        CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    });
+                }
+            }
 
             await _repository.AddAsync(package);
             await _unitOfWork.SaveChangesAsync();
@@ -83,6 +100,24 @@ namespace FitSocial.Application.Services
             if (dto.TargetAudience != null) package.TargetAudience = dto.TargetAudience;
             if (dto.IsActive.HasValue) package.IsActive = dto.IsActive.Value;
 
+            if (dto.ImageUrls != null)
+            {
+                package.Media.Clear();
+                short sortOrder = 0;
+                foreach (var url in dto.ImageUrls.Where(u => !string.IsNullOrWhiteSpace(u)))
+                {
+                    package.Media.Add(new TrainingPackageMedium
+                    {
+                        MediaId = Guid.Empty,
+                        PackageId = package.PackageId,
+                        MediaUrl = url.Trim(),
+                        MediaType = "IMAGE",
+                        SortOrder = sortOrder++,
+                        CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    });
+                }
+            }
+
             await _unitOfWork.SaveChangesAsync();
 
             return MapToDto(package);
@@ -101,6 +136,12 @@ namespace FitSocial.Application.Services
             return true;
         }
 
+        public async Task<IEnumerable<TrainingPackageResponseDto>> GetPurchasedPackagesAsync(Guid currentUserId)
+        {
+            var packages = await _repository.GetPurchasedPackagesAsync(currentUserId);
+            return packages.Select(MapToDto);
+        }
+
         private static TrainingPackageResponseDto MapToDto(TrainingPackage entity)
         {
             return new TrainingPackageResponseDto
@@ -116,14 +157,17 @@ namespace FitSocial.Application.Services
                 MinAge = entity.MinAge,
                 TargetAudience = entity.TargetAudience,
                 IsActive = entity.IsActive,
-                CreatedAt = entity.CreatedAt
+                CreatedAt = entity.CreatedAt,
+                Media = entity.Media?.OrderBy(m => m.SortOrder).Select(m => new TrainingPackageMediaDto
+                {
+                    MediaId = m.MediaId,
+                    PackageId = m.PackageId,
+                    MediaUrl = m.MediaUrl,
+                    MediaType = m.MediaType,
+                    SortOrder = m.SortOrder,
+                    CreatedAt = m.CreatedAt
+                }).ToList() ?? new List<TrainingPackageMediaDto>()
             };
         }
-        public async Task<IEnumerable<TrainingPackageResponseDto>> GetPurchasedPackagesAsync(Guid currentUserId)
-        {
-            var packages = await _repository.GetPurchasedPackagesAsync(currentUserId);
-            return packages.Select(MapToDto);
-        }
-
     }
 }

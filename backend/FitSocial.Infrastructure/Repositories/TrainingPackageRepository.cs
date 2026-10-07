@@ -1,8 +1,10 @@
-﻿using FitSocial.Domain.Entities;
+using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -19,6 +21,7 @@ namespace FitSocial.Infrastructure.Repositories
             return await DbSet
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.Coach)
+                .Include(x => x.Media)
                 .Where(x => x.CoachId == coachId)
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
@@ -29,6 +32,7 @@ namespace FitSocial.Infrastructure.Repositories
             return await DbSet
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.Coach)
+                .Include(x => x.Media)
                 .FirstOrDefaultAsync(x => x.PackageId == (Guid)id, cancellationToken);
         }
 
@@ -41,6 +45,7 @@ namespace FitSocial.Infrastructure.Repositories
             var query = DbSet
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.Coach)
+                .Include(x => x.Media)
                 .Where(x => x.IsActive == true);
 
             if (coachId.HasValue && coachId.Value != Guid.Empty)
@@ -67,19 +72,21 @@ namespace FitSocial.Infrastructure.Repositories
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
         }
+
         public async Task<IEnumerable<TrainingPackage>> GetPurchasedPackagesAsync(Guid traineeId, CancellationToken cancellationToken = default)
         {
+            var paidStatuses = new[] { FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+
             return await DbSet
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.Coach)
+                .Include(x => x.Media)
                 .Where(x => x.OrderDetails.Any(od =>
                     od.Order.BuyerId == traineeId && 
-                    od.Order.OrderStatus == FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid))
+                    od.Order.OrderStatus != null &&
+                    paidStatuses.Contains(od.Order.OrderStatus.ToUpper())))
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
         }
-
-
-
     }
 }

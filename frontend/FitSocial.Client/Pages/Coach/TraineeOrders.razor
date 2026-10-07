@@ -1,0 +1,512 @@
+@page "/coach/trainee-orders"
+@page "/trainee-orders"
+@layout EmptyLayout
+@attribute [Authorize(Roles = "COACH")]
+@inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Orders
+@using System.Security.Claims
+
+<PageTitle>Trainee Purchase Orders - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .orders-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 68rem) minmax(0, 1fr) !important;
+                align-items: start !important;
+            }
+            .orders-left-sidebar { justify-self: start !important; }
+            .orders-main-content { justify-self: center !important; width: 100% !important; max-width: 68rem !important; }
+        }
+    </style>
+
+    <div class="orders-3col-layout w-full pt-6 px-4 lg:px-8 flex flex-col items-start pb-16">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="trainee-orders" Class="orders-left-sidebar" />
+
+        <!-- Main Content Section -->
+        <main class="orders-main-content w-full flex flex-col gap-6 min-w-0">
+            <!-- Header Banner -->
+            <div class="bg-white rounded-2xl shadow-sm p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-gray-100">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-orange-100 text-[#EA580C] uppercase tracking-wider">
+                            Coach Portal
+                        </span>
+                        <span class="text-xs text-gray-400">Order &amp; Trainee Management</span>
+                    </div>
+                    <h1 class="text-2xl font-black text-gray-900 mt-1 tracking-tight">Trainee Purchase Orders History</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">List of trainees who purchased packages and their order history to prepare training programs.</p>
+                </div>
+
+                <div class="flex items-center gap-2.5">
+                    <button @onclick="LoadTraineeOrdersAsync"
+                            disabled="@isLoading"
+                            class="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold text-sm rounded-xl border border-gray-200 transition flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer">
+                        <svg class="w-4 h-4 @(isLoading ? "animate-spin text-[#EA580C]" : "text-gray-500")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.03 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+                    <a href="coach/dashboard"
+                       class="px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white font-semibold text-sm rounded-xl shadow-xs hover:shadow-md hover:-translate-y-0.5 transition flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <span>Dashboard</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Error Banner -->
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between text-red-700 text-sm">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-5 h-5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span>@errorMessage</span>
+                    </div>
+                    <button @onclick="LoadTraineeOrdersAsync" class="font-semibold underline hover:text-red-800 cursor-pointer">Try Again</button>
+                </div>
+            }
+
+            @if (isLoading && trainees == null)
+            {
+                <div class="bg-white rounded-2xl p-16 shadow-xs border border-gray-100 flex flex-col items-center justify-center">
+                    <div class="w-12 h-12 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-500 font-medium text-base">Loading trainees and purchase orders...</p>
+                </div>
+            }
+            else if (trainees != null && trainees.Count == 0)
+            {
+                <!-- Empty State -->
+                <div class="bg-white rounded-2xl shadow-xs border border-gray-100 p-12 text-center flex flex-col items-center">
+                    <div class="w-20 h-20 mb-4 rounded-full bg-orange-50 text-[#EA580C] flex items-center justify-center">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">No Trainee Orders Yet</h3>
+                    <p class="text-gray-500 max-w-md text-sm mb-6 leading-relaxed">
+                        No trainees have completed payment for your training packages yet. When trainees purchase your packages, their orders will appear here so you can prepare customized workout and nutrition plans!
+                    </p>
+                    <a href="training-packages" class="bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-xs hover:shadow-md transition">
+                        Manage My Packages
+                    </a>
+                </div>
+            }
+            else if (trainees != null)
+            {
+                <!-- Two-Column Master-Detail Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    <!-- Left: Trainee List (5 columns) -->
+                    <div class="lg:col-span-5 bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-gray-900 text-base">Enrolled Trainees</h3>
+                                <span class="bg-orange-100 text-[#C2410C] text-xs font-bold px-2 py-0.5 rounded-full">
+                                    @FilteredTrainees.Count
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Search input for Trainees -->
+                        <div class="p-3 border-b border-gray-100 bg-white">
+                            <div class="relative">
+                                <svg class="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                                <input type="text"
+                                       @bind="searchTraineeKeyword"
+                                       @bind:event="oninput"
+                                       placeholder="Search trainees by name, email..."
+                                       class="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#EA580C] focus:bg-white transition" />
+                            </div>
+                        </div>
+
+                        <!-- Trainee cards list -->
+                        <div class="divide-y divide-gray-100 max-h-[640px] overflow-y-auto">
+                            @if (FilteredTrainees.Count == 0)
+                            {
+                                <div class="p-8 text-center text-xs text-gray-400">
+                                    No trainees match your search keyword.
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var t in FilteredTrainees)
+                                {
+                                    var isSelected = selectedTraineeId == t.TraineeId;
+                                    <div @onclick="() => SelectTrainee(t.TraineeId)"
+                                         class="p-4 transition cursor-pointer flex items-center gap-3.5 @(isSelected ? "bg-orange-50/60 border-l-4 border-l-[#EA580C]" : "hover:bg-gray-50/70 border-l-4 border-l-transparent")">
+                                        <!-- Avatar -->
+                                        <div class="relative flex-shrink-0">
+                                            @if (!string.IsNullOrWhiteSpace(t.AvatarUrl))
+                                            {
+                                                <img src="@t.AvatarUrl" alt="@t.FullName" class="w-12 h-12 rounded-full object-cover border border-gray-200 shadow-2xs" />
+                                            }
+                                            else
+                                            {
+                                                <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-[#FF8C00] to-[#FF5500] text-white flex items-center justify-center font-bold text-sm shadow-2xs">
+                                                    @(t.FullName.Length >= 2 ? t.FullName.Substring(0, 2).ToUpper() : "TR")
+                                                </div>
+                                            }
+                                            <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+                                        </div>
+
+                                        <!-- Trainee details -->
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between gap-1 mb-0.5">
+                                                <h4 class="font-bold text-sm text-gray-900 truncate">@t.FullName</h4>
+                                                <span class="text-[11px] font-semibold text-gray-400 whitespace-nowrap">
+                                                    @(t.LatestPurchasedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "")
+                                                </span>
+                                            </div>
+                                            <p class="text-xs text-gray-500 truncate mb-1">@t.Email</p>
+                                            <div class="flex items-center gap-2">
+                                                <span class="px-2 py-0.5 bg-orange-100 text-[#C2410C] rounded-md text-[10px] font-bold">
+                                                    @t.TotalOrdersCount @(t.TotalOrdersCount > 1 ? "packages" : "package")
+                                                </span>
+                                                <span class="text-[11px] font-bold text-[#EA580C]">
+                                                    @t.TotalSpent.ToString("N0") VND
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <svg class="w-4 h-4 text-gray-300 flex-shrink-0 @(isSelected ? "text-[#EA580C]" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Right: Selected Trainee & Purchased Packages (7 columns) -->
+                    <div class="lg:col-span-7 flex flex-col gap-6">
+                        @if (SelectedTrainee != null)
+                        {
+                            <!-- Trainee Profile Info Box -->
+                            <div class="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div class="flex items-center gap-4">
+                                    <div class="relative flex-shrink-0">
+                                        @if (!string.IsNullOrWhiteSpace(SelectedTrainee.AvatarUrl))
+                                        {
+                                            <img src="@SelectedTrainee.AvatarUrl" alt="@SelectedTrainee.FullName" class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm" />
+                                        }
+                                        else
+                                        {
+                                            <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-[#FF8C00] to-[#FF5500] text-white flex items-center justify-center font-bold text-xl shadow-sm">
+                                                @(SelectedTrainee.FullName.Length >= 2 ? SelectedTrainee.FullName.Substring(0, 2).ToUpper() : "TR")
+                                            </div>
+                                        }
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h2 class="text-xl font-black text-gray-900">@SelectedTrainee.FullName</h2>
+                                            <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                                ✓ Enrolled Trainee
+                                            </span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                            <span>Email: <strong>@SelectedTrainee.Email</strong></span>
+                                            @if (!string.IsNullOrWhiteSpace(SelectedTrainee.PhoneNumber))
+                                            {
+                                                <span>•</span>
+                                                <span>Phone: <strong>@SelectedTrainee.PhoneNumber</strong></span>
+                                            }
+                                        </p>
+                                        <p class="text-xs text-gray-400 mt-1">
+                                            Last order: @(SelectedTrainee.LatestPurchasedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "N/A")
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <a href="messages" class="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    </svg>
+                                    <span>Message Trainee</span>
+                                </a>
+                            </div>
+
+                            <!-- Purchased Packages List Header -->
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+                                    <span>Purchased Training Packages</span>
+                                    <span class="bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                                        @SelectedTrainee.PurchasedPackages.Count
+                                    </span>
+                                </h3>
+                                <span class="text-xs text-gray-400">Select package to review details &amp; curriculum</span>
+                            </div>
+
+                            <!-- Packages Cards -->
+                            <div class="space-y-4">
+                                @foreach (var pkg in SelectedTrainee.PurchasedPackages)
+                                {
+                                    <div class="bg-white rounded-2xl shadow-xs border border-gray-100 p-5 hover:border-orange-200 transition flex flex-col gap-4">
+                                        <div class="flex flex-col sm:flex-row items-start justify-between gap-4">
+                                            <div class="flex items-start gap-3.5 flex-1">
+                                                @if (!string.IsNullOrWhiteSpace(pkg.ThumbnailUrl))
+                                                {
+                                                    <img src="@pkg.ThumbnailUrl" alt="@pkg.PackageTitle" class="w-16 h-16 rounded-xl object-cover border border-gray-100 flex-shrink-0" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="w-16 h-16 rounded-xl bg-orange-50 text-[#EA580C] flex items-center justify-center flex-shrink-0 font-bold text-xl border border-orange-100">
+                                                        FIT
+                                                    </div>
+                                                }
+                                                <div>
+                                                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                                                        <span class="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-md text-[11px] font-bold border border-blue-100">
+                                                            @pkg.DurationDays Days @(pkg.DurationDays.HasValue && pkg.DurationDays.Value >= 7 ? $"({pkg.DurationDays.Value / 7} Weeks)" : "")
+                                                        </span>
+                                                        @if (pkg.SessionCount.HasValue)
+                                                        {
+                                                            <span class="px-2.5 py-0.5 bg-orange-50 text-[#EA580C] rounded-md text-[11px] font-bold border border-orange-100">
+                                                                @pkg.SessionCount Sessions
+                                                            </span>
+                                                        }
+                                                        <span class="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-bold border border-emerald-100">
+                                                            Paid (COMPLETED)
+                                                        </span>
+                                                    </div>
+
+                                                    <h4 class="text-base font-black text-gray-900 leading-snug">@pkg.PackageTitle</h4>
+                                                    @if (!string.IsNullOrWhiteSpace(pkg.PackageDescription))
+                                                    {
+                                                        <p class="text-xs text-gray-500 line-clamp-2 mt-1">@pkg.PackageDescription</p>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <div class="text-right flex-shrink-0 sm:self-start">
+                                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">AMOUNT PAID</span>
+                                                <div class="text-xl font-black text-[#EA580C]">
+                                                    @((pkg.PricePaid ?? 0).ToString("N0")) <span class="text-xs font-bold">VND</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="border-t border-gray-100 pt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+                                            <div class="flex items-center gap-4 flex-wrap">
+                                                <span>Order Code: <strong class="text-gray-800">@(string.IsNullOrWhiteSpace(pkg.OrderCode) ? pkg.OrderId.ToString().Substring(0, 8).ToUpper() : pkg.OrderCode)</strong></span>
+                                                <span>Purchased Date: <strong class="text-gray-800">@(pkg.PurchasedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "N/A")</strong></span>
+                                            </div>
+
+                                            @if (pkg.PackageId.HasValue)
+                                            {
+                                                <a href="/training-packages/@pkg.PackageId.Value" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                                                    <span>View Original Syllabus</span>
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                    </svg>
+                                                </a>
+                                            }
+                                        </div>
+
+                                        <!-- Future Workout & Meal Plan Upload Action Slot (As explicitly requested) -->
+                                        <div class="bg-gradient-to-r from-orange-50/60 to-amber-50/60 border border-orange-100/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                            <div class="flex items-center gap-2.5">
+                                                <div class="w-8 h-8 rounded-lg bg-orange-100 text-[#EA580C] flex items-center justify-center flex-shrink-0">
+                                                    <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                                    </svg>
+                                                </div>
+                                                <div>
+                                                    <p class="font-bold text-xs text-gray-900">Workout &amp; Nutrition Curriculum</p>
+                                                    <p class="text-[11px] text-gray-500">Prepare workout schedules and dietary guidelines for this enrolled trainee.</p>
+                                                </div>
+                                            </div>
+
+                                            <button type="button"
+                                                    @onclick="() => PromptFeatureComingSoon(pkg.PackageTitle)"
+                                                    class="px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                                </svg>
+                                                <span>Create Workout &amp; Meal Plan</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="bg-white rounded-2xl shadow-xs border border-gray-100 p-12 text-center text-gray-400 text-sm">
+                                Please select a trainee from the left column to view purchased package details.
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </main>
+    </div>
+</div>
+
+<!-- Coming Soon Modal for Workout & Meal Plan Upload -->
+@if (showComingSoonModal)
+{
+    <div class="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 text-center">
+            <div class="w-12 h-12 rounded-full bg-orange-100 text-[#EA580C] flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mb-1">Create Workout &amp; Meal Plan</h3>
+            <p class="text-xs text-gray-500 mb-2">Package: <strong class="text-gray-800">@activePackageModalTitle</strong></p>
+            <p class="text-xs text-gray-600 bg-orange-50 p-3 rounded-xl mb-5 leading-relaxed">
+                The upload workout schedule and dietary plan feature is connected and will be activated in the upcoming update!
+            </p>
+            <button @onclick="() => showComingSoonModal = false"
+                    class="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-xs transition cursor-pointer">
+                Got It
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CoachTraineeGroupDto>? trainees;
+    private Guid? selectedTraineeId;
+    private string searchTraineeKeyword = string.Empty;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    // Feature modal
+    private bool showComingSoonModal = false;
+    private string activePackageModalTitle = string.Empty;
+
+    // Header State
+    private string? headerSearchTerm = "";
+    private string userName = "Coach";
+    private string userInitials = "C";
+    private string userRole = "Coach";
+
+    private List<CoachTraineeGroupDto> FilteredTrainees
+    {
+        get
+        {
+            if (trainees == null) return new();
+            if (string.IsNullOrWhiteSpace(searchTraineeKeyword)) return trainees;
+
+            var kw = searchTraineeKeyword.Trim().ToLowerInvariant();
+            return trainees
+                .Where(t => (t.FullName != null && t.FullName.ToLowerInvariant().Contains(kw))
+                         || (t.Email != null && t.Email.ToLowerInvariant().Contains(kw)))
+                .ToList();
+        }
+    }
+
+    private CoachTraineeGroupDto? SelectedTrainee =>
+        trainees?.FirstOrDefault(t => t.TraineeId == selectedTraineeId)
+        ?? FilteredTrainees.FirstOrDefault();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        await LoadTraineeOrdersAsync();
+    }
+
+    private async Task LoadTraineeOrdersAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var res = await CheckoutService.GetCoachTraineeOrdersAsync();
+            if (res.Success && res.Data != null)
+            {
+                trainees = res.Data;
+                if (trainees.Count > 0 && selectedTraineeId == null)
+                {
+                    selectedTraineeId = trainees[0].TraineeId;
+                }
+            }
+            else
+            {
+                errorMessage = res.Message ?? "Failed to load trainee purchase orders.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+
+        isLoading = false;
+    }
+
+    private void SelectTrainee(Guid traineeId)
+    {
+        selectedTraineeId = traineeId;
+    }
+
+    private void PromptFeatureComingSoon(string packageTitle)
+    {
+        activePackageModalTitle = packageTitle;
+        showComingSoonModal = true;
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "Coach";
+                userRole = "Coach";
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+            else
+            {
+                Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
+            }
+        }
+        catch
+        {
+            userInitials = "C";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e) { headerSearchTerm = e.Value?.ToString(); }
+    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
+    private void ExecuteHeaderSearch() { }
+    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
+}

@@ -10,7 +10,6 @@ namespace FitSocial.Client.Services.Cart
         Task<ApiResponse<CartSummaryDto>> GetCartAsync();
         Task<ApiResponse<int>> GetCartCountAsync();
         Task<ApiResponse<CartItemDto>> AddToCartAsync(AddToCartDto dto);
-        Task<ApiResponse<CartItemDto>> AddToCartAsync(AddToCartRequestDto request);
         Task<ApiResponse<bool>> RemoveCartItemAsync(Guid cartId);
         Task<ApiResponse<bool>> ClearCartAsync();
 

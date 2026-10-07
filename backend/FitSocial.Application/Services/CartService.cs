@@ -57,11 +57,11 @@ namespace FitSocial.Application.Services
 
                     if (isOwnPackage)
                     {
-                        unavailableReason = "Gói tập của chính bạn - Không thể mua";
+                        unavailableReason = "Your own training package - Cannot purchase";
                     }
                     else if (!isPackageActive)
                     {
-                        unavailableReason = "Gói tập này hiện đã tạm dừng nhận học viên mới bởi HLV";
+                        unavailableReason = "This package is currently suspended from taking new trainees";
                     }
 
                     var durationDays = pkg.DurationDays ?? 30;
@@ -87,17 +87,23 @@ namespace FitSocial.Application.Services
                         }
                     }
 
-                    var sportName = "Gym & Strength";
+                    var sportName = "Personal Coaching";
+                    var thumbnailUrl = pkg.Media?.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).FirstOrDefault();
 
                     itemDtos.Add(new CartItemDto
                     {
                         CartId = c.CartId,
                         PackageId = pkg.PackageId,
                         Title = pkg.Title ?? "Custom Training Package",
+                        Description = pkg.Description,
                         DurationDays = pkg.DurationDays,
                         DurationLabel = durationLabel,
                         Price = pkg.Price ?? 0,
-                        Quantity = c.Quantity <= 0 ? 1 : c.Quantity,
+                        Quantity = 1,
+                        SessionCount = pkg.SessionCount,
+                        MinAge = pkg.MinAge,
+                        TargetAudience = pkg.TargetAudience,
+                        ThumbnailUrl = thumbnailUrl,
                         CoachId = pkg.CoachId,
                         CoachName = coachUser?.FullName ?? "Coach",
                         CoachAvatarUrl = coachUser?.AvatarUrl,
@@ -168,7 +174,13 @@ namespace FitSocial.Application.Services
                 return ApiResponseDto<CartItemDto>.Fail("User is not authenticated.");
             }
 
-            if (dto == null || dto.PackageId == Guid.Empty)
+            if (dto == null)
+            {
+                return ApiResponseDto<CartItemDto>.Fail("Invalid training package information.");
+            }
+
+            var packageId = dto.GetEffectivePackageId();
+            if (packageId == Guid.Empty)
             {
                 return ApiResponseDto<CartItemDto>.Fail("Invalid training package information.");
             }
@@ -180,7 +192,7 @@ namespace FitSocial.Application.Services
 
             try
             {
-                var package = await _packageRepository.GetByIdAsync(dto.PackageId, cancellationToken);
+                var package = await _packageRepository.GetByIdAsync(packageId, cancellationToken);
                 if (package == null)
                 {
                     return ApiResponseDto<CartItemDto>.Fail("Training package does not exist.");
@@ -196,31 +208,18 @@ namespace FitSocial.Application.Services
                     return ApiResponseDto<CartItemDto>.Fail("This training package is currently suspended from taking trainees.");
                 }
 
-                var existing = await _cartRepository.GetCartItemAsync(userId, dto.PackageId, cancellationToken);
+                var existing = await _cartRepository.GetCartItemAsync(userId, packageId, cancellationToken);
                 if (existing != null)
                 {
-                    var existingDto = new CartItemDto
-                    {
-                        CartId = existing.CartId,
-                        PackageId = existing.PackageId,
-                        Title = package.Title ?? "Training Package",
-                        Price = package.Price ?? 0,
-                        Quantity = existing.Quantity,
-                        CoachId = package.CoachId,
-                        CoachName = package.Coach?.Coach?.FullName ?? "Coach",
-                        CoachAvatarUrl = package.Coach?.Coach?.AvatarUrl,
-                        IsActive = package.IsActive ?? true,
-                        IsAvailable = true
-                    };
-                    return ApiResponseDto<CartItemDto>.Ok(existingDto, "This training package is already in your cart.");
+                    return ApiResponseDto<CartItemDto>.Fail("This training package is already in your cart. Each package can only be added once.");
                 }
 
                 var newCart = new Cart
                 {
                     CartId = Guid.NewGuid(),
                     UserId = userId,
-                    PackageId = dto.PackageId,
-                    Quantity = dto.Quantity > 0 ? dto.Quantity : 1,
+                    PackageId = packageId,
+                    Quantity = 1, // Each personalized training package is added with quantity 1
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -232,8 +231,17 @@ namespace FitSocial.Application.Services
                     CartId = newCart.CartId,
                     PackageId = newCart.PackageId,
                     Title = package.Title ?? "Training Package",
+                    Description = package.Description,
+                    DurationDays = package.DurationDays,
+                    DurationLabel = (package.DurationDays.HasValue && package.DurationDays.Value >= 7 && package.DurationDays.Value % 7 == 0)
+                        ? $"{package.DurationDays.Value / 7} Weeks ({package.DurationDays.Value} Days)"
+                        : $"{package.DurationDays ?? 30} Days",
                     Price = package.Price ?? 0,
-                    Quantity = newCart.Quantity,
+                    Quantity = 1,
+                    SessionCount = package.SessionCount,
+                    MinAge = package.MinAge,
+                    TargetAudience = package.TargetAudience,
+                    ThumbnailUrl = package.Media?.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).FirstOrDefault(),
                     CoachId = package.CoachId,
                     CoachName = package.Coach?.Coach?.FullName ?? "Coach",
                     CoachAvatarUrl = package.Coach?.Coach?.AvatarUrl,

@@ -202,8 +202,11 @@ public class CoachService : ICoachService
         // 2. Lấy danh sách các đơn hàng của Trainee này
         var orders = await _orderRepository.GetOrdersByBuyerIdAsync(traineeId, cancellationToken);
 
-        // 3. Kiểm tra xem có đơn hàng nào mua của Coach này và đã thanh toán (PAID) hay chưa
-        bool hasPurchased = orders.Any(o => o.CoachId == coachId && o.OrderStatus == FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid);
+        // 3. Kiểm tra xem có đơn hàng nào mua của Coach này và đã thanh toán (PAID/COMPLETED/ACTIVE) hay chưa
+        var paidStatuses = new[] { FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+        bool hasPurchased = orders.Any(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
+            && o.OrderStatus != null
+            && paidStatuses.Contains(o.OrderStatus.ToUpper()));
         if (!hasPurchased)
         {
             throw new ValidationException("You can only review a coach if you have purchased their training package.");

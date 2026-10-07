@@ -76,4 +76,22 @@ public class OrdersController : ControllerBase
         var result = await _orderService.GetOrderByIdAsync(id, currentUserId, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Gets list of trainees and their purchased packages for the authenticated coach.
+    /// </summary>
+    [HttpGet("coach-trainees")]
+    [Authorize(Roles = "COACH")]
+    [ProducesResponseType(typeof(ApiResponseDto<List<CoachTraineeGroupDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCoachTraineeOrders(CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var coachId))
+        {
+            return Unauthorized(ApiResponseDto<List<CoachTraineeGroupDto>>.Fail("Unauthorized: Invalid coach identity."));
+        }
+
+        var result = await _orderService.GetCoachTraineeOrdersAsync(coachId, cancellationToken);
+        return Ok(result);
+    }
 }

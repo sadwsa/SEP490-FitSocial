@@ -137,6 +137,87 @@ public class OrderService : IOrderService
         return ApiResponseDto<OrderDto>.Ok(MapToOrderDto(order));
     }
 
+    public async Task<ApiResponseDto<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync(
+        Guid coachId,
+        CancellationToken cancellationToken = default)
+    {
+        if (coachId == Guid.Empty)
+        {
+            throw new ValidationException("Invalid coach identity.");
+        }
+
+        var orders = await _orderRepository.GetOrdersByCoachIdAsync(coachId, cancellationToken);
+
+        var grouped = orders
+            .GroupBy(o => o.BuyerId)
+            .Select(group =>
+            {
+                var buyer = group.First().Buyer;
+                var traineeName = buyer?.FullName ?? buyer?.Email ?? "Trainee";
+                var traineeEmail = buyer?.Email ?? string.Empty;
+                var traineePhone = buyer?.PhoneNumber;
+                var traineeAvatar = buyer?.AvatarUrl;
+
+                var packages = new List<CoachTraineePackageOrderDto>();
+
+                foreach (var order in group)
+                {
+                    var paymentCode = order.Payments?.FirstOrDefault()?.GatewayTransactionId;
+
+                    foreach (var detail in order.OrderDetails)
+                    {
+                        var pkg = detail.Package;
+                        if (pkg != null && pkg.CoachId != coachId && order.CoachId != coachId)
+                        {
+                            continue;
+                        }
+
+                        var plan = detail.TrainingPlans?.FirstOrDefault();
+                        var thumbnailUrl = pkg?.Media?.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).FirstOrDefault();
+
+                        packages.Add(new CoachTraineePackageOrderDto
+                        {
+                            OrderId = order.OrderId,
+                            OrderDetailsId = detail.OrderDetailsId,
+                            PackageId = detail.PackageId,
+                            PackageTitle = detail.PackageTitle ?? pkg?.Title ?? "Training Package",
+                            PackageDescription = pkg?.Description,
+                            DurationDays = detail.PackageDurationDays ?? pkg?.DurationDays,
+                            SessionCount = pkg?.SessionCount,
+                            PricePaid = detail.PackagePrice ?? order.TotalAmount,
+                            OrderStatus = order.OrderStatus,
+                            OrderCode = paymentCode,
+                            PurchasedAt = order.CreatedAt,
+                            ThumbnailUrl = thumbnailUrl,
+                            TrainingPlanId = plan?.TrainingPlanId,
+                            PlanStatus = plan?.Status ?? (order.OrderStatus == "COMPLETED" ? "ACTIVE" : order.OrderStatus)
+                        });
+                    }
+                }
+
+                var totalSpent = packages.Sum(p => p.PricePaid ?? 0);
+                var latestDate = packages.Count > 0 ? packages.Max(p => p.PurchasedAt) : null;
+
+                return new CoachTraineeGroupDto
+                {
+                    TraineeId = group.Key,
+                    FullName = traineeName,
+                    Email = traineeEmail,
+                    PhoneNumber = traineePhone,
+                    AvatarUrl = traineeAvatar,
+                    TotalOrdersCount = packages.Count,
+                    TotalSpent = totalSpent,
+                    LatestPurchasedAt = latestDate,
+                    PurchasedPackages = packages.OrderByDescending(p => p.PurchasedAt).ToList()
+                };
+            })
+            .Where(g => g.PurchasedPackages.Count > 0)
+            .OrderByDescending(g => g.LatestPurchasedAt)
+            .ToList();
+
+        return ApiResponseDto<List<CoachTraineeGroupDto>>.Ok(grouped, "Trainee orders retrieved successfully.");
+    }
+
     private static OrderDto MapToOrderDto(Order o)
     {
         return new OrderDto

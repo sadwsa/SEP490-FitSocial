@@ -65,5 +65,26 @@ public class OrderRepository : Repository<Order>, IOrderRepository
                 && paidStatuses.Contains(o.OrderStatus.ToUpper()),
                 cancellationToken);
     }
+
+    public async Task<List<Order>> GetOrdersByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+
+        return await DbSet
+            .Include(o => o.Buyer)
+            .Include(o => o.OrderDetails)
+                .ThenInclude(od => od.Package)
+                    .ThenInclude(p => p!.Media)
+            .Include(o => o.OrderDetails)
+                .ThenInclude(od => od.TrainingPlans)
+            .Include(o => o.Payments)
+            .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
+                && o.OrderType == Domain.Constants.PaymentConstants.OrderTypePackage
+                && o.OrderStatus != null
+                && paidStatuses.Contains(o.OrderStatus.ToUpper()))
+            .OrderByDescending(o => o.CreatedAt)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
 }
 

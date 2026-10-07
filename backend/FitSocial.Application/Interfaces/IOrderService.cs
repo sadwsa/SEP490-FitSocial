@@ -22,4 +22,8 @@ public interface IOrderService
         Guid orderId,
         Guid currentUserId,
         CancellationToken cancellationToken = default);
+
+    Task<ApiResponseDto<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync(
+        Guid coachId,
+        CancellationToken cancellationToken = default);
 }

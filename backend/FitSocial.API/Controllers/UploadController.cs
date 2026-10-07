@@ -348,6 +348,83 @@ public class UploadController : ControllerBase
     }
 
     /// <summary>
+    /// Upload images for a training package (max 10 images, JPG, PNG, WEBP, GIF).
+    /// Returns a list of public secure image URLs.
+    /// </summary>
+    [HttpPost("package-media")]
+    [AllowAnonymous]
+    [RequestSizeLimit(50 * 1024 * 1024)]
+    [ProducesResponseType(typeof(ApiResponseDto<List<string>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<List<string>>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadPackageMedia([FromForm] List<IFormFile>? files, CancellationToken cancellationToken)
+    {
+        if (files == null || files.Count == 0)
+        {
+            return BadRequest(ApiResponseDto<List<string>>.Fail("Please select at least one image to upload."));
+        }
+
+        if (files.Count > 10)
+        {
+            return BadRequest(ApiResponseDto<List<string>>.Fail("A package can have at most 10 images."));
+        }
+
+        var cloudName = _configuration["Cloudinary:CloudName"];
+        var apiKey = _configuration["Cloudinary:ApiKey"];
+        var apiSecret = _configuration["Cloudinary:ApiSecret"];
+        if (string.IsNullOrWhiteSpace(cloudName) || string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(apiSecret))
+        {
+            return BadRequest(ApiResponseDto<List<string>>.Fail("File storage service is not configured on the server."));
+        }
+
+        for (int i = 0; i < files.Count; i++)
+        {
+            var file = files[i];
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedImageExtensions.Contains(extension))
+            {
+                return BadRequest(ApiResponseDto<List<string>>.Fail($"Unsupported image format for '{file.FileName}'. Only JPG, PNG, WEBP, GIF are supported."));
+            }
+            if (file.Length > MaxImageBytes)
+            {
+                return BadRequest(ApiResponseDto<List<string>>.Fail($"Image '{file.FileName}' exceeds the maximum allowed size (10MB)."));
+            }
+        }
+
+        var cloudinary = _cloudinary ?? new Cloudinary(new Account(cloudName, apiKey, apiSecret));
+        var uploadedUrls = new string[files.Count];
+
+        try
+        {
+            var uploadTasks = files.Select(async (file, index) =>
+            {
+                await using var stream = file.OpenReadStream();
+                var uploadResult = await cloudinary.UploadAsync(new ImageUploadParams
+                {
+                    File = new FileDescription(file.FileName, stream),
+                    Folder = "fitsocial/packages",
+                    UseFilename = false,
+                    UniqueFilename = true
+                }, cancellationToken);
+
+                if (uploadResult.Error != null || string.IsNullOrWhiteSpace(uploadResult.SecureUrl?.ToString()))
+                {
+                    throw new InvalidOperationException($"Failed to upload '{file.FileName}': {uploadResult.Error?.Message ?? "Unknown Cloudinary error"}");
+                }
+
+                uploadedUrls[index] = uploadResult.SecureUrl.ToString();
+            });
+
+            await Task.WhenAll(uploadTasks);
+            return Ok(ApiResponseDto<List<string>>.Ok(uploadedUrls.ToList(), "Package images uploaded successfully."));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[API][UploadPackageMedia] Upload failed: {Message}", ex.Message);
+            return BadRequest(ApiResponseDto<List<string>>.Fail($"Image upload failed: {ex.Message}"));
+        }
+    }
+
+    /// <summary>
     /// Generate a Signed URL (valid ~10 minutes) for an authenticated/private Cloudinary asset.
     /// Per FitConnect spec: Backend must use Cloudinary SDK to create Signed URLs (5-15 min)
     /// before sending to Frontend/Admin. DB only stores plain URL strings.

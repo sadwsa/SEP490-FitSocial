@@ -48,6 +48,7 @@ public partial class FitSocialDbContext : DbContext
     public virtual DbSet<Review> Reviews { get; set; }
     public virtual DbSet<TermsAndPolicy> TermsAndPolicies { get; set; }
     public virtual DbSet<TrainingPackage> TrainingPackages { get; set; }
+    public virtual DbSet<TrainingPackageMedium> TrainingPackageMedia { get; set; }
     public virtual DbSet<TrainingPlan> TrainingPlans { get; set; }
     public virtual DbSet<TrainingPlanExercise> TrainingPlanExercises { get; set; }
     public virtual DbSet<User> Users { get; set; }
@@ -743,6 +744,28 @@ public partial class FitSocialDbContext : DbContext
             entity.HasOne(d => d.Coach).WithMany(p => p.TrainingPackages)
                 .HasForeignKey(d => d.CoachId)
                 .HasConstraintName("TrainingPackages_CoachID_fkey");
+        });
+
+        // 25b. TrainingPackageMedia
+        modelBuilder.Entity<TrainingPackageMedium>(entity =>
+        {
+            entity.HasKey(e => e.MediaId).HasName("TrainingPackageMedia_pkey");
+            entity.ToTable("TrainingPackageMedia");
+            entity.Property(e => e.MediaId)
+                .HasDefaultValueSql("uuid_generate_v4()")
+                .HasColumnName("MediaID");
+            entity.Property(e => e.PackageId).HasColumnName("PackageID");
+            entity.Property(e => e.MediaUrl).HasMaxLength(2048).HasColumnName("MediaUrl");
+            entity.Property(e => e.MediaType).HasMaxLength(20).HasDefaultValue("IMAGE");
+            entity.Property(e => e.SortOrder).HasDefaultValue((short)0);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone");
+
+            entity.HasOne(d => d.Package).WithMany(p => p.Media)
+                .HasForeignKey(d => d.PackageId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("TrainingPackageMedia_PackageID_fkey");
         });
 
         // 26. Orders

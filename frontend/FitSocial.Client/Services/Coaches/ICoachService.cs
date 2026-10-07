@@ -34,4 +34,9 @@ public interface ICoachService
     Task<ApiResponse<CoachApplicationDetailDto>> RejectCoachApplicationAsync(
         Guid coachId,
         RejectCoachApplicationRequestModel? request = null);
+
+    Task<ApiResponse<CoachApplicationDetailDto>> ReviewCertificateAsync(
+        Guid coachId,
+        Guid certificateId,
+        ReviewCertificateRequestModel request);
 }

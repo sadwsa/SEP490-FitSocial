@@ -109,4 +109,13 @@ public class CoachService : ICoachService
         return await _apiClient.PostAsync<RejectCoachApplicationRequestModel, CoachApplicationDetailDto>(
             $"{BaseEndpoint}/applications/{coachId}/reject", request ?? new RejectCoachApplicationRequestModel());
     }
+
+    public async Task<ApiResponse<CoachApplicationDetailDto>> ReviewCertificateAsync(
+        Guid coachId,
+        Guid certificateId,
+        ReviewCertificateRequestModel request)
+    {
+        return await _apiClient.PostAsync<ReviewCertificateRequestModel, CoachApplicationDetailDto>(
+            $"{BaseEndpoint}/applications/{coachId}/certificates/{certificateId}/review", request);
+    }
 }

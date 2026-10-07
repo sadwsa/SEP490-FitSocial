@@ -64,4 +64,16 @@ public interface ICoachService
         Guid rejectorId,
         RejectCoachApplicationRequestDto? request = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_29.2: Review (Approve/Reject) an individual certificate of a coach application (Staff/Admin).
+    /// If all certificates are rejected (or none exist), the application is auto-rejected.
+    /// If at least one is rejected and others are approved/pending, the application remains pending.
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationDetailDto>> ReviewCertificateAsync(
+        Guid coachId,
+        Guid certificateId,
+        Guid reviewerId,
+        ReviewCertificateRequestDto request,
+        CancellationToken cancellationToken = default);
 }

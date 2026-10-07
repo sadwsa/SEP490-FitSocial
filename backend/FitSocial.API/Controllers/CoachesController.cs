@@ -333,4 +333,35 @@ public class CoachesController : ControllerBase
         }
         return Ok(result);
     }
+
+    /// <summary>
+    /// UC_29.2: Review (Approve/Reject) an individual certificate of a coach application (Staff/Admin).
+    /// If all certificates are rejected (or none exist), the application is auto-rejected.
+    /// If at least one is rejected and others are approved/pending, the application remains pending.
+    /// </summary>
+    [HttpPost("applications/{coachId:guid}/certificates/{certificateId:guid}/review")]
+    [HttpPost("~/api/admin/coach-applications/{coachId:guid}/certificates/{certificateId:guid}/review")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ReviewCertificate(
+        Guid coachId,
+        Guid certificateId,
+        [FromBody] ReviewCertificateRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachApplicationDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _coachService.ReviewCertificateAsync(coachId, certificateId, currentUserId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
 }

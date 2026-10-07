@@ -14,6 +14,10 @@ public interface ICoachService
 
     Task<FitSocial.Client.Models.Common.ApiResponse<bool>> DeleteReviewAsync(Guid reviewId);
 
+    Task<FitSocial.Client.Models.Common.ApiResponse<List<CoachBankAccountDto>>> GetBankAccountsAsync();
+    Task<FitSocial.Client.Models.Common.ApiResponse<CoachBankAccountDto>> AddBankAccountAsync(CreateCoachBankAccountDto dto);
+    Task<FitSocial.Client.Models.Common.ApiResponse<bool>> SetDefaultBankAccountAsync(Guid bankId);
+    Task<FitSocial.Client.Models.Common.ApiResponse<bool>> DeleteBankAccountAsync(Guid bankId);
     Task<ApiResponse<CoachApplicationListResponseDto>> GetCoachApplicationsAsync(
         string? search = null,
         string? status = null,

@@ -66,6 +66,7 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<FitSocial.Client.Services.Payouts.IPayoutService, FitSocial.Client.Services.Payouts.PayoutApiService>();
 builder.Services.AddScoped<FitSocial.Client.Services.PaymentGateways.IPaymentGatewayService, FitSocial.Client.Services.PaymentGateways.PaymentGatewayApiService>();
 builder.Services.AddScoped<ISubscriptionPriceHistoryApiService, SubscriptionPriceHistoryApiService>();
+builder.Services.AddScoped<FitSocial.Client.Services.Transactions.ITransactionService, FitSocial.Client.Services.Transactions.TransactionService>();
 builder.Services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
 builder.Services.AddScoped<FitSocial.Client.Services.Refunds.IRefundService, FitSocial.Client.Services.Refunds.RefundApiService>();
 

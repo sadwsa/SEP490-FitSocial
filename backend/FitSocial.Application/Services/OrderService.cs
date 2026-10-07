@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Orders;
 using FitSocial.Application.Exceptions;
@@ -246,4 +247,7 @@ public class OrderService : IOrderService
             }).ToList()
         };
     }
+
+  
+
 }

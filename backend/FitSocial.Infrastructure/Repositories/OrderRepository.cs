@@ -64,7 +64,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
                 cancellationToken);
     }
 
-<<<<<<< Updated upstream
+
     public async Task<List<Order>> GetOrdersByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
         var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
@@ -85,7 +85,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
-=======
+
     public Task<List<Order>> GetCompletedOrdersByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
         var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
@@ -99,6 +99,5 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .ToListAsync(cancellationToken);
     }
 
->>>>>>> Stashed changes
 }
 

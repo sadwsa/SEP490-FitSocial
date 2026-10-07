@@ -23,12 +23,12 @@ public interface IOrderService
         Guid orderId,
         Guid currentUserId,
         CancellationToken cancellationToken = default);
-<<<<<<< Updated upstream
+
 
     Task<ApiResponseDto<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync(
         Guid coachId,
         CancellationToken cancellationToken = default);
-=======
+
   
->>>>>>> Stashed changes
+
 }

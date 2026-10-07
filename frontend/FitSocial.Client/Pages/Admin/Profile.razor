@@ -1,10 +1,13 @@
 @page "/admin/profile"
 @layout AdminLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
+@implements IDisposable
 @using FitSocial.Client.Models.Common
 @using FitSocial.Client.Models.Users
 @using FitSocial.Client.Services.Users
+@using FitSocial.Client.Services.Files
 @inject IUserService UserService
+@inject IFileUploadService FileUploadService
 @inject NavigationManager Navigation
 
 <PageTitle>My Profile - FitSocial Admin Console</PageTitle>
@@ -13,12 +16,41 @@
     <Authorized>
         <div class="profile-container">
             <!-- Page Header -->
-            <div class="mb-4">
-                <h2 class="view-title">My Profile</h2>
-                <p class="view-sub">View your personal account information.</p>
+            <div class="profile-header-actions mb-4">
+                <div>
+                    <h2 class="view-title">My Profile</h2>
+                    <p class="view-sub">
+                        @(isEditing ? "Update your personal account information." : "View your personal account information.")
+                    </p>
+                </div>
+                @if (!isEditing && profile != null)
+                {
+                    <button type="button" class="action-btn-primary" @onclick="EnterEditMode">
+                        <AppIcon Name="pencil" />
+                        <span>Edit Profile</span>
+                    </button>
+                }
             </div>
 
-            <!-- Error Notification -->
+            <!-- Notifications -->
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="auth-alert success mb-4" role="alert">
+                    <AppIcon Name="check" />
+                    <span class="alert-text">@successMessage</span>
+                    <button type="button" class="alert-close ms-auto" @onclick="DismissSuccessMessage">✕</button>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(saveErrorMessage))
+            {
+                <div class="auth-alert error mb-4" role="alert">
+                    <AppIcon Name="warning" />
+                    <span class="alert-text">@saveErrorMessage</span>
+                    <button type="button" class="alert-close ms-auto" @onclick="DismissSaveErrorMessage">✕</button>
+                </div>
+            }
+
             @if (!string.IsNullOrEmpty(errorMessage))
             {
                 <div class="auth-alert error mb-4" role="alert">
@@ -42,82 +74,321 @@
             {
                 <!-- Section 1: Profile Header Card -->
                 <div class="profile-card header-card mb-4">
-                    <div class="header-card-content">
-                        <div class="avatar-wrapper">
-                            @if (AvatarHelper.HasValidAvatarUrl(profile.Avatar))
-                            {
-                                <img src="@profile.Avatar" alt="@(profile.FullName ?? "Staff/Admin")" class="profile-avatar-img" />
-                            }
-                            else
-                            {
-                                <div class="profile-avatar-placeholder">
-                                    @AvatarHelper.GetInitials(profile.FullName)
-                                </div>
-                            }
-                        </div>
-
-                        <div class="header-info">
-                            <h3 class="profile-name">
-                                @(string.IsNullOrWhiteSpace(profile.FullName) ? "Not provided" : profile.FullName)
-                            </h3>
-                            <div class="profile-role-badge-wrap">
-                                @if (string.Equals(profile.Role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+                    @if (!isEditing)
+                    {
+                        <div class="header-card-content">
+                            <div class="avatar-wrapper">
+                                @if (AvatarHelper.HasValidAvatarUrl(profile.Avatar))
                                 {
-                                    <span class="role-badge admin">ADMIN</span>
-                                }
-                                else if (string.Equals(profile.Role, "STAFF", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    <span class="role-badge staff">STAFF</span>
-                                }
-                                else if (!string.IsNullOrWhiteSpace(profile.Role))
-                                {
-                                    <span class="role-badge">@profile.Role</span>
+                                    <img src="@profile.Avatar" alt="@(profile.FullName ?? "Staff/Admin")" class="profile-avatar-img" />
                                 }
                                 else
                                 {
-                                    <span class="text-muted text-xs">Role not assigned</span>
+                                    <div class="profile-avatar-placeholder">
+                                        @AvatarHelper.GetInitials(profile.FullName)
+                                    </div>
                                 }
                             </div>
+
+                            <div class="header-info">
+                                <h3 class="profile-name">
+                                    @(string.IsNullOrWhiteSpace(profile.FullName) ? "Not provided" : profile.FullName)
+                                </h3>
+                                <div class="profile-role-badge-wrap">
+                                    @if (string.Equals(profile.Role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="role-badge admin">ADMIN</span>
+                                    }
+                                    else if (string.Equals(profile.Role, "STAFF", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="role-badge staff">STAFF</span>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(profile.Role))
+                                    {
+                                        <span class="role-badge">@profile.Role</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted text-xs">Role not assigned</span>
+                                    }
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    }
+                    else
+                    {
+                        <div class="header-card-content edit-mode">
+                            <div class="avatar-edit-box">
+                                <div class="avatar-wrapper">
+                                    @if (isUploadingAvatar)
+                                    {
+                                        <div class="profile-avatar-placeholder uploading-avatar">
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        </div>
+                                    }
+                                    else if (!isAvatarRemoved && AvatarHelper.HasValidAvatarUrl(EffectiveAvatarUrl))
+                                    {
+                                        <img src="@EffectiveAvatarUrl" alt="Avatar Preview" class="profile-avatar-img" />
+                                    }
+                                    else
+                                    {
+                                        <div class="profile-avatar-placeholder">
+                                            @AvatarHelper.GetInitials(inputFullName ?? profile.FullName)
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="avatar-buttons">
+                                    <InputFile id="adminAvatarUpload" OnChange="HandleAvatarSelected" accept=".jpg,.jpeg,.png,.webp" style="display:none;" />
+                                    <label for="adminAvatarUpload" class="avatar-upload-btn @(isUploadingAvatar ? "disabled" : "")">
+                                        <AppIcon Name="upload" />
+                                        <span>@(isUploadingAvatar ? "Uploading..." : "Change Photo")</span>
+                                    </label>
+
+                                    @if (!isAvatarRemoved && (!string.IsNullOrWhiteSpace(profile.Avatar) || !string.IsNullOrWhiteSpace(newUploadedAvatarUrl)))
+                                    {
+                                        <button type="button" class="avatar-remove-btn" @onclick="RemoveAvatar" title="Remove photo">
+                                            <AppIcon Name="trash" />
+                                            <span>Remove</span>
+                                        </button>
+                                    }
+                                    else if (isAvatarRemoved)
+                                    {
+                                        <button type="button" class="avatar-restore-btn" @onclick="RestoreAvatar" title="Undo avatar removal">
+                                            <AppIcon Name="refresh" />
+                                            <span>Undo</span>
+                                        </button>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(avatarUploadError))
+                                {
+                                    <span class="field-error-text text-center">@avatarUploadError</span>
+                                }
+                                <span class="field-note text-center">JPG, PNG or WEBP (Max 5MB)</span>
+                            </div>
+
+                            <div class="header-info">
+                                <div class="form-field-group">
+                                    <label class="form-field-label" for="adminFullNameInput">
+                                        Full Name
+                                        <span class="field-optional-hint">(Leave blank to keep current)</span>
+                                    </label>
+                                    <input id="adminFullNameInput"
+                                           type="text"
+                                           class="form-input-control @(fullNameError != null ? "has-error" : "")"
+                                           placeholder="@(profile.FullName ?? "Enter full name")"
+                                           @bind="inputFullName"
+                                           @bind:event="oninput"
+                                           @bind:after="ValidateFullName"
+                                           maxlength="100" />
+                                    @if (!string.IsNullOrEmpty(fullNameError))
+                                    {
+                                        <span class="field-error-text">@fullNameError</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="field-status-hint">
+                                            @if (string.IsNullOrWhiteSpace(inputFullName))
+                                            {
+                                                <span class="hint-keep">Keep current: <strong>@(string.IsNullOrWhiteSpace(profile.FullName) ? "Not provided" : profile.FullName)</strong></span>
+                                            }
+                                            else if (string.Equals(inputFullName.Trim(), profile.FullName?.Trim(), StringComparison.Ordinal))
+                                            {
+                                                <span class="hint-same">Current value</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="hint-new">Will update to: <strong>@inputFullName.Trim()</strong></span>
+                                            }
+                                        </span>
+                                    }
+                                </div>
+
+                                <div class="profile-role-badge-wrap mt-3">
+                                    <span class="info-label me-2">Role:</span>
+                                    @if (string.Equals(profile.Role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="role-badge admin">ADMIN</span>
+                                    }
+                                    else if (string.Equals(profile.Role, "STAFF", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="role-badge staff">STAFF</span>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(profile.Role))
+                                    {
+                                        <span class="role-badge">@profile.Role</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
                 </div>
 
                 <!-- Section 2: Personal Information Card -->
                 <div class="profile-card mb-4">
                     <div class="card-section-header">
                         <h4 class="section-title">Personal Information</h4>
+                        @if (isEditing)
+                        {
+                            <span class="section-subtitle">Leave any field blank to keep its current value in database.</span>
+                        }
                     </div>
 
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <span class="info-label">Full Name</span>
-                            <span class="info-value">@(string.IsNullOrWhiteSpace(profile.FullName) ? "Not provided" : profile.FullName)</span>
-                        </div>
+                    @if (!isEditing)
+                    {
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Full Name</span>
+                                <span class="info-value">@(string.IsNullOrWhiteSpace(profile.FullName) ? "Not provided" : profile.FullName)</span>
+                            </div>
 
-                        <div class="info-item">
-                            <span class="info-label">Date of Birth</span>
-                            <span class="info-value">@(profile.DateOfBirth.HasValue ? profile.DateOfBirth.Value.ToString("dd/MM/yyyy") : "Not provided")</span>
-                        </div>
+                            <div class="info-item">
+                                <span class="info-label">Date of Birth</span>
+                                <span class="info-value">@(profile.DateOfBirth.HasValue ? profile.DateOfBirth.Value.ToString("dd/MM/yyyy") : "Not provided")</span>
+                            </div>
 
-                        <div class="info-item">
-                            <span class="info-label">Gender</span>
-                            <span class="info-value">@(string.IsNullOrWhiteSpace(profile.Gender) ? "Not provided" : profile.Gender)</span>
-                        </div>
+                            <div class="info-item">
+                                <span class="info-label">Gender</span>
+                                <span class="info-value">@(string.IsNullOrWhiteSpace(profile.Gender) ? "Not provided" : profile.Gender)</span>
+                            </div>
 
-                        <div class="info-item">
-                            <span class="info-label">Phone Number</span>
-                            <span class="info-value">@(string.IsNullOrWhiteSpace(profile.PhoneNumber) ? "Not provided" : profile.PhoneNumber)</span>
-                        </div>
+                            <div class="info-item">
+                                <span class="info-label">Phone Number</span>
+                                <span class="info-value">@(string.IsNullOrWhiteSpace(profile.PhoneNumber) ? "Not provided" : profile.PhoneNumber)</span>
+                            </div>
 
-                        <div class="info-item full-width">
-                            <span class="info-label">Email</span>
-                            <span class="info-value email-value">@(string.IsNullOrWhiteSpace(profile.Email) ? "Not provided" : profile.Email)</span>
+                            <div class="info-item full-width">
+                                <span class="info-label">Email</span>
+                                <span class="info-value email-value">@(string.IsNullOrWhiteSpace(profile.Email) ? "Not provided" : profile.Email)</span>
+                            </div>
                         </div>
-                    </div>
+                    }
+                    else
+                    {
+                        <div class="form-grid">
+                            <!-- Date of Birth -->
+                            <div class="form-field-group">
+                                <label class="form-field-label" for="adminDobInput">
+                                    Date of Birth
+                                    <span class="field-optional-hint">(Leave blank to keep current)</span>
+                                </label>
+                                <input id="adminDobInput"
+                                       type="date"
+                                       class="form-input-control @(dobError != null ? "has-error" : "")"
+                                       min="1900-01-01"
+                                       max="@DateTime.Today.ToString("yyyy-MM-dd")"
+                                       value="@inputDobString"
+                                       @onchange="OnDobChanged" />
+                                @if (!string.IsNullOrEmpty(dobError))
+                                {
+                                    <span class="field-error-text">@dobError</span>
+                                }
+                                else
+                                {
+                                    <span class="field-status-hint">
+                                        @if (string.IsNullOrWhiteSpace(inputDobString))
+                                        {
+                                            <span class="hint-keep">Keep current: <strong>@(profile.DateOfBirth.HasValue ? profile.DateOfBirth.Value.ToString("dd/MM/yyyy") : "Not provided")</strong></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="hint-new">Will update to: <strong>@inputDobString</strong></span>
+                                        }
+                                    </span>
+                                }
+                            </div>
+
+                            <!-- Gender -->
+                            <div class="form-field-group">
+                                <label class="form-field-label" for="adminGenderSelect">
+                                    Gender
+                                    <span class="field-optional-hint">(Leave blank to keep current)</span>
+                                </label>
+                                <select id="adminGenderSelect"
+                                        class="form-select-control @(genderError != null ? "has-error" : "")"
+                                        @bind="inputGender"
+                                        @bind:after="ValidateGender">
+                                    <option value="">-- Keep Current (@(string.IsNullOrWhiteSpace(profile.Gender) ? "Not provided" : profile.Gender)) --</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                @if (!string.IsNullOrEmpty(genderError))
+                                {
+                                    <span class="field-error-text">@genderError</span>
+                                }
+                                else
+                                {
+                                    <span class="field-status-hint">
+                                        @if (string.IsNullOrWhiteSpace(inputGender))
+                                        {
+                                            <span class="hint-keep">Keep current: <strong>@(string.IsNullOrWhiteSpace(profile.Gender) ? "Not provided" : profile.Gender)</strong></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="hint-new">Will update to: <strong>@inputGender</strong></span>
+                                        }
+                                    </span>
+                                }
+                            </div>
+
+                            <!-- Phone Number -->
+                            <div class="form-field-group">
+                                <label class="form-field-label" for="adminPhoneInput">
+                                    Phone Number
+                                    <span class="field-optional-hint">(Leave blank to keep current)</span>
+                                </label>
+                                <input id="adminPhoneInput"
+                                       type="tel"
+                                       class="form-input-control @(phoneError != null ? "has-error" : "")"
+                                       placeholder="@(profile.PhoneNumber ?? "0xxxxxxxxx (10 digits)")"
+                                       @bind="inputPhoneNumber"
+                                       @bind:event="oninput"
+                                       @bind:after="ValidatePhone"
+                                       maxlength="15" />
+                                @if (!string.IsNullOrEmpty(phoneError))
+                                {
+                                    <span class="field-error-text">@phoneError</span>
+                                }
+                                else
+                                {
+                                    <span class="field-status-hint">
+                                        @if (string.IsNullOrWhiteSpace(inputPhoneNumber))
+                                        {
+                                            <span class="hint-keep">Keep current: <strong>@(string.IsNullOrWhiteSpace(profile.PhoneNumber) ? "Not provided" : profile.PhoneNumber)</strong></span>
+                                        }
+                                        else if (string.Equals(inputPhoneNumber.Trim(), profile.PhoneNumber?.Trim(), StringComparison.Ordinal))
+                                        {
+                                            <span class="hint-same">Current value</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="hint-new">Will update to: <strong>@inputPhoneNumber.Trim()</strong></span>
+                                        }
+                                    </span>
+                                }
+                            </div>
+
+                            <!-- Email (Read-only) -->
+                            <div class="form-field-group full-width">
+                                <label class="form-field-label" for="adminEmailInput">
+                                    Email
+                                    <span class="field-readonly-hint">(Read-only)</span>
+                                </label>
+                                <input id="adminEmailInput"
+                                       type="email"
+                                       class="form-input-control readonly-input"
+                                       value="@profile.Email"
+                                       disabled
+                                       readonly />
+                                <span class="field-note">Email is associated with your account authentication and cannot be edited directly.</span>
+                            </div>
+                        </div>
+                    }
                 </div>
 
                 <!-- Section 3: Account Information Card -->
-                <div class="profile-card">
+                <div class="profile-card @(isEditing ? "mb-4" : "")">
                     <div class="card-section-header">
                         <h4 class="section-title">Account Information</h4>
                     </div>
@@ -146,6 +417,28 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Edit Actions Bar -->
+                @if (isEditing)
+                {
+                    <div class="form-actions-bar">
+                        <button type="button" class="btn-cancel" @onclick="CancelEdit" disabled="@isSaving">
+                            Cancel
+                        </button>
+                        <button type="button" class="btn-save" @onclick="SaveProfileAsync" disabled="@(isSaving || isUploadingAvatar || HasValidationErrors)">
+                            @if (isSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <span>Saving changes...</span>
+                            }
+                            else
+                            {
+                                <AppIcon Name="check" />
+                                <span>Save Changes</span>
+                            }
+                        </button>
+                    </div>
+                }
             }
         </div>
     </Authorized>

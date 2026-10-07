@@ -112,6 +112,72 @@ public class UploadController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Upload public avatar image (JPG, PNG, WEBP, GIF, max 10MB) to Cloudinary.
+    /// Returns the public secure URL of the stored avatar image.
+    /// </summary>
+    [HttpPost("avatar")]
+    [AllowAnonymous]
+    [RequestSizeLimit(MaxFileBytes)]
+    [ProducesResponseType(typeof(ApiResponseDto<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<string>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadAvatar(IFormFile? file, CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(ApiResponseDto<string>.Fail("Please choose an image file to upload."));
+        }
+
+        if (file.Length > MaxFileBytes)
+        {
+            return BadRequest(ApiResponseDto<string>.Fail("Avatar image size must not exceed 10MB."));
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!AllowedImageExtensions.Contains(extension))
+        {
+            return BadRequest(ApiResponseDto<string>.Fail("Only JPG, PNG, WEBP, and GIF images are allowed."));
+        }
+
+        var cloudName = _configuration["Cloudinary:CloudName"];
+        var apiKey = _configuration["Cloudinary:ApiKey"];
+        var apiSecret = _configuration["Cloudinary:ApiSecret"];
+        if (string.IsNullOrWhiteSpace(cloudName) ||
+            string.IsNullOrWhiteSpace(apiKey) ||
+            string.IsNullOrWhiteSpace(apiSecret))
+        {
+            return BadRequest(ApiResponseDto<string>.Fail("File upload is not configured on the server."));
+        }
+
+        try
+        {
+            var cloudinary = _cloudinary ?? new Cloudinary(new Account(cloudName, apiKey, apiSecret));
+
+            await using var stream = file.OpenReadStream();
+            var uploadResult = await cloudinary.UploadAsync(new ImageUploadParams
+            {
+                File = new FileDescription(file.FileName, stream),
+                Folder = "fitsocial/avatars",
+                UseFilename = false,
+                UniqueFilename = true,
+                Transformation = new Transformation().Width(500).Height(500).Crop("fill").Gravity("face")
+            }, cancellationToken);
+
+            if (uploadResult.Error != null || string.IsNullOrWhiteSpace(uploadResult.SecureUrl?.ToString()))
+            {
+                return BadRequest(ApiResponseDto<string>.Fail(
+                    $"Avatar upload failed: {uploadResult.Error?.Message ?? "Unknown Cloudinary error"}"));
+            }
+
+            return Ok(ApiResponseDto<string>.Ok(
+                uploadResult.SecureUrl.ToString(), "Avatar uploaded successfully."));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponseDto<string>.Fail($"Avatar upload failed: {ex.Message}"));
+        }
+    }
+
     private static readonly string[] AllowedImageExtensions = { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
     private static readonly string[] AllowedVideoExtensions = { ".mp4", ".mov", ".avi", ".mkv", ".webm" };
     private const long MaxImageBytes = 10 * 1024 * 1024; // 10MB

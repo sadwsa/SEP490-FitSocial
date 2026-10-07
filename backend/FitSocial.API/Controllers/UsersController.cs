@@ -53,6 +53,37 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Updates the profile of the currently authenticated Staff or Admin user (UC_35.1).
+    /// Only accessible by STAFF and ADMIN roles.
+    /// Retains existing data for blank/empty fields; validates and updates new data.
+    /// </summary>
+    [HttpPut("me/profile")]
+    [HttpPut("~/api/admin/users/me/profile")]
+    [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponseDto<StaffAdminOwnProfileDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateOwnProfile([FromBody] UpdateStaffAdminProfileRequestDto request)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                          ?? User.FindFirst("sub")?.Value
+                          ?? User.FindFirst("nameid")?.Value
+                          ?? User.FindFirst("id")?.Value
+                          ?? User.FindFirst("uid")?.Value;
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized(ApiResponseDto<StaffAdminOwnProfileDto>.Fail("Invalid user identity claim."));
+        }
+
+        var result = await _userService.UpdateStaffAdminProfileAsync(userId, request, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Gets the profile of another user by userId (Trainee or Coach).
     /// Requires authentication. Does not expose sensitive credentials, certificates, or coach sports.
     /// </summary>

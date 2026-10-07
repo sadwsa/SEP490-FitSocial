@@ -11,4 +11,5 @@ public interface IUserService
     Task<ApiResponseDto<UserProfileDto>> GetOwnProfileAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<ApiResponseDto<UserProfileResponseDto>> GetUserProfileAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<ApiResponseDto<StaffAdminOwnProfileDto>> GetStaffAdminProfileAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<ApiResponseDto<StaffAdminOwnProfileDto>> UpdateStaffAdminProfileAsync(Guid userId, UpdateStaffAdminProfileRequestDto request, CancellationToken cancellationToken = default);
 }

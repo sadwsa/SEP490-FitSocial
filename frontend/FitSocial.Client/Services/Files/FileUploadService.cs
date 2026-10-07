@@ -10,6 +10,7 @@ namespace FitSocial.Client.Services.Files;
 public interface IFileUploadService
 {
     Task<ApiResponse<string>> UploadAsync(IBrowserFile file);
+    Task<ApiResponse<string>> UploadAvatarAsync(IBrowserFile file);
     Task<ApiResponse<List<CreatePostMediaItemDto>>> UploadPostMediaAsync(IEnumerable<IBrowserFile> files);
     Task<ApiResponse<List<CreatePostMediaItemDto>>> UploadPostMediaAsync(IEnumerable<UploadMediaPayload> files);
 }
@@ -25,6 +26,48 @@ public class FileUploadService : IFileUploadService
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
+    }
+
+    public async Task<ApiResponse<string>> UploadAvatarAsync(IBrowserFile file)
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var token = await _tokenStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            await using var stream = file.OpenReadStream(MaxFileBytes);
+            var streamContent = new StreamContent(stream);
+            if (!string.IsNullOrWhiteSpace(file.ContentType))
+            {
+                streamContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+            }
+            content.Add(streamContent, "file", file.Name);
+
+            var response = await _httpClient.PostAsync("upload/avatar", content);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<string>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<string>
+            {
+                Success = false,
+                Message = $"Avatar upload failed (Code: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<string>
+            {
+                Success = false,
+                Message = $"Avatar upload failed: {ex.Message}"
+            };
+        }
     }
 
     public async Task<ApiResponse<string>> UploadAsync(IBrowserFile file)

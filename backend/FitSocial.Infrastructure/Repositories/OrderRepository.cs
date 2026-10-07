@@ -48,6 +48,8 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .Include(o => o.OrderDetails)
                 .ThenInclude(od => od.CoachSubscriptionPlan)
             .Include(o => o.Payments)
+            .Include(o => o.PayoutItems)
+                .ThenInclude(pi => pi.Payout)
             .FirstOrDefaultAsync(o => o.OrderId == orderId, cancellationToken);
     }
 

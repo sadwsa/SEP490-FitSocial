@@ -70,5 +70,71 @@ public class CoachService : ICoachService
         return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/bank-accounts/{bankId}");
     }
 
+    public async Task<ApiResponse<CoachApplicationListResponseDto>> GetCoachApplicationsAsync(
+        string? search = null,
+        string? status = null,
+        int? minExperience = null,
+        int? maxExperience = null,
+        string? sortBy = null,
+        int pageNumber = 1,
+        int pageSize = 10)
+    {
+        var queryParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(search))
+            queryParts.Add($"search={Uri.EscapeDataString(search.Trim())}");
 
+        if (!string.IsNullOrWhiteSpace(status))
+            queryParts.Add($"status={Uri.EscapeDataString(status.Trim())}");
+
+        if (minExperience.HasValue)
+            queryParts.Add($"minExperience={minExperience.Value}");
+
+        if (maxExperience.HasValue)
+            queryParts.Add($"maxExperience={maxExperience.Value}");
+
+        if (!string.IsNullOrWhiteSpace(sortBy))
+            queryParts.Add($"sortBy={Uri.EscapeDataString(sortBy.Trim())}");
+
+        queryParts.Add($"pageNumber={pageNumber}");
+        queryParts.Add($"pageSize={pageSize}");
+
+        var queryString = "?" + string.Join("&", queryParts);
+        return await _apiClient.GetAsync<CoachApplicationListResponseDto>($"{BaseEndpoint}/applications{queryString}");
+    }
+
+
+    public async Task<ApiResponse<CoachApplicationDetailDto>> GetCoachApplicationDetailsAsync(Guid coachId)
+    {
+        return await _apiClient.GetAsync<CoachApplicationDetailDto>($"{BaseEndpoint}/applications/{coachId}");
+    }
+
+    public async Task<ApiResponse<CoachApplicationStatusCountsDto>> GetCoachApplicationStatusCountsAsync()
+    {
+        return await _apiClient.GetAsync<CoachApplicationStatusCountsDto>($"{BaseEndpoint}/applications/status-counts");
+    }
+
+    public async Task<ApiResponse<CoachApplicationDetailDto>> ApproveCoachApplicationAsync(
+        Guid coachId,
+        ApproveCoachApplicationRequestModel? request = null)
+    {
+        return await _apiClient.PostAsync<ApproveCoachApplicationRequestModel, CoachApplicationDetailDto>(
+            $"{BaseEndpoint}/applications/{coachId}/approve", request ?? new ApproveCoachApplicationRequestModel());
+    }
+
+    public async Task<ApiResponse<CoachApplicationDetailDto>> RejectCoachApplicationAsync(
+        Guid coachId,
+        RejectCoachApplicationRequestModel? request = null)
+    {
+        return await _apiClient.PostAsync<RejectCoachApplicationRequestModel, CoachApplicationDetailDto>(
+            $"{BaseEndpoint}/applications/{coachId}/reject", request ?? new RejectCoachApplicationRequestModel());
+    }
+
+    public async Task<ApiResponse<CoachApplicationDetailDto>> ReviewCertificateAsync(
+        Guid coachId,
+        Guid certificateId,
+        ReviewCertificateRequestModel request)
+    {
+        return await _apiClient.PostAsync<ReviewCertificateRequestModel, CoachApplicationDetailDto>(
+            $"{BaseEndpoint}/applications/{coachId}/certificates/{certificateId}/review", request);
+    }
 }

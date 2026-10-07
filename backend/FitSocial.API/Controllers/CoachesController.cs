@@ -1,4 +1,4 @@
-﻿using FitSocial.Application.DTOs.Coach;
+using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Coaches;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Interfaces;
@@ -216,5 +216,152 @@ public class CoachesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// UC_29: Get coach application requests for Staff and Admin.
+    /// Supports basic viewing, searching, filtering, and pagination.
+    /// </summary>
+    [HttpGet("applications")]
+    [HttpGet("~/api/admin/coach-applications")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationListResponseDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCoachApplications(
+        [FromQuery] string? search,
+        [FromQuery] string? status,
+        [FromQuery] int? minExperience,
+        [FromQuery] int? maxExperience,
+        [FromQuery] string? sortBy,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _coachService.GetCoachApplicationsAsync(
+            search, status, minExperience, maxExperience, sortBy, pageNumber, pageSize, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
 
+    /// <summary>
+    /// UC_29: Get status counts of coach applications (Staff/Admin).
+    /// </summary>
+    [HttpGet("applications/status-counts")]
+    [HttpGet("~/api/admin/coach-applications/status-counts")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationStatusCountsDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCoachApplicationStatusCounts(CancellationToken cancellationToken = default)
+    {
+        var result = await _coachService.GetCoachApplicationStatusCountsAsync(cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC_29: Get detailed coach application request for Staff and Admin review (read-only).
+    /// </summary>
+    [HttpGet("applications/{coachId:guid}")]
+    [HttpGet("~/api/admin/coach-applications/{coachId:guid}")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCoachApplicationDetails(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        var result = await _coachService.GetCoachApplicationDetailsAsync(coachId, cancellationToken);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC_29.1: Approve a pending coach application (Staff/Admin).
+    /// </summary>
+    [HttpPost("applications/{coachId:guid}/approve")]
+    [HttpPost("~/api/admin/coach-applications/{coachId:guid}/approve")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ApproveCoachApplication(
+        Guid coachId,
+        [FromBody] ApproveCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachApplicationDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _coachService.ApproveCoachApplicationAsync(coachId, currentUserId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC_29.1: Reject a pending coach application (Staff/Admin).
+    /// </summary>
+    [HttpPost("applications/{coachId:guid}/reject")]
+    [HttpPost("~/api/admin/coach-applications/{coachId:guid}/reject")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RejectCoachApplication(
+        Guid coachId,
+        [FromBody] RejectCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachApplicationDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _coachService.RejectCoachApplicationAsync(coachId, currentUserId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// UC_29.2: Review (Approve/Reject) an individual certificate of a coach application (Staff/Admin).
+    /// If all certificates are rejected (or none exist), the application is auto-rejected.
+    /// If at least one is rejected and others are approved/pending, the application remains pending.
+    /// </summary>
+    [HttpPost("applications/{coachId:guid}/certificates/{certificateId:guid}/review")]
+    [HttpPost("~/api/admin/coach-applications/{coachId:guid}/certificates/{certificateId:guid}/review")]
+    [Authorize(Roles = "STAFF,ADMIN")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachApplicationDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ReviewCertificate(
+        Guid coachId,
+        Guid certificateId,
+        [FromBody] ReviewCertificateRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachApplicationDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _coachService.ReviewCertificateAsync(coachId, certificateId, currentUserId, request, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
 }

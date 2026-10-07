@@ -1,0 +1,566 @@
+@page "/admin/payment-gateways"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN")]
+@using FitSocial.Client.Models.PaymentGateways
+@using FitSocial.Client.Services.PaymentGateways
+@inject IPaymentGatewayService GatewayService
+
+<PageTitle>Payment Gateways - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert @toastType" role="alert">
+                <span class="flex-1">@toastMessage</span>
+                <button type="button" class="ml-2 font-bold cursor-pointer opacity-70 hover:opacity-100" @onclick="() => toastMessage = null">✕</button>
+            </div>
+        }
+
+        <h2 class="view-title">Payment Gateway Accounts</h2>
+        <p class="view-sub">System payment gateway configurations used for collecting and disbursing (UC-36)</p>
+
+        <div class="stat-row">
+            <div class="stat-card">
+                <span class="stat-num">@gateways.Count</span>
+                <span class="stat-label">Total gateways</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-num">@gateways.Count(g => g.IsActive)</span>
+                <span class="stat-label">Active</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-num">@gateways.Count(g => !g.IsActive)</span>
+                <span class="stat-label">Inactive</span>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="search-wrap grow">
+                <span class="search-icon">⌕</span>
+                <input value="@searchTerm"
+                       @oninput="OnSearchInput"
+                       class="toolbar-input"
+                       placeholder="Filter by gateway name..." />
+            </div>
+            <button type="button" class="row-btn" @onclick="LoadAsync" disabled="@isLoading">↻ Refresh</button>
+            <span class="grow"></span>
+            <button type="button" class="btn-add" @onclick="OpenAddModal">+ Add Gateway</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="py-4 text-center muted">Loading payment gateways...</div>
+        }
+        else if (FilteredGateways.Count == 0)
+        {
+            <div class="empty-box">
+                <p class="font-bold">No payment gateway configs found</p>
+                <p class="text-sm">Click "+ Add Gateway" to register a new payment gateway configuration.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Gateway</th>
+                            <th>Client ID</th>
+                            <th>API key</th>
+                            <th>Checksum key</th>
+                            <th>Webhook URL</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var g in PagedGateways)
+                        {
+                            <tr>
+                                <td class="font-semibold">@(g.GatewayName ?? "—")</td>
+                                <td>
+                                    <span class="secret-val"><code>@(IsRevealed(g.GatewayId, "client") ? g.ClientId : g.ClientIdMasked)</code></span>
+                                    <button type="button" class="eye-btn" title="Show/hide client ID" @onclick='() => ToggleSecret(g.GatewayId, "client")'>
+                                        <AppIcon Name="@(IsRevealed(g.GatewayId, "client") ? "eye-slash" : "eye")" />
+                                    </button>
+                                </td>
+                                <td>
+                                    <span class="secret-val"><code>@(IsRevealed(g.GatewayId, "api") ? g.ApiKey : g.ApiKeyMasked)</code></span>
+                                    <button type="button" class="eye-btn" title="Show/hide API key" @onclick='() => ToggleSecret(g.GatewayId, "api")'>
+                                        <AppIcon Name="@(IsRevealed(g.GatewayId, "api") ? "eye-slash" : "eye")" />
+                                    </button>
+                                </td>
+                                <td>
+                                    <span class="secret-val"><code>@(IsRevealed(g.GatewayId, "checksum") ? g.ChecksumKey : g.ChecksumKeyMasked)</code></span>
+                                    <button type="button" class="eye-btn" title="Show/hide checksum key" @onclick='() => ToggleSecret(g.GatewayId, "checksum")'>
+                                        <AppIcon Name="@(IsRevealed(g.GatewayId, "checksum") ? "eye-slash" : "eye")" />
+                                    </button>
+                                </td>
+                                <td class="muted-sm url-cell">@(string.IsNullOrWhiteSpace(g.WebhookUrl) ? "—" : g.WebhookUrl)</td>
+                                <td>
+                                    @if (g.IsActive)
+                                    {
+                                        <span class="status-pill done">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-pill off">Inactive</span>
+                                    }
+                                </td>
+                                <td class="muted-sm">@g.UpdatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-end whitespace-nowrap">
+                                    <button type="button" class="row-btn small info" @onclick="() => OpenEditModal(g)">Edit</button>
+                                    @if (g.IsActive)
+                                    {
+                                        <button type="button" class="row-btn danger" @onclick="() => PromptToggle(g, false)" disabled="@actionBusy">Deactivate</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="row-btn primary" @onclick="() => PromptToggle(g, true)" disabled="@actionBusy">Activate</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (FilteredGateways.Count > 0)
+            {
+                var totalPages = Math.Max(1, (int)Math.Ceiling(FilteredGateways.Count / (double)pageSize));
+                var start = (pageIndex - 1) * pageSize + 1;
+                var end = Math.Min(pageIndex * pageSize, FilteredGateways.Count);
+                <div class="pagination-container">
+                    <div class="pagination-info">
+                        <span>Showing <strong>@start–@end</strong> of <strong>@FilteredGateways.Count</strong> gateways</span>
+                    </div>
+
+                    @if (totalPages > 1)
+                    {
+                        <div class="pagination-controls">
+                            <button type="button" class="page-btn" disabled="@(pageIndex <= 1)" @onclick="() => GoToPage(pageIndex - 1)">‹ Prev</button>
+                            @for (int i = 1; i <= totalPages; i++)
+                            {
+                                var pNum = i;
+                                if (pNum == 1 || pNum == totalPages || Math.Abs(pNum - pageIndex) <= 1)
+                                {
+                                    <button type="button" class="page-btn @(pNum == pageIndex ? "active" : "")" @onclick="() => GoToPage(pNum)">@pNum</button>
+                                }
+                                else if (pNum == 2 && pageIndex > 3)
+                                {
+                                    <span class="page-dots">…</span>
+                                }
+                                else if (pNum == totalPages - 1 && pageIndex < totalPages - 2)
+                                {
+                                    <span class="page-dots">…</span>
+                                }
+                            }
+                            <button type="button" class="page-btn" disabled="@(pageIndex >= totalPages)" @onclick="() => GoToPage(pageIndex + 1)">Next ›</button>
+                        </div>
+                    }
+
+                    <div class="page-size-selector">
+                        <span>Per page:</span>
+                        <select value="@pageSize" @onchange="OnPageSizeChanged" class="page-size-select">
+                            <option value="5">5 / page</option>
+                            <option value="10">10 / page</option>
+                            <option value="20">20 / page</option>
+                        </select>
+                    </div>
+                </div>
+            }
+        }
+
+        <!-- Activate / Deactivate confirmation popup -->
+        @if (confirmGateway != null)
+        {
+            <div class="modal-backdrop" @onclick="CloseConfirm">
+                <div class="modal-card" @onclick:stopPropagation="true">
+                    <div class="modal-head">
+                        <h3>@(confirmActivate ? "Activate payment gateway?" : "Deactivate payment gateway?")</h3>
+                        <button type="button" class="modal-x" @onclick="CloseConfirm">✕</button>
+                    </div>
+                    <div class="confirm-box">
+                        <div><span class="muted-sm">Gateway</span><strong>@confirmGateway.GatewayName</strong></div>
+                        <div><span class="muted-sm">Client ID</span><strong>@confirmGateway.ClientId</strong></div>
+                    </div>
+                    @if (confirmActivate)
+                    {
+                        <div class="auth-alert info">This gateway will become the active one. Only one gateway can be active at a time — deactivate the current active gateway first.</div>
+                    }
+                    else
+                    {
+                        <div class="auth-alert error">Payments routed through this gateway will stop working until it is reactivated.</div>
+                    }
+                    @if (!string.IsNullOrEmpty(confirmError))
+                    {
+                        <div class="auth-alert error">@confirmError</div>
+                    }
+                    <div class="modal-actions">
+                        <button type="button" class="btn-ghost" @onclick="CloseConfirm" disabled="@confirmBusy">Cancel</button>
+                        @if (confirmActivate)
+                        {
+                            <button type="button" class="btn-primary" @onclick="ConfirmAsync" disabled="@confirmBusy">
+                                @(confirmBusy ? "Activating..." : "Confirm Activate")
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn-danger" @onclick="ConfirmAsync" disabled="@confirmBusy">
+                                @(confirmBusy ? "Deactivating..." : "Confirm Deactivate")
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- UC-36.2 Add Gateway popup -->
+        @if (showAddModal)
+        {
+            <div class="modal-backdrop" @onclick="CloseAddModal">
+                <div class="modal-card" @onclick:stopPropagation="true">
+                    <div class="modal-head">
+                        <h3>Add Payment Gateway</h3>
+                        <button type="button" class="modal-x" @onclick="CloseAddModal">✕</button>
+                    </div>
+                    <div class="form-grid">
+                        <label class="form-field">
+                            <span>Gateway name *</span>
+                            <input class="form-input" @bind="newGatewayName" placeholder="e.g. PayOS" />
+                        </label>
+                        <label class="form-field">
+                            <span>Client ID *</span>
+                            <input class="form-input" @bind="newClientId" placeholder="Merchant client ID" />
+                        </label>
+                        <label class="form-field">
+                            <span>API key *</span>
+                            <input class="form-input" type="password" @bind="newApiKey" placeholder="Stored encrypted" />
+                        </label>
+                        <label class="form-field">
+                            <span>Checksum key *</span>
+                            <input class="form-input" type="password" @bind="newChecksumKey" placeholder="Stored encrypted" />
+                        </label>
+                        <label class="form-field">
+                            <span>Webhook URL</span>
+                            <input class="form-input" @bind="newWebhookUrl" placeholder="Optional, e.g. https://api.../payments/payos-webhook" />
+                        </label>
+                        <p class="muted-sm">New gateways start as Inactive (only one gateway is active at a time). It becomes Active automatically if no other gateway is active.</p>
+                    </div>
+                    @if (!string.IsNullOrEmpty(addError))
+                    {
+                        <div class="auth-alert error">@addError</div>
+                    }
+                    <div class="modal-actions">
+                        <button type="button" class="btn-ghost" @onclick="CloseAddModal" disabled="@addBusy">Cancel</button>
+                        <button type="button" class="btn-primary" @onclick="ConfirmAddAsync" disabled="@addBusy">
+                            @(addBusy ? "Adding..." : "Add Gateway")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- UC-36.3 Edit Gateway popup -->
+        @if (editGateway != null)
+        {
+            <div class="modal-backdrop" @onclick="CloseEditModal">
+                <div class="modal-card" @onclick:stopPropagation="true">
+                    <div class="modal-head">
+                        <h3>Edit Payment Gateway</h3>
+                        <button type="button" class="modal-x" @onclick="CloseEditModal">✕</button>
+                    </div>
+                    <div class="form-grid">
+                        <label class="form-field">
+                            <span>Gateway name *</span>
+                            <input class="form-input" @bind="editGatewayName" />
+                        </label>
+                        <label class="form-field">
+                            <span>Client ID *</span>
+                            <input class="form-input" @bind="editClientId" />
+                        </label>
+                        <label class="form-field">
+                            <span>API key <small class="muted-sm">(leave blank to keep current)</small></span>
+                            <input class="form-input" type="password" @bind="editApiKey" placeholder="••••" />
+                        </label>
+                        <label class="form-field">
+                            <span>Checksum key <small class="muted-sm">(leave blank to keep current)</small></span>
+                            <input class="form-input" type="password" @bind="editChecksumKey" placeholder="••••" />
+                        </label>
+                        <label class="form-field">
+                            <span>Webhook URL</span>
+                            <input class="form-input" @bind="editWebhookUrl" />
+                        </label>
+                        <label class="form-check">
+                            <input type="checkbox" @bind="editIsActive" />
+                            <span>Set as the active gateway (only one can be active)</span>
+                        </label>
+                    </div>
+                    @if (!string.IsNullOrEmpty(editError))
+                    {
+                        <div class="auth-alert error">@editError</div>
+                    }
+                    <div class="modal-actions">
+                        <button type="button" class="btn-ghost" @onclick="CloseEditModal" disabled="@editBusy">Cancel</button>
+                        <button type="button" class="btn-primary" @onclick="ConfirmEditAsync" disabled="@editBusy">
+                            @(editBusy ? "Saving..." : "Save Changes")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private List<PaymentGatewayConfig> gateways = new();
+    private bool isLoading = true;
+    private string searchTerm = "";
+    private string? toastMessage;
+    private string toastType = "info";
+    private bool actionBusy = false;
+
+    private PaymentGatewayConfig? confirmGateway;
+    private HashSet<string> revealedSecrets = new();
+    private bool confirmActivate = false;
+    private bool confirmBusy = false;
+    private string? confirmError;
+
+    private bool showAddModal = false;
+    private bool addBusy = false;
+    private string? addError;
+    private PaymentGatewayConfig? editGateway;
+    private bool editBusy = false;
+    private string? editError;
+    private string editGatewayName = "";
+    private string editClientId = "";
+    private string editApiKey = "";
+    private string editChecksumKey = "";
+    private string editWebhookUrl = "";
+    private bool editIsActive = true;
+    private string newGatewayName = "";
+    private string newClientId = "";
+    private string newApiKey = "";
+    private string newChecksumKey = "";
+    private string newWebhookUrl = "";
+
+    private List<PaymentGatewayConfig> FilteredGateways =>
+        string.IsNullOrWhiteSpace(searchTerm)
+            ? gateways
+            : gateways.Where(g => (g.GatewayName ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private int pageIndex = 1;
+    private int pageSize = 10;
+
+    private List<PaymentGatewayConfig> PagedGateways =>
+        FilteredGateways.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToList();
+
+    private void GoToPage(int page)
+    {
+        var totalPages = Math.Max(1, (int)Math.Ceiling(FilteredGateways.Count / (double)pageSize));
+        pageIndex = Math.Clamp(page, 1, totalPages);
+    }
+
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            pageSize = size;
+        }
+        pageIndex = 1;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var res = await GatewayService.GetAllAsync();
+        if (res.Success && res.Data != null)
+        {
+            gateways = res.Data;
+        }
+        else
+        {
+            toastMessage = res.Message ?? "Failed to load payment gateways.";
+            toastType = "error";
+        }
+        var maxPage = Math.Max(1, (int)Math.Ceiling(gateways.Count / (double)pageSize));
+        if (pageIndex > maxPage) pageIndex = maxPage;
+        isLoading = false;
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        pageIndex = 1;
+    }
+
+    private bool IsRevealed(Guid gatewayId, string field)
+    {
+        return revealedSecrets.Contains($"{gatewayId}:{field}");
+    }
+
+    private void ToggleSecret(Guid gatewayId, string field)
+    {
+        var key = $"{gatewayId}:{field}";
+        if (!revealedSecrets.Remove(key))
+        {
+            revealedSecrets.Add(key);
+        }
+    }
+
+    private void PromptToggle(PaymentGatewayConfig gateway, bool activate)
+    {
+        confirmGateway = gateway;
+        confirmActivate = activate;
+        confirmError = null;
+    }
+
+    private void CloseConfirm()
+    {
+        if (confirmBusy) return;
+        confirmGateway = null;
+        confirmError = null;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (confirmGateway == null || confirmBusy) return;
+        actionBusy = true;
+        confirmBusy = true;
+
+        var res = confirmActivate
+            ? await GatewayService.ActivateAsync(confirmGateway.GatewayId)
+            : await GatewayService.DeactivateAsync(confirmGateway.GatewayId);
+
+        if (res.Success)
+        {
+            toastMessage = res.Message ?? (confirmActivate ? "Gateway activated." : "Gateway deactivated.");
+            toastType = "info";
+            confirmGateway = null;
+            confirmError = null;
+            await LoadAsync();
+        }
+        else
+        {
+            confirmError = res.Message ?? "Operation failed.";
+        }
+        actionBusy = false;
+        confirmBusy = false;
+    }
+
+    private void OpenAddModal()
+    {
+        showAddModal = true;
+        addError = null;
+        newGatewayName = "";
+        newClientId = "";
+        newApiKey = "";
+        newChecksumKey = "";
+        newWebhookUrl = "";
+    }
+
+    private void CloseAddModal()
+    {
+        if (addBusy) return;
+        showAddModal = false;
+        addError = null;
+    }
+
+    private async Task ConfirmAddAsync()
+    {
+        addError = null;
+
+        if (string.IsNullOrWhiteSpace(newGatewayName) || string.IsNullOrWhiteSpace(newClientId) ||
+            string.IsNullOrWhiteSpace(newApiKey) || string.IsNullOrWhiteSpace(newChecksumKey))
+        {
+            addError = "Gateway name, client ID, API key and checksum key are required.";
+            return;
+        }
+
+        addBusy = true;
+        var res = await GatewayService.CreateAsync(new CreatePaymentGatewayConfig
+        {
+            GatewayName = newGatewayName.Trim(),
+            ClientId = newClientId.Trim(),
+            ApiKey = newApiKey.Trim(),
+            ChecksumKey = newChecksumKey.Trim(),
+            WebhookUrl = string.IsNullOrWhiteSpace(newWebhookUrl) ? null : newWebhookUrl.Trim(),
+            IsActive = false // server enforces single-active (active only if none exists)
+        });
+
+        if (res.Success)
+        {
+            toastMessage = "Payment gateway added successfully.";
+            toastType = "info";
+            showAddModal = false;
+            await LoadAsync();
+        }
+        else
+        {
+            addError = res.Message ?? "Failed to add payment gateway.";
+        }
+        addBusy = false;
+    }
+
+    private void OpenEditModal(PaymentGatewayConfig gateway)
+    {
+        editGateway = gateway;
+        editError = null;
+        editGatewayName = gateway.GatewayName ?? "";
+        editClientId = gateway.ClientId ?? "";
+        editApiKey = "";
+        editChecksumKey = "";
+        editWebhookUrl = gateway.WebhookUrl ?? "";
+        editIsActive = gateway.IsActive;
+    }
+
+    private void CloseEditModal()
+    {
+        if (editBusy) return;
+        editGateway = null;
+        editError = null;
+    }
+
+    private async Task ConfirmEditAsync()
+    {
+        if (editGateway == null || editBusy) return;
+        editError = null;
+
+        if (string.IsNullOrWhiteSpace(editGatewayName) || string.IsNullOrWhiteSpace(editClientId))
+        {
+            editError = "Gateway name and client ID are required.";
+            return;
+        }
+
+        editBusy = true;
+        var res = await GatewayService.UpdateAsync(editGateway.GatewayId, new UpdatePaymentGatewayConfig
+        {
+            GatewayName = editGatewayName.Trim(),
+            ClientId = editClientId.Trim(),
+            ApiKey = string.IsNullOrWhiteSpace(editApiKey) ? null : editApiKey.Trim(),
+            ChecksumKey = string.IsNullOrWhiteSpace(editChecksumKey) ? null : editChecksumKey.Trim(),
+            WebhookUrl = string.IsNullOrWhiteSpace(editWebhookUrl) ? null : editWebhookUrl.Trim(),
+            IsActive = editIsActive
+        });
+
+        if (res.Success)
+        {
+            toastMessage = "Payment gateway updated successfully.";
+            toastType = "info";
+            editGateway = null;
+            await LoadAsync();
+        }
+        else
+        {
+            editError = res.Message ?? "Failed to update payment gateway.";
+        }
+        editBusy = false;
+    }
+}

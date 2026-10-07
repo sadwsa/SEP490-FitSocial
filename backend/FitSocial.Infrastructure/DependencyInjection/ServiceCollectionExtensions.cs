@@ -44,7 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<ISubscriptionPriceHistoryService, SubscriptionPriceHistoryService>();
         services.AddScoped<ITransactionService, TransactionService>();
-
+        services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
         return services;
     }
 
@@ -70,6 +70,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenBlacklistService, TokenBlacklistService>();
         services.AddScoped<IPaymentGateway, PayOSGateway>();
         services.AddScoped<IBankTransferGateway, PayOSPayoutGateway>();
+        services.AddScoped<IPaymentGatewayCredentialProvider, DbPaymentGatewayCredentialProvider>();
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<INotificationService, NotificationService>();
 
@@ -109,6 +110,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<ITransactionRepository, TransactionRepository>();
 
+        services.AddScoped<IRevenueAnalyticsRepository, RevenueAnalyticsRepository>();
 
         return services;
 

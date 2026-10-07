@@ -14,7 +14,11 @@
     <Authorized>
         @if (!string.IsNullOrEmpty(toastMessage))
         {
-            <div class="auth-alert info" role="alert"><AppIcon Name="info" /><span>@toastMessage</span></div>
+            <div class="auth-alert info toast-auto-dismiss" role="alert">
+                <AppIcon Name="info" />
+                <span class="toast-text">@toastMessage</span>
+                <button type="button" class="toast-dismiss-btn" @onclick="DismissToast" title="Dismiss notification" aria-label="Dismiss notification">✕</button>
+            </div>
         }
 
         <h2 class="view-title">User Accounts</h2>
@@ -147,7 +151,24 @@
 </AuthorizeView>
 
 @code {
-    private string? toastMessage;
+    private string? _toastMessage;
+    private string? toastMessage
+    {
+        get => _toastMessage;
+        set
+        {
+            _toastMessage = value;
+            if (!string.IsNullOrEmpty(value))
+            {
+                TriggerToastTimer();
+            }
+            else
+            {
+                toastCts?.Cancel();
+            }
+        }
+    }
+    private CancellationTokenSource? toastCts;
     private string userSearch = "";
     private string roleFilter = "";
     private string userStatusFilter = "active";
@@ -248,5 +269,41 @@
         finally { isLockingUser = false; }
     }
 
-    public void Dispose() { searchDebounceTimer?.Stop(); searchDebounceTimer?.Dispose(); }
+    private void TriggerToastTimer(int durationMs = 10000)
+    {
+        toastCts?.Cancel();
+        toastCts?.Dispose();
+        toastCts = new CancellationTokenSource();
+        var token = toastCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(durationMs, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        _toastMessage = null;
+                        StateHasChanged();
+                    });
+                }
+            }
+            catch (TaskCanceledException) { }
+        });
+    }
+
+    private void DismissToast()
+    {
+        toastMessage = null;
+    }
+
+    public void Dispose()
+    {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+        toastCts?.Cancel();
+        toastCts?.Dispose();
+    }
 }

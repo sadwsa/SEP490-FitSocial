@@ -19,6 +19,35 @@ public class UpdateUserLockStatusRequest
     public bool IsLocked { get; set; }
 }
 
+public class CreateStaffAccountRequest
+{
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
+    public string Password { get; set; } = string.Empty;
+    public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+public class UpdateStaffAccountRequest
+{
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
+    public string? Password { get; set; }
+    public string? ConfirmPassword { get; set; }
+}
+
+public class UpdateOwnProfileRequest
+{
+    public string FullName { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Bio { get; set; }
+    public int? ExperienceYears { get; set; }
+}
+
 /// <summary>
 /// Profile model for the currently logged-in user (Trainee or Coach).
 /// Does not expose internal UserId or certificate information.
@@ -66,5 +95,36 @@ public class OtherUserProfileModel
 
     public bool IsCoach => string.Equals(Role, "COACH", StringComparison.OrdinalIgnoreCase);
     public bool IsTrainee => string.Equals(Role, "TRAINEE", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Profile model for the currently logged-in Staff or Admin user.
+/// Strictly limited to the 7 core fields returned by GET /api/users/me/profile.
+/// </summary>
+public class StaffAdminOwnProfileDto
+{
+    public string? Avatar { get; set; }
+    public string? FullName { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Email { get; set; }
+    public string? Role { get; set; }
+
+    public bool IsAdmin => string.Equals(Role, "ADMIN", StringComparison.OrdinalIgnoreCase);
+    public bool IsStaff => string.Equals(Role, "STAFF", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Request model for Staff or Admin updating their own profile (UC_35.1).
+/// </summary>
+public class UpdateStaffAdminProfileRequest
+{
+    public string? FullName { get; set; }
+    public string? Avatar { get; set; }
+    public string? AvatarUrl { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? PhoneNumber { get; set; }
 }
 

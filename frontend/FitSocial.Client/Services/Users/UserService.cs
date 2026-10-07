@@ -23,8 +23,14 @@ public interface IUserService
         bool? isLocked = null,
         int pageNumber = 1,
         int pageSize = 10);
+    Task<ApiResponse<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequest request);
+    Task<ApiResponse<AdminUserDto>> UpdateStaffAccountAsync(Guid userId, UpdateStaffAccountRequest request);
+    Task<ApiResponse<bool>> CheckEmailExistsAsync(string email, Guid? excludingUserId = null);
     Task<ApiResponse<bool>> SetUserLockStatusAsync(Guid userId, bool isLocked);
     Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync();
+    Task<ApiResponse<UserProfileModel>> UpdateOwnProfileAsync(UpdateOwnProfileRequest request);
+    Task<ApiResponse<StaffAdminOwnProfileDto>> GetStaffAdminOwnProfileAsync();
+    Task<ApiResponse<StaffAdminOwnProfileDto>> UpdateStaffAdminOwnProfileAsync(UpdateStaffAdminProfileRequest request);
     Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId);
 }
 
@@ -45,6 +51,21 @@ public class UserService : IUserService
     public async Task<ApiResponse<UserProfileModel>> GetOwnProfileAsync()
     {
         return await _apiClient.GetAsync<UserProfileModel>("users/me/profile");
+    }
+
+    public async Task<ApiResponse<UserProfileModel>> UpdateOwnProfileAsync(UpdateOwnProfileRequest request)
+    {
+        return await _apiClient.PutAsync<UpdateOwnProfileRequest, UserProfileModel>("users/me/profile", request);
+    }
+
+    public async Task<ApiResponse<StaffAdminOwnProfileDto>> GetStaffAdminOwnProfileAsync()
+    {
+        return await _apiClient.GetAsync<StaffAdminOwnProfileDto>("users/me/profile");
+    }
+
+    public async Task<ApiResponse<StaffAdminOwnProfileDto>> UpdateStaffAdminOwnProfileAsync(UpdateStaffAdminProfileRequest request)
+    {
+        return await _apiClient.PutAsync<UpdateStaffAdminProfileRequest, StaffAdminOwnProfileDto>("admin/users/me/profile", request);
     }
 
     public async Task<ApiResponse<OtherUserProfileModel>> GetUserProfileAsync(Guid userId)
@@ -189,6 +210,96 @@ public class UserService : IUserService
             {
                 Success = false,
                 Message = $"Failed to update lock status (Status: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<AdminUserDto>> CreateStaffAccountAsync(CreateStaffAccountRequest request)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _httpClient.PostAsJsonAsync("admin/staff", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AdminUserDto>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Failed to create staff account (Status: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<AdminUserDto>> UpdateStaffAccountAsync(Guid userId, UpdateStaffAccountRequest request)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var response = await _httpClient.PutAsJsonAsync($"admin/staff/{userId}", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AdminUserDto>>();
+            if (response.IsSuccessStatusCode && result != null && result.Success)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Failed to update staff account (Status: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<AdminUserDto>
+            {
+                Success = false,
+                Message = $"Connection error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> CheckEmailExistsAsync(string email, Guid? excludingUserId = null)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            var encodedEmail = Uri.EscapeDataString(email?.Trim() ?? string.Empty);
+            var url = $"admin/staff/check-email?email={encodedEmail}";
+            if (excludingUserId.HasValue)
+            {
+                url += $"&excludingUserId={excludingUserId.Value}";
+            }
+            var response = await _httpClient.GetAsync(url);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            if (response.IsSuccessStatusCode && result != null)
+            {
+                return result;
+            }
+
+            return result ?? new ApiResponse<bool>
+            {
+                Success = false,
+                Message = $"Failed to check email availability (Status: {response.StatusCode})"
             };
         }
         catch (Exception ex)

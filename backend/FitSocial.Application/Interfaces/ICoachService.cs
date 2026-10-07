@@ -21,4 +21,59 @@ public interface ICoachService
 
     Task<ApiResponseDto<bool>> DeleteReviewAsync(Guid reviewId, Guid traineeId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// UC_29: Get paginated coach application requests with searching, filtering, and status counts for Staff/Admin.
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationListResponseDto>> GetCoachApplicationsAsync(
+        string? search = null,
+        string? status = null,
+        int? minExperience = null,
+        int? maxExperience = null,
+        string? sortBy = null,
+        int pageNumber = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_29: Get full details of a specific coach application request for Staff/Admin review (read-only).
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationDetailDto>> GetCoachApplicationDetailsAsync(
+        Guid coachId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_29: Get summary counts of coach applications by status for Staff/Admin tabs.
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationStatusCountsDto>> GetCoachApplicationStatusCountsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_29.1: Approve a pending coach application (Staff/Admin).
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationDetailDto>> ApproveCoachApplicationAsync(
+        Guid coachId,
+        Guid approverId,
+        ApproveCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_29.1: Reject a pending coach application (Staff/Admin).
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationDetailDto>> RejectCoachApplicationAsync(
+        Guid coachId,
+        Guid rejectorId,
+        RejectCoachApplicationRequestDto? request = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC_29.2: Review (Approve/Reject) an individual certificate of a coach application (Staff/Admin).
+    /// If all certificates are rejected (or none exist), the application is auto-rejected.
+    /// If at least one is rejected and others are approved/pending, the application remains pending.
+    /// </summary>
+    Task<ApiResponseDto<CoachApplicationDetailDto>> ReviewCertificateAsync(
+        Guid coachId,
+        Guid certificateId,
+        Guid reviewerId,
+        ReviewCertificateRequestDto request,
+        CancellationToken cancellationToken = default);
 }

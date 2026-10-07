@@ -93,6 +93,7 @@ CREATE TABLE CoachBankAccounts (
     EncryptedAccountNumber BYTEA, -- Đã có tiền tố Encrypted
     Branch VARCHAR(255),
     IsDefault BOOLEAN DEFAULT FALSE,
+    IsActive BOOLEAN DEFAULT TRUE,
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

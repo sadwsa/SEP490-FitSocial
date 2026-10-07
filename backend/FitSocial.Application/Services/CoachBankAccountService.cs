@@ -88,6 +88,23 @@ public class CoachBankAccountService : ICoachBankAccountService
 
             return ApiResponseDto<CoachBankAccountDto>.Ok(MapToDto(newAccount), "Bank account added successfully.");
         }
+            BankId = Guid.NewGuid(),
+            CoachId = coachId,
+            BankName = dto.BankName.Trim(),
+            BankCode = dto.BankCode.Trim().ToUpperInvariant(),
+            AccountName = dto.AccountName.Trim().ToUpperInvariant(),
+            EncryptedAccountNumber = _encryptionService.Encrypt(dto.AccountNumber.Trim()),
+            Branch = string.IsNullOrWhiteSpace(dto.Branch) ? null : dto.Branch.Trim(),
+            IsDefault = isDefault,
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await _bankRepository.AddAsync(newAccount, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<CoachBankAccountDto>.Ok(MapToDto(newAccount), "Bank account added successfully.");
     }
 
 
@@ -98,6 +115,11 @@ public class CoachBankAccountService : ICoachBankAccountService
         if (targetAccount == null)
         {
             throw new NotFoundException("Bank account not found.");
+        }
+
+        if (targetAccount.IsActive == false)
+        {
+            throw new ValidationException("An inactive bank account cannot be set as default.");
         }
 
         foreach (var acc in accounts)
@@ -152,6 +174,7 @@ public class CoachBankAccountService : ICoachBankAccountService
             MaskedAccountNumber = masked,
             Branch = b.Branch,
             IsDefault = b.IsDefault,
+            IsActive = b.IsActive,
             CreatedAt = b.CreatedAt,
             UpdatedAt = b.UpdatedAt
         };

@@ -70,6 +70,12 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             UpdatedAt = now
         };
 
+        // Single-active invariant: the system collects through exactly one
+        // gateway. A new gateway starts Inactive unless none is active,
+        // in which case it becomes the active one.
+        var existing = await _configRepository.GetAllConfigsAsync(cancellationToken);
+        config.IsActive = !existing.Any(c => c.IsActive == true);
+
         await _configRepository.AddAsync(config, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -95,6 +101,14 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         if (dto.WebhookUrl != null) config.WebhookUrl = dto.WebhookUrl.Trim();
         if (dto.IsActive.HasValue) config.IsActive = dto.IsActive.Value;
 
+        // Single-active invariant: only one gateway may be active at a time.
+        // Turning this one on while another is active is rejected — staff must
+        // deactivate the current one first.
+        if (config.IsActive == true)
+        {
+            await EnsureNoOtherActiveAsync(id, cancellationToken);
+        }
+
         config.UpdatedBy = adminUserId;
         config.UpdatedAt = DateTime.UtcNow;
 
@@ -112,6 +126,40 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         }
 
         // Soft-delete / deactivate
+        config.IsActive = false;
+        config.UpdatedAt = DateTime.UtcNow;
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<bool>.Ok(true, "Payment gateway config deactivated successfully.");
+    }
+
+    public async Task<ApiResponseDto<bool>> ActivateConfigAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var config = await _configRepository.GetByIdAsync(id, cancellationToken);
+        if (config == null)
+        {
+            throw new NotFoundException("Payment gateway config not found.");
+        }
+
+        await EnsureNoOtherActiveAsync(id, cancellationToken);
+
+        config.IsActive = true;
+        config.UpdatedAt = DateTime.UtcNow;
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponseDto<bool>.Ok(true, "Payment gateway config activated successfully.");
+    }
+
+    public async Task<ApiResponseDto<bool>> DeactivateConfigAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var config = await _configRepository.GetByIdAsync(id, cancellationToken);
+        if (config == null)
+        {
+            throw new NotFoundException("Payment gateway config not found.");
+        }
+
         config.IsActive = false;
         config.UpdatedAt = DateTime.UtcNow;
 
@@ -148,7 +196,10 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             GatewayId = c.GatewayId,
             GatewayName = c.GatewayName,
             ClientId = c.ClientId,
+            ClientIdMasked = MaskKey(c.ClientId),
+            ApiKey = plainApiKey,
             ApiKeyMasked = MaskKey(plainApiKey),
+            ChecksumKey = plainChecksumKey,
             ChecksumKeyMasked = MaskKey(plainChecksumKey),
             WebhookUrl = c.WebhookUrl,
             IsActive = c.IsActive ?? true,
@@ -162,5 +213,16 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         if (string.IsNullOrWhiteSpace(value)) return "********";
         if (value.Length <= 8) return new string('*', value.Length);
         return $"{value[..4]}...{value[^4..]}";
+    }
+
+    private async Task EnsureNoOtherActiveAsync(Guid exceptId, CancellationToken cancellationToken)
+    {
+        var all = await _configRepository.GetAllConfigsAsync(cancellationToken);
+        var other = all.FirstOrDefault(c => c.GatewayId != exceptId && c.IsActive == true);
+        if (other != null)
+        {
+            throw new ValidationException(
+                $"Gateway '{other.GatewayName}' is currently active. Please deactivate it first — only one payment gateway can be active at a time.");
+        }
     }
 }

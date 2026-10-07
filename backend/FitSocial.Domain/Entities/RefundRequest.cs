@@ -22,6 +22,7 @@ public partial class RefundRequest
 
     public string? EvidenceUrls { get; set; }
 
+    [System.ComponentModel.DataAnnotations.ConcurrencyCheck]
     public string? Status { get; set; }
 
     public Guid? ReviewedBy { get; set; }

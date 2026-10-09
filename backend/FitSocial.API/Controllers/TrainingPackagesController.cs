@@ -123,6 +123,43 @@ namespace FitSocial.API.Controllers
             var packages = await _service.GetPurchasedPackagesAsync(currentUserId);
             return Ok(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Ok(packages));
         }
-
+        // ==============================================================
+        // REVIEWS & REPLY ENDPOINTS (SHOPEE / TIKTOK STYLE)
+        // ==============================================================
+        // 1. Lấy danh sách reviews & thống kê của gói tập (Public)
+        [HttpGet("{id}/reviews")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetPackageReviews(Guid id, CancellationToken cancellationToken)
+        {
+            var result = await _service.GetPackageReviewsAsync(id, cancellationToken);
+            return Ok(result);
+        }
+        // 2. Trainee gửi đánh giá cho gói tập
+        [HttpPost("{id}/reviews")]
+        [Authorize(Roles = "TRAINEE")]
+        public async Task<IActionResult> SubmitPackageReview(Guid id, [FromBody] CreatePackageReviewDto dto, CancellationToken cancellationToken)
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdString, out var traineeId))
+            {
+                return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
+            }
+            var result = await _service.SubmitPackageReviewAsync(id, traineeId, dto, cancellationToken);
+            return Ok(result);
+        }
+        // 3. Coach phản hồi lại đánh giá của học viên
+        [HttpPost("{id}/reviews/{reviewId}/reply")]
+        [Authorize(Roles = "COACH")]
+        public async Task<IActionResult> ReplyToReview(Guid id, Guid reviewId, [FromBody] ReplyReviewDto dto, CancellationToken cancellationToken)
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdString, out var coachId))
+            {
+                return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
+            }
+            var result = await _service.ReplyToReviewAsync(id, reviewId, coachId, dto, cancellationToken);
+            return Ok(result);
+        }
     }
 }
+

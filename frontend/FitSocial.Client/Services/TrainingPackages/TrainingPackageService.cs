@@ -116,4 +116,22 @@ public class TrainingPackageService : ITrainingPackageService
             };
         }
     }
+    // ==========================================
+    // REVIEWS & REPLY CALLS
+    // ==========================================
+    public async Task<ApiResponse<PackageReviewSummaryDto>> GetPackageReviewsAsync(Guid packageId)
+    {
+        return await _apiClient.GetAsync<PackageReviewSummaryDto>($"{BaseEndpoint}/{packageId}/reviews");
+    }
+
+    public async Task<ApiResponse<bool>> SubmitPackageReviewAsync(Guid packageId, CreatePackageReviewDto dto)
+    {
+        return await _apiClient.PostAsync<CreatePackageReviewDto, bool>($"{BaseEndpoint}/{packageId}/reviews", dto);
+    }
+
+    public async Task<ApiResponse<bool>> ReplyToReviewAsync(Guid packageId, Guid reviewId, ReplyReviewDto dto)
+    {
+        return await _apiClient.PostAsync<ReplyReviewDto, bool>($"{BaseEndpoint}/{packageId}/reviews/{reviewId}/reply", dto);
+    }
+
 }

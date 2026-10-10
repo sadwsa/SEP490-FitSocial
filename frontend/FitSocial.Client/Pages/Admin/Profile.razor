@@ -1,0 +1,152 @@
+@page "/admin/profile"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.Users
+@using FitSocial.Client.Services.Users
+@inject IUserService UserService
+@inject NavigationManager Navigation
+
+<PageTitle>My Profile - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        <div class="profile-container">
+            <!-- Page Header -->
+            <div class="mb-4">
+                <h2 class="view-title">My Profile</h2>
+                <p class="view-sub">View your personal account information.</p>
+            </div>
+
+            <!-- Error Notification -->
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="auth-alert error mb-4" role="alert">
+                    <AppIcon Name="flag" />
+                    <span class="alert-text">@errorMessage</span>
+                    <button type="button" class="row-btn ms-auto" @onclick="LoadProfileAsync">
+                        <AppIcon Name="refresh" /> Retry
+                    </button>
+                </div>
+            }
+
+            <!-- Loading State -->
+            @if (isLoading)
+            {
+                <div class="loading-card">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <span>Loading profile...</span>
+                </div>
+            }
+            else if (profile != null)
+            {
+                <!-- Section 1: Profile Header Card -->
+                <div class="profile-card header-card mb-4">
+                    <div class="header-card-content">
+                        <div class="avatar-wrapper">
+                            @if (AvatarHelper.HasValidAvatarUrl(profile.Avatar))
+                            {
+                                <img src="@profile.Avatar" alt="@(profile.FullName ?? "Staff/Admin")" class="profile-avatar-img" />
+                            }
+                            else
+                            {
+                                <div class="profile-avatar-placeholder">
+                                    @AvatarHelper.GetInitials(profile.FullName)
+                                </div>
+                            }
+                        </div>
+
+                        <div class="header-info">
+                            <h3 class="profile-name">
+                                @(string.IsNullOrWhiteSpace(profile.FullName) ? "Not provided" : profile.FullName)
+                            </h3>
+                            <div class="profile-role-badge-wrap">
+                                @if (string.Equals(profile.Role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="role-badge admin">ADMIN</span>
+                                }
+                                else if (string.Equals(profile.Role, "STAFF", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="role-badge staff">STAFF</span>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(profile.Role))
+                                {
+                                    <span class="role-badge">@profile.Role</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted text-xs">Role not assigned</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Personal Information Card -->
+                <div class="profile-card mb-4">
+                    <div class="card-section-header">
+                        <h4 class="section-title">Personal Information</h4>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Full Name</span>
+                            <span class="info-value">@(string.IsNullOrWhiteSpace(profile.FullName) ? "Not provided" : profile.FullName)</span>
+                        </div>
+
+                        <div class="info-item">
+                            <span class="info-label">Date of Birth</span>
+                            <span class="info-value">@(profile.DateOfBirth.HasValue ? profile.DateOfBirth.Value.ToString("dd/MM/yyyy") : "Not provided")</span>
+                        </div>
+
+                        <div class="info-item">
+                            <span class="info-label">Gender</span>
+                            <span class="info-value">@(string.IsNullOrWhiteSpace(profile.Gender) ? "Not provided" : profile.Gender)</span>
+                        </div>
+
+                        <div class="info-item">
+                            <span class="info-label">Phone Number</span>
+                            <span class="info-value">@(string.IsNullOrWhiteSpace(profile.PhoneNumber) ? "Not provided" : profile.PhoneNumber)</span>
+                        </div>
+
+                        <div class="info-item full-width">
+                            <span class="info-label">Email</span>
+                            <span class="info-value email-value">@(string.IsNullOrWhiteSpace(profile.Email) ? "Not provided" : profile.Email)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Account Information Card -->
+                <div class="profile-card">
+                    <div class="card-section-header">
+                        <h4 class="section-title">Account Information</h4>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Role</span>
+                            <div class="info-value mt-1">
+                                @if (string.Equals(profile.Role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="role-badge admin">ADMIN</span>
+                                }
+                                else if (string.Equals(profile.Role, "STAFF", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="role-badge staff">STAFF</span>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(profile.Role))
+                                {
+                                    <span class="role-badge">@profile.Role</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not provided</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </Authorized>
+</AuthorizeView>

@@ -136,4 +136,37 @@ public class UserService : IUserService
 
         throw new NotFoundException("User profile not found.");
     }
+
+    public async Task<ApiResponseDto<StaffAdminOwnProfileDto>> GetStaffAdminProfileAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user == null)
+        {
+            throw new NotFoundException("Staff or Admin profile could not be found.");
+        }
+
+        if (user.IsLocked == true)
+        {
+            throw new ForbiddenException("This account has been locked. Please contact support.");
+        }
+
+        var role = user.RoleCode?.Trim().ToUpperInvariant();
+        if (!RoleConstants.IsAdminOrStaff(role))
+        {
+            throw new ForbiddenException("Access denied. Only Staff and Admin profiles are allowed.");
+        }
+
+        var profileDto = new StaffAdminOwnProfileDto
+        {
+            Avatar = user.AvatarUrl,
+            FullName = user.FullName ?? string.Empty,
+            DateOfBirth = user.DateOfBirth,
+            Gender = user.Gender,
+            PhoneNumber = user.PhoneNumber,
+            Email = user.Email,
+            Role = role
+        };
+
+        return ApiResponseDto<StaffAdminOwnProfileDto>.Ok(profileDto, "Profile retrieved successfully.");
+    }
 }

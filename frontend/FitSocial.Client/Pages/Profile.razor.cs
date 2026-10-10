@@ -32,6 +32,14 @@ public partial class Profile : ComponentBase
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true && (user.IsInRole("STAFF") || user.IsInRole("ADMIN")))
+        {
+            Navigation.NavigateTo("/admin/profile", replace: true);
+            return;
+        }
+
         await LoadHeaderUserInfoAsync();
         await LoadProfileAsync();
     }

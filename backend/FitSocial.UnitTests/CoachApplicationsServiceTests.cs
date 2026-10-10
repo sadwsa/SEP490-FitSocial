@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
@@ -390,5 +391,197 @@ public class CoachApplicationsServiceTests
         // Assert
         Assert.False(result.Success);
         Assert.Equal("Coach application not found.", result.Message);
+    }
+
+    [Fact]
+    public async Task ApproveCoachApplicationAsync_WhenEmailServiceConfigured_SendsApprovalEmailWithNote()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var approverId = Guid.NewGuid();
+        var emailMock = new Mock<IEmailService>();
+        var serviceWithEmail = new CoachService(
+            _coachProfileRepoMock.Object,
+            _locationRepoMock.Object,
+            _unitOfWorkMock.Object,
+            _reviewRepoMock.Object,
+            _orderRepoMock.Object,
+            emailService: emailMock.Object);
+
+        var user = new User
+        {
+            UserId = coachId,
+            FullName = "Nguyen Van A",
+            Email = "coach.a@example.com",
+            RoleCode = "TRAINEE",
+            IsLocked = true
+        };
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "PENDING",
+            Coach = user
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await serviceWithEmail.ApproveCoachApplicationAsync(
+            coachId,
+            approverId,
+            new FitSocial.Application.DTOs.Coach.ApproveCoachApplicationRequestDto { Note = "Welcome to the team!" });
+
+        // Assert
+        Assert.True(result.Success);
+        emailMock.Verify(e => e.SendEmailAsync(
+            "coach.a@example.com",
+            It.Is<string>(s => s.Contains("phê duyệt", StringComparison.OrdinalIgnoreCase) || s.Contains("Approved", StringComparison.OrdinalIgnoreCase)),
+            It.Is<string>(b => b.Contains("Nguyen Van A") && b.Contains("Welcome to the team!"))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RejectCoachApplicationAsync_WhenEmailServiceConfigured_SendsRejectionEmailWithReason()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var rejectorId = Guid.NewGuid();
+        var emailMock = new Mock<IEmailService>();
+        var serviceWithEmail = new CoachService(
+            _coachProfileRepoMock.Object,
+            _locationRepoMock.Object,
+            _unitOfWorkMock.Object,
+            _reviewRepoMock.Object,
+            _orderRepoMock.Object,
+            emailService: emailMock.Object);
+
+        var user = new User
+        {
+            UserId = coachId,
+            FullName = "Tran Thi B",
+            Email = "coach.b@example.com",
+            RoleCode = "TRAINEE",
+            IsLocked = true
+        };
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "PENDING",
+            Coach = user
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await serviceWithEmail.RejectCoachApplicationAsync(
+            coachId,
+            rejectorId,
+            new FitSocial.Application.DTOs.Coach.RejectCoachApplicationRequestDto { Reason = "Unclear certificate images." });
+
+        // Assert
+        Assert.True(result.Success);
+        emailMock.Verify(e => e.SendEmailAsync(
+            "coach.b@example.com",
+            It.Is<string>(s => s.Contains("Coach Application", StringComparison.OrdinalIgnoreCase)),
+            It.Is<string>(b => b.Contains("Tran Thi B") && b.Contains("Unclear certificate images."))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ApproveCoachApplicationAsync_WhenEmailServiceThrows_StillSucceedsApproval()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var approverId = Guid.NewGuid();
+        var emailMock = new Mock<IEmailService>();
+        emailMock.Setup(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP connection failed"));
+
+        var serviceWithEmail = new CoachService(
+            _coachProfileRepoMock.Object,
+            _locationRepoMock.Object,
+            _unitOfWorkMock.Object,
+            _reviewRepoMock.Object,
+            _orderRepoMock.Object,
+            emailService: emailMock.Object);
+
+        var user = new User
+        {
+            UserId = coachId,
+            FullName = "Le Van C",
+            Email = "coach.c@example.com",
+            RoleCode = "TRAINEE",
+            IsLocked = true
+        };
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "PENDING",
+            Coach = user
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await serviceWithEmail.ApproveCoachApplicationAsync(coachId, approverId);
+
+        // Assert - approval succeeds despite email failure
+        Assert.True(result.Success);
+        Assert.Equal("APPROVED", profile.ApprovalStatus);
+    }
+
+    [Fact]
+    public async Task RejectCoachApplicationAsync_WhenEmailServiceThrows_StillSucceedsRejection()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var rejectorId = Guid.NewGuid();
+        var emailMock = new Mock<IEmailService>();
+        emailMock.Setup(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP connection failed"));
+
+        var serviceWithEmail = new CoachService(
+            _coachProfileRepoMock.Object,
+            _locationRepoMock.Object,
+            _unitOfWorkMock.Object,
+            _reviewRepoMock.Object,
+            _orderRepoMock.Object,
+            emailService: emailMock.Object);
+
+        var user = new User
+        {
+            UserId = coachId,
+            FullName = "Pham Thi D",
+            Email = "coach.d@example.com",
+            RoleCode = "TRAINEE",
+            IsLocked = true
+        };
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "PENDING",
+            Coach = user
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await serviceWithEmail.RejectCoachApplicationAsync(coachId, rejectorId);
+
+        // Assert - rejection succeeds despite email failure
+        Assert.True(result.Success);
+        Assert.Equal("REJECTED", profile.ApprovalStatus);
     }
 }

@@ -45,6 +45,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISubscriptionPriceHistoryService, SubscriptionPriceHistoryService>();
         services.AddScoped<ITransactionService, TransactionService>();
         services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
+        services.AddScoped<ICoachCertificateService, CoachCertificateService>();
         return services;
     }
 

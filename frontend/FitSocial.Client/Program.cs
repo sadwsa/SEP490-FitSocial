@@ -69,5 +69,6 @@ builder.Services.AddScoped<ISubscriptionPriceHistoryApiService, SubscriptionPric
 builder.Services.AddScoped<FitSocial.Client.Services.Transactions.ITransactionService, FitSocial.Client.Services.Transactions.TransactionService>();
 builder.Services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
 builder.Services.AddScoped<FitSocial.Client.Services.Refunds.IRefundService, FitSocial.Client.Services.Refunds.RefundApiService>();
+builder.Services.AddScoped<FitSocial.Client.Services.CoachCertificate.ICoachCertificateService, FitSocial.Client.Services.CoachCertificate.CoachCertificateService>();
 
 await builder.Build().RunAsync();

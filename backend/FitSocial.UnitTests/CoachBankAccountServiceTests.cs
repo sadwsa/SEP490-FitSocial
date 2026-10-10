@@ -27,11 +27,13 @@ public class CoachBankAccountServiceTests
         _mockEncryption = new Mock<IEncryptionService>();
         _mockUow = new Mock<IUnitOfWork>();
 
+        var mockHttpFactory = new Mock<IHttpClientFactory>();
         _service = new CoachBankAccountService(
             _mockBankRepo.Object,
             _mockCoachRepo.Object,
             _mockEncryption.Object,
-            _mockUow.Object);
+            _mockUow.Object,
+            mockHttpFactory.Object);
     }
 
     [Fact]

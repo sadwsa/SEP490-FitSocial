@@ -16,13 +16,17 @@ public class TrainingPackageServiceTests
 {
     private readonly Mock<ITrainingPackageRepository> _mockRepo;
     private readonly Mock<IUnitOfWork> _mockUow;
+    private readonly Mock<IReviewRepository> _mockReviewRepo;
+    private readonly Mock<IOrderRepository> _mockOrderRepo;
     private readonly TrainingPackageService _service;
 
     public TrainingPackageServiceTests()
     {
         _mockRepo = new Mock<ITrainingPackageRepository>();
         _mockUow = new Mock<IUnitOfWork>();
-        _service = new TrainingPackageService(_mockRepo.Object, _mockUow.Object);
+        _mockReviewRepo = new Mock<IReviewRepository>();
+        _mockOrderRepo = new Mock<IOrderRepository>();
+        _service = new TrainingPackageService(_mockRepo.Object, _mockUow.Object, _mockReviewRepo.Object, _mockOrderRepo.Object);
     }
 
     [Fact]

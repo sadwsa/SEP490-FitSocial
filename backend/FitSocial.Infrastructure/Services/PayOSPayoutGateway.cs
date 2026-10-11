@@ -8,8 +8,8 @@ namespace FitSocial.Infrastructure.Services;
 /// <summary>
 /// UC-23.1: real disbursement via PayOS Payout API (POST /v1/payouts).
 /// Credentials resolve from the admin-managed PaymentGatewayConfigs table
-/// first ("PayOS-Payout" row, else "PayOS" row, else the single active row),
-/// falling back to appsettings (PayOS:Payout* then PayOS:*).
+/// first (active IsPayout=true row), falling back to appsettings
+/// (PayOS:Payout* then PayOS:*).
 /// Funding comes from the merchant's payout source (e.g. Bao Kim wallet).
 /// </summary>
 public class PayOSPayoutGateway : IBankTransferGateway
@@ -59,21 +59,67 @@ public class PayOSPayoutGateway : IBankTransferGateway
         _credentials = credentials!;
     }
 
+    /// <summary>
+    /// Shared HttpClient forced onto IPv4. PayOS payout calls are IP-allowlisted
+    /// (IPv4), but .NET prefers IPv6 when the network has it — PayOS would then
+    /// see an unlisted IPv6 source and answer 403 even with correct keys.
+    /// </summary>
+    private static readonly HttpClient SharedIPv4Client = CreateIPv4HttpClient();
+
+    private static HttpClient CreateIPv4HttpClient()
+    {
+        var handler = new System.Net.Http.SocketsHttpHandler
+        {
+            ConnectCallback = async (context, cancellationToken) =>
+            {
+                var entry = await System.Net.Dns.GetHostEntryAsync(context.DnsEndPoint.Host, cancellationToken);
+                var ipv4 = entry.AddressList.FirstOrDefault(a =>
+                    a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                if (ipv4 == null)
+                {
+                    throw new InvalidOperationException("PayOS API host has no IPv4 address.");
+                }
+                var socket = new System.Net.Sockets.Socket(
+                    System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+                try
+                {
+                    await socket.ConnectAsync(new System.Net.IPEndPoint(ipv4, context.DnsEndPoint.Port), cancellationToken);
+                    return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            }
+        };
+        return new HttpClient(handler);
+    }
+
     private async Task<PayOSClient> CreateClientAsync(CancellationToken cancellationToken = default)
     {
+        string clientId;
+        string apiKey;
+        string checksumKey;
+
         if (_credentials != null)
         {
-            var dbCreds = await _credentials.GetDbCredentialsAsync(["PayOS-Payout", "PayOS"], cancellationToken)
-                ?? await _credentials.GetSingleActiveCredentialsAsync(cancellationToken);
+            var dbCreds = await _credentials.GetPayoutCredentialsAsync(cancellationToken);
             if (dbCreds != null)
             {
-                return new PayOSClient(dbCreds.ClientId, dbCreds.ApiKey, dbCreds.ChecksumKey);
+                return new PayOSClient(new PayOSOptions
+                {
+                    ClientId = dbCreds.ClientId,
+                    ApiKey = dbCreds.ApiKey,
+                    ChecksumKey = dbCreds.ChecksumKey,
+                    HttpClient = SharedIPv4Client
+                });
             }
         }
 
-        var clientId = _configuration["PayOS:PayoutClientId"];
-        var apiKey = _configuration["PayOS:PayoutApiKey"];
-        var checksumKey = _configuration["PayOS:PayoutChecksumKey"];
+        clientId = _configuration["PayOS:PayoutClientId"];
+        apiKey = _configuration["PayOS:PayoutApiKey"];
+        checksumKey = _configuration["PayOS:PayoutChecksumKey"];
 
         // Fall back to the collection-channel keys if dedicated payout keys are absent.
         clientId ??= _configuration["PayOS:ClientId"];
@@ -87,7 +133,13 @@ public class PayOSPayoutGateway : IBankTransferGateway
             throw new InvalidOperationException("PayOS payout is not configured on the server.");
         }
 
-        return new PayOSClient(clientId, apiKey, checksumKey);
+        return new PayOSClient(new PayOSOptions
+        {
+            ClientId = clientId,
+            ApiKey = apiKey,
+            ChecksumKey = checksumKey,
+            HttpClient = SharedIPv4Client
+        });
     }
 
     public static string? ResolveBin(string? bankCode)
@@ -133,15 +185,24 @@ public class PayOSPayoutGateway : IBankTransferGateway
         var referenceId = string.IsNullOrWhiteSpace(request.Reference)
             ? $"FSPO{DateTimeOffset.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}"
             : request.Reference;
+        var amount = (long)Math.Round(request.Amount);
         var payoutRequest = new PayoutRequest
         {
             ReferenceId = referenceId,
-            Amount = (long)Math.Round(request.Amount),
+            Amount = amount,
             Description = request.Description,
             ToBin = bin,
             ToAccountNumber = request.AccountNumber.Trim(),
             Category = null
         };
+
+        // Pre-check the payout source balance so "insufficient funds" fails
+        // fast with a clear message instead of a generic API error.
+        var balanceError = await CheckBalanceAsync(client, amount, cancellationToken);
+        if (balanceError != null)
+        {
+            return new BankTransferResult(false, null, balanceError);
+        }
 
         Payout payout;
         try
@@ -152,7 +213,7 @@ public class PayOSPayoutGateway : IBankTransferGateway
         }
         catch (Exception ex)
         {
-            return new BankTransferResult(false, null, $"PayOS payout rejected: {ex.Message}");
+            return new BankTransferResult(false, null, MapPayOSException(ex, amount));
         }
 
         var tx = payout.Transactions?.FirstOrDefault();
@@ -171,5 +232,63 @@ public class PayOSPayoutGateway : IBankTransferGateway
             ? tx.ErrorMessage
             : $"PayOS transaction state: {tx.State} (approval: {payout.ApprovalState}).";
         return new BankTransferResult(false, payout.Id, reason);
+    }
+
+    /// <summary>
+    /// Reads the payout source balance (GET /v1/payouts-account/balance).
+    /// Returns an error message when the balance is known-insufficient,
+    /// otherwise null (a failed balance lookup never blocks the transfer —
+    /// the create call itself will surface auth problems).
+    /// </summary>
+    private static async Task<string?> CheckBalanceAsync(
+        PayOSClient client, long amount, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var info = await client.PayoutsAccount.GetBalanceAsync();
+            if (info == null)
+            {
+                return null;
+            }
+
+            if (decimal.TryParse(
+                    info.Balance?.ToString(),
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var balance) && balance < amount)
+            {
+                return $"Insufficient payout source balance ({balance:N0} VND available, {amount:N0} VND needed). Top up the payout wallet on the PayOS dashboard and retry.";
+            }
+        }
+        catch
+        {
+            // Fall through: let the create call report the real problem.
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The PayOS .NET SDK throws bare ApiException("API request failed")
+    /// without the response desc, so map by exception type to actionable text.
+    /// </summary>
+    private static string MapPayOSException(Exception ex, long amount)
+    {
+        return ex switch
+        {
+            PayOS.Exceptions.UnauthorizedException =>
+                "PayOS authentication failed (401): the payout API key is missing/inactive or the payout channel (Kênh chi) is not activated for these credentials.",
+            PayOS.Exceptions.ForbiddenException =>
+                "PayOS refused the payout order (403): this credential has no payout permission. Check that the payout channel (Kênh chi) is approved AND that this server's public IP is whitelisted under 'Quản lý IP cho kênh' on the PayOS dashboard.",
+            PayOS.Exceptions.BadRequestException =>
+                $"PayOS rejected the payout data (400) for {amount:N0} VND. Common causes: amount below the minimum per transaction, insufficient wallet balance, invalid beneficiary account/bank, or invalid description. Check the payout wallet balance and channel limits on the PayOS dashboard, then retry.",
+            PayOS.Exceptions.TooManyRequestsException =>
+                "PayOS rate limit hit (429). Wait a moment and retry.",
+            PayOS.Exceptions.ConnectionTimeoutException or PayOS.Exceptions.ConnectionException =>
+                $"Could not reach PayOS ({ex.Message}). Check network and retry.",
+            PayOS.Exceptions.ApiException api when !string.IsNullOrWhiteSpace(api.ErrorDescription) && api.ErrorDescription != "API request failed" =>
+                $"PayOS payout rejected: {api.ErrorDescription}",
+            _ => $"PayOS payout rejected: {ex.Message}",
+        };
     }
 }

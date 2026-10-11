@@ -22,6 +22,7 @@ public class PayoutService : IPayoutService
     private readonly IBankTransferGateway _bankGateway;
     private readonly IAuditLogRepository _auditLogs;
     private readonly INotificationRepository _notifications;
+    private readonly IEmailService _emailService;
     private readonly IUnitOfWork _unitOfWork;
 
     /// <summary>
@@ -39,7 +40,8 @@ public class PayoutService : IPayoutService
         IBankTransferGateway bankGateway,
         IAuditLogRepository auditLogs,
         INotificationRepository notifications,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IEmailService? emailService = null)
     {
         _payouts = payouts;
         _users = users;
@@ -49,6 +51,7 @@ public class PayoutService : IPayoutService
         _bankGateway = bankGateway;
         _auditLogs = auditLogs;
         _notifications = notifications;
+        _emailService = emailService!;
         _unitOfWork = unitOfWork;
     }
 
@@ -91,23 +94,68 @@ public class PayoutService : IPayoutService
                 ProcessedAt = p.ProcessedAt,
                 CreatedAt = p.CreatedAt,
                 OrderCount = p.PayoutItems.Count(i => (i.GrossAmount ?? 0) > 0),
+                PaidItemCount = p.PayoutItems.Count(i => (i.GrossAmount ?? 0) > 0 && IsItemPaid(i, p.Status)),
+                TotalItemCount = p.PayoutItems.Count(i => (i.GrossAmount ?? 0) > 0),
                 HasBlockingReports = reportCount > 0,
                 BlockingReportCount = reportCount,
                 HasBankAccount = banks.Count > 0
             };
 
-            (dto.CanProcess, dto.BlockReason) = EvaluateProcessable(dto.Status, dto.NetPayoutAmount, dto.HasBankAccount, reportCount);
+            (dto.CanProcess, dto.BlockReason) = EvaluateProcessable(
+                dto.Status, dto.NetPayoutAmount, dto.HasBankAccount, reportCount,
+                dto.PayoutMonth, dto.PayoutYear);
             result.Add(dto);
         }
 
         return ApiResponseDto<List<PayoutHistoryItemDto>>.Ok(result, "Payout history retrieved successfully.");
     }
 
-    private static (bool canProcess, string? reason) EvaluateProcessable(string? status, decimal net, bool hasBank, int reportCount)
+    private static bool IsFutureCycle(int month, int year)
+    {
+        var now = DateTime.UtcNow;
+        return year * 12 + month > now.Year * 12 + now.Month;
+    }
+
+    private static readonly string[] MonthNames =
+    {
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    };
+
+    private static string FutureCycleMessage(int month, int year)
+    {
+        return $"Cannot pay a future cycle yet. Cycle {month:D2}/{year} becomes payable once {MonthNames[month - 1]} {year} arrives.";
+    }
+
+    /// <summary>
+    /// An item counts as paid when marked PROCESSED, or (legacy rows) when it
+    /// belongs to an already-PROCESSED payout.
+    /// </summary>
+    private static bool IsItemPaid(PayoutItem item, string? payoutStatus)
+    {
+        if (string.Equals(item.Status, PayoutConstants.StatusProcessed, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (item.Status == null &&
+            (string.Equals(payoutStatus, PayoutConstants.StatusProcessed, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(payoutStatus, PaymentConstants.OrderStatusPaid, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private static (bool canProcess, string? reason) EvaluateProcessable(
+        string? status, decimal net, bool hasBank, int reportCount, int month, int year)
     {
         if (!string.Equals(status, PayoutConstants.StatusPending, StringComparison.OrdinalIgnoreCase))
         {
             return (false, null); // processed/failed records show no action
+        }
+        if (IsFutureCycle(month, year))
+        {
+            return (false, FutureCycleMessage(month, year));
         }
         if (net <= 0)
         {
@@ -181,16 +229,33 @@ public class PayoutService : IPayoutService
                     continue; // never recalculate a PROCESSED cycle
                 }
 
-                // Rebuild pending snapshot. Clear() first: Deleted instances must
-                // leave the tracked collection, otherwise EF change tracking
-                // can UPDATE old rows instead of INSERTing the new ones.
-                _payouts.RemoveItems(existing.PayoutItems.ToList());
-                existing.PayoutItems.Clear();
-                foreach (var item in BuildItems(existing.PayoutId, calc))
+                // Rebuild pending snapshot but KEEP already-paid lines
+                // (per-package payments must survive regeneration).
+                var kept = existing.PayoutItems.Where(i => IsItemPaid(i, existing.Status)).ToList();
+                var coveredOrders = kept
+                    .Where(i => (i.GrossAmount ?? 0) > 0)
+                    .Select(i => i.OrderId)
+                    .ToHashSet();
+                var coveredRefunds = kept
+                    .Where(i => (i.RefundAdjustment ?? 0) > 0)
+                    .Select(i => i.OrderId)
+                    .ToHashSet();
+                var doomed = existing.PayoutItems.Where(i => !IsItemPaid(i, existing.Status)).ToList();
+                _payouts.RemoveItems(doomed);
+                foreach (var dead in doomed)
+                {
+                    existing.PayoutItems.Remove(dead);
+                }
+                foreach (var item in BuildItems(existing.PayoutId, calc, coveredOrders, coveredRefunds))
                 {
                     existing.PayoutItems.Add(item);
                 }
-                ApplyTotals(existing, calc);
+                ApplyItemTotals(existing);
+                if ((existing.NetPayoutAmount ?? 0) <= 0 && kept.Count == 0)
+                {
+                    skipped++;
+                    continue;
+                }
                 updated++;
             }
             else
@@ -244,7 +309,9 @@ public class PayoutService : IPayoutService
         return (to.Year - from.Year) * 12 + to.Month - from.Month;
     }
 
-    private static string BuildVestingInfo(DateTime? orderCreatedAt, int? durationDays, int cycleMonth, int cycleYear, bool isGrossLine)
+    private static string BuildVestingInfo(
+        DateTime? orderCreatedAt, int? durationDays, int cycleMonth, int cycleYear,
+        bool isGrossLine, decimal trancheAmount, decimal packageTotal)
     {
         if (!isGrossLine || !orderCreatedAt.HasValue)
         {
@@ -257,7 +324,88 @@ public class PayoutService : IPayoutService
         {
             return n <= 1 ? "100% kỳ này" : string.Empty;
         }
-        return $"Kỳ {k + 1}/{n}";
+        var pct = packageTotal > 0
+            ? (trancheAmount / packageTotal * 100m).ToString("0.##")
+            : "?";
+        return $"Kỳ {k + 1}/{n} • {pct}%";
+    }
+
+    private static string PackageGroupKey(Payout payout, Guid orderId)
+    {
+        var pkg = payout.PayoutItems
+            .FirstOrDefault(x => x.OrderId == orderId)?.Order
+            ?.OrderDetails.FirstOrDefault()?.PackageId;
+        return pkg?.ToString() ?? ("order:" + orderId);
+    }
+
+    private static PayoutItemDto MapItemDto(PayoutItem i, Payout payout)
+    {
+        return new PayoutItemDto
+        {
+            PayoutItemId = i.PayoutItemId,
+            OrderId = i.OrderId,
+            BuyerName = i.Order?.Buyer?.FullName ?? i.Order?.Buyer?.Email,
+            PackageTitle = i.Order?.OrderDetails.FirstOrDefault()?.PackageTitle,
+            OrderCreatedAt = i.Order?.CreatedAt,
+            GrossAmount = i.GrossAmount ?? 0,
+            CommissionRate = i.CommissionRate ?? PayoutConstants.CommissionRate,
+            CommissionAmount = i.CommissionAmount ?? 0,
+            RefundAdjustment = i.RefundAdjustment ?? 0,
+            TaxAmount = i.TaxAmount ?? 0,
+            NetAmount = i.NetAmount ?? 0,
+            IsPaid = IsItemPaid(i, payout.Status),
+            ProcessedAt = i.ProcessedAt,
+            TransactionRef = i.TransactionRef,
+            VestingInfo = BuildVestingInfo(
+                i.Order?.CreatedAt,
+                i.Order?.OrderDetails.FirstOrDefault()?.PackageDurationDays,
+                payout.PayoutMonth, payout.PayoutYear,
+                (i.GrossAmount ?? 0) > 0,
+                i.GrossAmount ?? 0,
+                i.Order?.TotalAmount ?? 0)
+        };
+    }
+
+    /// <summary>
+    /// Full month-by-month vesting timeline of one order, marked with what
+    /// has already been paid in any cycle. A PAYABLE month carrying an unpaid
+    /// item of a still-pending payout can be paid directly (CanPay).
+    /// </summary>
+    private static List<VestingMonthDto> BuildOrderTimeline(
+        Order? order,
+        HashSet<(Guid, int, int)> paidCycles,
+        Dictionary<(Guid, int, int), (Guid, Guid, bool, bool)> monthLedger,
+        bool guardsOk)
+    {
+        var result = new List<VestingMonthDto>();
+        if (order?.CreatedAt == null)
+        {
+            return result;
+        }
+        var duration = order.OrderDetails.FirstOrDefault()?.PackageDurationDays;
+        var n = PayoutConstants.VestingMonths(duration);
+        var gross = order.TotalAmount ?? 0;
+        var orderMonth = new DateTime(order.CreatedAt.Value.Year, order.CreatedAt.Value.Month, 1);
+        var now = DateTime.UtcNow;
+        for (var k = 0; k < n; k++)
+        {
+            var m = orderMonth.AddMonths(k);
+            var paid = paidCycles.Contains((order.OrderId, m.Year, m.Month));
+            var arrived = m.Year * 12 + m.Month <= now.Year * 12 + now.Month;
+            monthLedger.TryGetValue((order.OrderId, m.Year, m.Month), out var entry);
+            var hasUnpaidItem = entry != default && !entry.Item3;
+            result.Add(new VestingMonthDto
+            {
+                Month = m.Month,
+                Year = m.Year,
+                State = paid ? "PAID" : (arrived ? "PAYABLE" : "FUTURE"),
+                Amount = PayoutConstants.TrancheAmount(gross, n, k),
+                PayoutId = entry == default ? null : entry.Item1,
+                PayoutItemId = entry == default || entry.Item3 ? null : entry.Item2,
+                CanPay = guardsOk && arrived && hasUnpaidItem && entry.Item4
+            });
+        }
+        return result;
     }
 
     private async Task<CycleCalc> CalculateCycleAsync(
@@ -322,13 +470,31 @@ public class PayoutService : IPayoutService
         payout.NetPayoutAmount = calc.Net;
     }
 
-    private static List<PayoutItem> BuildItems(Guid payoutId, CycleCalc calc)
+    /// <summary>
+    /// Recomputes snapshot totals from the actual item set (used when kept
+    /// paid lines survive a regeneration).
+    /// </summary>
+    private static void ApplyItemTotals(Payout payout)
+    {
+        payout.TotalGrossAmount = payout.PayoutItems.Sum(i => i.GrossAmount ?? 0);
+        payout.SystemCommissionAmount = payout.PayoutItems.Sum(i => i.CommissionAmount ?? 0);
+        payout.TaxAmount = payout.PayoutItems.Sum(i => i.TaxAmount ?? 0);
+        payout.NetPayoutAmount = payout.PayoutItems.Sum(i => i.NetAmount ?? 0);
+    }
+
+    private static List<PayoutItem> BuildItems(
+        Guid payoutId, CycleCalc calc,
+        HashSet<Guid>? skipOrderIds = null, HashSet<Guid>? skipRefundOrderIds = null)
     {
         var now = DateTime.UtcNow;
         var items = new List<PayoutItem>();
 
         foreach (var line in calc.Lines)
         {
+            if (skipOrderIds != null && skipOrderIds.Contains(line.Order.OrderId))
+            {
+                continue;
+            }
             var commission = Math.Round(line.Amount * PayoutConstants.CommissionRate, 2);
             // NOTE: PayoutItemId intentionally left unset (DB default uuid_generate_v4()).
             // These items attach via the tracked Payout collection; an explicitly
@@ -350,6 +516,10 @@ public class PayoutService : IPayoutService
 
         foreach (var (refund, amount) in calc.Refunds)
         {
+            if (skipRefundOrderIds != null && skipRefundOrderIds.Contains(refund.OrderId))
+            {
+                continue;
+            }
             // Same note as above: leave PayoutItemId for the DB default.
             items.Add(new PayoutItem
             {
@@ -414,35 +584,142 @@ public class PayoutService : IPayoutService
             BlockingReportCount = reportCount,
             Items = payout.PayoutItems
                 .OrderByDescending(i => i.GrossAmount ?? 0)
-                .Select(i => new PayoutItemDto
-                {
-                    PayoutItemId = i.PayoutItemId,
-                    OrderId = i.OrderId,
-                    BuyerName = i.Order?.Buyer?.FullName ?? i.Order?.Buyer?.Email,
-                    PackageTitle = i.Order?.OrderDetails.FirstOrDefault()?.PackageTitle,
-                    OrderCreatedAt = i.Order?.CreatedAt,
-                    GrossAmount = i.GrossAmount ?? 0,
-                    CommissionRate = i.CommissionRate ?? PayoutConstants.CommissionRate,
-                    CommissionAmount = i.CommissionAmount ?? 0,
-                    RefundAdjustment = i.RefundAdjustment ?? 0,
-                    TaxAmount = i.TaxAmount ?? 0,
-                    NetAmount = i.NetAmount ?? 0,
-                    VestingInfo = BuildVestingInfo(
-                        i.Order?.CreatedAt,
-                        i.Order?.OrderDetails.FirstOrDefault()?.PackageDurationDays,
-                        payout.PayoutMonth, payout.PayoutYear,
-                        (i.GrossAmount ?? 0) > 0)
-                }).ToList()
+                .Select(i => MapItemDto(i, payout))
+                .ToList()
         };
 
+        // Paid months across ALL cycles of this coach (for per-package timelines).
+        // Value: payout + item holding that month's tranche, and whether it is paid.
+        var coachPayouts = await _payouts.ListHistoryAsync(null, null, null, payout.CoachId, cancellationToken);
+        var monthLedger = new Dictionary<(Guid, int, int), (Guid, Guid, bool, bool)>();
+        foreach (var cp in coachPayouts)
+        {
+            var cpPending = string.Equals(cp.Status, PayoutConstants.StatusPending, StringComparison.OrdinalIgnoreCase);
+            foreach (var ci in cp.PayoutItems)
+            {
+                if ((ci.GrossAmount ?? 0) <= 0)
+                {
+                    continue;
+                }
+                monthLedger[(ci.OrderId, cp.PayoutYear, cp.PayoutMonth)] =
+                    (cp.PayoutId, ci.PayoutItemId, IsItemPaid(ci, cp.Status), cpPending);
+            }
+        }
+        var paidCycles = monthLedger
+            .Where(kv => kv.Value.Item3)
+            .Select(kv => kv.Key)
+            .ToHashSet();
+
+        var guardsOk = bank != null && reportCount == 0;
+        foreach (var item in dto.Items.Where(i => i.GrossAmount > 0))
+        {
+            var order = payout.PayoutItems.FirstOrDefault(x => x.PayoutItemId == item.PayoutItemId)?.Order;
+            item.Timeline = BuildOrderTimeline(order, paidCycles, monthLedger, guardsOk);
+        }
+
+        dto.PackageGroups = dto.Items
+            .Where(i => i.GrossAmount > 0)
+            .GroupBy(i => PackageGroupKey(payout, i.OrderId))
+            .Select(g =>
+            {
+                var first = g.First();
+                var order = payout.PayoutItems.FirstOrDefault(x => x.PayoutItemId == first.PayoutItemId)?.Order;
+                var detail0 = order?.OrderDetails.FirstOrDefault();
+                var duration = detail0?.PackageDurationDays ?? 30;
+                var paid = g.Where(i => i.IsPaid).Sum(i => i.NetAmount);
+                var total = g.Sum(i => i.NetAmount);
+                return new PayoutPackageGroupDto
+                {
+                    PackageId = detail0?.PackageId,
+                    PackageTitle = first.PackageTitle ?? "Training Package",
+                    DurationDays = duration,
+                    MonthsTotal = PayoutConstants.VestingMonths(duration),
+                    CycleAmount = total,
+                    CyclePaidAmount = paid,
+                    CycleUnpaidAmount = total - paid,
+                    IsFullyPaid = g.All(i => i.IsPaid),
+                    Items = g.ToList()
+                };
+            })
+            .OrderByDescending(g => g.CycleUnpaidAmount)
+            .ToList();
+
         (dto.CanProcess, dto.BlockReason) = EvaluateProcessable(
-            dto.Status, dto.NetPayoutAmount, dto.BankAccount != null, reportCount);
+            dto.Status, dto.NetPayoutAmount, dto.BankAccount != null, reportCount,
+            dto.PayoutMonth, dto.PayoutYear);
 
         return ApiResponseDto<PayoutDetailDto>.Ok(dto, "Payout detail retrieved successfully.");
     }
 
     // ---------- Process ----------
 
+    private static List<PayoutItem> UnpaidGrossItems(Payout payout)
+    {
+        return payout.PayoutItems
+            .Where(i => (i.GrossAmount ?? 0) > 0 && !IsItemPaid(i, payout.Status))
+            .ToList();
+    }
+
+    private static List<PayoutItem> PendingRefundItems(Payout payout)
+    {
+        return payout.PayoutItems
+            .Where(i => (i.GrossAmount ?? 0) <= 0 && (i.RefundAdjustment ?? 0) > 0 && !IsItemPaid(i, payout.Status))
+            .ToList();
+    }
+
+    private sealed record ProcessGuards(CoachBankAccount Bank, string AccountNumber);
+
+    /// <summary>
+    /// Shared guards for any payout disbursement (full or per-package):
+    /// pending status, arrived cycle, active bank account, no blocking reports.
+    /// </summary>
+    private async Task<(ProcessGuards? guards, string? error)> CheckProcessGuardsAsync(
+        Payout payout, Guid staffId, string? ipAddress, CancellationToken ct)
+    {
+        if (!string.Equals(payout.Status, PayoutConstants.StatusPending, StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, $"Only pending payouts can be processed (current status: {payout.Status}).");
+        }
+
+        // Future cycles are not payable yet; overdue (past, still pending) ones are.
+        if (IsFutureCycle(payout.PayoutMonth, payout.PayoutYear))
+        {
+            return (null, FutureCycleMessage(payout.PayoutMonth, payout.PayoutYear));
+        }
+
+        // 23.1.E1 Missing or Inactive Coach Payment Account (UC-36.1: inactive excluded)
+        var banks = await _bankAccounts.ListActiveByCoachIdAsync(payout.CoachId, ct);
+        var bank = banks.FirstOrDefault(b => b.IsDefault == true) ?? banks.FirstOrDefault();
+        if (bank == null)
+        {
+            await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, "PENDING",
+                new { reason = "E1: missing bank account" }, ipAddress, ct);
+            return (null, "Coach has not added or activated a valid bank account. Payout rejected and flagged.");
+        }
+
+        // TH1: unresolved reports block the transfer
+        var reportCount = await _reports.CountUnresolvedAgainstUserAsync(payout.CoachId, ct);
+        if (reportCount > 0)
+        {
+            await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, "PENDING",
+                new { reason = "TH1: unresolved reports", reportCount }, ipAddress, ct);
+            return (null, $"Coach has {reportCount} unresolved report(s). Payout is blocked until reports are resolved.");
+        }
+
+        var accountNumber = _encryption.Decrypt(bank.EncryptedAccountNumber) ?? string.Empty;
+        return (new ProcessGuards(bank, accountNumber), null);
+    }
+
+    private static bool IsOrderRefunded(PayoutItem item)
+    {
+        return item.Order != null &&
+            string.Equals(item.Order.OrderStatus, PaymentConstants.OrderStatusRefunded, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Pay-all: transfers the REMAINING balance (unpaid tranches minus
+    /// unconsumed refund adjustments) in one transfer.
+    /// </summary>
     public async Task<ApiResponseDto<ProcessPayoutResultDto>> ProcessPayoutAsync(
         Guid payoutId, Guid staffId, string? ipAddress = null, CancellationToken cancellationToken = default)
     {
@@ -452,47 +729,100 @@ public class PayoutService : IPayoutService
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Payout record not found.");
         }
 
-        if (!string.Equals(payout.Status, PayoutConstants.StatusPending, StringComparison.OrdinalIgnoreCase))
+        var (guards, guardError) = await CheckProcessGuardsAsync(payout, staffId, ipAddress, cancellationToken);
+        if (guards == null)
         {
-            return ApiResponseDto<ProcessPayoutResultDto>.Fail($"Only pending payouts can be processed (current status: {payout.Status}).");
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail(guardError!);
         }
 
-        var net = payout.NetPayoutAmount ?? 0;
-        if (net <= 0)
+        var unpaid = UnpaidGrossItems(payout);
+        if (unpaid.Count == 0)
         {
-            return ApiResponseDto<ProcessPayoutResultDto>.Fail("Payout has no positive disbursement balance.");
+            return ApiResponseDto<ProcessPayoutResultDto>.Ok(
+                new ProcessPayoutResultDto
+                {
+                    PayoutId = payout.PayoutId,
+                    Status = payout.Status,
+                    TransactionRef = payout.TransactionRef,
+                    NetPayoutAmount = 0,
+                    ProcessedAt = payout.ProcessedAt
+                },
+                "Payout is already fully paid.");
         }
 
-        // Mutual Consistency: If any order in this cycle has been refunded, block payout and require regeneration
-        var hasRefundedOrder = payout.PayoutItems.Any(i =>
-            (i.GrossAmount ?? 0) > 0 && i.Order != null && string.Equals(i.Order.OrderStatus, PaymentConstants.OrderStatusRefunded, StringComparison.OrdinalIgnoreCase));
-        if (hasRefundedOrder)
+        // Mutual Consistency: refunded orders require regeneration first.
+        if (unpaid.Any(IsOrderRefunded))
         {
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("One or more orders in this payout cycle have been refunded. Please regenerate the payout cycle before processing.");
         }
 
-        // 23.1.E1 Missing or Inactive Coach Payment Account (UC-36.1: inactive excluded)
-        var banks = await _bankAccounts.ListActiveByCoachIdAsync(payout.CoachId, cancellationToken);
-        var bank = banks.FirstOrDefault(b => b.IsDefault == true) ?? banks.FirstOrDefault();
-        if (bank == null)
+        var refunds = PendingRefundItems(payout);
+        return await ExecuteTransferAsync(
+            payout, unpaid, refunds, guards.Bank, guards.AccountNumber,
+            staffId, ipAddress, $"PO{payout.PayoutId:N}", cancellationToken);
+    }
+
+    /// <summary>
+    /// Pay selected lines only (one package group): transfers just their
+    /// net amount. The payout stays PENDING until every line is paid.
+    /// </summary>
+    public async Task<ApiResponseDto<ProcessPayoutResultDto>> ProcessPackageItemsAsync(
+        Guid payoutId, List<Guid> payoutItemIds, Guid staffId, string? ipAddress = null, CancellationToken cancellationToken = default)
+    {
+        var payout = await _payouts.GetByIdWithDetailsAsync(payoutId, cancellationToken);
+        if (payout == null)
         {
-            await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, "PENDING",
-                new { reason = "E1: missing bank account" }, ipAddress, cancellationToken);
-            return ApiResponseDto<ProcessPayoutResultDto>.Fail("Coach has not added or activated a valid bank account. Payout rejected and flagged.");
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail("Payout record not found.");
         }
 
-        // TH1: unresolved reports block the transfer
-        var reportCount = await _reports.CountUnresolvedAgainstUserAsync(payout.CoachId, cancellationToken);
-        if (reportCount > 0)
+        var (guards, guardError) = await CheckProcessGuardsAsync(payout, staffId, ipAddress, cancellationToken);
+        if (guards == null)
         {
-            await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, "PENDING",
-                new { reason = "TH1: unresolved reports", reportCount }, ipAddress, cancellationToken);
-            return ApiResponseDto<ProcessPayoutResultDto>.Fail(
-                $"Coach has {reportCount} unresolved report(s). Payout is blocked until reports are resolved.");
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail(guardError!);
         }
 
-        // Execute transfer via banking gateway
-        var accountNumber = _encryption.Decrypt(bank.EncryptedAccountNumber) ?? string.Empty;
+        if (payoutItemIds == null || payoutItemIds.Count == 0)
+        {
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail("Select at least one package line to pay.");
+        }
+
+        var wanted = payoutItemIds.ToHashSet();
+        var targets = payout.PayoutItems
+            .Where(i => wanted.Contains(i.PayoutItemId) && (i.GrossAmount ?? 0) > 0 && !IsItemPaid(i, payout.Status))
+            .ToList();
+        if (targets.Count == 0)
+        {
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail("Selected lines are already paid or do not belong to this payout.");
+        }
+
+        if (targets.Any(IsOrderRefunded))
+        {
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail("One or more selected orders have been refunded. Please regenerate the payout cycle before processing.");
+        }
+
+        var orderIds = targets.Select(t => t.OrderId).ToHashSet();
+        var refunds = PendingRefundItems(payout).Where(r => orderIds.Contains(r.OrderId)).ToList();
+
+        // Stable idempotency key for this exact selection (safe retries).
+        var first = targets.OrderBy(t => t.PayoutItemId).First().PayoutItemId.ToString("N")[..8];
+        var reference = $"PO{payout.PayoutId:N}-{first}x{targets.Count}";
+
+        return await ExecuteTransferAsync(
+            payout, targets, refunds, guards.Bank, guards.AccountNumber,
+            staffId, ipAddress, reference, cancellationToken);
+    }
+
+    private async Task<ApiResponseDto<ProcessPayoutResultDto>> ExecuteTransferAsync(
+        Payout payout, List<PayoutItem> grossTargets, List<PayoutItem> relatedRefunds,
+        CoachBankAccount bank, string accountNumber,
+        Guid staffId, string? ipAddress, string reference, CancellationToken ct)
+    {
+        var amount = grossTargets.Sum(i => i.NetAmount ?? 0) - relatedRefunds.Sum(i => i.RefundAdjustment ?? 0);
+        if (amount <= 0)
+        {
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail("Nothing positive to pay after refund adjustments.");
+        }
+
         BankTransferResult transfer;
         try
         {
@@ -500,58 +830,75 @@ public class PayoutService : IPayoutService
                 bank.BankCode ?? string.Empty,
                 accountNumber,
                 bank.AccountName ?? string.Empty,
-                net,
+                amount,
                 "VND",
                 $"FITCONNECT PAYOUT {payout.PayoutMonth} {payout.PayoutYear}",
-                $"PO{payout.PayoutId:N}"), cancellationToken);
+                reference), ct);
         }
         catch (Exception ex)
         {
             // 23.1.E2 Banking Gateway failure
             await WriteAuditAsync(staffId, "PAYOUT_FAILED", payout, "PENDING",
-                new { reason = "E2: gateway exception", error = ex.Message }, ipAddress, cancellationToken);
+                new { reason = "E2: gateway exception", error = ex.Message }, ipAddress, ct);
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Banking gateway error. Payout kept as PENDING — please retry.");
         }
 
         if (!transfer.Success)
         {
             await WriteAuditAsync(staffId, "PAYOUT_FAILED", payout, "PENDING",
-                new { reason = "E2: transfer rejected", error = transfer.FailureReason }, ipAddress, cancellationToken);
+                new { reason = "E2: transfer rejected", error = transfer.FailureReason }, ipAddress, ct);
             return ApiResponseDto<ProcessPayoutResultDto>.Fail(
                 $"Payout transfer failed ({transfer.FailureReason}). Payout kept as PENDING — please retry.");
         }
 
         var now = DateTime.UtcNow;
-        payout.Status = PayoutConstants.StatusProcessed;
-        payout.TransactionRef = transfer.TransactionRef;
-        payout.ProcessedBy = staffId;
-        payout.ProcessedAt = now;
-
-        await WriteAuditAsync(staffId, "PAYOUT_PROCESSED", payout, "PROCESSED",
-            new { transactionRef = transfer.TransactionRef, net, processedAt = now }, ipAddress, cancellationToken);
-
-        try
+        foreach (var t in grossTargets.Concat(relatedRefunds))
         {
-            await _notifications.AddAsync(new Notification
+            t.Status = PayoutConstants.StatusProcessed;
+            t.ProcessedAt = now;
+            t.TransactionRef = transfer.TransactionRef;
+        }
+
+        var fullyPaid = !UnpaidGrossItems(payout).Any();
+        if (fullyPaid)
+        {
+            payout.Status = PayoutConstants.StatusProcessed;
+            payout.TransactionRef = transfer.TransactionRef;
+            payout.ProcessedBy = staffId;
+            payout.ProcessedAt = now;
+        }
+
+        await WriteAuditAsync(staffId, fullyPaid ? "PAYOUT_PROCESSED" : "PAYOUT_PARTIAL", payout,
+            fullyPaid ? "PROCESSED" : "PENDING",
+            new { transactionRef = transfer.TransactionRef, amount, processedAt = now }, ipAddress, ct);
+
+        if (fullyPaid)
+        {
+            try
             {
-                Id = Guid.NewGuid(),
-                UserId = payout.CoachId,
-                ActorId = staffId,
-                ReferenceId = payout.PayoutId,
-                Type = "PAYOUT_PROCESSED",
-                Description = $"Your {payout.PayoutMonth:D2}/{payout.PayoutYear} payout of {net:N0} VND has been processed. Ref: {transfer.TransactionRef}.",
-                IsRead = false,
-                CreatedAt = now
-            }, cancellationToken);
+                await _notifications.AddAsync(new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = payout.CoachId,
+                    ActorId = staffId,
+                    ReferenceId = payout.PayoutId,
+                    Type = "PAYOUT_PROCESSED",
+                    Description = $"Your {payout.PayoutMonth:D2}/{payout.PayoutYear} payout of {amount:N0} VND has been processed. Ref: {transfer.TransactionRef}.",
+                    IsRead = false,
+                    CreatedAt = now
+                }, ct);
+            }
+            catch
+            {
+                // Notifications must never break payout fulfillment
+            }
         }
-        catch
-        {
-            // Notifications must never break payout fulfillment
-        }
+
+        await SendPayoutEmailAsync(payout, grossTargets, amount, transfer.TransactionRef, fullyPaid, ct);
 
         try
         {
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.SaveChangesAsync(ct);
         }
         catch (DbUpdateException)
         {
@@ -563,11 +910,87 @@ public class PayoutService : IPayoutService
             {
                 PayoutId = payout.PayoutId,
                 Status = payout.Status,
-                TransactionRef = payout.TransactionRef,
-                NetPayoutAmount = net,
+                TransactionRef = transfer.TransactionRef,
+                NetPayoutAmount = amount,
                 ProcessedAt = now
             },
-            "Payout processed successfully.");
+            fullyPaid ? "Payout processed successfully." : $"Package paid: {amount:N0} VND. Remaining lines stay PENDING.");
+    }
+
+    private async Task SendPayoutEmailAsync(
+        Payout payout, List<PayoutItem> paidTargets, decimal amount,
+        string? transactionRef, bool fullyPaid, CancellationToken ct)
+    {
+        try
+        {
+            if (_emailService == null)
+            {
+                return;
+            }
+
+            var coachEmail = payout.Coach?.Coach?.Email;
+            if (string.IsNullOrWhiteSpace(coachEmail))
+            {
+                return;
+            }
+
+            var coachName = payout.Coach?.Coach?.FullName ?? coachEmail;
+            var groups = paidTargets
+                .GroupBy(t => t.Order?.OrderDetails.FirstOrDefault()?.PackageTitle ?? "Training Package")
+                .Select(g => new
+                {
+                    Title = g.Key,
+                    Count = g.Count(),
+                    Amount = g.Sum(t => t.NetAmount ?? 0),
+                    Buyers = g.Select(t => t.Order?.Buyer?.FullName ?? t.Order?.Buyer?.Email ?? "Trainee")
+                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Distinct()
+                        .Take(5)
+                        .ToList()
+                })
+                .ToList();
+
+            var rows = string.Join("", groups.Select(g =>
+                "<tr>" +
+                $"<td style=\"padding:8px;border:1px solid #e0e0e0;\">{System.Net.WebUtility.HtmlEncode(g.Title)}</td>" +
+                $"<td style=\"padding:8px;border:1px solid #e0e0e0;text-align:center;\">{g.Count}</td>" +
+                $"<td style=\"padding:8px;border:1px solid #e0e0e0;text-align:right;\">{g.Amount:N0} VND</td>" +
+                "</tr>"));
+
+            var subject = fullyPaid
+                ? $"[FitConnect] Payout {payout.PayoutMonth:D2}/{payout.PayoutYear} completed: {amount:N0} VND"
+                : $"[FitConnect] Partial payout {payout.PayoutMonth:D2}/{payout.PayoutYear}: {amount:N0} VND";
+            var body = $@"
+            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;"">
+                <div style=""text-align: center; margin-bottom: 20px;"">
+                    <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitConnect</h2>
+                    <p style=""color: #666; margin: 5px 0 0;"">Coach payout notification</p>
+                </div>
+                <p style=""color: #333; font-size: 16px;"">Hello {System.Net.WebUtility.HtmlEncode(coachName)},</p>
+                <p style=""color: #555;"">The system has just paid <strong>{amount:N0} VND</strong> for your {payout.PayoutMonth:D2}/{payout.PayoutYear} earnings{(fullyPaid ? "" : " (partial payment — remaining lines stay pending)")}. Reference: <strong>{System.Net.WebUtility.HtmlEncode(transactionRef ?? "")}</strong>.</p>
+                <p style=""color: #555;"">This transfer covers <strong>{groups.Count} package(s)</strong>:</p>
+                <table style=""width: 100%; border-collapse: collapse; margin: 12px 0;"">
+                    <tr style=""background: #fff3e0;"">
+                        <th style=""padding: 8px; border: 1px solid #e0e0e0; text-align: left;"">Package</th>
+                        <th style=""padding: 8px; border: 1px solid #e0e0e0;"">Orders</th>
+                        <th style=""padding: 8px; border: 1px solid #e0e0e0; text-align: right;"">Amount</th>
+                    </tr>
+                    {rows}
+                    <tr>
+                        <td colspan=""2"" style=""padding: 8px; border: 1px solid #e0e0e0; text-align: right;""><strong>Total paid now</strong></td>
+                        <td style=""padding: 8px; border: 1px solid #e0e0e0; text-align: right;""><strong>{amount:N0} VND</strong></td>
+                    </tr>
+                </table>
+                <hr style=""border: none; border-top: 1px solid #eee; margin: 20px 0;"" />
+                <p style=""color: #999; font-size: 12px; text-align: center; margin: 0;"">If you have questions about this payout, please contact FitConnect support.</p>
+            </div>";
+
+            await _emailService.SendEmailAsync(coachEmail, subject, body);
+        }
+        catch
+        {
+            // Email must never break payout fulfillment
+        }
     }
 
     private async Task WriteAuditAsync(Guid staffId, string action, Payout payout, string newStatus, object details, string? ipAddress, CancellationToken ct)

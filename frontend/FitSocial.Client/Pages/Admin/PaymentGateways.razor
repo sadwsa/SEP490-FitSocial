@@ -20,17 +20,29 @@
         <h2 class="view-title">Payment Gateway Accounts</h2>
         <p class="view-sub">System payment gateway configurations used for collecting and disbursing (UC-36)</p>
 
+        <div class="cat-tabs">
+            <button type="button" class="cat-tab @(channelTab == "all" ? "active" : "")" @onclick='() => SetChannelTab("all")'>
+                All
+            </button>
+            <button type="button" class="cat-tab @(channelTab == "collect" ? "active" : "")" @onclick='() => SetChannelTab("collect")'>
+                Thu tiền
+            </button>
+            <button type="button" class="cat-tab @(channelTab == "payout" ? "active" : "")" @onclick='() => SetChannelTab("payout")'>
+                Chi tiền
+            </button>
+        </div>
+
         <div class="stat-row">
             <div class="stat-card">
-                <span class="stat-num">@gateways.Count</span>
+                <span class="stat-num">@FilteredGateways.Count</span>
                 <span class="stat-label">Total gateways</span>
             </div>
             <div class="stat-card">
-                <span class="stat-num">@gateways.Count(g => g.IsActive)</span>
+                <span class="stat-num">@FilteredGateways.Count(g => g.IsActive)</span>
                 <span class="stat-label">Active</span>
             </div>
             <div class="stat-card">
-                <span class="stat-num">@gateways.Count(g => !g.IsActive)</span>
+                <span class="stat-num">@FilteredGateways.Count(g => !g.IsActive)</span>
                 <span class="stat-label">Inactive</span>
             </div>
         </div>
@@ -66,6 +78,7 @@
                     <thead>
                         <tr>
                             <th>Gateway</th>
+                            <th>Channel</th>
                             <th>Client ID</th>
                             <th>API key</th>
                             <th>Checksum key</th>
@@ -80,6 +93,16 @@
                         {
                             <tr>
                                 <td class="font-semibold">@(g.GatewayName ?? "—")</td>
+                                <td>
+                                    @if (g.IsPayout)
+                                    {
+                                        <span class="status-pill payout">Chi tiền</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-pill collect">Thu tiền</span>
+                                    }
+                                </td>
                                 <td>
                                     <span class="secret-val"><code>@(IsRevealed(g.GatewayId, "client") ? g.ClientId : g.ClientIdMasked)</code></span>
                                     <button type="button" class="eye-btn" title="Show/hide client ID" @onclick='() => ToggleSecret(g.GatewayId, "client")'>
@@ -247,7 +270,14 @@
                             <span>Webhook URL</span>
                             <input class="form-input" @bind="newWebhookUrl" placeholder="Optional, e.g. https://api.../payments/payos-webhook" />
                         </label>
-                        <p class="muted-sm">New gateways start as Inactive (only one gateway is active at a time). It becomes Active automatically if no other gateway is active.</p>
+                        <label class="form-field">
+                            <span>Channel *</span>
+                            <select class="form-input" @bind="addChannel">
+                                <option value="thu">Thu tiền (collection)</option>
+                                <option value="chi">Chi tiền (payout)</option>
+                            </select>
+                        </label>
+                        <p class="muted-sm">New gateways start as Inactive (only one active gateway per channel). It becomes Active automatically if no other gateway of the same channel is active.</p>
                     </div>
                     @if (!string.IsNullOrEmpty(addError))
                     {
@@ -293,9 +323,16 @@
                             <span>Webhook URL</span>
                             <input class="form-input" @bind="editWebhookUrl" />
                         </label>
+                        <label class="form-field">
+                            <span>Channel *</span>
+                            <select class="form-input" @bind="editChannel">
+                                <option value="thu">Thu tiền (collection)</option>
+                                <option value="chi">Chi tiền (payout)</option>
+                            </select>
+                        </label>
                         <label class="form-check">
                             <input type="checkbox" @bind="editIsActive" />
-                            <span>Set as the active gateway (only one can be active)</span>
+                            <span>Set as the active gateway (only one active per channel)</span>
                         </label>
                     </div>
                     @if (!string.IsNullOrEmpty(editError))
@@ -316,6 +353,7 @@
 
 @code {
     private List<PaymentGatewayConfig> gateways = new();
+    private string channelTab = "all";
     private bool isLoading = true;
     private string searchTerm = "";
     private string? toastMessage;
@@ -340,16 +378,20 @@
     private string editChecksumKey = "";
     private string editWebhookUrl = "";
     private bool editIsActive = true;
+    private string editChannel = "thu";
     private string newGatewayName = "";
     private string newClientId = "";
     private string newApiKey = "";
     private string newChecksumKey = "";
     private string newWebhookUrl = "";
+    private string addChannel = "thu";
 
     private List<PaymentGatewayConfig> FilteredGateways =>
-        string.IsNullOrWhiteSpace(searchTerm)
-            ? gateways
-            : gateways.Where(g => (g.GatewayName ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+        gateways
+            .Where(g => channelTab == "payout" ? g.IsPayout : channelTab == "collect" ? !g.IsPayout : true)
+            .Where(g => string.IsNullOrWhiteSpace(searchTerm) ||
+                (g.GatewayName ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
     private int pageIndex = 1;
     private int pageSize = 10;
@@ -398,6 +440,12 @@
     private void OnSearchInput(ChangeEventArgs e)
     {
         searchTerm = e.Value?.ToString() ?? "";
+        pageIndex = 1;
+    }
+
+    private void SetChannelTab(string tab)
+    {
+        channelTab = tab;
         pageIndex = 1;
     }
 
@@ -464,6 +512,7 @@
         newApiKey = "";
         newChecksumKey = "";
         newWebhookUrl = "";
+        addChannel = channelTab == "payout" ? "chi" : "thu";
     }
 
     private void CloseAddModal()
@@ -492,7 +541,8 @@
             ApiKey = newApiKey.Trim(),
             ChecksumKey = newChecksumKey.Trim(),
             WebhookUrl = string.IsNullOrWhiteSpace(newWebhookUrl) ? null : newWebhookUrl.Trim(),
-            IsActive = false // server enforces single-active (active only if none exists)
+            IsActive = false, // server enforces single-active per channel
+            IsPayout = addChannel == "chi"
         });
 
         if (res.Success)
@@ -519,6 +569,7 @@
         editChecksumKey = "";
         editWebhookUrl = gateway.WebhookUrl ?? "";
         editIsActive = gateway.IsActive;
+        editChannel = gateway.IsPayout ? "chi" : "thu";
     }
 
     private void CloseEditModal()
@@ -547,7 +598,8 @@
             ApiKey = string.IsNullOrWhiteSpace(editApiKey) ? null : editApiKey.Trim(),
             ChecksumKey = string.IsNullOrWhiteSpace(editChecksumKey) ? null : editChecksumKey.Trim(),
             WebhookUrl = string.IsNullOrWhiteSpace(editWebhookUrl) ? null : editWebhookUrl.Trim(),
-            IsActive = editIsActive
+            IsActive = editIsActive,
+            IsPayout = editChannel == "chi"
         });
 
         if (res.Success)

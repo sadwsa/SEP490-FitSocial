@@ -104,6 +104,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.EncryptedChecksumKey).HasColumnType("bytea").HasColumnName("EncryptedChecksumKey");
             entity.Property(e => e.GatewayName).HasMaxLength(50);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsPayout).HasDefaultValue(false);
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
@@ -1194,6 +1195,9 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.PayoutId).HasColumnName("PayoutID");
             entity.Property(e => e.RefundAdjustment).HasPrecision(18, 2);
             entity.Property(e => e.TaxAmount).HasPrecision(18, 2);
+            entity.Property(e => e.Status).HasMaxLength(20).HasDefaultValue("PENDING");
+            entity.Property(e => e.ProcessedAt).HasColumnType("timestamp without time zone");
+            entity.Property(e => e.TransactionRef).HasMaxLength(100);
 
             entity.HasOne(d => d.Order).WithMany(p => p.PayoutItems)
                 .HasForeignKey(d => d.OrderId)

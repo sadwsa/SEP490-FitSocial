@@ -13,6 +13,7 @@ public interface IPayoutService
     Task<ApiResponse<GeneratePayoutsResult>> GenerateAsync(int month, int year);
     Task<ApiResponse<PayoutDetail>> GetDetailAsync(Guid payoutId);
     Task<ApiResponse<ProcessPayoutResult>> ProcessAsync(Guid payoutId);
+    Task<ApiResponse<ProcessPayoutResult>> ProcessItemsAsync(Guid payoutId, List<Guid> payoutItemIds);
 }
 
 public class PayoutApiService : IPayoutService
@@ -48,5 +49,11 @@ public class PayoutApiService : IPayoutService
     public Task<ApiResponse<ProcessPayoutResult>> ProcessAsync(Guid payoutId)
     {
         return _apiClient.PostAsync<ProcessPayoutResult>($"payouts/{payoutId}/process");
+    }
+
+    public Task<ApiResponse<ProcessPayoutResult>> ProcessItemsAsync(Guid payoutId, List<Guid> payoutItemIds)
+    {
+        return _apiClient.PostAsync<object, ProcessPayoutResult>(
+            $"payouts/{payoutId}/process-items", new { payoutItemIds });
     }
 }

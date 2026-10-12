@@ -1,9 +1,10 @@
+using FitSocial.Application.DTOs.Coach;
+using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.DTOs.Orders;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using FitSocial.Application.DTOs.Common;
-using FitSocial.Application.DTOs.Orders;
 
 namespace FitSocial.Application.Interfaces;
 
@@ -23,7 +24,11 @@ public interface IOrderService
         Guid currentUserId,
         CancellationToken cancellationToken = default);
 
+
     Task<ApiResponseDto<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync(
         Guid coachId,
         CancellationToken cancellationToken = default);
+
+  
+
 }

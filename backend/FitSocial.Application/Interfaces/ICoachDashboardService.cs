@@ -20,4 +20,9 @@ public interface ICoachDashboardService
     Task<ApiResponseDto<CoachDashboardMetricsDto>> GetCoachDashboardMetricsAsync(
         Guid coachId, 
         CancellationToken cancellationToken = default);
+   
+    Task<ApiResponseDto<CoachDashboardDto>> GetCoachDashboardAnalyticsAsync(Guid coachId, CancellationToken cancellationToken = default);
+
+
+
 }

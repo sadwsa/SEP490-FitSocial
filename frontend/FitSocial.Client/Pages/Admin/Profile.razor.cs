@@ -4,7 +4,9 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Users;
+using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Files;
 using FitSocial.Client.Services.Users;
 using Microsoft.AspNetCore.Components;
@@ -452,5 +454,56 @@ public partial class Profile : ComponentBase, IDisposable
         successMessageCts?.Dispose();
         saveErrorCts?.Cancel();
         saveErrorCts?.Dispose();
+    }
+
+    // Profile tabs: "info" | "security"
+    private string profileTab = "info";
+
+    private void SwitchProfileTab(string tab)
+    {
+        profileTab = tab;
+    }
+
+    // Change Password (Security tab, shared by ADMIN and STAFF)
+    private ChangePasswordRequest pwdModel = new();
+    private string? pwdErrorMessage;
+    private string? pwdSuccessMessage;
+    private bool isChangingPassword = false;
+    private bool showPwdCurrent = false;
+    private bool showPwdNew = false;
+    private bool showPwdConfirm = false;
+
+    private async Task HandlePasswordChange()
+    {
+        pwdErrorMessage = null;
+        pwdSuccessMessage = null;
+
+        if (pwdModel.NewPassword == pwdModel.CurrentPassword)
+        {
+            pwdErrorMessage = "New password must be different from the current password.";
+            return;
+        }
+
+        isChangingPassword = true;
+        try
+        {
+            var result = await AuthService.ChangePasswordAsync(pwdModel);
+            if (result.Success)
+            {
+                pwdSuccessMessage = (result.Message ?? "Password changed successfully.") + " Signing you out...";
+                StateHasChanged();
+                await Task.Delay(1500);
+                await AuthService.LogoutAsync();
+                Navigation.NavigateTo("/admin/login");
+            }
+            else
+            {
+                pwdErrorMessage = result.Message ?? "Could not change the password. Please try again.";
+            }
+        }
+        finally
+        {
+            isChangingPassword = false;
+        }
     }
 }

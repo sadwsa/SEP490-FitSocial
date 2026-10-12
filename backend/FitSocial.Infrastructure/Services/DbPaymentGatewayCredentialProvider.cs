@@ -5,8 +5,8 @@ namespace FitSocial.Infrastructure.Services;
 
 /// <summary>
 /// Reads gateway credentials from the admin-managed PaymentGatewayConfigs
-/// table (keys stored AES-encrypted). Returns null when no named row exists
-/// or decrypts to empty values, letting callers fall back to appsettings.
+/// table (keys stored AES-encrypted), filtered by channel purpose.
+/// Returns null when no usable row exists, letting callers fall back.
 /// </summary>
 public class DbPaymentGatewayCredentialProvider : IPaymentGatewayCredentialProvider
 {
@@ -21,41 +21,18 @@ public class DbPaymentGatewayCredentialProvider : IPaymentGatewayCredentialProvi
         _encryption = encryption;
     }
 
-    public async Task<GatewayCredentials?> GetDbCredentialsAsync(IEnumerable<string> gatewayNames, CancellationToken cancellationToken = default)
+    public Task<GatewayCredentials?> GetCollectCredentialsAsync(CancellationToken cancellationToken = default)
     {
-        foreach (var name in gatewayNames)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                continue;
-            }
-
-            FitSocial.Domain.Entities.PaymentGatewayConfig? config;
-            try
-            {
-                config = await _configs.GetActiveByNameAsync(name, cancellationToken);
-            }
-            catch
-            {
-                continue;
-            }
-
-            if (config == null)
-            {
-                continue;
-            }
-
-            var creds = TryDecrypt(config);
-            if (creds != null)
-            {
-                return creds;
-            }
-        }
-
-        return null;
+        return GetCredentialsAsync(isPayout: false, preferredNames: ["PayOS"], cancellationToken);
     }
 
-    public async Task<GatewayCredentials?> GetSingleActiveCredentialsAsync(CancellationToken cancellationToken = default)
+    public Task<GatewayCredentials?> GetPayoutCredentialsAsync(CancellationToken cancellationToken = default)
+    {
+        return GetCredentialsAsync(isPayout: true, preferredNames: ["PayOS-Payout"], cancellationToken);
+    }
+
+    private async Task<GatewayCredentials?> GetCredentialsAsync(
+        bool isPayout, string[] preferredNames, CancellationToken cancellationToken)
     {
         List<FitSocial.Domain.Entities.PaymentGatewayConfig> all;
         try
@@ -67,13 +44,36 @@ public class DbPaymentGatewayCredentialProvider : IPaymentGatewayCredentialProvi
             return null;
         }
 
-        var actives = all.Where(c => c.IsActive == true).ToList();
-        if (actives.Count != 1)
+        var candidates = all
+            .Where(c => c.IsActive == true && (c.IsPayout ?? false) == isPayout)
+            .ToList();
+        if (candidates.Count == 0)
         {
             return null;
         }
 
-        return TryDecrypt(actives[0]);
+        foreach (var name in preferredNames)
+        {
+            var match = candidates.FirstOrDefault(c =>
+                string.Equals(c.GatewayName?.Trim(), name, StringComparison.OrdinalIgnoreCase));
+            var creds = match == null ? null : TryDecrypt(match);
+            if (creds != null)
+            {
+                return creds;
+            }
+        }
+
+        // Deterministic fallback: most recently updated row of this purpose.
+        foreach (var candidate in candidates.OrderByDescending(c => c.UpdatedAt))
+        {
+            var creds = TryDecrypt(candidate);
+            if (creds != null)
+            {
+                return creds;
+            }
+        }
+
+        return null;
     }
 
     private GatewayCredentials? TryDecrypt(FitSocial.Domain.Entities.PaymentGatewayConfig config)

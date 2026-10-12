@@ -34,4 +34,5 @@ public partial class TrainingPackage
     public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
 
     public virtual ICollection<TrainingPackageMedium> Media { get; set; } = new List<TrainingPackageMedium>();
+    public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 }

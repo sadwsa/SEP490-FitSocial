@@ -177,17 +177,17 @@
                                     </button>
                                     @if (string.Equals(app.ApprovalStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
                                     {
-                                        <button type="button" class="btn-row-approve" @onclick="() => OpenApproveConfirm(app.CoachId, app.FullName, app.ApplicationCode)" title="Approve application">
-                                            Approve
-                                        </button>
+                                        @if (app.CanApprove)
+                                        {
+                                            <button type="button" class="btn-row-approve" @onclick="() => OpenApproveConfirm(app.CoachId, app.FullName, app.ApplicationCode)" title="Approve application">
+                                                Approve
+                                            </button>
+                                        }
                                         <button type="button" class="btn-row-reject" @onclick="() => OpenRejectConfirm(app.CoachId, app.FullName, app.ApplicationCode)" title="Reject application">
                                             Reject
                                         </button>
                                     }
                                 </div>
-                                <button type="button" class="btn-review" @onclick="() => OpenDetailModal(app.CoachId)">
-                                    Review
-                                </button>
                             </td>
                         </tr>
                     }
@@ -222,29 +222,27 @@
                 }
             </div>
 
-            @if (pagedApplications.TotalPages > 1)
-            {
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedApplications.HasPreviousPage)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Previous</button>
-                    @foreach (var p in GetVisiblePageNumbers())
+            <div class="pagination-controls">
+                <button type="button" class="page-btn" disabled="@(!pagedApplications.HasPreviousPage || currentPage <= 1)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Previous</button>
+                @foreach (var p in GetVisiblePageNumbers())
+                {
+                    if (p == -1)
                     {
-                        if (p == -1)
-                        {
-                            <span class="page-dots">…</span>
-                        }
-                        else
-                        {
-                            var pageNum = p;
-                            <button type="button" class="page-btn @(pageNum == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pageNum)">@pageNum</button>
-                        }
+                        <span class="page-dots">…</span>
                     }
-                    <button type="button" class="page-btn" disabled="@(!pagedApplications.HasNextPage)" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
-                </div>
-            }
+                    else
+                    {
+                        var pageNum = p;
+                        <button type="button" class="page-btn @(pageNum == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pageNum)">@pageNum</button>
+                    }
+                }
+                <button type="button" class="page-btn" disabled="@(!pagedApplications.HasNextPage || currentPage >= Math.Max(1, pagedApplications.TotalPages))" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
+            </div>
 
             <div class="page-size-selector">
                 <span>Per page:</span>
                 <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
+                    <option value="5">5 / page</option>
                     <option value="10">10 / page</option>
                     <option value="20">20 / page</option>
                     <option value="50">50 / page</option>
@@ -349,6 +347,12 @@
                                                         <span> • Expires: @cert.ExpiryDate.Value.ToString("dd/MM/yyyy")</span>
                                                     }
                                                 </div>
+                                                @if (!string.IsNullOrWhiteSpace(cert.RejectedReason))
+                                                {
+                                                    <div class="cert-reject-reason">
+                                                        <span class="reject-reason-label">Reason:</span> @cert.RejectedReason
+                                                    </div>
+                                                }
                                             </div>
                                             <div class="cert-actions">
                                                 <span class="cert-status @(cert.VerificationStatus?.ToLowerInvariant() ?? "pending")">@(cert.VerificationStatus ?? "PENDING")</span>
@@ -373,6 +377,30 @@
                             else
                             {
                                 <p class="text-muted text-sm">No certificates submitted with this application.</p>
+                            }
+                            @if (string.Equals(selectedDetail.ApprovalStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                            {
+                                @if (!selectedDetail.CanApprove)
+                                {
+                                    <div class="cert-eligibility-warning mt-2">
+                                        <span class="warning-icon">⚠️</span>
+                                        <span>At least one certificate must be <strong>Approved</strong> before this application can be approved. If all certificates are rejected, the application will be automatically rejected.</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="cert-eligibility-success mt-2">
+                                        <span class="success-icon">✓</span>
+                                        <span>Eligible for approval: Has at least one approved certificate.</span>
+                                    </div>
+                                }
+                            }
+                            else if (string.Equals(selectedDetail.ApprovalStatus, "REJECTED", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="cert-eligibility-rejected mt-2">
+                                    <span class="rejected-icon">✕</span>
+                                    <span>This coach application has been <strong>Rejected</strong> (no certificates or all certificates were rejected).</span>
+                                </div>
                             }
                         </div>
 
@@ -400,45 +428,61 @@
                                 <div class="id-images-row">
                                     @if (!string.IsNullOrWhiteSpace(ekyc.FrontCardUrl))
                                     {
-                                        <div class="id-img-box">
+                                        <div class="id-img-box" @onclick='() => OpenLightbox(new List<string> { ekyc.FrontCardUrl }, 0, "Front ID Card")'>
                                             <span class="id-img-label">Front ID Card</span>
-                                            <a href="@ekyc.FrontCardUrl" target="_blank" rel="noopener noreferrer">
-                                                <img src="@ekyc.FrontCardUrl" alt="Front ID" class="id-thumb" />
-                                            </a>
+                                            <img src="@ekyc.FrontCardUrl" alt="Front ID" class="id-thumb clickable-thumb" title="Click to view full-size" />
                                         </div>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(ekyc.BackCardUrl))
                                     {
-                                        <div class="id-img-box">
+                                        <div class="id-img-box" @onclick='() => OpenLightbox(new List<string> { ekyc.BackCardUrl }, 0, "Back ID Card")'>
                                             <span class="id-img-label">Back ID Card</span>
-                                            <a href="@ekyc.BackCardUrl" target="_blank" rel="noopener noreferrer">
-                                                <img src="@ekyc.BackCardUrl" alt="Back ID" class="id-thumb" />
-                                            </a>
-                                        </div>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(ekyc.FaceImageUrl))
-                                    {
-                                        <div class="id-img-box">
-                                            <span class="id-img-label">Live Face Photo</span>
-                                            <a href="@ekyc.FaceImageUrl" target="_blank" rel="noopener noreferrer">
-                                                <img src="@ekyc.FaceImageUrl" alt="Live Face" class="id-thumb" />
-                                            </a>
+                                            <img src="@ekyc.BackCardUrl" alt="Back ID" class="id-thumb clickable-thumb" title="Click to view full-size" />
                                         </div>
                                     }
                                 </div>
                             }
                             else if (!string.IsNullOrWhiteSpace(selectedDetail.IdentityCardUrl))
                             {
-                                <div class="id-img-box">
+                                <div class="id-img-box" @onclick='() => OpenLightbox(new List<string> { selectedDetail.IdentityCardUrl }, 0, "ID Card Document")'>
                                     <span class="id-img-label">ID Card</span>
-                                    <a href="@selectedDetail.IdentityCardUrl" target="_blank" rel="noopener noreferrer" class="view-link">
-                                        View ID Card Document ↗
-                                    </a>
+                                    <img src="@selectedDetail.IdentityCardUrl" alt="ID Card Document" class="id-thumb clickable-thumb" title="Click to view full-size" />
                                 </div>
                             }
                             else
                             {
                                 <p class="text-muted text-sm">No identity card documents submitted.</p>
+                            }
+                        </div>
+
+                        <!-- Live Photos (Review / Biometric Face Photos) -->
+                        <div class="detail-card">
+                            <h5 class="section-heading">
+                                Live Face Photos
+                                <span class="badge-count">@(selectedDetail.LivePhotoUrls?.Count ?? 0)</span>
+                            </h5>
+                            @if (selectedDetail.LivePhotoUrls != null && selectedDetail.LivePhotoUrls.Any())
+                            {
+                                <div class="live-photos-grid">
+                                    @for (int i = 0; i < selectedDetail.LivePhotoUrls.Count; i++)
+                                    {
+                                        var photoIdx = i;
+                                        var photoUrl = selectedDetail.LivePhotoUrls[photoIdx];
+                                        <div class="live-photo-card" @onclick='() => OpenLightbox(selectedDetail.LivePhotoUrls, photoIdx, "Live Photo")' title="Click to view full-size">
+                                            <div class="live-photo-thumb-wrap">
+                                                <img src="@photoUrl" alt="Live Face Photo @(photoIdx + 1)" class="live-photo-thumb" />
+                                                <div class="live-photo-overlay">
+                                                    <span class="live-photo-zoom-icon">🔍 View Full</span>
+                                                </div>
+                                            </div>
+                                            <span class="live-photo-index-label">Live Photo #@(photoIdx + 1)</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="no-photos-text text-muted text-sm fst-italic">No photos available</p>
                             }
                         </div>
 
@@ -450,12 +494,68 @@
                             <button type="button" class="ca-btn-modal-reject" @onclick="() => OpenRejectConfirm(selectedDetail.CoachId, selectedDetail.FullName, selectedDetail.ApplicationCode)">
                                 Reject
                             </button>
-                            <button type="button" class="ca-btn-modal-approve" @onclick="() => OpenApproveConfirm(selectedDetail.CoachId, selectedDetail.FullName, selectedDetail.ApplicationCode)">
-                                Approve
-                            </button>
+                            @if (selectedDetail.CanApprove)
+                            {
+                                <button type="button" class="ca-btn-modal-approve" @onclick="() => OpenApproveConfirm(selectedDetail.CoachId, selectedDetail.FullName, selectedDetail.ApplicationCode)">
+                                    Approve
+                                </button>
+                            }
                         }
                         <button type="button" class="ca-btn-close-modal" @onclick="CloseDetailModal">Close</button>
                     </div>
+                </div>
+            </div>
+        }
+
+        <!-- Full-Size Image Lightbox Modal -->
+        @if (isLightboxOpen && lightboxImages.Any())
+        {
+            <div class="ca-lightbox-overlay" @onclick="CloseLightbox">
+                <div class="ca-lightbox-dialog" @onclick:stopPropagation="true">
+                    <div class="ca-lightbox-topbar">
+                        <div class="ca-lightbox-info">
+                            <span class="ca-lightbox-title">@lightboxTitle</span>
+                            @if (lightboxImages.Count > 1)
+                            {
+                                <span class="ca-lightbox-counter">(@(lightboxIndex + 1) / @lightboxImages.Count)</span>
+                            }
+                        </div>
+                        <button type="button" class="ca-lightbox-close-btn" @onclick="CloseLightbox" title="Close">✕</button>
+                    </div>
+
+                    <div class="ca-lightbox-main">
+                        @if (lightboxImages.Count > 1)
+                        {
+                            <button type="button" class="ca-lightbox-arrow prev" @onclick="PrevLightboxImage" disabled="@(lightboxIndex <= 0)" title="Previous photo">
+                                ‹
+                            </button>
+                        }
+
+                        <div class="ca-lightbox-img-stage">
+                            <img src="@lightboxImages[lightboxIndex]" alt="@lightboxTitle" class="ca-lightbox-img" />
+                        </div>
+
+                        @if (lightboxImages.Count > 1)
+                        {
+                            <button type="button" class="ca-lightbox-arrow next" @onclick="NextLightboxImage" disabled="@(lightboxIndex >= lightboxImages.Count - 1)" title="Next photo">
+                                ›
+                            </button>
+                        }
+                    </div>
+
+                    @if (lightboxImages.Count > 1)
+                    {
+                        <div class="ca-lightbox-strip">
+                            @for (int k = 0; k < lightboxImages.Count; k++)
+                            {
+                                var stripIdx = k;
+                                <img src="@lightboxImages[stripIdx]"
+                                     alt="Thumb @(stripIdx + 1)"
+                                     class="ca-lightbox-strip-item @(stripIdx == lightboxIndex ? "active" : "")"
+                                     @onclick="() => lightboxIndex = stripIdx" />
+                            }
+                        </div>
+                    }
                 </div>
             </div>
         }
@@ -691,8 +791,12 @@
 
     private IEnumerable<int> GetVisiblePageNumbers()
     {
-        var total = pagedApplications.TotalPages;
-        if (total <= 1) yield break;
+        var total = Math.Max(1, pagedApplications.TotalPages);
+        if (total <= 1)
+        {
+            yield return 1;
+            yield break;
+        }
 
         var current = currentPage;
         var delta = 2;
@@ -745,8 +849,48 @@
         }
     }
 
+    // Lightbox modal state for full-size photo viewing
+    private bool isLightboxOpen = false;
+    private List<string> lightboxImages = new();
+    private int lightboxIndex = 0;
+    private string lightboxTitle = "Photo";
+
+    private void OpenLightbox(List<string> images, int index, string title)
+    {
+        if (images == null || !images.Any()) return;
+        lightboxImages = images.Where(u => !string.IsNullOrWhiteSpace(u)).ToList();
+        if (!lightboxImages.Any()) return;
+        lightboxIndex = Math.Clamp(index, 0, Math.Max(0, lightboxImages.Count - 1));
+        lightboxTitle = title;
+        isLightboxOpen = true;
+    }
+
+    private void CloseLightbox()
+    {
+        isLightboxOpen = false;
+        lightboxImages.Clear();
+        lightboxIndex = 0;
+    }
+
+    private void PrevLightboxImage()
+    {
+        if (lightboxIndex > 0)
+        {
+            lightboxIndex--;
+        }
+    }
+
+    private void NextLightboxImage()
+    {
+        if (lightboxIndex < lightboxImages.Count - 1)
+        {
+            lightboxIndex++;
+        }
+    }
+
     private async Task CloseDetailModal()
     {
+        CloseLightbox();
         selectedDetail = null;
         if (!showConfirmDialog)
         {
@@ -886,6 +1030,7 @@
         }
         await SetBodyScrollLockAsync(false);
     }
+
 
     private async Task SetBodyScrollLockAsync(bool isLocked)
     {

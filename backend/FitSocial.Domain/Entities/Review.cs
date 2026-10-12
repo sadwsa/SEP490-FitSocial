@@ -20,8 +20,13 @@ public partial class Review
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }
+    public Guid? PackageId { get; set; }
+    public bool? IsEdited { get; set; } = false;
+
 
     public virtual CoachProfile Coach { get; set; } = null!;
 
     public virtual User Trainee { get; set; } = null!;
+
+    public virtual TrainingPackage? Package { get; set; }
 }

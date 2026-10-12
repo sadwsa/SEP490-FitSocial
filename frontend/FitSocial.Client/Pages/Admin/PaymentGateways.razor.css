@@ -13,6 +13,31 @@
     margin: 0 0 14px;
 }
 
+.cat-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.cat-tab {
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #64748b;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.cat-tab.active {
+    border-color: #FF5500;
+    color: #FF5500;
+    background: #fff7f3;
+}
+
 .auth-alert {
     display: flex;
     align-items: flex-start;
@@ -290,6 +315,18 @@
     border: 1px solid #fecaca;
 }
 
+.status-pill.collect {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+.status-pill.payout {
+    background: #faf5ff;
+    color: #7e22ce;
+    border: 1px solid #e9d5ff;
+}
+
 .empty-box {
     background: #fff;
     border: 1px dashed #cbd5e1;
@@ -534,4 +571,14 @@
     accent-color: #FF5500;
     width: 16px;
     height: 16px;
+}
+
+.channel-static {
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #334155;
+    padding: 8px 12px;
 }

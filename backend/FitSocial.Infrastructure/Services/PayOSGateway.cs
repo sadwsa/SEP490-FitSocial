@@ -6,10 +6,10 @@ using PayOS.Models.V2.PaymentRequests;
 namespace FitSocial.Infrastructure.Services;
 
 /// <summary>
-/// VietQR payment gateway via PayOS SDK.
+/// VietQR payment gateway via PayOS SDK (collection channel / thu tiền).
 /// Credentials resolve from the admin-managed PaymentGatewayConfigs table
-/// first ("PayOS" row, else the single active row), falling back to the
-/// PayOS section of appsettings.
+/// first (active IsPayout=false row), falling back to the PayOS section
+/// of appsettings.
 /// </summary>
 public class PayOSGateway : IPaymentGateway
 {
@@ -26,8 +26,7 @@ public class PayOSGateway : IPaymentGateway
     {
         if (_credentials != null)
         {
-            var dbCreds = await _credentials.GetDbCredentialsAsync(["PayOS"], cancellationToken)
-                ?? await _credentials.GetSingleActiveCredentialsAsync(cancellationToken);
+            var dbCreds = await _credentials.GetCollectCredentialsAsync(cancellationToken);
             if (dbCreds != null)
             {
                 return new PayOSClient(dbCreds.ClientId, dbCreds.ApiKey, dbCreds.ChecksumKey);

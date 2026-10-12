@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<ISubscriptionPriceHistoryService, SubscriptionPriceHistoryService>();
         services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
+        services.AddScoped<ITrainingPlanService, TrainingPlanService>();
         return services;
     }
 

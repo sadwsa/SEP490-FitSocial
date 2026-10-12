@@ -68,5 +68,6 @@ builder.Services.AddScoped<FitSocial.Client.Services.PaymentGateways.IPaymentGat
 builder.Services.AddScoped<ISubscriptionPriceHistoryApiService, SubscriptionPriceHistoryApiService>();
 builder.Services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
 builder.Services.AddScoped<FitSocial.Client.Services.Refunds.IRefundService, FitSocial.Client.Services.Refunds.RefundApiService>();
+builder.Services.AddScoped<FitSocial.Client.Services.TrainingPlans.ITrainingPlanClientService, FitSocial.Client.Services.TrainingPlans.TrainingPlanClientService>();
 
 await builder.Build().RunAsync();

@@ -111,6 +111,10 @@
                                 </td>
                                 <td>
                                     <span class="status-pill @(p.Status == "PROCESSED" ? "done" : "pending")">@p.Status</span>
+                                    @if (p.Status == "PENDING" && p.TotalItemCount > 0)
+                                    {
+                                        <div class="muted-sm">Paid @p.PaidItemCount/@p.TotalItemCount lines</div>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(p.TransactionRef))
                                     {
                                         <div class="muted-sm">Ref: @p.TransactionRef</div>
@@ -125,7 +129,7 @@
                                         </button>
                                         @if (!p.CanProcess && !string.IsNullOrEmpty(p.BlockReason))
                                         {
-                                            <div class="muted-sm" style="max-width:220px;">@p.BlockReason</div>
+                                            <div class="block-note" title="@p.BlockReason">@p.BlockReason</div>
                                         }
                                     }
                                     else
@@ -213,7 +217,6 @@
                             <div class="bd-row"><span>Gross Package Sales (@detail.Items.Count(i => i.GrossAmount > 0) orders)</span><strong>@detail.TotalGrossAmount.ToString("N0") VND</strong></div>
                             <div class="bd-row"><span>Platform Commission (@((detail.CommissionRate * 100).ToString("0"))%)</span><span>-@detail.SystemCommissionAmount.ToString("N0") VND</span></div>
                             <div class="bd-row"><span>Refund Adjustments</span><span>-@detail.RefundAdjustmentTotal.ToString("N0") VND</span></div>
-                            <div class="bd-row"><span>Tax Withheld</span><span>-@detail.TaxAmount.ToString("N0") VND</span></div>
                             <div class="bd-row total"><span>Final Net Payout Amount</span><strong>@detail.NetPayoutAmount.ToString("N0") VND</strong></div>
                         </div>
 
@@ -247,32 +250,92 @@
                             <div class="auth-alert error">@detail.BlockReason</div>
                         }
 
-                        <!-- Order items -->
-                        @if (detail.Items.Count > 0)
+                        <!-- Packages in this cycle: pay per package or pay all -->
+                        @if (detail.PackageGroups.Count > 0)
                         {
-                            <h4 class="sec-title">Included Orders (@detail.Items.Count)</h4>
-                            <div class="items-list">
-                                @foreach (var it in detail.Items)
+                            <h4 class="sec-title">Packages in this cycle (@detail.PackageGroups.Count)</h4>
+                            <div class="pkg-list">
+                                @foreach (var g in detail.PackageGroups)
                                 {
-                                    <div class="item-row">
-                                        <div class="flex-1">
-                                            <div class="font-semibold text-sm">@(it.PackageTitle ?? "Training Package")</div>
-                                            <div class="muted-sm">@it.BuyerName • @it.OrderCreatedAt?.ToLocalTime().ToString("dd/MM/yyyy")@(string.IsNullOrWhiteSpace(it.VestingInfo) ? "" : $" • {it.VestingInfo}")</div>
-                                        </div>
-                                        <div class="text-end text-sm">
-                                            @if (it.GrossAmount > 0)
+                                    <div class="pkg-card">
+                                        <div class="pkg-head">
+                                            <div class="flex-1">
+                                                <div class="font-bold text-sm">@(!string.IsNullOrWhiteSpace(g.PackageTitle) ? g.PackageTitle : "Training Package")</div>
+                                                <div class="muted-sm">@g.MonthsTotal tháng • Đã trả @g.CyclePaidAmount.ToString("N0") / @g.CycleAmount.ToString("N0") VND</div>
+                                            </div>
+                                            @if (g.IsFullyPaid)
                                             {
-                                                <div>@it.GrossAmount.ToString("N0") − @it.CommissionAmount.ToString("N0") = <strong>@it.NetAmount.ToString("N0")</strong></div>
+                                                <span class="status-pill done">Paid ✓</span>
                                             }
                                             else
                                             {
-                                                <div class="text-red">Refund −@it.RefundAdjustment.ToString("N0")</div>
+                                                <button type="button" class="row-btn primary small"
+                                                        @onclick="() => HandlePayPackageAsync(g)"
+                                                        disabled="@(!CanPayGroup(g) || isProcessing)"
+                                                        title="Pay only this package's unpaid lines">
+                                                    @(isProcessing ? "..." : $"Pay {g.CycleUnpaidAmount:N0} →")
+                                                </button>
                                             }
                                         </div>
+                                        @foreach (var it in g.Items)
+                                        {
+                                            <div class="item-row">
+                                                <div class="flex-1">
+                                                    <div class="font-semibold text-sm">
+                                                        @(!string.IsNullOrWhiteSpace(it.PackageTitle) ? it.PackageTitle : "Training Package")
+                                                        @if (it.IsPaid)
+                                                        {
+                                                            <span class="status-pill done" style="margin-left:6px;">Paid ✓</span>
+                                                        }
+                                                    </div>
+                                                    <div class="muted-sm">@it.BuyerName • @it.OrderCreatedAt?.ToLocalTime().ToString("dd/MM/yyyy")@(string.IsNullOrWhiteSpace(it.VestingInfo) ? "" : $" • {it.VestingInfo}")</div>
+                                                    @if (it.Timeline.Count > 0)
+                                                    {
+                                                        <div class="chips">
+                                                            @foreach (var m in it.Timeline)
+                                                            {
+                                                                @if (m.CanPay && m.PayoutId.HasValue && m.PayoutItemId.HasValue)
+                                                                {
+                                                                    <button type="button" class="chip payable clickable"
+                                                                            title="Pay @m.Amount.ToString("N0") VND for @m.Label"
+                                                                            disabled="@isProcessing"
+                                                                            @onclick="() => HandlePayMonthAsync(m)">
+                                                                        @m.Label ! →
+                                                                    </button>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="chip @m.State.ToLower()" title="@m.Amount.ToString("N0") VND">@m.Label @(m.State == "PAID" ? "✓" : m.State == "PAYABLE" ? "!" : "·")</span>
+                                                                }
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div class="text-end text-sm">
+                                                    <div><strong>@it.NetAmount.ToString("N0")</strong></div>
+                                                    @if (it.IsPaid && !string.IsNullOrWhiteSpace(it.TransactionRef))
+                                                    {
+                                                        <div class="muted-sm">Ref: @it.TransactionRef</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>
                         }
+
+                        @if (PendingRefunds().Count > 0)
+                        {
+                            <div class="muted-sm" style="margin:6px 0;">
+                                Refund adjustments (@PendingRefunds().Count): −@PendingRefunds().Sum(i => i.RefundAdjustment).ToString("N0") VND (deducted on pay)
+                            </div>
+                        }
+
+                        <div class="bd-row total" style="margin-top:8px;">
+                            <span>Còn lại cần trả:</span>
+                            <strong>@RemainingAmount().ToString("N0") VND</strong>
+                        </div>
 
                         @if (!string.IsNullOrEmpty(modalError))
                         {
@@ -284,9 +347,9 @@
                             @if (detail.Status == "PENDING")
                             {
                                 <button type="button" class="btn-primary" @onclick="HandleConfirmPayoutAsync"
-                                        disabled="@(!detail.CanProcess || isProcessing)"
-                                        title="@(detail.CanProcess ? "Confirm payout execution" : detail.BlockReason)">
-                                    @(isProcessing ? "Executing..." : "Confirm Payout Execution")
+                                        disabled="@(!detail.CanProcess || isProcessing || RemainingAmount() <= 0)"
+                                        title="@(detail.CanProcess ? "Pay all remaining lines" : detail.BlockReason)">
+                                    @(isProcessing ? "Executing..." : $"Pay All Remaining →")
                                 </button>
                             }
                         </div>
@@ -427,6 +490,85 @@
         showModal = false;
         detail = null;
         modalError = null;
+    }
+
+    private bool CanPayGroup(PayoutPackageGroup g)
+    {
+        return detail != null
+            && detail.Status == "PENDING"
+            && detail.CanProcess
+            && !g.IsFullyPaid
+            && g.CycleUnpaidAmount > 0;
+    }
+
+    private decimal RemainingAmount()
+    {
+        if (detail == null) return 0;
+        var grossUnpaid = detail.PackageGroups.SelectMany(g => g.Items)
+            .Where(i => !i.IsPaid && i.GrossAmount > 0).Sum(i => i.NetAmount);
+        var refunds = detail.Items
+            .Where(i => !i.IsPaid && i.GrossAmount <= 0).Sum(i => i.RefundAdjustment);
+        return grossUnpaid - refunds;
+    }
+
+    private List<PayoutItem> PendingRefunds()
+    {
+        if (detail == null) return new();
+        return detail.Items.Where(i => !i.IsPaid && i.GrossAmount <= 0 && i.RefundAdjustment > 0).ToList();
+    }
+
+    private async Task RefreshDetailAsync()
+    {
+        if (detail == null) return;
+        var res = await PayoutService.GetDetailAsync(detail.PayoutId);
+        if (res.Success && res.Data != null)
+        {
+            detail = res.Data;
+        }
+        await LoadHistoryAsync();
+    }
+
+    private async Task HandlePayPackageAsync(PayoutPackageGroup g)
+    {
+        if (detail == null || isProcessing) return;
+        isProcessing = true;
+        modalError = null;
+
+        var ids = g.Items.Where(i => !i.IsPaid && i.GrossAmount > 0)
+            .Select(i => i.PayoutItemId).ToList();
+        var res = await PayoutService.ProcessItemsAsync(detail.PayoutId, ids);
+        if (res.Success && res.Data != null)
+        {
+            ShowToast($"Package paid: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
+            await RefreshDetailAsync();
+        }
+        else
+        {
+            modalError = res.Message ?? "Package payment failed. Kept as PENDING — please retry.";
+            await LoadHistoryAsync();
+        }
+        isProcessing = false;
+    }
+
+    private async Task HandlePayMonthAsync(VestingMonth m)
+    {
+        if (detail == null || isProcessing) return;
+        if (!m.CanPay || !m.PayoutId.HasValue || !m.PayoutItemId.HasValue) return;
+        isProcessing = true;
+        modalError = null;
+
+        var res = await PayoutService.ProcessItemsAsync(m.PayoutId.Value, new List<Guid> { m.PayoutItemId.Value });
+        if (res.Success && res.Data != null)
+        {
+            ShowToast($"Month {m.Label} paid: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
+            await RefreshDetailAsync();
+        }
+        else
+        {
+            modalError = res.Message ?? "Month payment failed. Kept as PENDING — please retry.";
+            await LoadHistoryAsync();
+        }
+        isProcessing = false;
     }
 
     private async Task HandleConfirmPayoutAsync()

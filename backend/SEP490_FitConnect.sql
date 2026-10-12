@@ -31,6 +31,7 @@ CREATE TABLE PaymentGatewayConfigs (
     EncryptedChecksumKey BYTEA,     -- Đã có tiền tố Encrypted
     WebhookUrl VARCHAR(2048),
     IsActive BOOLEAN DEFAULT TRUE,
+    IsPayout BOOLEAN DEFAULT FALSE,
     UpdatedBy UUID, 
     UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -541,6 +542,9 @@ CREATE TABLE PayoutItems (
     RefundAdjustment NUMERIC(18,2),
     TaxAmount NUMERIC(18,2),
     NetAmount NUMERIC(18,2),
+    Status VARCHAR(20) DEFAULT 'PENDING',
+    ProcessedAt TIMESTAMP,
+    TransactionRef VARCHAR(100),
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

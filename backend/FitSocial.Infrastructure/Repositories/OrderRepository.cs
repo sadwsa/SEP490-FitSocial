@@ -66,6 +66,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
                 cancellationToken);
     }
 
+
     public async Task<List<Order>> GetOrdersByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
         var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
@@ -86,5 +87,19 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
+
+    public Task<List<Order>> GetCompletedOrdersByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+
+        return DbSet
+            .Where(o => o.CoachId == coachId
+                     && o.OrderStatus != null
+                     && paidStatuses.Contains(o.OrderStatus.ToUpper()))
+            .OrderBy(o => o.CreatedAt)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+
 }
 

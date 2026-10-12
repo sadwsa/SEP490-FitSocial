@@ -866,7 +866,7 @@ public class CoachService : ICoachService
         if (_emailService == null) return;
 
         var safeName = EscapeHtml(string.IsNullOrWhiteSpace(fullName) ? "Coach" : fullName);
-        var subject = "[FitSocial] Congratulations! Your Coach Application Has Been Approved";
+        var subject = "[FitConnect] Congratulations! Your Coach Application Has Been Approved";
 
         var noteHtml = string.IsNullOrWhiteSpace(adminNote)
             ? string.Empty
@@ -880,26 +880,24 @@ public class CoachService : ICoachService
             <div style=""background-color: #f4f6f8; padding: 30px 15px; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333333; line-height: 1.6;"">
                 <div style=""max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;"">
                     <!-- Header -->
-                    <div style=""background: linear-gradient(135deg, #FF5722 0%, #FF8A65 100%); padding: 32px 24px; text-align: center;"">
-                        <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitSocial"" style=""width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: #fff; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"" />
-                        <h1 style=""color: #ffffff; margin: 12px 0 4px; font-size: 24px; font-weight: 700; letter-spacing: 0.5px;"">FitSocial</h1>
+                    <div style=""background: linear-gradient(135deg, #FF5722 0%, #FF8A65 100%); padding: 28px 24px; text-align: center;"">
+                        <h1 style=""color: #ffffff; margin: 0 0 4px; font-size: 26px; font-weight: 700; letter-spacing: 0.5px;"">FitConnect</h1>
                         <p style=""color: #ffe0b2; margin: 0; font-size: 14px; font-weight: 500;"">Sports & Fitness Community Platform</p>
                     </div>
 
                     <!-- Status Banner -->
                     <div style=""background-color: #e8f5e9; border-left: 5px solid #2e7d32; padding: 18px 24px; margin: 24px 24px 0;"">
                         <div style=""display: flex; align-items: center;"">
-                            <span style=""font-size: 20px; margin-right: 10px;"">🎉</span>
                             <span style=""color: #1b5e20; font-size: 16px; font-weight: 700;"">APPLICATION APPROVED</span>
                         </div>
-                        <p style=""margin: 6px 0 0; color: #2e7d32; font-size: 14px;"">Congratulations! You are now officially recognized as a Coach on FitSocial.</p>
+                        <p style=""margin: 6px 0 0; color: #2e7d32; font-size: 14px;"">Congratulations! You are now officially recognized as a Coach on FitConnect.</p>
                     </div>
 
                     <!-- Body Content -->
                     <div style=""padding: 24px;"">
                         <p style=""font-size: 16px; margin: 0 0 16px;"">Hello <strong>{safeName}</strong>,</p>
                         <p style=""font-size: 15px; margin: 0 0 16px; color: #4a5568;"">
-                            We are thrilled to inform you that your <strong>Coach Application</strong> has been reviewed and officially approved by the FitSocial administration team.
+                            We are thrilled to inform you that your <strong>Coach Application</strong> has been reviewed and officially approved by the FitConnect administration team.
                         </p>
                         <p style=""font-size: 14px; color: #718096; margin: 0 0 20px;"">
                             Your account permissions have been upgraded to Coach status, giving you full access to all coach platform features.
@@ -924,13 +922,13 @@ public class CoachService : ICoachService
                                 Go to Coach Dashboard →
                             </a>
                         </div>
-                        <p style=""text-align: center; font-size: 13px; color: #a0aec0; margin: 0 0 10px;"">Or sign in directly through the official FitSocial website.</p>
+                        <p style=""text-align: center; font-size: 13px; color: #a0aec0; margin: 0 0 10px;"">Or sign in directly through the official FitConnect website.</p>
                     </div>
 
                     <!-- Footer -->
                     <div style=""background-color: #f7fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #edf2f7;"">
-                        <p style=""margin: 0 0 6px; font-size: 13px; color: #718096;"">Need assistance? Please reach out to <a href=""mailto:support@fitsocial.vn"" style=""color: #FF5722; text-decoration: none;"">support@fitsocial.vn</a></p>
-                        <p style=""margin: 0; font-size: 12px; color: #a0aec0;"">© 2026 FitSocial. All rights reserved.</p>
+                        <p style=""margin: 0 0 6px; font-size: 13px; color: #718096;"">Need assistance? Please reach out to <a href=""mailto:support@fitconnect.vn"" style=""color: #FF5722; text-decoration: none;"">support@fitconnect.vn</a></p>
+                        <p style=""margin: 0; font-size: 12px; color: #a0aec0;"">© 2026 FitConnect. All rights reserved.</p>
                     </div>
                 </div>
             </div>";
@@ -946,7 +944,7 @@ public class CoachService : ICoachService
         if (_emailService == null) return;
 
         var safeName = EscapeHtml(string.IsNullOrWhiteSpace(fullName) ? "Applicant" : fullName);
-        var subject = "[FitSocial] Important Update on Your Coach Application";
+        var subject = "[FitConnect] Important Update on Your Coach Application";
         var safeReason = EscapeHtml(
             string.IsNullOrWhiteSpace(rejectReason)
                 ? "Submitted documents or verification credentials do not meet platform verification criteria."
@@ -956,16 +954,14 @@ public class CoachService : ICoachService
             <div style=""background-color: #f4f6f8; padding: 30px 15px; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333333; line-height: 1.6;"">
                 <div style=""max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;"">
                     <!-- Header -->
-                    <div style=""background: linear-gradient(135deg, #455A64 0%, #607D8B 100%); padding: 32px 24px; text-align: center;"">
-                        <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitSocial"" style=""width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: #fff; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"" />
-                        <h1 style=""color: #ffffff; margin: 12px 0 4px; font-size: 24px; font-weight: 700; letter-spacing: 0.5px;"">FitSocial</h1>
+                    <div style=""background: linear-gradient(135deg, #455A64 0%, #607D8B 100%); padding: 28px 24px; text-align: center;"">
+                        <h1 style=""color: #ffffff; margin: 0 0 4px; font-size: 26px; font-weight: 700; letter-spacing: 0.5px;"">FitConnect</h1>
                         <p style=""color: #cfd8dc; margin: 0; font-size: 14px; font-weight: 500;"">Sports & Fitness Community Platform</p>
                     </div>
 
                     <!-- Status Banner -->
                     <div style=""background-color: #ffebee; border-left: 5px solid #d32f2f; padding: 18px 24px; margin: 24px 24px 0;"">
                         <div style=""display: flex; align-items: center;"">
-                            <span style=""font-size: 20px; margin-right: 10px;"">⚠️</span>
                             <span style=""color: #b71c1c; font-size: 16px; font-weight: 700;"">APPLICATION NOT APPROVED</span>
                         </div>
                         <p style=""margin: 6px 0 0; color: #c62828; font-size: 14px;"">Notification regarding your coach application verification result</p>
@@ -975,7 +971,7 @@ public class CoachService : ICoachService
                     <div style=""padding: 24px;"">
                         <p style=""font-size: 16px; margin: 0 0 16px;"">Hello <strong>{safeName}</strong>,</p>
                         <p style=""font-size: 15px; margin: 0 0 16px; color: #4a5568;"">
-                            Thank you for your interest in joining FitSocial as a Coach. After carefully reviewing your submitted credentials and verification records, we regret to inform you that your coach application could not be approved at this time.
+                            Thank you for your interest in joining FitConnect as a Coach. After carefully reviewing your submitted credentials and verification records, we regret to inform you that your coach application could not be approved at this time.
                         </p>
 
                         <!-- Rejection Reason Box -->
@@ -1003,8 +999,8 @@ public class CoachService : ICoachService
 
                     <!-- Footer -->
                     <div style=""background-color: #f7fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #edf2f7;"">
-                        <p style=""margin: 0 0 6px; font-size: 13px; color: #718096;"">Support Department: <a href=""mailto:support@fitsocial.vn"" style=""color: #FF5722; text-decoration: none;"">support@fitsocial.vn</a></p>
-                        <p style=""margin: 0; font-size: 12px; color: #a0aec0;"">© 2026 FitSocial. All rights reserved.</p>
+                        <p style=""margin: 0 0 6px; font-size: 13px; color: #718096;"">Support Department: <a href=""mailto:support@fitconnect.vn"" style=""color: #FF5722; text-decoration: none;"">support@fitconnect.vn</a></p>
+                        <p style=""margin: 0; font-size: 12px; color: #a0aec0;"">© 2026 FitConnect. All rights reserved.</p>
                     </div>
                 </div>
             </div>";

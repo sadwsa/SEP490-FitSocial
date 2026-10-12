@@ -13,6 +13,7 @@ public interface IFileUploadService
     Task<ApiResponse<string>> UploadAvatarAsync(IBrowserFile file);
     Task<ApiResponse<List<CreatePostMediaItemDto>>> UploadPostMediaAsync(IEnumerable<IBrowserFile> files);
     Task<ApiResponse<List<CreatePostMediaItemDto>>> UploadPostMediaAsync(IEnumerable<UploadMediaPayload> files);
+    Task<ApiResponse<string>> UploadExerciseVideoAsync(IBrowserFile file);
 }
 
 public class FileUploadService : IFileUploadService
@@ -213,6 +214,59 @@ public class FileUploadService : IFileUploadService
             {
                 Success = false,
                 Message = $"Media upload error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<string>> UploadExerciseVideoAsync(IBrowserFile file)
+    {
+        try
+        {
+            const long maxVideoBytes = 100 * 1024 * 1024; // 100MB
+            if (file.Size > maxVideoBytes)
+            {
+                return new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Video file size must not exceed 100MB."
+                };
+            }
+
+            using var content = new MultipartFormDataContent();
+            var token = await _tokenStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var stream = file.OpenReadStream(maxVideoBytes);
+            content.Add(new StreamContent(stream), "files", file.Name);
+
+            var response = await _httpClient.PostAsync("upload/post-media", content);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<CreatePostMediaItemDto>>>();
+
+            if (response.IsSuccessStatusCode && result != null && result.Success && result.Data?.Count > 0)
+            {
+                return new ApiResponse<string>
+                {
+                    Success = true,
+                    Data = result.Data[0].MediaUrl,
+                    Message = "Video uploaded successfully."
+                };
+            }
+
+            return new ApiResponse<string>
+            {
+                Success = false,
+                Message = result?.Message ?? $"Video upload failed (Code: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<string>
+            {
+                Success = false,
+                Message = $"Video upload error: {ex.Message}"
             };
         }
     }

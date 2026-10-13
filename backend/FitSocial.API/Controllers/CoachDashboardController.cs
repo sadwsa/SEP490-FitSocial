@@ -49,4 +49,6 @@ public class CoachDashboardController : ControllerBase
         var result = await _dashboardService.GetCoachDashboardMetricsAsync(coachId, cancellationToken);
         return Ok(result);
     }
+  
+
 }

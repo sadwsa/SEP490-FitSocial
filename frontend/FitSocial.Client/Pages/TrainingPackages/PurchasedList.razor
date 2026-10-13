@@ -1,18 +1,24 @@
-﻿@page "/training-packages/purchased"
+@page "/training-packages/purchased"
 @layout EmptyLayout
 @inject ITrainingPackageService PackageService
-@inject ICoachService CoachService
 @inject NavigationManager Navigation
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.TrainingPackages
-@using FitSocial.Client.Models.Coaches
 @using FitSocial.Client.Services.TrainingPackages
-@using FitSocial.Client.Services.Coaches
 
 <PageTitle>Purchased Packages - FitSocial</PageTitle>
 
 <div class="min-h-screen bg-gray-100 text-gray-800">
     <AppHeader />
+
+    <!-- Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl transition-all duration-300">
+            <svg class="w-5 h-5 fill-current" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+            <span>@toastSuccessMessage</span>
+        </div>
+    }
 
     <style>
         @@media (min-width: 1024px) {
@@ -72,28 +78,77 @@
             }
             else
             {
-                <!-- Giao diện kiểu Danh sách (List) -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <ul class="divide-y divide-gray-100">
                         @foreach (var pkg in packages)
                         {
-                            <li class="p-5 hover:bg-gray-50 transition duration-200 cursor-pointer flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                                <div>
-                                    <h3 class="text-lg font-bold text-gray-800">@pkg.Title</h3>
-                                    <p class="text-sm text-gray-500 mb-2">Coach: <span class="font-semibold text-gray-700">@pkg.CoachName</span></p>
-                                    <div class="flex gap-3 text-xs font-semibold text-gray-500">
-                                        <span class="bg-gray-100 px-2 py-1 rounded">@($"{pkg.DurationDays} Days")</span>
-                                        <span class="bg-gray-100 px-2 py-1 rounded">@($"{pkg.Price:N0} đ")</span>
+                            <li class="p-5 hover:bg-gray-50/80 transition duration-200 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                                <div class="flex items-start gap-4 flex-1 min-w-0 cursor-pointer" @onclick="() => OpenPackageDetailsModal(pkg)">
+                                    @if (!string.IsNullOrWhiteSpace(pkg.ThumbnailUrl))
+                                    {
+                                        <img src="@pkg.ThumbnailUrl" alt="@pkg.Title" class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border border-gray-100 flex-shrink-0 shadow-xs" />
+                                    }
+                                    else
+                                    {
+                                        <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-orange-50 text-[#FF5500] flex items-center justify-center flex-shrink-0 font-black text-lg border border-orange-100">
+                                            FIT
+                                        </div>
+                                    }
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="text-base sm:text-lg font-bold text-gray-800 hover:text-orange-600 transition line-clamp-2 break-words" title="@pkg.Title">@pkg.Title</h3>
+                                        <p class="text-xs sm:text-sm text-gray-500 mb-2 truncate">Coach: <span class="font-semibold text-gray-700">@pkg.CoachName</span></p>
+                                        <div class="flex flex-wrap gap-2 text-xs font-semibold text-gray-500">
+                                            <span class="bg-gray-100 px-2 py-1 rounded">@($"{pkg.DurationDays} Days")</span>
+                                            @if (pkg.SessionCount.HasValue)
+                                            {
+                                                <span class="bg-gray-100 px-2 py-1 rounded">@($"{pkg.SessionCount} Sessions")</span>
+                                            }
+                                            <span class="bg-orange-50 text-[#FF5500] px-2 py-1 rounded font-bold">@($"{pkg.Price:N0} đ")</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="text-right flex flex-col sm:items-end gap-2">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-green-50 text-green-600 text-sm font-bold border border-green-100">
-                                        Purchased
-                                    </span>
+                                <div class="flex items-center gap-2 sm:self-center flex-shrink-0 ml-auto sm:ml-0">
+                                    <!-- Start Workout Button -->
+                                    @if (pkg.OrderDetailsId.HasValue && !string.IsNullOrWhiteSpace(pkg.PlanStatus) && pkg.PlanStatus != "PENDING_COACH")
+                                    {
+                                        <a href="/training-packages/workout/@pkg.OrderDetailsId"
+                                           class="px-3.5 py-2 bg-[#FF5500] hover:bg-orange-600 text-white text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 shadow-xs">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Start Workout
+                                        </a>
+                                    }
+                                    else if (pkg.OrderDetailsId.HasValue)
+                                    {
+                                        <span class="px-3.5 py-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 whitespace-nowrap flex-shrink-0">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Plan Pending
+                                        </span>
+                                    }
 
-                                    <!-- Nút Rate Coach bật Modal -->
-                                    <button type="button" @onclick="() => OpenReviewModal(pkg.CoachId)" @onclick:stopPropagation="true" class="mt-1 px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg border border-gray-200 transition-colors">
-                                        Rate Coach
+                                    <!-- Meal Plan Button -->
+                                    @if (pkg.OrderDetailsId.HasValue)
+                                    {
+                                        <a href="/training-packages/meal-plan/@pkg.OrderDetailsId"
+                                           class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 shadow-2xs">
+                                            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                            </svg>
+                                            Meal Plan
+                                        </a>
+                                    }
+
+                                    <!-- View Details Button -->
+                                    <button type="button" @onclick="() => OpenPackageDetailsModal(pkg)" class="px-3.5 py-2 bg-gray-100 hover:bg-orange-50 hover:text-[#FF5500] hover:border-orange-200 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 cursor-pointer shadow-2xs">
+                                        <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        View Details
                                     </button>
                                 </div>
                             </li>
@@ -107,13 +162,146 @@
     </div>
 </div>
 
-<!-- ĐÂY LÀ GIAO DIỆN CỬA SỔ BẬT LÊN (MODAL) NHẬP REVIEW -->
+<!-- MODAL VIEW PURCHASED PACKAGE DETAILS -->
+@if (isDetailModalOpen && selectedDetailPackage != null)
+{
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <!-- Modal Header -->
+            <div class="flex items-start justify-between gap-3 pb-4 border-b border-gray-100 mb-4">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-900 leading-snug">@selectedDetailPackage.Title</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Coach: <strong class="text-gray-700">@selectedDetailPackage.CoachName</strong></p>
+                </div>
+                <button type="button" @onclick="ClosePackageDetailsModal" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition cursor-pointer flex-shrink-0" title="Close">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Media / Thumbnail -->
+            @if (selectedDetailPackage.ImageUrls != null && selectedDetailPackage.ImageUrls.Any())
+            {
+                <div class="rounded-xl overflow-hidden mb-4 max-h-56 bg-gray-100 border border-gray-100">
+                    <img src="@selectedDetailPackage.ThumbnailUrl" alt="@selectedDetailPackage.Title" class="w-full h-56 object-cover" />
+                </div>
+            }
+
+            <!-- 4-Grid Key Specifications -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Duration</span>
+                    <p class="text-sm font-black text-gray-800">@selectedDetailPackage.DurationDays Days</p>
+                </div>
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Sessions</span>
+                    <p class="text-sm font-black text-gray-800">@(selectedDetailPackage.SessionCount.HasValue ? $"{selectedDetailPackage.SessionCount} Sessions" : "Flexible")</p>
+                </div>
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Min Age</span>
+                    <p class="text-sm font-black text-gray-800">@(selectedDetailPackage.MinAge.HasValue ? $"{selectedDetailPackage.MinAge}+ yrs" : "All ages")</p>
+                </div>
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Price Paid</span>
+                    <p class="text-sm font-black text-[#FF5500]">@selectedDetailPackage.Price.ToString("N0") đ</p>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(selectedDetailPackage.TargetAudience))
+            {
+                <div class="mb-4 bg-orange-50/50 border border-orange-100 rounded-xl p-3 flex items-start gap-2 text-xs">
+                    <span class="font-bold text-orange-800 flex-shrink-0">Target Audience:</span>
+                    <span class="text-orange-900">@selectedDetailPackage.TargetAudience</span>
+                </div>
+            }
+
+            <!-- Description -->
+            <div class="mb-5">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">Package Description</h4>
+                <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-sm text-gray-700 leading-relaxed whitespace-pre-line max-h-40 overflow-y-auto">
+                    @(string.IsNullOrWhiteSpace(selectedDetailPackage.Description) ? "No description provided for this package." : selectedDetailPackage.Description)
+                </div>
+            </div>
+
+            <!-- Review Status Block inside Modal -->
+            <div class="mb-5 p-3.5 rounded-xl border @(selectedDetailPackage.HasReviewed ? "bg-amber-50/40 border-amber-200" : "bg-gray-50 border-gray-200")">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-xs font-bold text-gray-800">Your Review Status</span>
+                    @if (selectedDetailPackage.HasReviewed)
+                    {
+                        <div class="flex items-center gap-1 text-yellow-400">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <svg class="w-4 h-4 @(i <= selectedDetailPackage.UserRating ? "fill-current" : "text-gray-200 fill-current")" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                </svg>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (selectedDetailPackage.HasReviewed)
+                {
+                    <p class="text-xs text-gray-600 italic">
+                        @(string.IsNullOrWhiteSpace(selectedDetailPackage.UserComment) ? "You gave this package a star rating." : $"\"{selectedDetailPackage.UserComment}\"")
+                    </p>
+                    @if (!selectedDetailPackage.IsReviewEdited)
+                    {
+                        <div class="mt-2 text-right">
+                            <button type="button" @onclick="OpenReviewFromDetails" class="text-xs font-bold text-[#FF5500] hover:underline cursor-pointer">
+                                ✏️ Edit your review
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-[11px] text-gray-400 mt-1 italic">Review edited once (Maximum 1 edit reached)</p>
+                    }
+                }
+                else
+                {
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-xs text-gray-500">You haven't rated this package yet.</p>
+                        <button type="button" @onclick="OpenReviewFromDetails" class="px-3 py-1 bg-[#FF5500] text-white text-xs font-semibold rounded-lg hover:bg-orange-600 transition cursor-pointer">
+                            Write Review
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-between pt-3 border-t border-gray-100 gap-3">
+                <a href="/training-packages/@selectedDetailPackage.PackageId" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition">
+                    <span>View Public Page & All Reviews</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                </a>
+                <button type="button" @onclick="ClosePackageDetailsModal" class="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL NHẬP REVIEW THEO PACKAGE -->
 @if (isReviewModalOpen)
 {
-    <div class="fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 animate-fade-in-up">
-            <h3 class="text-xl font-bold text-gray-900 mb-2 text-center">Rate Coach</h3>
-            <p class="text-sm text-gray-500 text-center mb-6">How was your training experience?</p>
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95">
+            <h3 class="text-xl font-bold text-gray-900 mb-1 text-center">
+                @(isEditingMode ? "Edit Your Review" : "Rate & Review Package")
+            </h3>
+            <p class="text-xs text-orange-600 font-semibold text-center mb-4 truncate px-2">@selectedPackageTitle</p>
+
+            @if (isEditingMode)
+            {
+                <!-- Notice: Edit once only -->
+                <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl mb-5 flex items-start gap-2.5">
+                    <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-xs text-amber-800 font-medium">Notice: You can only edit this review <strong>once</strong>. After saving, you will not be able to modify it again.</span>
+                </div>
+            }
 
             @if (!string.IsNullOrEmpty(reviewErrorMessage))
             {
@@ -128,7 +316,7 @@
                     @for (int i = 1; i <= 5; i++)
                     {
                         int star = i;
-                        <button type="button" @onclick="() => reviewDto.Rating = star" class="focus:outline-none transition-transform hover:scale-110">
+                        <button type="button" @onclick="() => reviewDto.Rating = star" class="focus:outline-none transition-transform hover:scale-110 cursor-pointer">
                             <svg class="w-10 h-10 @(star <= reviewDto.Rating ? "text-yellow-400" : "text-gray-200")" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
                             </svg>
@@ -138,18 +326,19 @@
 
                 <!-- Nhập bình luận -->
                 <div class="mb-6">
-                    <InputTextArea @bind-Value="reviewDto.Comment" rows="3" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none text-sm" placeholder="Write your review here..."></InputTextArea>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">Your experience:</label>
+                    <InputTextArea @bind-Value="reviewDto.Comment" rows="4" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none text-sm" placeholder="Tell us how effective this package was for your training..."></InputTextArea>
                 </div>
 
                 <!-- Nút Cancel / Submit -->
                 <div class="flex justify-end gap-3">
-                    <button type="button" @onclick="CloseReviewModal" class="px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
-                    <button type="submit" disabled="@isSubmittingReview" class="px-4 py-2 text-sm font-semibold text-white bg-gray-800 rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors flex items-center gap-2">
+                    <button type="button" @onclick="CloseReviewModal" class="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition cursor-pointer">Cancel</button>
+                    <button type="submit" disabled="@isSubmittingReview" class="px-5 py-2.5 text-sm font-semibold text-white bg-[#FF5500] hover:bg-orange-600 rounded-xl disabled:opacity-50 transition flex items-center gap-2 cursor-pointer">
                         @if (isSubmittingReview)
                         {
                             <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                         }
-                        Submit
+                        @(isEditingMode ? "Save Changes" : "Submit Review")
                     </button>
                 </div>
             </EditForm>
@@ -162,15 +351,55 @@
     private bool isLoading = true;
     private string? errorMessage;
 
+    // --- Các biến và hàm cho Modal Xem Chi Tiết Gói Đã Mua ---
+    private bool isDetailModalOpen = false;
+    private TrainingPackageResponseDto? selectedDetailPackage;
+
+    private void OpenPackageDetailsModal(TrainingPackageResponseDto pkg)
+    {
+        selectedDetailPackage = pkg;
+        isDetailModalOpen = true;
+    }
+
+    private void ClosePackageDetailsModal()
+    {
+        isDetailModalOpen = false;
+        selectedDetailPackage = null;
+    }
+
+    private void OpenReviewFromDetails()
+    {
+        if (selectedDetailPackage == null) return;
+        var pkg = selectedDetailPackage;
+        ClosePackageDetailsModal();
+        if (!pkg.HasReviewed)
+        {
+            OpenReviewModal(pkg);
+        }
+        else if (!pkg.IsReviewEdited)
+        {
+            OpenEditReviewModal(pkg);
+        }
+    }
+
     // --- Các biến và hàm cho Modal Review ---
     private bool isReviewModalOpen = false;
-    private Guid selectedCoachId;
-    private CreateReviewDto reviewDto = new CreateReviewDto();
+    private bool isEditingMode = false;
+    private Guid selectedPackageId;
+    private string selectedPackageTitle = string.Empty;
+    private CreatePackageReviewDto reviewDto = new CreatePackageReviewDto();
     private bool isSubmittingReview = false;
     private string? reviewErrorMessage;
+    private string? toastSuccessMessage;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadPurchasedPackagesAsync();
+    }
+
+    private async Task LoadPurchasedPackagesAsync()
+    {
+        isLoading = true;
         var response = await PackageService.GetPurchasedPackagesAsync();
         if (response.Success && response.Data != null)
         {
@@ -188,10 +417,26 @@
         Navigation.NavigateTo($"/training-packages/{id}");
     }
 
-    private void OpenReviewModal(Guid coachId)
+    private void OpenReviewModal(TrainingPackageResponseDto pkg)
     {
-        selectedCoachId = coachId;
-        reviewDto = new CreateReviewDto { Rating = 5 }; // Mặc định 5 sao
+        selectedPackageId = pkg.PackageId;
+        selectedPackageTitle = pkg.Title ?? "Training Package";
+        isEditingMode = false;
+        reviewDto = new CreatePackageReviewDto { Rating = 5, Comment = "" };
+        reviewErrorMessage = null;
+        isReviewModalOpen = true;
+    }
+
+    private void OpenEditReviewModal(TrainingPackageResponseDto pkg)
+    {
+        selectedPackageId = pkg.PackageId;
+        selectedPackageTitle = pkg.Title ?? "Training Package";
+        isEditingMode = true;
+        reviewDto = new CreatePackageReviewDto
+        {
+            Rating = pkg.UserRating ?? 5,
+            Comment = pkg.UserComment ?? ""
+        };
         reviewErrorMessage = null;
         isReviewModalOpen = true;
     }
@@ -206,11 +451,20 @@
         isSubmittingReview = true;
         reviewErrorMessage = null;
 
-        var response = await CoachService.SubmitReviewAsync(selectedCoachId, reviewDto);
+        var response = await PackageService.SubmitPackageReviewAsync(selectedPackageId, reviewDto);
         if (response.Success)
         {
-            isReviewModalOpen = false; // Tắt modal khi thành công
-            // (Bạn có thể gọi thư viện Toast Alert ở đây nếu muốn thông báo xanh)
+            isReviewModalOpen = false;
+            toastSuccessMessage = isEditingMode 
+                ? "Review updated successfully!" 
+                : "Your review has been submitted successfully!";
+            await LoadPurchasedPackagesAsync();
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(3500);
+                toastSuccessMessage = null;
+                await InvokeAsync(StateHasChanged);
+            });
         }
         else
         {

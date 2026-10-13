@@ -27,6 +27,8 @@ public class PayoutHistoryItemDto
     public DateTime? ProcessedAt { get; set; }
     public DateTime? CreatedAt { get; set; }
     public int OrderCount { get; set; }
+    public int PaidItemCount { get; set; }
+    public int TotalItemCount { get; set; }
 
     /// <summary>TH1: coach currently has unresolved reports.</summary>
     public bool HasBlockingReports { get; set; }
@@ -72,6 +74,43 @@ public class PayoutItemDto
     public decimal NetAmount { get; set; }
     /// <summary>Monthly vesting label, e.g. "Kỳ 2/4". Empty for refund-only lines.</summary>
     public string VestingInfo { get; set; } = string.Empty;
+    public bool IsPaid { get; set; }
+    public DateTime? ProcessedAt { get; set; }
+    public string? TransactionRef { get; set; }
+    /// <summary>Month-by-month vesting timeline of the underlying order.</summary>
+    public List<VestingMonthDto> Timeline { get; set; } = new();
+}
+
+public class VestingMonthDto
+{
+    public int Month { get; set; }
+    public int Year { get; set; }
+    public string Label => $"{Month:D2}/{Year}";
+    /// <summary>PAID (already paid), PAYABLE (arrived, unpaid) or FUTURE.</summary>
+    public string State { get; set; } = "FUTURE";
+    public decimal Amount { get; set; }
+    /// <summary>Payout + item holding this month's tranche (if generated).</summary>
+    public Guid? PayoutId { get; set; }
+    public Guid? PayoutItemId { get; set; }
+    /// <summary>True when clicking this month may pay it now.</summary>
+    public bool CanPay { get; set; }
+}
+
+/// <summary>
+/// One package group inside a payout cycle: its tranches, timeline and
+/// per-package pay action (pay-all for the whole payout is kept too).
+/// </summary>
+public class PayoutPackageGroupDto
+{
+    public Guid? PackageId { get; set; }
+    public string PackageTitle { get; set; } = string.Empty;
+    public int DurationDays { get; set; }
+    public int MonthsTotal { get; set; }
+    public decimal CycleAmount { get; set; }
+    public decimal CyclePaidAmount { get; set; }
+    public decimal CycleUnpaidAmount { get; set; }
+    public bool IsFullyPaid { get; set; }
+    public List<PayoutItemDto> Items { get; set; } = new();
 }
 
 public class PayoutBankAccountDto
@@ -106,6 +145,7 @@ public class PayoutDetailDto
     public string? Status { get; set; }
     public string? TransactionRef { get; set; }
     public List<PayoutItemDto> Items { get; set; } = new();
+    public List<PayoutPackageGroupDto> PackageGroups { get; set; } = new();
     public PayoutBankAccountDto? BankAccount { get; set; }
     public bool HasBlockingReports { get; set; }
     public int BlockingReportCount { get; set; }

@@ -81,6 +81,11 @@ namespace FitSocial.Infrastructure.Repositories
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.Coach)
                 .Include(x => x.Media)
+                .Include(x => x.Reviews.Where(r => r.TraineeId == traineeId))
+                .Include(x => x.OrderDetails.Where(od => od.Order.BuyerId == traineeId))
+                    .ThenInclude(od => od.Order)
+                .Include(x => x.OrderDetails.Where(od => od.Order.BuyerId == traineeId))
+                    .ThenInclude(od => od.TrainingPlans)
                 .Where(x => x.OrderDetails.Any(od =>
                     od.Order.BuyerId == traineeId && 
                     od.Order.OrderStatus != null &&

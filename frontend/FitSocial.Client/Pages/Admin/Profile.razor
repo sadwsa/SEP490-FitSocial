@@ -4,16 +4,19 @@
 @implements IDisposable
 @using FitSocial.Client.Models.Common
 @using FitSocial.Client.Models.Users
+@using FitSocial.Client.Models.Auth
 @using FitSocial.Client.Services.Users
 @using FitSocial.Client.Services.Files
+@using FitSocial.Client.Services.Auth
 @inject IUserService UserService
 @inject IFileUploadService FileUploadService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>My Profile - FitSocial Admin Console</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
-    <Authorized>
+    <Authorized Context="authCtx">
         <div class="profile-container">
             <!-- Page Header -->
             <div class="profile-header-actions mb-4">
@@ -32,6 +35,20 @@
                 }
             </div>
 
+            <!-- Profile Tabs -->
+            <div class="profile-tabs mb-4">
+                <button type="button" class="profile-tab @(profileTab == "info" ? "active" : "")" @onclick='() => SwitchProfileTab("info")'>
+                    <AppIcon Name="person" />
+                    <span>Profile Information</span>
+                </button>
+                <button type="button" class="profile-tab @(profileTab == "security" ? "active" : "")" @onclick='() => SwitchProfileTab("security")'>
+                    <AppIcon Name="lock" />
+                    <span>Change Password</span>
+                </button>
+            </div>
+
+            @if (profileTab == "info")
+            {
             <!-- Notifications -->
             @if (!string.IsNullOrEmpty(successMessage))
             {
@@ -439,6 +456,83 @@
                         </button>
                     </div>
                 }
+            }
+            }
+            else
+            {
+                <!-- Security Tab: Change Password -->
+                <div class="profile-card">
+                    <div class="card-section-header">
+                        <h4 class="section-title">Change Password</h4>
+                        <span class="section-subtitle">All other sessions will be signed out. You will sign in again with the new password.</span>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(pwdSuccessMessage))
+                    {
+                        <div class="auth-alert success mb-4" role="alert">
+                            <AppIcon Name="check" />
+                            <span class="alert-text">@pwdSuccessMessage</span>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(pwdErrorMessage))
+                    {
+                        <div class="auth-alert error mb-4" role="alert">
+                            <AppIcon Name="warning" />
+                            <span class="alert-text">@pwdErrorMessage</span>
+                        </div>
+                    }
+
+                    <EditForm Model="@pwdModel" OnValidSubmit="HandlePasswordChange">
+                        <DataAnnotationsValidator />
+
+                        <div class="form-field-group">
+                            <label class="form-field-label" for="pwdCurrentInput">Current password</label>
+                            <div style="position:relative;">
+                                <InputText id="pwdCurrentInput" type="@(showPwdCurrent ? "text" : "password")" @bind-Value="pwdModel.CurrentPassword" class="form-input-control" style="padding-right:2.5rem;" placeholder="Enter your current password" />
+                                <button type="button" @onclick="() => showPwdCurrent = !showPwdCurrent" title="Show/hide password" class="pwd-eye-btn">
+                                    <AppIcon Name="@(showPwdCurrent ? "eye-slash" : "eye")" />
+                                </button>
+                            </div>
+                            <ValidationMessage For="@(() => pwdModel.CurrentPassword)" class="field-error-text" />
+                        </div>
+
+                        <div class="form-field-group">
+                            <label class="form-field-label" for="pwdNewInput">New password</label>
+                            <div style="position:relative;">
+                                <InputText id="pwdNewInput" type="@(showPwdNew ? "text" : "password")" @bind-Value="pwdModel.NewPassword" class="form-input-control" style="padding-right:2.5rem;" placeholder="Minimum 8 characters, different from current" />
+                                <button type="button" @onclick="() => showPwdNew = !showPwdNew" title="Show/hide password" class="pwd-eye-btn">
+                                    <AppIcon Name="@(showPwdNew ? "eye-slash" : "eye")" />
+                                </button>
+                            </div>
+                            <ValidationMessage For="@(() => pwdModel.NewPassword)" class="field-error-text" />
+                        </div>
+
+                        <div class="form-field-group">
+                            <label class="form-field-label" for="pwdConfirmInput">Confirm new password</label>
+                            <div style="position:relative;">
+                                <InputText id="pwdConfirmInput" type="@(showPwdConfirm ? "text" : "password")" @bind-Value="pwdModel.ConfirmPassword" class="form-input-control" style="padding-right:2.5rem;" placeholder="Re-enter the new password" />
+                                <button type="button" @onclick="() => showPwdConfirm = !showPwdConfirm" title="Show/hide password" class="pwd-eye-btn">
+                                    <AppIcon Name="@(showPwdConfirm ? "eye-slash" : "eye")" />
+                                </button>
+                            </div>
+                            <ValidationMessage For="@(() => pwdModel.ConfirmPassword)" class="field-error-text" />
+                        </div>
+
+                        <button type="submit" disabled="@isChangingPassword" class="action-btn-primary" style="margin-top:12px;">
+                            @if (isChangingPassword)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <span>Updating...</span>
+                            }
+                            else
+                            {
+                                <AppIcon Name="check" />
+                                <span>Update Password</span>
+                            }
+                        </button>
+                    </EditForm>
+                </div>
             }
         </div>
     </Authorized>

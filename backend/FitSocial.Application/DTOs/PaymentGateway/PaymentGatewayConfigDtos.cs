@@ -15,6 +15,7 @@ public class PaymentGatewayConfigDto
     public string? ChecksumKeyMasked { get; set; }
     public string? WebhookUrl { get; set; }
     public bool IsActive { get; set; }
+    public bool IsPayout { get; set; }
     public Guid? UpdatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
@@ -41,6 +42,9 @@ public class CreatePaymentGatewayConfigDto
     public string? WebhookUrl { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>false = thu tiền (collection), true = chi tiền (payout).</summary>
+    public bool IsPayout { get; set; } = false;
 }
 
 public class UpdatePaymentGatewayConfigDto
@@ -61,4 +65,7 @@ public class UpdatePaymentGatewayConfigDto
     public string? WebhookUrl { get; set; }
 
     public bool? IsActive { get; set; }
+
+    /// <summary>false = thu tiền (collection), true = chi tiền (payout).</summary>
+    public bool? IsPayout { get; set; }
 }

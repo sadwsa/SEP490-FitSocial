@@ -19,6 +19,12 @@ public partial class PaymentGatewayConfig
 
     public bool? IsActive { get; set; } = true;
 
+    /// <summary>
+    /// false/NULL = collection channel (thu tiền), true = payout channel (chi tiền).
+    /// At most one active config per purpose.
+    /// </summary>
+    public bool? IsPayout { get; set; } = false;
+
     public Guid? UpdatedBy { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

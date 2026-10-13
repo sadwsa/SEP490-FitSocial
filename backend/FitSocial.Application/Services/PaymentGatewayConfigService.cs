@@ -66,15 +66,17 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             EncryptedChecksumKey = _encryptionService.Encrypt(dto.ChecksumKey.Trim()),
             WebhookUrl = dto.WebhookUrl?.Trim(),
             IsActive = dto.IsActive,
+            IsPayout = dto.IsPayout,
             UpdatedBy = adminUserId,
             UpdatedAt = now
         };
 
-        // Single-active invariant: the system collects through exactly one
-        // gateway. A new gateway starts Inactive unless none is active,
-        // in which case it becomes the active one.
-        var existing = await _configRepository.GetAllConfigsAsync(cancellationToken);
-        config.IsActive = !existing.Any(c => c.IsActive == true);
+        // Single-active-per-purpose invariant: at most one active collection
+        // gateway and one active payout gateway. A new row starts Inactive
+        // unless nothing of the same purpose is active, then it becomes active.
+        var existing = await _configRepository.GetAllConfigsAsync(cancellationToken)
+            ?? new List<PaymentGatewayConfig>();
+        config.IsActive = !existing.Any(c => c.IsActive == true && IsPayoutOf(c) == config.IsPayout);
 
         await _configRepository.AddAsync(config, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -100,13 +102,14 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         if (!string.IsNullOrWhiteSpace(dto.ChecksumKey)) config.EncryptedChecksumKey = _encryptionService.Encrypt(dto.ChecksumKey.Trim());
         if (dto.WebhookUrl != null) config.WebhookUrl = dto.WebhookUrl.Trim();
         if (dto.IsActive.HasValue) config.IsActive = dto.IsActive.Value;
+        if (dto.IsPayout.HasValue) config.IsPayout = dto.IsPayout.Value;
 
-        // Single-active invariant: only one gateway may be active at a time.
-        // Turning this one on while another is active is rejected — staff must
-        // deactivate the current one first.
+        // Single-active-per-purpose invariant: only one active gateway per
+        // channel. Turning this one on while another of the same channel is
+        // active is rejected — staff must deactivate the current one first.
         if (config.IsActive == true)
         {
-            await EnsureNoOtherActiveAsync(id, cancellationToken);
+            await EnsureNoOtherActiveAsync(id, IsPayoutOf(config), cancellationToken);
         }
 
         config.UpdatedBy = adminUserId;
@@ -142,7 +145,7 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             throw new NotFoundException("Payment gateway config not found.");
         }
 
-        await EnsureNoOtherActiveAsync(id, cancellationToken);
+        await EnsureNoOtherActiveAsync(id, IsPayoutOf(config), cancellationToken);
 
         config.IsActive = true;
         config.UpdatedAt = DateTime.UtcNow;
@@ -203,6 +206,7 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             ChecksumKeyMasked = MaskKey(plainChecksumKey),
             WebhookUrl = c.WebhookUrl,
             IsActive = c.IsActive ?? true,
+            IsPayout = c.IsPayout ?? false,
             UpdatedBy = c.UpdatedBy,
             UpdatedAt = c.UpdatedAt
         };
@@ -215,14 +219,21 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         return $"{value[..4]}...{value[^4..]}";
     }
 
-    private async Task EnsureNoOtherActiveAsync(Guid exceptId, CancellationToken cancellationToken)
+    private static bool IsPayoutOf(PaymentGatewayConfig config)
     {
-        var all = await _configRepository.GetAllConfigsAsync(cancellationToken);
-        var other = all.FirstOrDefault(c => c.GatewayId != exceptId && c.IsActive == true);
+        return config.IsPayout == true;
+    }
+
+    private async Task EnsureNoOtherActiveAsync(Guid exceptId, bool isPayout, CancellationToken cancellationToken)
+    {
+        var all = await _configRepository.GetAllConfigsAsync(cancellationToken)
+            ?? new List<PaymentGatewayConfig>();
+        var other = all.FirstOrDefault(c => c.GatewayId != exceptId && c.IsActive == true && IsPayoutOf(c) == isPayout);
         if (other != null)
         {
+            var channel = isPayout ? "payout" : "collection";
             throw new ValidationException(
-                $"Gateway '{other.GatewayName}' is currently active. Please deactivate it first — only one payment gateway can be active at a time.");
+                $"Gateway '{other.GatewayName}' is currently active for {channel}. Please deactivate it first — only one {channel} gateway can be active at a time.");
         }
     }
 }

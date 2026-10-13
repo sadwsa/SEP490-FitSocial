@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FitSocial.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -1124,6 +1124,12 @@ public partial class FitSocialDbContext : DbContext
                 .HasDefaultValueSql("uuid_generate_v4()")
                 .HasColumnName("ReviewID");
             entity.Property(e => e.CoachId).HasColumnName("CoachID");
+
+            // THÊM 1: Map cột PackageID
+            entity.Property(e => e.PackageId).HasColumnName("PackageID");
+            entity.Property(e => e.IsEdited).HasColumnName("IsEdited").HasDefaultValue(false);
+
+
             entity.Property(e => e.Comment).HasColumnType("text");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
@@ -1142,7 +1148,14 @@ public partial class FitSocialDbContext : DbContext
             entity.HasOne(d => d.Trainee).WithMany(p => p.Reviews)
                 .HasForeignKey(d => d.TraineeId)
                 .HasConstraintName("Reviews_TraineeID_fkey");
+
+            // THÊM 2: Cấu hình khóa ngoại liên kết tới TrainingPackages
+            entity.HasOne(d => d.Package).WithMany(p => p.Reviews)
+                .HasForeignKey(d => d.PackageId)
+                .HasConstraintName("Reviews_PackageID_fkey")
+                .OnDelete(DeleteBehavior.Cascade);
         });
+
 
         // 40. Payouts
         modelBuilder.Entity<Payout>(entity =>
@@ -1198,6 +1211,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.Status).HasMaxLength(20).HasDefaultValue("PENDING");
             entity.Property(e => e.ProcessedAt).HasColumnType("timestamp without time zone");
             entity.Property(e => e.TransactionRef).HasMaxLength(100);
+            entity.Property(e => e.GatewayRef).HasMaxLength(100);
 
             entity.HasOne(d => d.Order).WithMany(p => p.PayoutItems)
                 .HasForeignKey(d => d.OrderId)

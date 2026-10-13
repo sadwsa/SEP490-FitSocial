@@ -325,7 +325,7 @@
                                             }
                                         </div>
 
-                                        <!-- Future Workout & Meal Plan Upload Action Slot (As explicitly requested) -->
+                                        <!-- UC_14.1.3 & UC_14.1.4: Workout Plan Action -->
                                         <div class="bg-gradient-to-r from-orange-50/60 to-amber-50/60 border border-orange-100/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                             <div class="flex items-center gap-2.5">
                                                 <div class="w-8 h-8 rounded-lg bg-orange-100 text-[#EA580C] flex items-center justify-center flex-shrink-0">
@@ -334,19 +334,47 @@
                                                     </svg>
                                                 </div>
                                                 <div>
-                                                    <p class="font-bold text-xs text-gray-900">Workout &amp; Nutrition Curriculum</p>
-                                                    <p class="text-[11px] text-gray-500">Prepare workout schedules and dietary guidelines for this enrolled trainee.</p>
+                                                    <div class="flex items-center gap-2">
+                                                        <p class="font-bold text-xs text-gray-900">Custom Training Plan</p>
+                                                        @if (pkg.TrainingPlanId.HasValue)
+                                                        {
+                                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">
+                                                                ✓ @(pkg.PlanStatus ?? "Active Plan")
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                                                                No Plan Created
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                    <p class="text-[11px] text-gray-500">Draft weekly workout schedules and attach video tutorials for your trainee.</p>
                                                 </div>
                                             </div>
 
-                                            <button type="button"
-                                                    @onclick="() => PromptFeatureComingSoon(pkg.PackageTitle)"
-                                                    class="px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                                </svg>
-                                                <span>Create Workout &amp; Meal Plan</span>
-                                            </button>
+                                            @if (pkg.TrainingPlanId.HasValue)
+                                            {
+                                                <button type="button"
+                                                        @onclick="() => OpenTrainingPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: true)"
+                                                        class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                    <span>Update Plan (UC_14.1.4)</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        @onclick="() => OpenTrainingPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: false)"
+                                                        class="px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                                    </svg>
+                                                    <span>Create Plan (UC_14.1.3)</span>
+                                                </button>
+                                            }
                                         </div>
                                     </div>
                                 }
@@ -365,28 +393,16 @@
     </div>
 </div>
 
-<!-- Coming Soon Modal for Workout & Meal Plan Upload -->
-@if (showComingSoonModal)
-{
-    <div class="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 text-center">
-            <div class="w-12 h-12 rounded-full bg-orange-100 text-[#EA580C] flex items-center justify-center mx-auto mb-4">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-            </div>
-            <h3 class="text-lg font-bold text-gray-900 mb-1">Create Workout &amp; Meal Plan</h3>
-            <p class="text-xs text-gray-500 mb-2">Package: <strong class="text-gray-800">@activePackageModalTitle</strong></p>
-            <p class="text-xs text-gray-600 bg-orange-50 p-3 rounded-xl mb-5 leading-relaxed">
-                The upload workout schedule and dietary plan feature is connected and will be activated in the upcoming update!
-            </p>
-            <button @onclick="() => showComingSoonModal = false"
-                    class="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-xs transition cursor-pointer">
-                Got It
-            </button>
-        </div>
-    </div>
-}
+<!-- Coach Training Plan Form Modal (UC_14.1.3 & UC_14.1.4) -->
+<CoachTrainingPlanFormModal
+    IsOpen="@showTrainingPlanModal"
+    OrderDetailsId="@modalOrderDetailsId"
+    PackageTitle="@modalPackageTitle"
+    TraineeName="@modalTraineeName"
+    Mode="@modalMode"
+    ExistingPlanId="@modalPlanId"
+    OnClose="@CloseTrainingPlanModal"
+    OnSuccess="@HandleTrainingPlanSuccess" />
 
 @code {
     private List<CoachTraineeGroupDto>? trainees;
@@ -395,9 +411,13 @@
     private bool isLoading = true;
     private string? errorMessage;
 
-    // Feature modal
-    private bool showComingSoonModal = false;
-    private string activePackageModalTitle = string.Empty;
+    // Training Plan Modal State
+    private bool showTrainingPlanModal = false;
+    private Guid modalOrderDetailsId;
+    private string modalPackageTitle = string.Empty;
+    private string modalTraineeName = string.Empty;
+    private string modalMode = "create";
+    private Guid? modalPlanId;
 
     // Header State
     private string? headerSearchTerm = "";
@@ -464,10 +484,25 @@
         selectedTraineeId = traineeId;
     }
 
-    private void PromptFeatureComingSoon(string packageTitle)
+    private void OpenTrainingPlanModal(CoachTraineePackageOrderDto pkg, string? traineeName, bool isUpdate)
     {
-        activePackageModalTitle = packageTitle;
-        showComingSoonModal = true;
+        modalOrderDetailsId = pkg.OrderDetailsId;
+        modalPackageTitle = pkg.PackageTitle;
+        modalTraineeName = traineeName ?? "Học viên";
+        modalMode = isUpdate ? "update" : "create";
+        modalPlanId = pkg.TrainingPlanId;
+        showTrainingPlanModal = true;
+    }
+
+    private void CloseTrainingPlanModal()
+    {
+        showTrainingPlanModal = false;
+    }
+
+    private async Task HandleTrainingPlanSuccess(TrainingPlanDetailDto plan)
+    {
+        showTrainingPlanModal = false;
+        await LoadTraineeOrdersAsync();
     }
 
     private async Task LoadUserInfoAsync()

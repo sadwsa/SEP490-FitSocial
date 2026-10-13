@@ -545,6 +545,7 @@ CREATE TABLE PayoutItems (
     Status VARCHAR(20) DEFAULT 'PENDING',
     ProcessedAt TIMESTAMP,
     TransactionRef VARCHAR(100),
+    GatewayRef VARCHAR(100),
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

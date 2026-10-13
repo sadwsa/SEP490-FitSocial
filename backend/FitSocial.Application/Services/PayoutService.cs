@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Payouts;
 using FitSocial.Application.Interfaces;
@@ -823,10 +823,53 @@ public class PayoutService : IPayoutService
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Nothing positive to pay after refund adjustments.");
         }
 
-        BankTransferResult transfer;
+        var now = DateTime.UtcNow;
+
+        // 1. Reconcile first: some targets may already carry a gateway order
+        // from an earlier attempt whose response never reached us.
+        var withRef = grossTargets.Where(t => !string.IsNullOrWhiteSpace(t.GatewayRef)).ToList();
+        foreach (var grp in withRef.GroupBy(t => t.GatewayRef!))
+        {
+            BankTransferStatus? st = null;
+            try
+            {
+                st = await _bankGateway.GetTransferStatusAsync(grp.Key, ct);
+            }
+            catch
+            {
+                st = null;
+            }
+            if (st != null && st.Found && st.Succeeded)
+            {
+                foreach (var t in grp)
+                {
+                    t.Status = PayoutConstants.StatusProcessed;
+                    t.ProcessedAt = now;
+                    t.TransactionRef = st.TransactionRef ?? st.GatewayRef;
+                }
+            }
+        }
+
+        var remaining = grossTargets.Where(t => !IsItemPaid(t, payout.Status)).ToList();
+        if (remaining.Count == 0)
+        {
+            // Everything was already settled on PayOS by earlier attempts.
+            return await FinalizeSettlementAsync(
+                payout, 0, null, staffId, ipAddress,
+                "Already settled on PayOS by an earlier attempt — records reconciled, no new transfer.", ct);
+        }
+
+        var remainingRefunds = relatedRefunds.Where(r => !IsItemPaid(r, payout.Status)).ToList();
+        var remainingAmount = remaining.Sum(i => i.NetAmount ?? 0) - remainingRefunds.Sum(i => i.RefundAdjustment ?? 0);
+        if (remainingAmount <= 0)
+        {
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail("Nothing positive to pay after refund adjustments.");
+        }
+
+        CreatedTransfer created;
         try
         {
-            transfer = await _bankGateway.TransferAsync(new BankTransferRequest(
+            created = await _bankGateway.CreateTransferAsync(new BankTransferRequest(
                 bank.BankCode ?? string.Empty,
                 accountNumber,
                 bank.AccountName ?? string.Empty,
@@ -843,34 +886,111 @@ public class PayoutService : IPayoutService
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Banking gateway error. Payout kept as PENDING — please retry.");
         }
 
-        if (!transfer.Success)
+        if (!created.Created)
         {
+            // Create failed (e.g. "idempotency key exists"): the order may
+            // already exist on PayOS — look it up by our reference instead of
+            // failing blindly, so money is never paid twice nor lost track of.
+            BankTransferStatus? found = null;
+            try
+            {
+                found = await _bankGateway.FindTransferByReferenceAsync(reference, ct);
+            }
+            catch
+            {
+                found = null;
+            }
+
+            if (found != null && found.Found)
+            {
+                foreach (var t in remaining.Concat(remainingRefunds))
+                {
+                    t.GatewayRef = found.GatewayRef;
+                }
+                if (found.Succeeded)
+                {
+                    foreach (var t in remaining.Concat(remainingRefunds))
+                    {
+                        t.Status = PayoutConstants.StatusProcessed;
+                        t.ProcessedAt = now;
+                        t.TransactionRef = found.TransactionRef ?? found.GatewayRef;
+                    }
+                    return await FinalizeSettlementAsync(
+                        payout, remainingAmount, found.TransactionRef ?? found.GatewayRef,
+                        staffId, ipAddress,
+                        "Found the existing PayOS order and reconciled it — no duplicate transfer.", ct);
+                }
+                try
+                {
+                    await _unitOfWork.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateException)
+                {
+                    return ApiResponseDto<ProcessPayoutResultDto>.Fail("Could not save the payout. Please try again.");
+                }
+                return ApiResponseDto<ProcessPayoutResultDto>.Fail(
+                    $"PayOS already holds this order (state: {found.State ?? "unknown"}). It is recorded for tracking — check again later instead of creating a duplicate. ({created.FailureReason})");
+            }
+
             await WriteAuditAsync(staffId, "PAYOUT_FAILED", payout, "PENDING",
-                new { reason = "E2: transfer rejected", error = transfer.FailureReason }, ipAddress, ct);
+                new { reason = "E2: transfer rejected", error = created.FailureReason }, ipAddress, ct);
             return ApiResponseDto<ProcessPayoutResultDto>.Fail(
-                $"Payout transfer failed ({transfer.FailureReason}). Payout kept as PENDING — please retry.");
+                $"Payout transfer failed ({created.FailureReason}). Payout kept as PENDING — please retry.");
         }
 
-        var now = DateTime.UtcNow;
-        foreach (var t in grossTargets.Concat(relatedRefunds))
+        // Order accepted — remember its gateway id on every touched line.
+        foreach (var t in remaining.Concat(remainingRefunds))
+        {
+            t.GatewayRef = created.GatewayRef;
+        }
+
+        if (!created.Succeeded)
+        {
+            // Async settlement: PayOS received the order (PROCESSING...).
+            // Persist the gateway ref now; staff re-checks via retry.
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                return ApiResponseDto<ProcessPayoutResultDto>.Fail("Could not save the payout. Please try again.");
+            }
+            await WriteAuditAsync(staffId, "PAYOUT_SUBMITTED", payout, "PENDING",
+                new { gatewayRef = created.GatewayRef, state = created.State, amount = remainingAmount }, ipAddress, ct);
+            return ApiResponseDto<ProcessPayoutResultDto>.Fail(
+                $"PayOS accepted the order but money has not settled yet (state: {created.State ?? "unknown"}). It is recorded — use retry/check again later instead of creating a duplicate order.");
+        }
+
+        foreach (var t in remaining.Concat(remainingRefunds))
         {
             t.Status = PayoutConstants.StatusProcessed;
             t.ProcessedAt = now;
-            t.TransactionRef = transfer.TransactionRef;
+            t.TransactionRef = created.TransactionRef;
         }
 
+        return await FinalizeSettlementAsync(
+            payout, remainingAmount, created.TransactionRef, staffId, ipAddress,
+            null, ct);
+    }
+
+    private async Task<ApiResponseDto<ProcessPayoutResultDto>> FinalizeSettlementAsync(
+        Payout payout, decimal amount, string? transactionRef,
+        Guid staffId, string? ipAddress, string? customMessage, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
         var fullyPaid = !UnpaidGrossItems(payout).Any();
         if (fullyPaid)
         {
             payout.Status = PayoutConstants.StatusProcessed;
-            payout.TransactionRef = transfer.TransactionRef;
+            payout.TransactionRef = transactionRef ?? payout.TransactionRef;
             payout.ProcessedBy = staffId;
             payout.ProcessedAt = now;
         }
 
         await WriteAuditAsync(staffId, fullyPaid ? "PAYOUT_PROCESSED" : "PAYOUT_PARTIAL", payout,
             fullyPaid ? "PROCESSED" : "PENDING",
-            new { transactionRef = transfer.TransactionRef, amount, processedAt = now }, ipAddress, ct);
+            new { transactionRef, amount, processedAt = now }, ipAddress, ct);
 
         if (fullyPaid)
         {
@@ -883,7 +1003,7 @@ public class PayoutService : IPayoutService
                     ActorId = staffId,
                     ReferenceId = payout.PayoutId,
                     Type = "PAYOUT_PROCESSED",
-                    Description = $"Your {payout.PayoutMonth:D2}/{payout.PayoutYear} payout of {amount:N0} VND has been processed. Ref: {transfer.TransactionRef}.",
+                    Description = $"Your {payout.PayoutMonth:D2}/{payout.PayoutYear} payout of {amount:N0} VND has been processed. Ref: {transactionRef}.",
                     IsRead = false,
                     CreatedAt = now
                 }, ct);
@@ -894,7 +1014,10 @@ public class PayoutService : IPayoutService
             }
         }
 
-        await SendPayoutEmailAsync(payout, grossTargets, amount, transfer.TransactionRef, fullyPaid, ct);
+        var paidTargets = payout.PayoutItems
+            .Where(i => (i.GrossAmount ?? 0) > 0 && IsItemPaid(i, payout.Status))
+            .ToList();
+        await SendPayoutEmailAsync(payout, paidTargets, amount, transactionRef, fullyPaid, ct);
 
         try
         {
@@ -910,11 +1033,13 @@ public class PayoutService : IPayoutService
             {
                 PayoutId = payout.PayoutId,
                 Status = payout.Status,
-                TransactionRef = transfer.TransactionRef,
+                TransactionRef = payout.TransactionRef,
                 NetPayoutAmount = amount,
                 ProcessedAt = now
             },
-            fullyPaid ? "Payout processed successfully." : $"Package paid: {amount:N0} VND. Remaining lines stay PENDING.");
+            customMessage ?? (fullyPaid
+                ? "Payout processed successfully."
+                : $"Package paid: {amount:N0} VND. Remaining lines stay PENDING."));
     }
 
     private async Task SendPayoutEmailAsync(

@@ -407,4 +407,648 @@ public class CoachTrainingPlanServiceTests
         await Assert.ThrowsAsync<ForbiddenException>(() =>
             _service.GetTrainingPlanByOrderDetailsIdAsync(coachId, orderDetailsId));
     }
+
+    [Fact]
+    public async Task CreateTrainingPlanAsync_WhenStartDateBeforePackagePurchasedDate_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+        var purchaseDate = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        var orderDetail = new OrderDetail
+        {
+            OrderDetailsId = orderDetailsId,
+            PackageDurationDays = 30,
+            Order = new Order { CoachId = coachId, CreatedAt = purchaseDate },
+            Package = new TrainingPackage { CoachId = coachId, DurationDays = 30 }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetOrderDetailWithOrderAndPackageAsync(orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orderDetail);
+
+        var dto = new CreateTrainingPlanDto
+        {
+            OrderDetailsId = orderDetailsId,
+            Title = "Kế hoạch bắt đầu trước ngày mua",
+            StartDate = purchaseDate.AddDays(-2), // 2 days before purchase date
+            EndDate = purchaseDate.AddDays(25)
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.CreateTrainingPlanAsync(coachId, dto));
+        Assert.Contains("cannot be earlier than package purchase date", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateTrainingPlanAsync_WhenEndDateAfterPackageExpirationDate_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+        var purchaseDate = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        var orderDetail = new OrderDetail
+        {
+            OrderDetailsId = orderDetailsId,
+            PackageDurationDays = 30,
+            Order = new Order { CoachId = coachId, CreatedAt = purchaseDate },
+            Package = new TrainingPackage { CoachId = coachId, DurationDays = 30 }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetOrderDetailWithOrderAndPackageAsync(orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orderDetail);
+
+        var dto = new CreateTrainingPlanDto
+        {
+            OrderDetailsId = orderDetailsId,
+            Title = "Kế hoạch vượt quá ngày hết hạn",
+            StartDate = purchaseDate,
+            EndDate = purchaseDate.AddDays(35) // 35 > 30 days
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.CreateTrainingPlanAsync(coachId, dto));
+        Assert.Contains("cannot exceed package expiration date", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateTrainingPlanAsync_WhenOneMonthPeriodHasMoreThanFourWeeks_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+        var purchaseDate = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var orderDetail = new OrderDetail
+        {
+            OrderDetailsId = orderDetailsId,
+            PackageDurationDays = 30,
+            Order = new Order { CoachId = coachId, CreatedAt = purchaseDate },
+            Package = new TrainingPackage { CoachId = coachId, DurationDays = 30 }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetOrderDetailWithOrderAndPackageAsync(orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orderDetail);
+
+        var dto = new CreateTrainingPlanDto
+        {
+            OrderDetailsId = orderDetailsId,
+            Title = "Kế hoạch 1 tháng nhưng có 5 tuần",
+            StartDate = purchaseDate,
+            EndDate = purchaseDate.AddDays(29), // 30 days total (~1 month => max 4 weeks)
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                new() { ExerciseName = "Bài tập Tuần 5", WeekNumber = 5, DayNumber = 1 }
+            }
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.CreateTrainingPlanAsync(coachId, dto));
+        Assert.Contains("cannot exceed 4 weeks", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateTrainingPlanAsync_WhenSessionCountDoesNotMatchPackage_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+        var purchaseDate = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var orderDetail = new OrderDetail
+        {
+            OrderDetailsId = orderDetailsId,
+            PackageDurationDays = 30,
+            Order = new Order { CoachId = coachId, CreatedAt = purchaseDate },
+            Package = new TrainingPackage { CoachId = coachId, DurationDays = 30, SessionCount = 12 }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetOrderDetailWithOrderAndPackageAsync(orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orderDetail);
+
+        var dto = new CreateTrainingPlanDto
+        {
+            OrderDetailsId = orderDetailsId,
+            Title = "Kế hoạch chưa đủ 12 buổi",
+            StartDate = purchaseDate,
+            EndDate = purchaseDate.AddDays(28),
+            // Only 2 sessions scheduled instead of required 12
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                new() { ExerciseName = "Bài 1", WeekNumber = 1, DayNumber = 1 },
+                new() { ExerciseName = "Bài 2", WeekNumber = 1, DayNumber = 1 }, // same day, 1 session
+                new() { ExerciseName = "Bài 3", WeekNumber = 1, DayNumber = 2 }  // second session
+            }
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.CreateTrainingPlanAsync(coachId, dto));
+        Assert.Contains("must match the package session count", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateTrainingPlanAsync_WhenSessionsAndDatesMatchPackageConstraints_ShouldSucceed()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+        var purchaseDate = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var orderDetail = new OrderDetail
+        {
+            OrderDetailsId = orderDetailsId,
+            PackageDurationDays = 30,
+            Order = new Order { CoachId = coachId, CreatedAt = purchaseDate },
+            Package = new TrainingPackage { CoachId = coachId, DurationDays = 30, SessionCount = 3 }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetOrderDetailWithOrderAndPackageAsync(orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orderDetail);
+
+        _mockPlanRepo
+            .Setup(r => r.AddAsync(It.IsAny<TrainingPlan>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _mockUow
+            .Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var dto = new CreateTrainingPlanDto
+        {
+            OrderDetailsId = orderDetailsId,
+            Title = "Kế hoạch chuẩn chỉnh 3 buổi",
+            StartDate = purchaseDate,
+            EndDate = purchaseDate.AddDays(28),
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                new() { ExerciseName = "Bài 1", WeekNumber = 1, DayNumber = 1 },
+                new() { ExerciseName = "Bài 2", WeekNumber = 1, DayNumber = 3 },
+                new() { ExerciseName = "Bài 3", WeekNumber = 1, DayNumber = 5 }
+            }
+        };
+
+        // Act
+        var result = await _service.CreateTrainingPlanAsync(coachId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(3, result.PackageSessionCount);
+        Assert.Equal(30, result.PackageDurationDays);
+    }
+
+    [Fact]
+    public async Task UpdateTrainingPlanAsync_WhenModifyingPastOrTodayExercise_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var exerciseId = Guid.NewGuid();
+        var planStartDate = new DateTime(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc);
+        var simulationToday = new DateTime(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
+
+        var existingPlan = new TrainingPlan
+        {
+            TrainingPlanId = planId,
+            CoachId = coachId,
+            Title = "Plan",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(28),
+            Status = "ACTIVE",
+            TrainingPlanExercises = new List<TrainingPlanExercise>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = exerciseId,
+                    TrainingPlanId = planId,
+                    ExerciseName = "Monday Squats",
+                    WeekNumber = 1,
+                    DayNumber = 1, // Monday 2026-10-05 (Past)
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetByIdWithExercisesAsync(planId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingPlan);
+
+        var updateDto = new UpdateTrainingPlanDto
+        {
+            Title = "Plan",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(28),
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = exerciseId,
+                    ExerciseName = "Monday Squats Modified",
+                    WeekNumber = 1,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                },
+                new()
+                {
+                    ExerciseName = "Week 2 Session",
+                    WeekNumber = 2,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.UpdateTrainingPlanInternalAsync(coachId, planId, updateDto, asOfDate: simulationToday));
+
+        Assert.Contains("Cannot modify workout session", ex.Message);
+        Assert.Contains("has already occurred", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateTrainingPlanAsync_WhenDeletingPastOrTodayExercise_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var exerciseId = Guid.NewGuid();
+        var planStartDate = new DateTime(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc);
+        var simulationToday = new DateTime(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
+
+        var existingPlan = new TrainingPlan
+        {
+            TrainingPlanId = planId,
+            CoachId = coachId,
+            Title = "Plan",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(28),
+            Status = "ACTIVE",
+            TrainingPlanExercises = new List<TrainingPlanExercise>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = exerciseId,
+                    TrainingPlanId = planId,
+                    ExerciseName = "Wednesday Bench Press",
+                    WeekNumber = 1,
+                    DayNumber = 3, // Wednesday 2026-10-07 (Today)
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetByIdWithExercisesAsync(planId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingPlan);
+
+        var updateDto = new UpdateTrainingPlanDto
+        {
+            Title = "Plan",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(28),
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                // Wednesday exercise omitted! (Delete attempt)
+                new()
+                {
+                    ExerciseName = "Future Squat",
+                    WeekNumber = 2,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.UpdateTrainingPlanInternalAsync(coachId, planId, updateDto, asOfDate: simulationToday));
+
+        Assert.Contains("Cannot delete workout session", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateTrainingPlanAsync_WhenAddingExerciseToPastOrToday_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var planStartDate = new DateTime(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc);
+        var simulationToday = new DateTime(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
+
+        var existingPlan = new TrainingPlan
+        {
+            TrainingPlanId = planId,
+            CoachId = coachId,
+            Title = "Plan",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(28),
+            Status = "ACTIVE",
+            TrainingPlanExercises = new List<TrainingPlanExercise>()
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetByIdWithExercisesAsync(planId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingPlan);
+
+        var updateDto = new UpdateTrainingPlanDto
+        {
+            Title = "Plan",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(28),
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                // New exercise added to Tuesday 2026-10-06 (Past)
+                new()
+                {
+                    ExerciseName = "Late addition",
+                    WeekNumber = 1,
+                    DayNumber = 2,
+                    Sets = 3,
+                    Reps = 10
+                },
+                new()
+                {
+                    ExerciseName = "Week 2 Session",
+                    WeekNumber = 2,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.UpdateTrainingPlanInternalAsync(coachId, planId, updateDto, asOfDate: simulationToday));
+
+        Assert.Contains("Cannot add new exercises to today or past dates", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateTrainingPlanAsync_WhenUpdatingFutureExercise_ShouldSucceed()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var pastExerciseId = Guid.NewGuid();
+        var futureExerciseId = Guid.NewGuid();
+        var planStartDate = new DateTime(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc);
+        var simulationToday = new DateTime(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
+
+        var existingPlan = new TrainingPlan
+        {
+            TrainingPlanId = planId,
+            CoachId = coachId,
+            Title = "Plan",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(28),
+            Status = "ACTIVE",
+            TrainingPlanExercises = new List<TrainingPlanExercise>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = pastExerciseId,
+                    TrainingPlanId = planId,
+                    ExerciseName = "Monday Squats",
+                    WeekNumber = 1,
+                    DayNumber = 1, // Past
+                    Sets = 3,
+                    Reps = 10
+                },
+                new()
+                {
+                    TrainingPlanExerciseId = futureExerciseId,
+                    TrainingPlanId = planId,
+                    ExerciseName = "Next Week Deadlift",
+                    WeekNumber = 2,
+                    DayNumber = 1, // Future
+                    Sets = 3,
+                    Reps = 8
+                }
+            }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetByIdWithExercisesAsync(planId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingPlan);
+
+        _mockUow
+            .Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var updateDto = new UpdateTrainingPlanDto
+        {
+            Title = "Updated Plan Title",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(28),
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                // Past exercise stays completely untouched
+                new()
+                {
+                    TrainingPlanExerciseId = pastExerciseId,
+                    ExerciseName = "Monday Squats",
+                    WeekNumber = 1,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                },
+                // Future exercise modified
+                new()
+                {
+                    TrainingPlanExerciseId = futureExerciseId,
+                    ExerciseName = "Next Week Deadlift Updated",
+                    WeekNumber = 2,
+                    DayNumber = 1,
+                    Sets = 4,
+                    Reps = 10
+                },
+                // New future exercise added
+                new()
+                {
+                    ExerciseName = "Next Week Pushups",
+                    WeekNumber = 2,
+                    DayNumber = 3,
+                    Sets = 3,
+                    Reps = 15
+                }
+            }
+        };
+
+        // Act
+        var result = await _service.UpdateTrainingPlanInternalAsync(coachId, planId, updateDto, asOfDate: simulationToday);
+
+        // Assert
+        Assert.NotNull(result);
+        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ValidatePlanConstraints_FlexiblePlan_WhenUpcomingWeekEmpty_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var planStartDate = new DateTime(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc);
+        var simulationToday = new DateTime(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc); // Week 1
+
+        var orderDetail = new OrderDetail
+        {
+            OrderDetailsId = Guid.NewGuid(),
+            PackageDurationDays = 60,
+            Order = new Order { CoachId = coachId, CreatedAt = planStartDate },
+            Package = new TrainingPackage { CoachId = coachId, DurationDays = 60, SessionCount = null }
+        };
+
+        var existingPlan = new TrainingPlan
+        {
+            TrainingPlanId = planId,
+            CoachId = coachId,
+            OrderDetails = orderDetail,
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(56),
+            TrainingPlanExercises = new List<TrainingPlanExercise>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = Guid.NewGuid(),
+                    TrainingPlanId = planId,
+                    ExerciseName = "Week 1 Day 1",
+                    WeekNumber = 1,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetByIdWithExercisesAsync(planId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingPlan);
+
+        // Coach submits Week 1 only, leaving Week 2 (upcoming week) empty
+        var updateDto = new UpdateTrainingPlanDto
+        {
+            Title = "Flexible Plan",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(56),
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = existingPlan.TrainingPlanExercises.First().TrainingPlanExerciseId,
+                    ExerciseName = "Week 1 Day 1",
+                    WeekNumber = 1,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.UpdateTrainingPlanInternalAsync(coachId, planId, updateDto, asOfDate: simulationToday));
+
+        Assert.Contains("Week 2 (the upcoming week)", ex.Message);
+    }
+
+    [Fact]
+    public async Task ValidatePlanConstraints_FlexiblePlan_WhenUpcomingWeekScheduled_ShouldSucceed()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var planStartDate = new DateTime(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc);
+        var simulationToday = new DateTime(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc); // Week 1
+
+        var orderDetail = new OrderDetail
+        {
+            OrderDetailsId = Guid.NewGuid(),
+            PackageDurationDays = 60,
+            Order = new Order { CoachId = coachId, CreatedAt = planStartDate },
+            Package = new TrainingPackage { CoachId = coachId, DurationDays = 60, SessionCount = null }
+        };
+
+        var pastExId = Guid.NewGuid();
+        var existingPlan = new TrainingPlan
+        {
+            TrainingPlanId = planId,
+            CoachId = coachId,
+            OrderDetails = orderDetail,
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(56),
+            TrainingPlanExercises = new List<TrainingPlanExercise>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = pastExId,
+                    TrainingPlanId = planId,
+                    ExerciseName = "Week 1 Day 1",
+                    WeekNumber = 1,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetByIdWithExercisesAsync(planId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingPlan);
+
+        _mockUow
+            .Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Coach uploads Phase 1: Week 1 + Week 2 (upcoming week). Week 3..8 left for later phase.
+        var updateDto = new UpdateTrainingPlanDto
+        {
+            Title = "Flexible Plan Phase 1",
+            StartDate = planStartDate,
+            EndDate = planStartDate.AddDays(56),
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = pastExId,
+                    ExerciseName = "Week 1 Day 1",
+                    WeekNumber = 1,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                },
+                new()
+                {
+                    ExerciseName = "Week 2 Upcoming Session",
+                    WeekNumber = 2,
+                    DayNumber = 1,
+                    Sets = 3,
+                    Reps = 10
+                }
+            }
+        };
+
+        // Act
+        var result = await _service.UpdateTrainingPlanInternalAsync(coachId, planId, updateDto, asOfDate: simulationToday);
+
+        // Assert
+        Assert.NotNull(result);
+        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

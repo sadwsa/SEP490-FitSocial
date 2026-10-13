@@ -374,4 +374,336 @@ public class TrainingPlanService : ITrainingPlanService
             CreatedAt = video.CreatedAt
         };
     }
+
+    public async Task<TraineeWorkoutPlanProgressDto> GetTraineeWorkoutPlanAsync(
+        Guid traineeId,
+        Guid orderDetailsId,
+        CancellationToken ct = default)
+    {
+        if (traineeId == Guid.Empty)
+        {
+            throw new ForbiddenException("Invalid trainee identity.");
+        }
+
+        var plan = await _trainingPlanRepository.GetTraineePlanWithLogsAsync(orderDetailsId, traineeId, ct);
+        if (plan == null)
+        {
+            var od = await _trainingPlanRepository.GetOrderDetailWithOrderAndPackageAsync(orderDetailsId, ct);
+            if (od == null || od.Order == null || od.Order.BuyerId != traineeId)
+            {
+                throw new NotFoundException("Order detail not found or does not belong to you.");
+            }
+
+            return new TraineeWorkoutPlanProgressDto
+            {
+                TrainingPlanId = Guid.Empty,
+                OrderDetailsId = orderDetailsId,
+                PackageId = od.PackageId ?? Guid.Empty,
+                PackageTitle = od.PackageTitle ?? od.Package?.Title ?? "Training Package",
+                PlanTitle = "Training Plan Not Ready",
+                PlanDescription = "Your coach is currently creating your personalized training program. Please check back soon!",
+                PlanStatus = "PENDING_COACH",
+                CoachId = od.Order?.CoachId ?? od.Package?.CoachId ?? Guid.Empty,
+                CoachName = od.CoachName ?? od.Package?.Coach?.Coach?.FullName ?? "Your Coach"
+            };
+        }
+
+        return MapToTraineeProgressDto(plan, traineeId);
+    }
+
+    public async Task<TraineeWorkoutPlanProgressDto> GetTraineeWorkoutPlanByPackageAsync(
+        Guid traineeId,
+        Guid packageId,
+        CancellationToken ct = default)
+    {
+        if (traineeId == Guid.Empty)
+        {
+            throw new ForbiddenException("Invalid trainee identity.");
+        }
+
+        var plan = await _trainingPlanRepository.GetTraineePlanByPackageIdWithLogsAsync(packageId, traineeId, ct);
+        if (plan == null)
+        {
+            throw new NotFoundException("No active training plan found for this purchased package.");
+        }
+
+        return MapToTraineeProgressDto(plan, traineeId);
+    }
+
+    public async Task<WorkoutCompletionResultDto> ToggleWorkoutCompletionAsync(
+        Guid traineeId,
+        ToggleWorkoutCompletionDto dto,
+        CancellationToken ct = default)
+    {
+        if (traineeId == Guid.Empty)
+        {
+            throw new ForbiddenException("Invalid trainee identity.");
+        }
+
+        if (dto == null || dto.TrainingPlanExerciseId == Guid.Empty)
+        {
+            throw new ValidationException("TrainingPlanExerciseId is required.");
+        }
+
+        var exercise = await _trainingPlanRepository.GetExerciseByIdAsync(dto.TrainingPlanExerciseId, ct);
+        if (exercise == null)
+        {
+            throw new NotFoundException("Exercise not found.");
+        }
+
+        var orderBuyerId = exercise.TrainingPlan?.OrderDetails?.Order?.BuyerId;
+        if (orderBuyerId.HasValue && orderBuyerId.Value != traineeId)
+        {
+            throw new ForbiddenException("You are not authorized to mark this exercise.");
+        }
+
+        var existingLog = await _trainingPlanRepository.GetWorkoutLogAsync(dto.TrainingPlanExerciseId, traineeId, ct);
+        bool isNowCompleted;
+        Guid? logId = null;
+        DateTime? completedAt = null;
+        string? savedNotes = dto.Notes;
+
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
+        if (existingLog != null)
+        {
+            if (string.Equals(dto.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase) ||
+                (string.Equals(existingLog.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(dto.Notes) && string.IsNullOrWhiteSpace(dto.Status)))
+            {
+                // Toggle OFF -> Delete log
+                _trainingPlanRepository.RemoveWorkoutLog(existingLog);
+                isNowCompleted = false;
+            }
+            else
+            {
+                // Update notes or status
+                if (!string.IsNullOrWhiteSpace(dto.Notes)) existingLog.Notes = dto.Notes;
+                if (!string.IsNullOrWhiteSpace(dto.Status)) existingLog.Status = dto.Status;
+                isNowCompleted = string.Equals(existingLog.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase);
+                logId = existingLog.WorkoutCompletionLogId;
+                completedAt = existingLog.CreatedAt;
+                savedNotes = existingLog.Notes;
+            }
+        }
+        else
+        {
+            // Toggle ON -> Add new log
+            var newLog = new WorkoutCompletionLog
+            {
+                WorkoutCompletionLogId = Guid.NewGuid(),
+                TraineeId = traineeId,
+                TrainingPlanExerciseId = dto.TrainingPlanExerciseId,
+                LogDate = dto.LogDate.HasValue ? DateTime.SpecifyKind(dto.LogDate.Value, DateTimeKind.Unspecified) : now,
+                Status = !string.IsNullOrWhiteSpace(dto.Status) ? dto.Status : "COMPLETED",
+                Notes = dto.Notes,
+                CreatedAt = now
+            };
+
+            await _trainingPlanRepository.AddWorkoutLogAsync(newLog, ct);
+            isNowCompleted = true;
+            logId = newLog.WorkoutCompletionLogId;
+            completedAt = newLog.CreatedAt;
+            savedNotes = newLog.Notes;
+        }
+
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        // Fetch refreshed progress for the parent plan
+        var plan = await _trainingPlanRepository.GetTraineePlanWithLogsAsync(
+            exercise.TrainingPlan?.OrderDetailsId ?? Guid.Empty, traineeId, ct);
+
+        int totalCount = plan?.TrainingPlanExercises?.Count ?? 0;
+        int completedCount = plan?.TrainingPlanExercises?
+            .Count(e => e.WorkoutCompletionLogs?.Any(l => l.TraineeId == traineeId && l.Status == "COMPLETED") == true) ?? 0;
+        double percentage = totalCount > 0 ? Math.Round((double)completedCount / totalCount * 100, 1) : 0;
+
+        return new WorkoutCompletionResultDto
+        {
+            TrainingPlanExerciseId = dto.TrainingPlanExerciseId,
+            IsCompleted = isNowCompleted,
+            WorkoutCompletionLogId = logId,
+            CompletedAt = completedAt,
+            Status = isNowCompleted ? "COMPLETED" : "INCOMPLETE",
+            Notes = savedNotes,
+            TotalExercisesCount = totalCount,
+            CompletedExercisesCount = completedCount,
+            ProgressPercentage = percentage
+        };
+    }
+
+    public async Task<CoachTraineeWorkoutProgressDto> GetCoachTraineeProgressAsync(
+        Guid coachId,
+        Guid orderDetailsId,
+        CancellationToken ct = default)
+    {
+        if (coachId == Guid.Empty)
+        {
+            throw new ForbiddenException("Invalid coach identity.");
+        }
+
+        var plan = await _trainingPlanRepository.GetCoachTraineePlanWithLogsAsync(orderDetailsId, coachId, ct);
+        if (plan == null)
+        {
+            var od = await _trainingPlanRepository.GetOrderDetailWithOrderAndPackageAsync(orderDetailsId, ct);
+            if (od == null || (od.Order?.CoachId != coachId && od.Package?.CoachId != coachId))
+            {
+                throw new NotFoundException("Order detail not found or does not belong to you.");
+            }
+
+            return new CoachTraineeWorkoutProgressDto
+            {
+                OrderDetailsId = orderDetailsId,
+                TraineeId = od.Order?.BuyerId ?? Guid.Empty,
+                TraineeName = od.Order?.Buyer?.FullName ?? "Trainee",
+                TraineeEmail = od.Order?.Buyer?.Email ?? string.Empty,
+                PackageId = od.PackageId ?? Guid.Empty,
+                PackageTitle = od.PackageTitle ?? od.Package?.Title ?? "Training Package",
+                PlanTitle = "No Plan Created",
+                PlanStatus = "DRAFT"
+            };
+        }
+
+        var buyer = plan.OrderDetails?.Order?.Buyer;
+        var weeks = BuildWeeksBreakdown(plan.TrainingPlanExercises, buyer?.UserId);
+
+        var allLogs = plan.TrainingPlanExercises
+            .SelectMany(e => e.WorkoutCompletionLogs.Select(l => new { Exercise = e, Log = l }))
+            .OrderByDescending(x => x.Log.CreatedAt)
+            .Take(30)
+            .Select(x => new CoachWorkoutActivityLogDto
+            {
+                LogId = x.Log.WorkoutCompletionLogId,
+                ExerciseName = x.Exercise.ExerciseName ?? "Exercise",
+                WeekNumber = x.Exercise.WeekNumber,
+                DayNumber = x.Exercise.DayNumber,
+                CompletedAt = x.Log.CreatedAt ?? DateTime.UtcNow,
+                Status = x.Log.Status,
+                Notes = x.Log.Notes
+            })
+            .ToList();
+
+        int totalCount = weeks.Sum(w => w.TotalExercises);
+        int completedCount = weeks.Sum(w => w.CompletedExercises);
+
+        return new CoachTraineeWorkoutProgressDto
+        {
+            OrderDetailsId = orderDetailsId,
+            TraineeId = buyer?.UserId ?? Guid.Empty,
+            TraineeName = buyer?.FullName ?? "Trainee",
+            TraineeEmail = buyer?.Email ?? string.Empty,
+            TraineeAvatarUrl = buyer?.AvatarUrl,
+            TraineePhone = buyer?.PhoneNumber,
+            PackageId = plan.OrderDetails?.PackageId ?? Guid.Empty,
+            PackageTitle = plan.OrderDetails?.PackageTitle ?? plan.OrderDetails?.Package?.Title ?? "Training Package",
+            TrainingPlanId = plan.TrainingPlanId,
+            PlanTitle = plan.Title,
+            PlanStatus = plan.Status,
+            StartDate = plan.StartDate,
+            EndDate = plan.EndDate,
+            TotalExercisesCount = totalCount,
+            CompletedExercisesCount = completedCount,
+            Weeks = weeks,
+            RecentLogs = allLogs
+        };
+    }
+
+    private static TraineeWorkoutPlanProgressDto MapToTraineeProgressDto(TrainingPlan plan, Guid traineeId)
+    {
+        var exercises = plan.TrainingPlanExercises ?? new List<TrainingPlanExercise>();
+        var weeks = BuildWeeksBreakdown(exercises, traineeId);
+
+        int totalCount = weeks.Sum(w => w.TotalExercises);
+        int completedCount = weeks.Sum(w => w.CompletedExercises);
+
+        return new TraineeWorkoutPlanProgressDto
+        {
+            TrainingPlanId = plan.TrainingPlanId,
+            OrderDetailsId = plan.OrderDetailsId ?? Guid.Empty,
+            PackageId = plan.OrderDetails?.PackageId ?? Guid.Empty,
+            PackageTitle = plan.OrderDetails?.PackageTitle ?? plan.OrderDetails?.Package?.Title ?? "Training Package",
+            PackageThumbnailUrl = plan.OrderDetails?.Package?.Media?.OrderBy(m => m.SortOrder).FirstOrDefault()?.MediaUrl,
+            PlanTitle = plan.Title ?? "Training Plan",
+            PlanDescription = plan.Description,
+            PlanStatus = plan.Status,
+            StartDate = plan.StartDate,
+            EndDate = plan.EndDate,
+            CoachId = plan.CoachId,
+            CoachName = plan.Coach?.Coach?.FullName ?? "Coach",
+            CoachAvatarUrl = plan.Coach?.Coach?.AvatarUrl,
+            TotalExercisesCount = totalCount,
+            CompletedExercisesCount = completedCount,
+            Weeks = weeks
+        };
+    }
+
+    private static List<TraineeWorkoutWeekDto> BuildWeeksBreakdown(
+        IEnumerable<TrainingPlanExercise> exercises,
+        Guid? filterTraineeId)
+    {
+        var weeks = new List<TraineeWorkoutWeekDto>();
+        var groupedByWeek = exercises
+            .GroupBy(e => e.WeekNumber ?? 1)
+            .OrderBy(g => g.Key);
+
+        foreach (var weekGroup in groupedByWeek)
+        {
+            var weekDto = new TraineeWorkoutWeekDto
+            {
+                WeekNumber = weekGroup.Key,
+                Title = $"Week {weekGroup.Key}"
+            };
+
+            var groupedByDay = weekGroup
+                .GroupBy(e => e.DayNumber ?? 1)
+                .OrderBy(g => g.Key);
+
+            foreach (var dayGroup in groupedByDay)
+            {
+                var dayDto = new TraineeWorkoutDayDto
+                {
+                    DayNumber = dayGroup.Key,
+                    Title = $"Day {dayGroup.Key}"
+                };
+
+                foreach (var ex in dayGroup.OrderBy(e => e.SortOrder ?? 1))
+                {
+                    var completionLog = filterTraineeId.HasValue
+                        ? ex.WorkoutCompletionLogs?.FirstOrDefault(l => l.TraineeId == filterTraineeId.Value && l.Status == "COMPLETED")
+                        : ex.WorkoutCompletionLogs?.OrderByDescending(l => l.CreatedAt).FirstOrDefault(l => l.Status == "COMPLETED");
+
+                    var isCompleted = completionLog != null;
+
+                    dayDto.Exercises.Add(new TraineeWorkoutExerciseDto
+                    {
+                        TrainingPlanExerciseId = ex.TrainingPlanExerciseId,
+                        TrainingPlanId = ex.TrainingPlanId,
+                        WeekNumber = ex.WeekNumber,
+                        DayNumber = ex.DayNumber,
+                        ExerciseName = ex.ExerciseName ?? "Exercise",
+                        Sets = ex.Sets,
+                        Reps = ex.Reps,
+                        DurationMinutes = ex.DurationMinutes,
+                        RestSeconds = ex.RestSeconds,
+                        Notes = ex.Notes,
+                        SortOrder = ex.SortOrder,
+                        VideoTutorial = ex.VideoTutorial != null ? MapVideoToDto(ex.VideoTutorial) : null,
+                        IsCompleted = isCompleted,
+                        WorkoutCompletionLogId = completionLog?.WorkoutCompletionLogId,
+                        CompletedAt = completionLog?.CreatedAt,
+                        TraineeNotes = completionLog?.Notes
+                    });
+                }
+
+                dayDto.TotalExercises = dayDto.Exercises.Count;
+                dayDto.CompletedExercises = dayDto.Exercises.Count(e => e.IsCompleted);
+                weekDto.Days.Add(dayDto);
+            }
+
+            weekDto.TotalExercises = weekDto.Days.Sum(d => d.TotalExercises);
+            weekDto.CompletedExercises = weekDto.Days.Sum(d => d.CompletedExercises);
+            weeks.Add(weekDto);
+        }
+
+        return weeks;
+    }
 }

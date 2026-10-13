@@ -156,6 +156,23 @@ namespace FitSocial.Application.Services
                     dto.UserRating = userReview.Rating;
                     dto.UserComment = userReview.Comment;
                 }
+
+                var myOrderDetail = pkg.OrderDetails?
+                    .Where(od => od.Order?.BuyerId == currentUserId)
+                    .OrderByDescending(od => od.CreatedAt)
+                    .FirstOrDefault();
+
+                if (myOrderDetail != null)
+                {
+                    dto.OrderDetailsId = myOrderDetail.OrderDetailsId;
+                    var plan = myOrderDetail.TrainingPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+                    if (plan != null)
+                    {
+                        dto.TrainingPlanId = plan.TrainingPlanId;
+                        dto.PlanStatus = plan.Status;
+                    }
+                }
+
                 return dto;
             });
         }

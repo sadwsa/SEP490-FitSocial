@@ -132,5 +132,27 @@ public class ReportService : IReportService
             };
         }
     }
+
+    public async Task<ApiResponse<ReportListItemDto>> SubmitCoachComplaintAsync(SubmitCoachComplaintRequest request)
+    {
+        try
+        {
+            var result = await _apiClient.PostAsync<SubmitCoachComplaintRequest, ReportListItemDto>("reports/coach", request);
+            return result ?? new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = "Unable to submit coach complaint. Please try again."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = $"Error submitting coach complaint: {ex.Message}"
+            };
+        }
+    }
 }
+
 

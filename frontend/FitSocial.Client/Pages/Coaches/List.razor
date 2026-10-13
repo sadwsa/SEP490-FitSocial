@@ -117,10 +117,23 @@
                                             <h5 class="font-bold text-gray-900 text-lg mb-0">@coach.FullName</h5>
                                             <p class="text-gray-500 text-xs font-medium">@("@coach_" + coach.CoachId.ToString().Substring(0, 6))</p>
                                         </div>
-                                        <button @onclick="@(() => Navigation.NavigateTo($"/profile/{coach.CoachId}"))"
-                                                class="hidden sm:block bg-gray-50 hover:bg-orange-50 text-gray-800 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap">
-                                            View Profile
-                                        </button>
+                                        <div class="flex items-center gap-2">
+                                            <button @onclick="@(() => Navigation.NavigateTo($"/profile/{coach.CoachId}"))"
+                                                    class="hidden sm:block bg-gray-50 hover:bg-orange-50 text-gray-800 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap">
+                                                View Profile
+                                            </button>
+                                            <AuthorizeView Roles="TRAINEE,COACH,Trainee,Coach">
+                                                <Authorized>
+                                                    <button @onclick="@(() => Navigation.NavigateTo($"/coach-complaint?coachId={coach.CoachId}"))"
+                                                            title="Report Coach"
+                                                            class="hidden sm:flex items-center justify-center p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-lg transition cursor-pointer">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                                        </svg>
+                                                    </button>
+                                                </Authorized>
+                                            </AuthorizeView>
+                                        </div>
                                     </div>
 
                                     <!-- Bio -->
@@ -144,10 +157,23 @@
                                         </div>
                                     </div>
 
-                                    <button @onclick="@(() => Navigation.NavigateTo($"/profile/{coach.CoachId}"))"
-                                            class="mt-4 w-full block sm:hidden bg-gray-50 hover:bg-orange-50 text-gray-800 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 py-2 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer">
-                                        View Profile
-                                    </button>
+                                    <div class="mt-4 flex sm:hidden gap-2">
+                                        <button @onclick="@(() => Navigation.NavigateTo($"/profile/{coach.CoachId}"))"
+                                                class="flex-1 bg-gray-50 hover:bg-orange-50 text-gray-800 hover:text-[#FF5500] border border-gray-200 hover:border-orange-200 py-2 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer">
+                                            View Profile
+                                        </button>
+                                        <AuthorizeView Roles="TRAINEE,COACH,Trainee,Coach">
+                                            <Authorized>
+                                                <button @onclick="@(() => Navigation.NavigateTo($"/coach-complaint?coachId={coach.CoachId}"))"
+                                                        title="Report Coach"
+                                                        class="px-3 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-600 border border-gray-200 hover:border-red-200 py-2 rounded-lg transition cursor-pointer flex items-center justify-center">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                                    </svg>
+                                                </button>
+                                            </Authorized>
+                                        </AuthorizeView>
+                                    </div>
                                 </div>
                             </div>
                         </div>

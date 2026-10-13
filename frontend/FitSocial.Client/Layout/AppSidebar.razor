@@ -57,6 +57,20 @@
             Coaches List
         </a>
 
+        <AuthorizeView Roles="TRAINEE,COACH">
+            <Authorized>
+                <!-- Coach Complaint (Trainee or Coach can report coaches) -->
+                <a href="coach-complaint" class="@GetItemClass("coach-complaint")">
+                    <svg class="w-5 h-5 @GetIconClass("coach-complaint")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                        </path>
+                    </svg>
+                    Coach Complaint
+                </a>
+            </Authorized>
+        </AuthorizeView>
+
         <AuthorizeView Roles="COACH">
             <Authorized>
                 <!-- Coach Dashboard & Revenue / Orders -->
@@ -138,6 +152,7 @@
             "package-list" => rootSegment == "packages" || (rootSegment == "training-packages" && segments.Contains("marketplace")),
             "my-packages" => rootSegment == "training-packages" && !segments.Contains("marketplace") && (segments.Length == 1 || segments.Contains("edit")),
             "coaches" => rootSegment == "coaches",
+            "coach-complaint" => rootSegment == "coach-complaint" || (rootSegment == "complaints" && segments.Contains("coach")),
             "coach-dashboard" => rootSegment == "coach" && (segments.Length == 1 || segments.Contains("dashboard")),
             "trainee-orders" => (rootSegment == "coach" && segments.Contains("trainee-orders")) || rootSegment == "trainee-orders",
             "messages" => rootSegment == "messages",

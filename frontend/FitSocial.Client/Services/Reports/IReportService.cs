@@ -20,5 +20,8 @@ public interface IReportService
     Task<ApiResponse<ReportListItemDto>> GetReportByIdAsync(Guid reportId);
 
     Task<ApiResponse<ReportListItemDto>> ProcessReportAsync(Guid reportId, ProcessViolationReportRequest request);
+
+    Task<ApiResponse<ReportListItemDto>> SubmitCoachComplaintAsync(SubmitCoachComplaintRequest request);
 }
+
 

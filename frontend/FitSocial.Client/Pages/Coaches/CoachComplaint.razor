@@ -1,0 +1,742 @@
+@page "/coach-complaint"
+@page "/complaints/coach"
+@layout EmptyLayout
+@attribute [Authorize(Roles = "TRAINEE,COACH,Trainee,Coach,trainee,coach")]
+@inject IReportService ReportService
+@inject ICoachService CoachService
+@inject IFileUploadService FileUploadService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Coaches
+@using FitSocial.Client.Models.Reports
+@using System.Security.Claims
+
+<PageTitle>Submit Coach Complaint - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader SearchTerm="@headerSearchTerm"
+               OnSearchInput="HandleHeaderSearchInput"
+               OnSearchKeyUp="HandleHeaderSearchKeyUp"
+               OnSearch="ExecuteHeaderSearch"
+               OnClearSearch="ClearHeaderSearch"
+               UserName="@userName"
+               UserInitials="@userInitials"
+               UserRole="@userRole"
+               OnLogout="HandleLogout" />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .home-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 44rem) minmax(18rem, 1fr) !important;
+                align-items: start !important;
+            }
+
+            .home-left-sidebar { justify-self: start !important; }
+            .home-center-feed { justify-self: end !important; width: 100% !important; max-width: 44rem !important; min-width: 0 !important; }
+            .home-right-sidebar { justify-self: center !important; }
+        }
+    </style>
+
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Left Sidebar -->
+        <AppSidebar ActiveItem="coach-complaint" />
+
+        <!-- Center Column -->
+        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-6 min-w-0 pb-12">
+            <!-- Breadcrumbs / Top bar -->
+            <div class="flex items-center justify-between text-xs text-gray-500">
+                <div class="flex items-center gap-1.5">
+                    <a href="home" class="hover:text-[#FF5500] transition">Home</a>
+                    <span>/</span>
+                    <a href="coaches" class="hover:text-[#FF5500] transition">Coaches</a>
+                    <span>/</span>
+                    <span class="text-gray-800 font-semibold">Submit Complaint</span>
+                </div>
+                <button type="button" @onclick="GoBack" class="hover:text-gray-800 flex items-center gap-1 cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back
+                </button>
+            </div>
+
+            @if (isSuccess && submittedReport != null)
+            {
+                <!-- Success State -->
+                <div class="bg-white rounded-2xl shadow-sm border border-emerald-100 p-8 text-center flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
+                    <div class="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+
+                    <h2 class="text-xl font-bold text-gray-900 mb-1">Complaint Submitted Successfully</h2>
+                    <p class="text-gray-500 text-xs max-w-md mb-6">
+                        Your complaint has been safely recorded and queued for moderation. Our staff team will review the issue and investigate according to FitSocial policies.
+                    </p>
+
+                    <div class="w-full max-w-md bg-gray-50 rounded-xl p-4 border border-gray-100 text-left space-y-2 mb-6 text-xs">
+                        <div class="flex justify-between items-center py-1 border-b border-gray-200/60">
+                            <span class="text-gray-500">Complaint ID:</span>
+                            <span class="font-mono font-bold text-gray-800">#@submittedReport.ReportId.ToString().Substring(0, 8)</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-gray-200/60">
+                            <span class="text-gray-500">Target Coach:</span>
+                            <span class="font-semibold text-gray-800">@(selectedCoach?.FullName ?? submittedReport.ReportedUserName ?? "Coach")</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-gray-200/60">
+                            <span class="text-gray-500">Title:</span>
+                            <span class="font-medium text-gray-800 truncate max-w-[200px]" title="@submittedReport.Reason">@submittedReport.Reason</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-gray-200/60">
+                            <span class="text-gray-500">Initial Status:</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">
+                                @(submittedReport.Status ?? "PENDING")
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-gray-500">Submitted At:</span>
+                            <span class="text-gray-600">@((submittedReport.CreatedAt ?? DateTime.UtcNow).ToString("yyyy-MM-dd HH:mm"))</span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-center gap-3">
+                        <button type="button" @onclick="ResetForm"
+                                class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl transition cursor-pointer">
+                            Submit Another Complaint
+                        </button>
+                        <button type="button" @onclick='() => Navigation.NavigateTo("coaches")'
+                                class="px-5 py-2.5 bg-[#FF5500] hover:bg-[#e04b00] text-white font-semibold text-xs rounded-xl shadow-xs hover:shadow transition cursor-pointer">
+                            Back to Coaches List
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- Form Card -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <!-- Card Header Banner -->
+                    <div class="bg-gradient-to-r from-red-600 via-orange-600 to-[#FF5500] p-6 text-white">
+                        <div class="flex items-center gap-3.5 mb-2">
+                            <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center flex-shrink-0 text-white">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h1 class="text-lg font-bold">Submit Coach Complaint</h1>
+                                <p class="text-xs text-white/80">Report coach conduct, session violations, or policy infractions</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Guidelines Banner -->
+                    <div class="bg-amber-50/70 border-b border-amber-100 px-6 py-3.5 flex items-start gap-3 text-xs text-amber-900">
+                        <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                        <div class="space-y-1">
+                            <p class="font-semibold text-amber-950">Notice on Coach Complaints</p>
+                            <p class="text-amber-800 text-[11px] leading-relaxed">
+                                Only valid registered coaches can be reported. Please provide clear facts, dates, and evidence where possible. False accusations or harassment are prohibited under the FitSocial Terms of Service.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Form Body -->
+                    <form @onsubmit="HandleSubmitAsync" class="p-6 space-y-6">
+                        <!-- Global Error Message -->
+                        @if (!string.IsNullOrWhiteSpace(apiErrorMessage))
+                        {
+                            <div class="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-3 animate-in fade-in">
+                                <svg class="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                </svg>
+                                <div class="flex-1">
+                                    <p class="font-bold">Submission Failed</p>
+                                    <p class="text-[11px] mt-0.5">@apiErrorMessage</p>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 1. Coach Selection -->
+                        <div>
+                            <label class="block text-xs font-bold text-gray-800 mb-1.5">
+                                Select Coach to Complain <span class="text-red-500">*</span>
+                            </label>
+
+                            @if (isLoadingCoaches)
+                            {
+                                <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-3 text-xs text-gray-500 animate-pulse">
+                                    <div class="w-8 h-8 rounded-full bg-gray-200"></div>
+                                    <span>Loading verified coaches...</span>
+                                </div>
+                            }
+                            else if (selectedCoach != null)
+                            {
+                                <!-- Selected Coach Card -->
+                                <div class="p-3.5 bg-orange-50/40 border border-[#FF5500]/40 rounded-xl flex items-center justify-between gap-3">
+                                    <div class="flex items-center gap-3 min-w-0">
+                                        @if (!string.IsNullOrEmpty(selectedCoach.AvatarUrl))
+                                        {
+                                            <img src="@selectedCoach.AvatarUrl" alt="@selectedCoach.FullName"
+                                                 class="w-10 h-10 rounded-full object-cover border-2 border-[#FF5500] flex-shrink-0" />
+                                        }
+                                        else
+                                        {
+                                            <div class="w-10 h-10 rounded-full bg-[#FF5500] text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                                @(string.IsNullOrEmpty(selectedCoach.FullName) ? "C" : selectedCoach.FullName.Substring(0, 1).ToUpper())
+                                            </div>
+                                        }
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-bold text-gray-900 text-xs truncate">@selectedCoach.FullName</span>
+                                                <span class="px-1.5 py-0.5 bg-orange-100 text-[#FF5500] text-[10px] font-bold rounded">COACH</span>
+                                            </div>
+                                            <p class="text-[11px] text-gray-500">
+                                                @(selectedCoach.ExperienceYears.HasValue ? $"{selectedCoach.ExperienceYears} yrs experience" : "Verified Coach")
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <button type="button" @onclick="ClearSelectedCoach" disabled="@isSubmitting"
+                                            class="text-xs text-gray-500 hover:text-red-600 px-2 py-1 rounded hover:bg-white transition cursor-pointer">
+                                        Change
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <!-- Coach Dropdown Selector -->
+                                <div class="relative">
+                                    <select class="w-full bg-gray-50 text-xs text-gray-800 p-3 rounded-xl border @(!string.IsNullOrWhiteSpace(coachError) ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-[#FF5500]") focus:outline-hidden transition"
+                                            @onchange="OnCoachDropdownChanged"
+                                            disabled="@isSubmitting">
+                                        <option value="">-- Choose a Coach from the list --</option>
+                                        @foreach (var coach in availableCoaches)
+                                        {
+                                            <option value="@coach.CoachId">
+                                                @coach.FullName @(coach.ExperienceYears.HasValue ? $"({coach.ExperienceYears} yrs exp)" : "")
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(coachError))
+                            {
+                                <p class="text-[11px] text-red-500 font-medium mt-1">@coachError</p>
+                            }
+                        </div>
+
+                        <!-- 2. Complaint Title -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block text-xs font-bold text-gray-800">
+                                    Complaint Title <span class="text-red-500">*</span>
+                                </label>
+                                <span class="text-[10px] @(titleText.Length > 500 ? "text-red-500 font-bold" : "text-gray-400")">
+                                    @titleText.Length / 500
+                                </span>
+                            </div>
+
+                            <input type="text"
+                                   @bind="titleText"
+                                   @bind:event="oninput"
+                                   disabled="@isSubmitting"
+                                   maxlength="500"
+                                   placeholder="e.g. Failure to conduct scheduled workout session, inappropriate behavior..."
+                                   class="w-full bg-gray-50 text-xs text-gray-800 p-3 rounded-xl border @(!string.IsNullOrWhiteSpace(titleError) ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-[#FF5500]") focus:outline-hidden transition" />
+
+                            @if (!string.IsNullOrWhiteSpace(titleError))
+                            {
+                                <p class="text-[11px] text-red-500 font-medium mt-1">@titleError</p>
+                            }
+                            else
+                            {
+                                <p class="text-[11px] text-gray-400 mt-1">Provide a concise summary of the complaint (3 - 500 characters).</p>
+                            }
+                        </div>
+
+                        <!-- 3. Complaint Description / Content -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block text-xs font-bold text-gray-800">
+                                    Detailed Complaint Description <span class="text-red-500">*</span>
+                                </label>
+                                <span class="text-[10px] @(contentText.Length > 500 ? "text-red-500 font-bold" : "text-gray-400")">
+                                    @contentText.Length / 500
+                                </span>
+                            </div>
+
+                            <textarea @bind="contentText"
+                                      @bind:event="oninput"
+                                      disabled="@isSubmitting"
+                                      rows="5"
+                                      maxlength="500"
+                                      placeholder="Describe what occurred in detail. Mention relevant dates, training packages, communication logs, and specifics of the violation..."
+                                      class="w-full bg-gray-50 text-xs text-gray-800 p-3 rounded-xl border @(!string.IsNullOrWhiteSpace(contentError) ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-[#FF5500]") focus:outline-hidden transition resize-y"></textarea>
+
+                            @if (!string.IsNullOrWhiteSpace(contentError))
+                            {
+                                <p class="text-[11px] text-red-500 font-medium mt-1">@contentError</p>
+                            }
+                            else
+                            {
+                                <p class="text-[11px] text-gray-400 mt-1">Must describe the issue clearly (10 - 500 characters).</p>
+                            }
+                        </div>
+
+                        <!-- 4. Evidence Attachments -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block text-xs font-bold text-gray-800">
+                                    Evidence Attachments <span class="text-gray-400 font-normal">(Optional)</span>
+                                </label>
+                                <span class="text-[10px] text-gray-400">@evidenceUrls.Count / 10 files</span>
+                            </div>
+
+                            <div class="p-4 bg-gray-50/80 border border-dashed border-gray-300 rounded-xl">
+                                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mb-3">
+                                    <div class="text-xs text-gray-500 text-center sm:text-left">
+                                        <p class="font-semibold text-gray-700">Attach supporting files (receipts, screenshots, PDF logs)</p>
+                                        <p class="text-[11px] text-gray-400">Allowed: JPG, PNG, WEBP, PDF (Max 10MB per file)</p>
+                                    </div>
+
+                                    <label class="px-4 py-2 bg-white hover:bg-orange-50 border border-gray-300 hover:border-[#FF5500] text-gray-700 hover:text-[#FF5500] rounded-xl text-xs font-semibold shadow-2xs transition flex items-center gap-2 cursor-pointer whitespace-nowrap @(isUploadingFile || isSubmitting || evidenceUrls.Count >= 10 ? "opacity-50 pointer-events-none" : "")">
+                                        <InputFile OnChange="HandleFileSelectedAsync" accept=".jpg,.jpeg,.png,.pdf,.webp" class="hidden" disabled="@(isUploadingFile || isSubmitting || evidenceUrls.Count >= 10)" />
+                                        <svg class="w-4 h-4 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                                        </svg>
+                                        <span>@(isUploadingFile ? "Uploading..." : "Attach File")</span>
+                                    </label>
+                                </div>
+
+                                @if (isUploadingFile)
+                                {
+                                    <div class="p-2.5 bg-orange-50/50 border border-orange-200 rounded-lg text-xs text-[#FF5500] flex items-center gap-2 mb-2 animate-pulse">
+                                        <span class="w-3.5 h-3.5 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin"></span>
+                                        <span>Uploading file to secure storage, please wait...</span>
+                                    </div>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(fileError))
+                                {
+                                    <p class="text-[11px] text-red-500 font-medium mb-2">@fileError</p>
+                                }
+
+                                <!-- Uploaded Evidence List -->
+                                @if (evidenceUrls.Any())
+                                {
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                        @for (int i = 0; i < evidenceUrls.Count; i++)
+                                        {
+                                            var url = evidenceUrls[i];
+                                            var index = i;
+                                            var isPdf = url.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+
+                                            <div class="bg-white p-2 rounded-xl border border-gray-200 flex items-center justify-between gap-2 shadow-2xs">
+                                                <div class="flex items-center gap-2 min-w-0">
+                                                    @if (isPdf)
+                                                    {
+                                                        <div class="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                                                            PDF
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <img src="@url" alt="Evidence" class="w-8 h-8 rounded-lg object-cover flex-shrink-0 border border-gray-100" />
+                                                    }
+                                                    <div class="min-w-0">
+                                                        <a href="@url" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-gray-800 hover:text-[#FF5500] truncate block max-w-[160px]">
+                                                            @(isPdf ? $"Document #{index + 1}.pdf" : $"Evidence #{index + 1}")
+                                                        </a>
+                                                        <span class="text-[10px] text-emerald-600 font-medium">Uploaded</span>
+                                                    </div>
+                                                </div>
+
+                                                <button type="button" @onclick="() => RemoveEvidence(index)" disabled="@isSubmitting"
+                                                        class="text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-gray-100 transition cursor-pointer" title="Remove attachment">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                            <button type="button" @onclick="GoBack" disabled="@isSubmitting"
+                                    class="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-100 rounded-xl transition disabled:opacity-50 cursor-pointer">
+                                Cancel
+                            </button>
+
+                            <button type="submit" disabled="@(isSubmitting || isUploadingFile)"
+                                    class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-[#FF5500] hover:bg-[#e04b00] rounded-xl shadow-xs hover:shadow transition disabled:opacity-50 flex items-center gap-2 cursor-pointer">
+                                @if (isSubmitting)
+                                {
+                                    <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                    <span>Submitting Complaint...</span>
+                                }
+                                else
+                                {
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                    </svg>
+                                    <span>Submit Complaint</span>
+                                }
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            }
+        </section>
+
+        <!-- Right Sidebar (Empty) -->
+        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "coachId")]
+    public string? QueryCoachId { get; set; }
+
+    private List<CoachListDto> availableCoaches = new();
+    private CoachListDto? selectedCoach;
+    private bool isLoadingCoaches = true;
+
+    // Form inputs
+    private string titleText = string.Empty;
+    private string contentText = string.Empty;
+    private List<string> evidenceUrls = new();
+
+    // Validation errors
+    private string? coachError;
+    private string? titleError;
+    private string? contentError;
+    private string? fileError;
+    private string? apiErrorMessage;
+
+    // Loading & state
+    private bool isUploadingFile = false;
+    private bool isSubmitting = false;
+    private bool isSuccess = false;
+    private ReportListItemDto? submittedReport;
+
+    // Header info
+    private string? headerSearchTerm = "";
+    private string userName = "User";
+    private string userInitials = "U";
+    private string userRole = "Trainee";
+    private Guid currentUserId = Guid.Empty;
+
+    private static readonly string[] AllowedFileExtensions = { ".jpg", ".jpeg", ".png", ".pdf", ".webp" };
+    private const long MaxFileBytes = 10 * 1024 * 1024; // 10MB
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfoAsync();
+        await LoadAvailableCoachesAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Pre-select coach if query param provided and coaches loaded
+        if (!string.IsNullOrWhiteSpace(QueryCoachId) && Guid.TryParse(QueryCoachId, out var parsedCoachId))
+        {
+            if (availableCoaches.Any() && (selectedCoach == null || selectedCoach.CoachId != parsedCoachId))
+            {
+                selectedCoach = availableCoaches.FirstOrDefault(c => c.CoachId == parsedCoachId);
+            }
+        }
+    }
+
+    private async Task LoadUserInfoAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
+                userRole = isCoach ? "Coach" : "Trainee";
+
+                var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user.FindFirst("sub")?.Value;
+                if (Guid.TryParse(idClaim, out var parsedId))
+                {
+                    currentUserId = parsedId;
+                }
+
+                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    userInitials = parts.Length > 1
+                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+                }
+            }
+        }
+        catch
+        {
+            userInitials = "U";
+        }
+    }
+
+    private async Task LoadAvailableCoachesAsync()
+    {
+        isLoadingCoaches = true;
+        try
+        {
+            var response = await CoachService.GetAllCoachesAsync();
+            if (response.Success && response.Data != null)
+            {
+                // Filter out self if user is a coach, and filter out locked/rejected if indicated
+                availableCoaches = response.Data
+                    .Where(c => c.CoachId != currentUserId)
+                    .Where(c => string.IsNullOrWhiteSpace(c.ApprovalStatus) || string.Equals(c.ApprovalStatus, "APPROVED", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(c => c.FullName)
+                    .ToList();
+
+                // If QueryCoachId is present, preselect coach
+                if (!string.IsNullOrWhiteSpace(QueryCoachId) && Guid.TryParse(QueryCoachId, out var targetId))
+                {
+                    selectedCoach = availableCoaches.FirstOrDefault(c => c.CoachId == targetId);
+                }
+            }
+            else
+            {
+                apiErrorMessage = response.Message ?? "Failed to load coaches.";
+            }
+        }
+        catch (Exception ex)
+        {
+            apiErrorMessage = "Unable to connect to coach directory.";
+            Console.WriteLine($"[CoachComplaint] LoadCoaches Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingCoaches = false;
+        }
+    }
+
+    private void OnCoachDropdownChanged(ChangeEventArgs e)
+    {
+        coachError = null;
+        var value = e.Value?.ToString();
+        if (Guid.TryParse(value, out var coachId))
+        {
+            selectedCoach = availableCoaches.FirstOrDefault(c => c.CoachId == coachId);
+        }
+        else
+        {
+            selectedCoach = null;
+        }
+    }
+
+    private void ClearSelectedCoach()
+    {
+        selectedCoach = null;
+        coachError = null;
+    }
+
+    private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        fileError = null;
+        var file = e.File;
+        if (file == null) return;
+
+        if (evidenceUrls.Count >= 10)
+        {
+            fileError = "A maximum of 10 evidence files can be attached.";
+            return;
+        }
+
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (!AllowedFileExtensions.Contains(ext))
+        {
+            fileError = "Only JPG, PNG, WEBP images and PDF files are allowed.";
+            return;
+        }
+
+        if (file.Size > MaxFileBytes)
+        {
+            fileError = "File size must not exceed 10MB.";
+            return;
+        }
+
+        isUploadingFile = true;
+        StateHasChanged();
+
+        try
+        {
+            var uploadResult = await FileUploadService.UploadAsync(file);
+            if (uploadResult.Success && !string.IsNullOrWhiteSpace(uploadResult.Data))
+            {
+                evidenceUrls.Add(uploadResult.Data.Trim());
+            }
+            else
+            {
+                fileError = uploadResult.Message ?? "Upload failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            fileError = $"Upload failed: {ex.Message}";
+        }
+        finally
+        {
+            isUploadingFile = false;
+        }
+    }
+
+    private void RemoveEvidence(int index)
+    {
+        if (index >= 0 && index < evidenceUrls.Count)
+        {
+            evidenceUrls.RemoveAt(index);
+        }
+    }
+
+    private bool ValidateForm()
+    {
+        var isValid = true;
+        coachError = null;
+        titleError = null;
+        contentError = null;
+        apiErrorMessage = null;
+
+        if (selectedCoach == null || selectedCoach.CoachId == Guid.Empty)
+        {
+            coachError = "Please select a valid coach.";
+            isValid = false;
+        }
+        else if (selectedCoach.CoachId == currentUserId)
+        {
+            coachError = "You cannot submit a complaint against yourself.";
+            isValid = false;
+        }
+
+        var trimmedTitle = titleText.Trim();
+        if (string.IsNullOrWhiteSpace(trimmedTitle))
+        {
+            titleError = "Complaint title is required.";
+            isValid = false;
+        }
+        else if (trimmedTitle.Length < 3)
+        {
+            titleError = "Title must be at least 3 characters.";
+            isValid = false;
+        }
+        else if (trimmedTitle.Length > 500)
+        {
+            titleError = "Title cannot exceed 500 characters.";
+            isValid = false;
+        }
+
+        var trimmedContent = contentText.Trim();
+        if (string.IsNullOrWhiteSpace(trimmedContent))
+        {
+            contentError = "Complaint content is required.";
+            isValid = false;
+        }
+        else if (trimmedContent.Length < 10)
+        {
+            contentError = "Complaint description must be at least 10 characters.";
+            isValid = false;
+        }
+        else if (trimmedContent.Length > 500)
+        {
+            contentError = "Complaint description cannot exceed 500 characters.";
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        if (isSubmitting || isUploadingFile) return;
+
+        if (!ValidateForm())
+        {
+            return;
+        }
+
+        isSubmitting = true;
+        apiErrorMessage = null;
+
+        try
+        {
+            var request = new SubmitCoachComplaintRequest
+            {
+                CoachId = selectedCoach!.CoachId,
+                Title = titleText.Trim(),
+                Content = contentText.Trim(),
+                EvidenceUrls = evidenceUrls.Where(u => !string.IsNullOrWhiteSpace(u)).ToList()
+            };
+
+            var response = await ReportService.SubmitCoachComplaintAsync(request);
+
+            if (response.Success && response.Data != null)
+            {
+                submittedReport = response.Data;
+                isSuccess = true;
+            }
+            else
+            {
+                apiErrorMessage = response.Message ?? "Failed to submit complaint. Please check your data and try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            apiErrorMessage = "An unexpected error occurred while submitting your complaint. Please try again.";
+            Console.WriteLine($"[CoachComplaint] Submit Error: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        selectedCoach = null;
+        titleText = string.Empty;
+        contentText = string.Empty;
+        evidenceUrls.Clear();
+        coachError = null;
+        titleError = null;
+        contentError = null;
+        fileError = null;
+        apiErrorMessage = null;
+        isSuccess = false;
+        submittedReport = null;
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("coaches");
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+
+    private void HandleHeaderSearchInput(ChangeEventArgs e) => headerSearchTerm = e.Value?.ToString();
+    private async Task HandleHeaderSearchKeyUp(KeyboardEventArgs e) { if (e.Key == "Enter") await ExecuteHeaderSearch(); }
+    private Task ExecuteHeaderSearch() { Navigation.NavigateTo($"coaches?searchKeyword={Uri.EscapeDataString(headerSearchTerm ?? "")}"); return Task.CompletedTask; }
+    private Task ClearHeaderSearch() { headerSearchTerm = string.Empty; return Task.CompletedTask; }
+}

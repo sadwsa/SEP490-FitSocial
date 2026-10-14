@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace FitSocial.Client.Models.Reports;
 
@@ -13,16 +14,16 @@ public class ReportListItemDto
     public string? ReporterAvatarUrl { get; set; }
 
     // Target Information
-    public string TargetType { get; set; } = string.Empty; // "POST" or "USER"
+    public string TargetType { get; set; } = string.Empty;
     public Guid? TargetId { get; set; }
 
-    // User Target Details (if TargetType is USER)
+    // User Target Details
     public Guid? ReportedUserId { get; set; }
     public string? ReportedUserName { get; set; }
     public string? ReportedUserEmail { get; set; }
     public string? ReportedUserAvatarUrl { get; set; }
 
-    // Post Target Details (if TargetType is POST)
+    // Post Target Details
     public Guid? ReportedPostId { get; set; }
     public string? ReportedPostContent { get; set; }
     public Guid? ReportedPostAuthorId { get; set; }
@@ -33,7 +34,7 @@ public class ReportListItemDto
     public int ReportedUserViolationCount { get; set; }
     public bool? ReportedUserIsLocked { get; set; }
     public bool? HasSoldTrainingPackage { get; set; }
-    public System.Collections.Generic.List<string> AvailableActions { get; set; } = new();
+    public List<string> AvailableActions { get; set; } = new();
 
     // Report Details
     public string? Type { get; set; }
@@ -46,8 +47,30 @@ public class ReportListItemDto
     public string? ResolverName { get; set; }
     public DateTime? ResolvedAt { get; set; }
 
+    // Appeal Details
+    public string? AppealStatus { get; set; }
+    public string? AppealContent { get; set; }
+    public DateTime? AppealedAt { get; set; }
+    public Guid? AppealReviewedBy { get; set; }
+    public string? AppealResolverName { get; set; }
+    public DateTime? AppealReviewedAt { get; set; }
+    public string? AppealReviewNote { get; set; }
+    public DateTime? NotifiedReportedUserAt { get; set; }
+
+    // Attached Evidence Media
+    public List<ReportMediaItemDto> Media { get; set; } = new();
+
     // Timestamp
     public DateTime? CreatedAt { get; set; }
+}
+
+public class ReportMediaItemDto
+{
+    public Guid MediaId { get; set; }
+    public string? MediaUrl { get; set; }
+    public string? MediaType { get; set; }
+    public string? MediaFor { get; set; }
+    public short? SortOrder { get; set; }
 }
 
 public class ProcessViolationReportRequest
@@ -63,6 +86,13 @@ public class CreateUserReportRequest
     public string Reason { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? Type { get; set; } = "USER";
-    public System.Collections.Generic.List<string>? MediaUrls { get; set; }
+    public List<string>? MediaUrls { get; set; }
 }
 
+public class ReviewAppealRequest
+{
+    public string AppealStatus { get; set; } = "APPROVED"; // APPROVED or REJECTED
+    public string? AppealReviewNote { get; set; }
+    public bool RemoveViolation { get; set; } = false;
+    public bool UnblockAccount { get; set; } = false;
+}

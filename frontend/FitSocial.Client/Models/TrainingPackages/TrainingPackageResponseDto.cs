@@ -38,4 +38,9 @@ public class TrainingPackageResponseDto
     public bool IsReviewEdited { get; set; }
     public int? UserRating { get; set; }
     public string? UserComment { get; set; }
+
+    // Training Plan & Order Details state
+    public Guid? OrderDetailsId { get; set; }
+    public Guid? TrainingPlanId { get; set; }
+    public string? PlanStatus { get; set; }
 }

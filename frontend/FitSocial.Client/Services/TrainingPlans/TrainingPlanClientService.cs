@@ -13,6 +13,14 @@ public interface ITrainingPlanClientService
     Task<ApiResponse<TrainingPlanDetailDto>> UpdateTrainingPlanAsync(Guid planId, UpdateTrainingPlanDto dto);
     Task<ApiResponse<TrainingPlanDetailDto?>> GetTrainingPlanByOrderDetailAsync(Guid orderDetailsId);
     Task<ApiResponse<List<VideoTutorialDto>>> GetCoachVideoTutorialsAsync();
+
+    // Trainee Workout Hub & Daily Workout Marking
+    Task<ApiResponse<TraineeWorkoutPlanProgressDto>> GetTraineeWorkoutPlanAsync(Guid orderDetailsId);
+    Task<ApiResponse<TraineeWorkoutPlanProgressDto>> GetTraineeWorkoutPlanByPackageAsync(Guid packageId);
+    Task<ApiResponse<WorkoutCompletionResultDto>> ToggleWorkoutCompletionAsync(ToggleWorkoutCompletionDto dto);
+
+    // Coach Progress Monitoring
+    Task<ApiResponse<CoachTraineeWorkoutProgressDto>> GetCoachTraineeProgressAsync(Guid orderDetailsId);
 }
 
 public class TrainingPlanClientService : ITrainingPlanClientService
@@ -42,5 +50,25 @@ public class TrainingPlanClientService : ITrainingPlanClientService
     public async Task<ApiResponse<List<VideoTutorialDto>>> GetCoachVideoTutorialsAsync()
     {
         return await _apiClient.GetAsync<List<VideoTutorialDto>>("coach/training-plans/video-tutorials");
+    }
+
+    public async Task<ApiResponse<TraineeWorkoutPlanProgressDto>> GetTraineeWorkoutPlanAsync(Guid orderDetailsId)
+    {
+        return await _apiClient.GetAsync<TraineeWorkoutPlanProgressDto>($"trainee/workout/plan/{orderDetailsId}");
+    }
+
+    public async Task<ApiResponse<TraineeWorkoutPlanProgressDto>> GetTraineeWorkoutPlanByPackageAsync(Guid packageId)
+    {
+        return await _apiClient.GetAsync<TraineeWorkoutPlanProgressDto>($"trainee/workout/plan/by-package/{packageId}");
+    }
+
+    public async Task<ApiResponse<WorkoutCompletionResultDto>> ToggleWorkoutCompletionAsync(ToggleWorkoutCompletionDto dto)
+    {
+        return await _apiClient.PostAsync<ToggleWorkoutCompletionDto, WorkoutCompletionResultDto>("trainee/workout/complete", dto);
+    }
+
+    public async Task<ApiResponse<CoachTraineeWorkoutProgressDto>> GetCoachTraineeProgressAsync(Guid orderDetailsId)
+    {
+        return await _apiClient.GetAsync<CoachTraineeWorkoutProgressDto>($"coach/training-plans/trainee-progress/{orderDetailsId}");
     }
 }

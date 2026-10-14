@@ -57,3 +57,12 @@ public class ProcessViolationReportRequest
     public string? Note { get; set; }
 }
 
+public class CreateUserReportRequest
+{
+    public Guid ReportedUserId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Type { get; set; } = "USER";
+    public System.Collections.Generic.List<string>? MediaUrls { get; set; }
+}
+

@@ -107,8 +107,42 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="flex items-center sm:self-center flex-shrink-0 ml-auto sm:ml-0">
-                                    <!-- Nút View Details luôn giữ form cố định, không bị lệch -->
+                                <div class="flex items-center gap-2 sm:self-center flex-shrink-0 ml-auto sm:ml-0">
+                                    <!-- Start Workout Button -->
+                                    @if (pkg.OrderDetailsId.HasValue && !string.IsNullOrWhiteSpace(pkg.PlanStatus) && pkg.PlanStatus != "PENDING_COACH")
+                                    {
+                                        <a href="/training-packages/workout/@pkg.OrderDetailsId"
+                                           class="px-3.5 py-2 bg-[#FF5500] hover:bg-orange-600 text-white text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 shadow-xs">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Start Workout
+                                        </a>
+                                    }
+                                    else if (pkg.OrderDetailsId.HasValue)
+                                    {
+                                        <span class="px-3.5 py-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 whitespace-nowrap flex-shrink-0">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Plan Pending
+                                        </span>
+                                    }
+
+                                    <!-- Meal Plan Button -->
+                                    @if (pkg.OrderDetailsId.HasValue)
+                                    {
+                                        <a href="/training-packages/meal-plan/@pkg.OrderDetailsId"
+                                           class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 shadow-2xs">
+                                            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                            </svg>
+                                            Meal Plan
+                                        </a>
+                                    }
+
+                                    <!-- View Details Button -->
                                     <button type="button" @onclick="() => OpenPackageDetailsModal(pkg)" class="px-3.5 py-2 bg-gray-100 hover:bg-orange-50 hover:text-[#FF5500] hover:border-orange-200 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 cursor-pointer shadow-2xs">
                                         <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -116,6 +150,15 @@
                                         </svg>
                                         View Details
                                     </button>
+
+                                    <!-- Report Coach Button -->
+                                    @if (pkg.CoachId != Guid.Empty)
+                                    {
+                                        <button type="button" @onclick="() => OpenReportCoachModal(pkg)" title="Report Coach" class="px-2.5 py-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-gray-200 text-gray-500 text-xs font-semibold rounded-xl transition-all flex items-center gap-1 whitespace-nowrap flex-shrink-0 cursor-pointer shadow-2xs">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path></svg>
+                                            <span class="hidden xl:inline">Report Coach</span>
+                                        </button>
+                                    }
                                 </div>
                             </li>
                         }
@@ -236,10 +279,19 @@
 
             <!-- Modal Footer -->
             <div class="flex items-center justify-between pt-3 border-t border-gray-100 gap-3">
-                <a href="/training-packages/@selectedDetailPackage.PackageId" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition">
-                    <span>View Public Page & All Reviews</span>
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                </a>
+                <div class="flex items-center gap-3">
+                    <a href="/training-packages/@selectedDetailPackage.PackageId" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition">
+                        <span>View Public Page & All Reviews</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </a>
+                    @if (selectedDetailPackage.CoachId != Guid.Empty)
+                    {
+                        <button type="button" @onclick="() => OpenReportCoachModal(selectedDetailPackage)" class="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path></svg>
+                            <span>Report Coach</span>
+                        </button>
+                    }
+                </div>
                 <button type="button" @onclick="ClosePackageDetailsModal" class="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer">
                     Close
                 </button>
@@ -310,6 +362,18 @@
             </EditForm>
         </div>
     </div>
+}
+
+<!-- MODAL BÁO CÁO COACH -->
+@if (isReportCoachModalOpen && reportCoachId != Guid.Empty)
+{
+    <ReportUserModal IsVisible="@isReportCoachModalOpen"
+                     ReportedUserId="@reportCoachId"
+                     ReportedUserName="@reportCoachName"
+                     IsCoach="true"
+                     PackageContext="@reportPackageTitle"
+                     OnClose="() => isReportCoachModalOpen = false"
+                     OnReportSubmitted="HandleCoachReportSubmitted" />
 }
 
 @code {
@@ -437,5 +501,33 @@
             reviewErrorMessage = response.Message ?? "Failed to submit review.";
         }
         isSubmittingReview = false;
+    }
+
+    // --- Các biến và hàm cho Modal Báo Cáo Coach ---
+    private bool isReportCoachModalOpen = false;
+    private Guid reportCoachId;
+    private string reportCoachName = string.Empty;
+    private string reportPackageTitle = string.Empty;
+
+    private void OpenReportCoachModal(TrainingPackageResponseDto? pkg)
+    {
+        if (pkg == null || pkg.CoachId == Guid.Empty) return;
+        reportCoachId = pkg.CoachId;
+        reportCoachName = pkg.CoachName ?? "Coach";
+        reportPackageTitle = pkg.Title ?? "Training Package";
+        isReportCoachModalOpen = true;
+    }
+
+    private void HandleCoachReportSubmitted(Guid coachId)
+    {
+        isReportCoachModalOpen = false;
+        toastSuccessMessage = "Coach report submitted successfully. Our team will review it.";
+        StateHasChanged();
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3500);
+            toastSuccessMessage = null;
+            await InvokeAsync(StateHasChanged);
+        });
     }
 }

@@ -106,4 +106,82 @@ public class TrainingPlanRepository : Repository<TrainingPlan>, ITrainingPlanRep
     {
         DbContext.TrainingPlanExercises.RemoveRange(exercises);
     }
+
+    public async Task<TrainingPlan?> GetTraineePlanWithLogsAsync(Guid orderDetailsId, Guid traineeId, CancellationToken cancellationToken = default)
+    {
+        return await DbContext.TrainingPlans
+            .Include(p => p.Coach)
+                .ThenInclude(c => c.Coach)
+            .Include(p => p.OrderDetails)
+                .ThenInclude(od => od!.Package)
+                    .ThenInclude(pkg => pkg!.Media)
+            .Include(p => p.OrderDetails)
+                .ThenInclude(od => od!.Order)
+            .Include(p => p.TrainingPlanExercises)
+                .ThenInclude(e => e.VideoTutorial)
+            .Include(p => p.TrainingPlanExercises)
+                .ThenInclude(e => e.WorkoutCompletionLogs.Where(log => log.TraineeId == traineeId))
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.OrderDetailsId == orderDetailsId && p.OrderDetails != null && p.OrderDetails.Order.BuyerId == traineeId, cancellationToken);
+    }
+
+    public async Task<TrainingPlan?> GetTraineePlanByPackageIdWithLogsAsync(Guid packageId, Guid traineeId, CancellationToken cancellationToken = default)
+    {
+        return await DbContext.TrainingPlans
+            .Include(p => p.Coach)
+                .ThenInclude(c => c.Coach)
+            .Include(p => p.OrderDetails)
+                .ThenInclude(od => od!.Package)
+                    .ThenInclude(pkg => pkg!.Media)
+            .Include(p => p.OrderDetails)
+                .ThenInclude(od => od!.Order)
+            .Include(p => p.TrainingPlanExercises)
+                .ThenInclude(e => e.VideoTutorial)
+            .Include(p => p.TrainingPlanExercises)
+                .ThenInclude(e => e.WorkoutCompletionLogs.Where(log => log.TraineeId == traineeId))
+            .AsNoTracking()
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync(p => p.OrderDetails != null && p.OrderDetails.PackageId == packageId && p.OrderDetails.Order.BuyerId == traineeId, cancellationToken);
+    }
+
+    public async Task<TrainingPlanExercise?> GetExerciseByIdAsync(Guid exerciseId, CancellationToken cancellationToken = default)
+    {
+        return await DbContext.TrainingPlanExercises
+            .Include(e => e.TrainingPlan)
+                .ThenInclude(p => p.OrderDetails)
+                    .ThenInclude(od => od!.Order)
+            .FirstOrDefaultAsync(e => e.TrainingPlanExerciseId == exerciseId, cancellationToken);
+    }
+
+    public async Task<WorkoutCompletionLog?> GetWorkoutLogAsync(Guid exerciseId, Guid traineeId, CancellationToken cancellationToken = default)
+    {
+        return await DbContext.WorkoutCompletionLogs
+            .FirstOrDefaultAsync(l => l.TrainingPlanExerciseId == exerciseId && l.TraineeId == traineeId, cancellationToken);
+    }
+
+    public async Task AddWorkoutLogAsync(WorkoutCompletionLog log, CancellationToken cancellationToken = default)
+    {
+        await DbContext.WorkoutCompletionLogs.AddAsync(log, cancellationToken);
+    }
+
+    public void RemoveWorkoutLog(WorkoutCompletionLog log)
+    {
+        DbContext.WorkoutCompletionLogs.Remove(log);
+    }
+
+    public async Task<TrainingPlan?> GetCoachTraineePlanWithLogsAsync(Guid orderDetailsId, Guid coachId, CancellationToken cancellationToken = default)
+    {
+        return await DbContext.TrainingPlans
+            .Include(p => p.OrderDetails)
+                .ThenInclude(od => od!.Order)
+                    .ThenInclude(o => o.Buyer)
+            .Include(p => p.OrderDetails)
+                .ThenInclude(od => od!.Package)
+            .Include(p => p.TrainingPlanExercises)
+                .ThenInclude(e => e.VideoTutorial)
+            .Include(p => p.TrainingPlanExercises)
+                .ThenInclude(e => e.WorkoutCompletionLogs)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.OrderDetailsId == orderDetailsId && (p.CoachId == coachId || (p.OrderDetails != null && p.OrderDetails.Order.CoachId == coachId)), cancellationToken);
+    }
 }

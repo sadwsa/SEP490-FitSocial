@@ -64,6 +64,7 @@ public partial class UserProfile : ComponentBase, IDisposable
     private readonly HashSet<Guid> reportedPostIds = new();
     private bool showReportModal = false;
     private Guid? reportPostId;
+    private bool showReportUserModal = false;
 
     // Training packages tab state
     private List<TrainingPackageResponseDto>? coachPackages;
@@ -465,6 +466,22 @@ public partial class UserProfile : ComponentBase, IDisposable
     private void ClearHeaderSearch()
     {
         headerSearchTerm = string.Empty;
+    }
+
+    private void OpenReportUserModal()
+    {
+        showReportUserModal = true;
+    }
+
+    private void CloseReportUserModal()
+    {
+        showReportUserModal = false;
+    }
+
+    private void HandleUserReportSubmitted(Guid reportedUserId)
+    {
+        showReportUserModal = false;
+        ShowToast("Report submitted successfully. Our moderation team will review it.");
     }
 
     public void Dispose()

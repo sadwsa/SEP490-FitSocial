@@ -33,6 +33,7 @@ public class TraineeMealPlanDto
     public Guid OrderDetailsId { get; set; }
     public string PackageTitle { get; set; } = string.Empty;
     public string? PackageThumbnailUrl { get; set; }
+    public Guid CoachId { get; set; }
     public string CoachName { get; set; } = string.Empty;
 
     public string? Title { get; set; }

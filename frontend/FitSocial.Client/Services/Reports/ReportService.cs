@@ -132,5 +132,26 @@ public class ReportService : IReportService
             };
         }
     }
+
+    public async Task<ApiResponse<ReportListItemDto>> ReportUserAsync(CreateUserReportRequest request)
+    {
+        try
+        {
+            var result = await _apiClient.PostAsync<CreateUserReportRequest, ReportListItemDto>("reports/user", request);
+            return result ?? new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = "Unable to submit user report."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = $"Error reporting user: {ex.Message}"
+            };
+        }
+    }
 }
 

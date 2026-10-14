@@ -222,8 +222,11 @@
                                     <div>
                                         <div class="flex items-center gap-2">
                                             <h2 class="text-xl font-black text-gray-900">@SelectedTrainee.FullName</h2>
-                                            <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                                ✓ Enrolled Trainee
+                                            <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <span>Enrolled Trainee</span>
                                             </span>
                                         </div>
                                         <p class="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
@@ -324,33 +327,38 @@
                                                 </a>
                                             }
                                         </div>
-
                                         <!-- UC_14.1.3 & UC_14.1.4: Workout Plan Action -->
                                         <div class="bg-gradient-to-r from-orange-50/60 to-amber-50/60 border border-orange-100/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                            <div class="flex items-center gap-2.5">
-                                                <div class="w-8 h-8 rounded-lg bg-orange-100 text-[#EA580C] flex items-center justify-center flex-shrink-0">
-                                                    <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                                    </svg>
-                                                </div>
+                                            <div class="flex items-center gap-3">
+                                                <svg class="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
+                                                    </path>
+                                                </svg>
                                                 <div>
                                                     <div class="flex items-center gap-2">
-                                                        <p class="font-bold text-xs text-gray-900">Custom Training Plan</p>
-                                                        @if (pkg.TrainingPlanId.HasValue)
-                                                        {
-                                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">
-                                                                ✓ @(pkg.PlanStatus ?? "Active Plan")
-                                                            </span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                                                                No Plan Created
-                                                            </span>
-                                                        }
-                                                    </div>
-                                                    <p class="text-[11px] text-gray-500">Draft weekly workout schedules and attach video tutorials for your trainee.</p>
-                                                </div>
+                                                         <p class="font-bold text-xs text-gray-900">Custom Training Plan</p>
+                                                         @if (pkg.TrainingPlanId.HasValue)
+                                                         {
+                                                             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                                                                 <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                                 </svg>
+                                                                 <span>@(pkg.PlanStatus ?? "Active Plan")</span>
+                                                             </span>
+                                                         }
+                                                         else
+                                                         {
+                                                             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
+                                                                 <svg class="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                                 </svg>
+                                                                 <span>No Plan Created</span>
+                                                             </span>
+                                                         }
+                                                     </div>
+                                                     <p class="text-[11px] text-gray-500">Draft weekly workout schedules and attach video tutorials for your trainee.</p>
+                                                 </div>
                                             </div>
 
                                             @if (pkg.TrainingPlanId.HasValue)
@@ -361,7 +369,7 @@
                                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                     </svg>
-                                                    <span>Update Plan (UC_14.1.4)</span>
+                                                    <span>Update Plan</span>
                                                 </button>
                                             }
                                             else
@@ -372,7 +380,7 @@
                                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                                     </svg>
-                                                    <span>Create Plan (UC_14.1.3)</span>
+                                                    <span>Create Plan</span>
                                                 </button>
                                             }
                                         </div>
@@ -393,7 +401,7 @@
     </div>
 </div>
 
-<!-- Coach Training Plan Form Modal (UC_14.1.3 & UC_14.1.4) -->
+<!-- Coach Training Plan Form Modal -->
 <CoachTrainingPlanFormModal
     IsOpen="@showTrainingPlanModal"
     OrderDetailsId="@modalOrderDetailsId"
@@ -401,6 +409,9 @@
     TraineeName="@modalTraineeName"
     Mode="@modalMode"
     ExistingPlanId="@modalPlanId"
+    PackageDurationDays="@modalDurationDays"
+    PackageSessionCount="@modalSessionCount"
+    PackagePurchasedAt="@modalPurchasedAt"
     OnClose="@CloseTrainingPlanModal"
     OnSuccess="@HandleTrainingPlanSuccess" />
 
@@ -418,6 +429,9 @@
     private string modalTraineeName = string.Empty;
     private string modalMode = "create";
     private Guid? modalPlanId;
+    private int? modalDurationDays;
+    private int? modalSessionCount;
+    private DateTime? modalPurchasedAt;
 
     // Header State
     private string? headerSearchTerm = "";
@@ -491,6 +505,9 @@
         modalTraineeName = traineeName ?? "Học viên";
         modalMode = isUpdate ? "update" : "create";
         modalPlanId = pkg.TrainingPlanId;
+        modalDurationDays = pkg.DurationDays;
+        modalSessionCount = pkg.SessionCount;
+        modalPurchasedAt = pkg.PurchasedAt;
         showTrainingPlanModal = true;
     }
 

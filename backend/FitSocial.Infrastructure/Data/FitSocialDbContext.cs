@@ -1211,6 +1211,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.Status).HasMaxLength(20).HasDefaultValue("PENDING");
             entity.Property(e => e.ProcessedAt).HasColumnType("timestamp without time zone");
             entity.Property(e => e.TransactionRef).HasMaxLength(100);
+            entity.Property(e => e.GatewayRef).HasMaxLength(100);
 
             entity.HasOne(d => d.Order).WithMany(p => p.PayoutItems)
                 .HasForeignKey(d => d.OrderId)

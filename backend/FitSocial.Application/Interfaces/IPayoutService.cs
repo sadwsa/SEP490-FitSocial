@@ -9,4 +9,5 @@ public interface IPayoutService
     Task<ApiResponseDto<GeneratePayoutsResultDto>> GenerateMonthlyPayoutsAsync(int month, int year, CancellationToken cancellationToken = default);
     Task<ApiResponseDto<PayoutDetailDto>> GetPayoutDetailAsync(Guid payoutId, CancellationToken cancellationToken = default);
     Task<ApiResponseDto<ProcessPayoutResultDto>> ProcessPayoutAsync(Guid payoutId, Guid staffId, string? ipAddress = null, CancellationToken cancellationToken = default);
+    Task<ApiResponseDto<ProcessPayoutResultDto>> ProcessPackageItemsAsync(Guid payoutId, List<Guid> payoutItemIds, Guid staffId, string? ipAddress = null, CancellationToken cancellationToken = default);
 }

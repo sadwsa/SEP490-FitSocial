@@ -1,0 +1,459 @@
+@page "/training-packages/meal-plan/{OrderDetailsId:guid}"
+@page "/meal-plan/{OrderDetailsId:guid}"
+@layout EmptyLayout
+@attribute [Authorize]
+@inject FitSocial.Client.Services.MealPlans.IMealPlanClientService MealPlanService
+@inject NavigationManager Navigation
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.MealPlans
+
+<PageTitle>@(mealPlan?.PackageTitle != null ? $"{mealPlan.PackageTitle} - Meal Plan" : "Meal Plan") - FitSocial</PageTitle>
+
+<div class="min-h-screen bg-gray-100 text-gray-800">
+    <AppHeader />
+
+    <style>
+        @@media (min-width: 1024px) {
+            .meal-3col-layout {
+                display: grid !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 68rem) minmax(0, 1fr) !important;
+                align-items: start !important;
+            }
+            .meal-left-sidebar { justify-self: start !important; }
+            .meal-main-content { justify-self: center !important; width: 100% !important; max-width: 68rem !important; }
+        }
+    </style>
+
+    <div class="meal-3col-layout w-full pt-6 px-4 lg:px-8 flex flex-col items-start pb-20">
+        <!-- Sidebar -->
+        <AppSidebar ActiveItem="purchased-packages" Class="meal-left-sidebar" />
+
+        <!-- Main Content -->
+        <main class="meal-main-content w-full flex flex-col gap-6 min-w-0">
+            <!-- Breadcrumb & Nav -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <nav class="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                    <a href="/training-packages/purchased" class="hover:text-emerald-600 transition flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                        <span>Purchased Packages</span>
+                    </a>
+                    <span>/</span>
+                    <span class="text-gray-800 font-bold truncate max-w-xs sm:max-w-md">@(mealPlan?.PackageTitle ?? "Meal Plan")</span>
+                </nav>
+
+                <!-- Program Quick Switcher Tabs -->
+                <div class="flex items-center gap-2">
+                    <a href="/training-packages/workout/@OrderDetailsId"
+                       class="px-3.5 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-xl hover:bg-orange-50 hover:text-[#FF5500] hover:border-orange-200 transition shadow-2xs flex items-center gap-1.5">
+                        <span>Workout Hub</span>
+                    </a>
+                    <span class="px-3.5 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5">
+                        <span>Meal Plan</span>
+                    </span>
+                </div>
+            </div>
+
+            @if (isLoading)
+            {
+                <div class="bg-white rounded-2xl p-16 shadow-xs border border-gray-100 flex flex-col items-center justify-center">
+                    <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-500 font-medium text-base">Loading your personalized meal plan...</p>
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-red-700 flex flex-col items-center gap-3 text-center">
+                    <svg class="w-10 h-10 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <p class="font-bold text-base">@errorMessage</p>
+                    <button @onclick="LoadMealPlanAsync" class="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition cursor-pointer">
+                        Try Again
+                    </button>
+                </div>
+            }
+            else if (mealPlan == null || !mealPlan.Weeks.Any())
+            {
+                <!-- Empty / Pending Meal Plan State -->
+                <div class="bg-white rounded-2xl p-12 shadow-xs border border-gray-100 flex flex-col items-center text-center">
+                    <div class="w-20 h-20 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
+                        <svg class="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                    </div>
+                    <span class="inline-block px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold rounded-full mb-2">
+                        Nutrition Plan Pending
+                    </span>
+                    <h2 class="text-xl font-black text-gray-900 mb-1">Coach is Preparing Your Meal Plan</h2>
+                    <p class="text-sm text-gray-500 max-w-md mb-6 leading-relaxed">
+                        Coach <strong class="text-gray-800">@(mealPlan?.CoachName ?? "Your Coach")</strong> has not yet assigned a meal plan for this package. Stay tuned or check your workout schedule in the meantime!
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <a href="/training-packages/workout/@OrderDetailsId" class="px-5 py-2.5 bg-[#FF5500] hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5">
+                            <span>Go to Workout Hub</span>
+                        </a>
+                        <a href="/training-packages/purchased" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl transition">
+                            Purchased Packages
+                        </a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- BANNER: PROGRAM & MEAL PLAN OVERVIEW -->
+                <div class="bg-white rounded-2xl p-6 shadow-xs border border-gray-100">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-gray-100">
+                        <div class="flex items-start gap-4">
+                            @if (!string.IsNullOrWhiteSpace(mealPlan.PackageThumbnailUrl))
+                            {
+                                <img src="@mealPlan.PackageThumbnailUrl" alt="@mealPlan.PackageTitle" class="w-20 h-20 rounded-2xl object-cover border border-gray-100 flex-shrink-0 shadow-xs" />
+                            }
+                            else
+                            {
+                                <div class="w-20 h-20 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 font-black text-sm border border-emerald-100 uppercase tracking-wider">
+                                    MEAL
+                                </div>
+                            }
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-wide">
+                                        Nutrition Program
+                                    </span>
+                                    <span class="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
+                                        <span>Coach: <strong class="text-gray-700">@mealPlan.CoachName</strong></span>
+                                        @if (mealPlan.CoachId != Guid.Empty)
+                                        {
+                                            <button type="button" @onclick="() => showReportCoachModal = true"
+                                                    title="Report Coach"
+                                                    class="px-2 py-0.5 text-[10px] text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition inline-flex items-center gap-1 cursor-pointer">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path></svg>
+                                                <span>Report Coach</span>
+                                            </button>
+                                        }
+                                    </span>
+                                </div>
+                                <h1 class="text-xl sm:text-2xl font-black text-gray-900 leading-snug">@(mealPlan.Title ?? mealPlan.PackageTitle)</h1>
+                                <p class="text-xs sm:text-sm text-gray-500 mt-1 line-clamp-2">
+                                    @(string.IsNullOrWhiteSpace(mealPlan.Description) ? "Follow your customized daily nutrition plan to optimize your fitness goals and recovery." : mealPlan.Description)
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Statistics Badge Card -->
+                        <div class="grid grid-cols-3 gap-2 bg-gray-50 border border-gray-200/70 rounded-2xl p-3.5 md:min-w-[280px]">
+                            <div class="text-center p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
+                                <span class="text-[10px] uppercase font-bold text-gray-400 block">Weeks</span>
+                                <span class="text-base font-black text-gray-900">@mealPlan.Weeks.Count</span>
+                            </div>
+                            <div class="text-center p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
+                                <span class="text-[10px] uppercase font-bold text-gray-400 block">Day Cal</span>
+                                <span class="text-base font-black text-emerald-600">@(CurrentDay?.TotalCalories ?? 0)</span>
+                            </div>
+                            <div class="text-center p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
+                                <span class="text-[10px] uppercase font-bold text-gray-400 block">Meals</span>
+                                <span class="text-base font-black text-gray-900">@(CurrentDay?.Items.Count ?? 0)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Week & Day Selectors -->
+                    <div class="pt-5 flex flex-col gap-4">
+                        <!-- 1. Week Selector Tabs -->
+                        <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider mr-2 flex-shrink-0">Weeks:</span>
+                            @foreach (var week in mealPlan.Weeks)
+                            {
+                                bool isSelectedWeek = week.WeekNumber == selectedWeekNumber;
+                                int weekMealsCount = week.Days.SelectMany(d => d.Items).Count();
+                                <button type="button"
+                                        @onclick="() => SelectWeek(week.WeekNumber)"
+                                        class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap @(isSelectedWeek ? "bg-emerald-600 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200")">
+                                    <span>Week @week.WeekNumber</span>
+                                    <span class="text-[10px] px-1.5 py-0.2 rounded-full @(isSelectedWeek ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700")">
+                                        @weekMealsCount meals
+                                    </span>
+                                </button>
+                            }
+                        </div>
+
+                        <!-- 2. Day Selector Tabs -->
+                        @if (CurrentWeek != null && CurrentWeek.Days.Any())
+                        {
+                            <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider mr-2 flex-shrink-0">Days:</span>
+                                @foreach (var day in CurrentWeek.Days)
+                                {
+                                    bool isSelectedDay = day.DayNumber == selectedDayNumber;
+                                    <button type="button"
+                                            @onclick="() => SelectDay(day.DayNumber)"
+                                            class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap @(isSelectedDay ? "bg-gray-900 text-white shadow-xs" : "bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100")">
+                                        <span>Day @day.DayNumber</span>
+                                        <span class="text-[10px] px-1.5 py-0.2 rounded-full @(isSelectedDay ? "bg-white/20 text-emerald-300" : "bg-emerald-50 text-emerald-700")">
+                                            @day.TotalCalories kcal
+                                        </span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- DAILY MEAL PLAN SECTION -->
+                <div class="space-y-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h2 class="text-lg font-black text-gray-900">
+                                    Week @selectedWeekNumber • Day @selectedDayNumber Nutrition Plan
+                                </h2>
+                                <span class="text-xs px-2.5 py-0.5 font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Total: @(CurrentDay?.TotalCalories ?? 0) kcal
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-0.5">Structured meals and portions prepared by Coach @mealPlan.CoachName</p>
+                        </div>
+
+                        <!-- Calorie Target Pill -->
+                        <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700 self-start sm:self-auto shadow-2xs">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                            <span>Target: <strong class="text-gray-900 font-bold">@(CurrentDay?.TotalCalories ?? 0) kcal</strong> / day</span>
+                        </div>
+                    </div>
+
+                    @if (CurrentDay == null || !CurrentDay.Items.Any())
+                    {
+                        <div class="bg-white rounded-2xl p-10 text-center border border-gray-100 text-gray-500">
+                            <div class="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 mx-auto mb-3 flex items-center justify-center">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                </svg>
+                            </div>
+                            <p class="font-bold text-sm text-gray-700">No meals planned for Day @selectedDayNumber</p>
+                            <p class="text-xs text-gray-400 mt-1">Enjoy your rest or flexible nutrition day as advised by your coach.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- MEALS GRID -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            @foreach (var meal in CurrentDay.Items)
+                            {
+                                var (badgeColor, mealLabel) = GetMealTypeBadge(meal.MealType);
+
+                                <div class="bg-white rounded-2xl p-5 border border-gray-100 hover:border-emerald-200 hover:shadow-md transition-all duration-200 flex flex-col justify-between group">
+                                    <div>
+                                        <!-- Meal Header -->
+                                        <div class="flex items-center justify-between gap-2 mb-3 pb-3 border-b border-gray-100">
+                                            <div class="flex items-center gap-2">
+                                                <span class="px-2.5 py-1 rounded-lg @badgeColor text-xs font-bold uppercase tracking-wide">
+                                                    @mealLabel
+                                                </span>
+                                                @if (meal.SortOrder.HasValue)
+                                                {
+                                                    <span class="text-[10px] text-gray-400 font-medium">Meal #@meal.SortOrder</span>
+                                                }
+                                            </div>
+
+                                            @if (meal.Calories.HasValue)
+                                            {
+                                                <span class="px-2.5 py-1 rounded-xl bg-orange-50 border border-orange-100 text-orange-700 text-xs font-bold flex items-center gap-1 shadow-2xs">
+                                                    @meal.Calories kcal
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <!-- Food Description -->
+                                        <div class="text-sm text-gray-700 leading-relaxed font-medium whitespace-pre-line pl-1">
+                                            @if (!string.IsNullOrWhiteSpace(meal.FoodDescription))
+                                            {
+                                                @meal.FoodDescription
+                                            }
+                                            else
+                                            {
+                                                <span class="text-gray-400 italic">No specific food description provided.</span>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Bottom Tip / Macro hint -->
+                                    <div class="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between text-[11px] text-gray-400">
+                                        <span class="flex items-center gap-1">
+                                            <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                            Coach Approved
+                                        </span>
+                                        <span class="text-gray-400">Day @meal.DayNumber • Week @meal.WeekNumber</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- HEALTHY HABITS & COACH ADVICE CARD -->
+                        <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 rounded-2xl p-6 border border-emerald-200/60 shadow-xs">
+                            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div class="flex items-start gap-3.5">
+                                    <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-900">Hydration & Nutrition Guidelines</h3>
+                                        <p class="text-xs text-gray-600 mt-1 max-w-xl leading-relaxed">
+                                            Drink at least 2.5 - 3.0 liters of water daily. Space meals 3-4 hours apart to sustain energy levels and support muscle recovery.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 self-end sm:self-center">
+                                    <a href="/training-packages/workout/@OrderDetailsId" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 whitespace-nowrap">
+                                        <span>Start Day Workout</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </main>
+
+        <!-- Right Spacing Sidebar -->
+        <aside class="hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(toastMessage))
+    {
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <svg class="w-5 h-5 fill-current" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            <span>@toastMessage</span>
+        </div>
+    }
+
+    @if (showReportCoachModal && mealPlan != null && mealPlan.CoachId != Guid.Empty)
+    {
+        <ReportUserModal IsVisible="@showReportCoachModal"
+                         ReportedUserId="@mealPlan.CoachId"
+                         ReportedUserName="@mealPlan.CoachName"
+                         IsCoach="true"
+                         PackageContext="@mealPlan.PackageTitle"
+                         OnClose="() => showReportCoachModal = false"
+                         OnReportSubmitted="HandleCoachReportSubmitted" />
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid OrderDetailsId { get; set; }
+
+    private TraineeMealPlanModel? mealPlan;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? toastMessage;
+    private bool showReportCoachModal = false;
+
+    private short selectedWeekNumber = 1;
+    private short selectedDayNumber = 1;
+
+    private MealPlanWeekModel? CurrentWeek => mealPlan?.Weeks.FirstOrDefault(w => w.WeekNumber == selectedWeekNumber);
+    private MealPlanDayModel? CurrentDay => CurrentWeek?.Days.FirstOrDefault(d => d.DayNumber == selectedDayNumber);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMealPlanAsync();
+    }
+
+    private async Task LoadMealPlanAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var res = await MealPlanService.GetTraineeMealPlanAsync(OrderDetailsId);
+            if (res.Success && res.Data != null)
+            {
+                mealPlan = res.Data;
+
+                if (mealPlan.Weeks.Any())
+                {
+                    selectedWeekNumber = mealPlan.Weeks.First().WeekNumber;
+                    var firstWeek = mealPlan.Weeks.First();
+                    if (firstWeek.Days.Any())
+                    {
+                        selectedDayNumber = firstWeek.Days.First().DayNumber;
+                    }
+                }
+            }
+            else
+            {
+                mealPlan = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load meal plan: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelectWeek(short weekNumber)
+    {
+        selectedWeekNumber = weekNumber;
+        var week = CurrentWeek;
+        if (week != null && week.Days.Any())
+        {
+            // Reset day to first day of selected week
+            selectedDayNumber = week.Days.First().DayNumber;
+        }
+    }
+
+    private void SelectDay(short dayNumber)
+    {
+        selectedDayNumber = dayNumber;
+    }
+
+    private void HandleCoachReportSubmitted(Guid coachId)
+    {
+        showReportCoachModal = false;
+        ShowToast("Coach report submitted successfully. Our team will review it.");
+    }
+
+    private void ShowToast(string message)
+    {
+        toastMessage = message;
+        StateHasChanged();
+        _ = Task.Delay(3500).ContinueWith(_ =>
+        {
+            toastMessage = null;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private (string badgeColor, string mealLabel) GetMealTypeBadge(string? mealType)
+    {
+        var norm = mealType?.Trim().ToLowerInvariant() ?? "";
+
+        if (norm.Contains("breakfast") || norm.Contains("sáng"))
+            return ("bg-amber-100 text-amber-800 border border-amber-200", "Breakfast");
+
+        if (norm.Contains("lunch") || norm.Contains("trưa"))
+            return ("bg-orange-100 text-orange-800 border border-orange-200", "Lunch");
+
+        if (norm.Contains("dinner") || norm.Contains("tối"))
+            return ("bg-indigo-100 text-indigo-800 border border-indigo-200", "Dinner");
+
+        if (norm.Contains("snack") || norm.Contains("phụ"))
+            return ("bg-emerald-100 text-emerald-800 border border-emerald-200", "Snack");
+
+        if (norm.Contains("pre-workout") || norm.Contains("pre"))
+            return ("bg-cyan-100 text-cyan-800 border border-cyan-200", "Pre-Workout");
+
+        if (norm.Contains("post-workout") || norm.Contains("post"))
+            return ("bg-purple-100 text-purple-800 border border-purple-200", "Post-Workout");
+
+        return ("bg-gray-100 text-gray-800 border border-gray-200", mealType ?? "Meal");
+    }
+}

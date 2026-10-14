@@ -66,8 +66,12 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<FitSocial.Client.Services.Payouts.IPayoutService, FitSocial.Client.Services.Payouts.PayoutApiService>();
 builder.Services.AddScoped<FitSocial.Client.Services.PaymentGateways.IPaymentGatewayService, FitSocial.Client.Services.PaymentGateways.PaymentGatewayApiService>();
 builder.Services.AddScoped<ISubscriptionPriceHistoryApiService, SubscriptionPriceHistoryApiService>();
+builder.Services.AddScoped<FitSocial.Client.Services.Transactions.ITransactionService, FitSocial.Client.Services.Transactions.TransactionService>();
 builder.Services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
 builder.Services.AddScoped<FitSocial.Client.Services.Refunds.IRefundService, FitSocial.Client.Services.Refunds.RefundApiService>();
 builder.Services.AddScoped<FitSocial.Client.Services.SystemLogs.ISystemLogService, FitSocial.Client.Services.SystemLogs.SystemLogService>();
+builder.Services.AddScoped<FitSocial.Client.Services.TrainingPlans.ITrainingPlanClientService, FitSocial.Client.Services.TrainingPlans.TrainingPlanClientService>();
+builder.Services.AddScoped<FitSocial.Client.Services.MealPlans.IMealPlanClientService, FitSocial.Client.Services.MealPlans.MealPlanClientService>();
+builder.Services.AddScoped<FitSocial.Client.Services.CoachCertificate.ICoachCertificateService, FitSocial.Client.Services.CoachCertificate.CoachCertificateService>();
 
 await builder.Build().RunAsync();

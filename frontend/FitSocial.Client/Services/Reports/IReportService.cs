@@ -20,5 +20,15 @@ public interface IReportService
     Task<ApiResponse<ReportListItemDto>> GetReportByIdAsync(Guid reportId);
 
     Task<ApiResponse<ReportListItemDto>> ProcessReportAsync(Guid reportId, ProcessViolationReportRequest request);
+
+    Task<ApiResponse<PagedResult<ReportListItemDto>>> GetAppealsAsync(
+        string? appealStatus = null,
+        string? searchTerm = null,
+        int pageNumber = 1,
+        int pageSize = 10);
+
+    Task<ApiResponse<ReportListItemDto>> ReviewAppealAsync(Guid reportId, ReviewAppealRequest request);
+
+    Task<ApiResponse<ReportListItemDto>> ReportUserAsync(CreateUserReportRequest request);
 }
 

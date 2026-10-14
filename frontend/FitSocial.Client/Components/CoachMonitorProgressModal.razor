@@ -1,0 +1,266 @@
+@using FitSocial.Client.Models.TrainingPlans
+@using FitSocial.Client.Services.TrainingPlans
+@inject ITrainingPlanClientService TrainingPlanService
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-gray-100 flex items-start justify-between gap-4 bg-gradient-to-r from-gray-50 to-white">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black text-lg border border-blue-100 flex-shrink-0">
+                        📊
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 uppercase tracking-wider">
+                                Trainee Workout Progress
+                            </span>
+                            <span class="text-xs text-gray-400">@PackageTitle</span>
+                        </div>
+                        <h2 class="text-lg font-black text-gray-900 mt-0.5">@TraineeName's Training Progress</h2>
+                    </div>
+                </div>
+                <button type="button" @onclick="HandleClose" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition cursor-pointer flex-shrink-0" title="Close">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
+                @if (isLoading)
+                {
+                    <div class="py-16 flex flex-col items-center justify-center">
+                        <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p class="text-xs text-gray-500 font-medium">Fetching trainee progress and logs...</p>
+                    </div>
+                }
+                else if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs text-center font-semibold">
+                        @errorMessage
+                    </div>
+                }
+                else if (progressData == null || !progressData.Weeks.Any())
+                {
+                    <div class="p-8 text-center text-gray-400 text-xs bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                        No training plan exercises found for this trainee. Please create a training plan first.
+                    </div>
+                }
+                else
+                {
+                    <!-- Overview Stats -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div class="p-4 rounded-xl bg-blue-50/60 border border-blue-100">
+                            <span class="text-[10px] uppercase font-bold text-blue-600 block mb-1">Completion Rate</span>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-black text-blue-900">@($"{progressData.ProgressPercentage:N0}%")</span>
+                                <span class="text-xs text-blue-700 font-medium">(@progressData.CompletedExercisesCount / @progressData.TotalExercisesCount)</span>
+                            </div>
+                            <div class="w-full bg-blue-200/80 h-1.5 rounded-full overflow-hidden mt-2">
+                                <div class="bg-blue-600 h-full rounded-full transition-all duration-500" style="width: @($"{progressData.ProgressPercentage}%")"></div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100">
+                            <span class="text-[10px] uppercase font-bold text-emerald-600 block mb-1">Completed Workouts</span>
+                            <div class="text-2xl font-black text-emerald-900">@progressData.CompletedExercisesCount</div>
+                            <span class="text-[11px] text-emerald-700 font-medium">Marked completed by trainee</span>
+                        </div>
+
+                        <div class="p-4 rounded-xl bg-amber-50/60 border border-amber-100">
+                            <span class="text-[10px] uppercase font-bold text-amber-600 block mb-1">Remaining Workouts</span>
+                            <div class="text-2xl font-black text-amber-900">@(progressData.TotalExercisesCount - progressData.CompletedExercisesCount)</div>
+                            <span class="text-[11px] text-amber-700 font-medium">Pending trainee sessions</span>
+                        </div>
+                    </div>
+
+                    <!-- Tabs: Weekly Schedule Breakdown vs Recent Activity Log -->
+                    <div class="flex items-center gap-2 border-b border-gray-100 pb-2">
+                        <button type="button"
+                                @onclick="() => activeTab = 0"
+                                class="px-3.5 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer @(activeTab == 0 ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100")">
+                            Weekly Plan Breakdown
+                        </button>
+                        <button type="button"
+                                @onclick="() => activeTab = 1"
+                                class="px-3.5 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer @(activeTab == 1 ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100")">
+                            Recent Trainee Activity Logs (@progressData.RecentLogs.Count)
+                        </button>
+                    </div>
+
+                    @if (activeTab == 0)
+                    {
+                        <!-- Weekly Plan Breakdown -->
+                        <div class="flex flex-col gap-4">
+                            @foreach (var week in progressData.Weeks)
+                            {
+                                <div class="border border-gray-200/80 rounded-xl overflow-hidden">
+                                    <div class="bg-gray-50 px-4 py-2.5 flex items-center justify-between border-b border-gray-200/80">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold text-xs text-gray-800">Week @week.WeekNumber</span>
+                                            <span class="text-[11px] text-gray-500">(@week.CompletedExercises/@week.TotalExercises completed)</span>
+                                        </div>
+                                        <div class="w-24 bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                                            <div class="bg-emerald-500 h-full rounded-full" style="width: @($"{week.ProgressPercentage}%")"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="p-3 divide-y divide-gray-100">
+                                        @foreach (var day in week.Days)
+                                        {
+                                            <div class="py-2.5 first:pt-1 last:pb-1">
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <span class="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                                                        <span>Day @day.DayNumber</span>
+                                                        @if (day.IsAllCompleted)
+                                                        {
+                                                            <span class="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded font-bold">✓ All Done</span>
+                                                        }
+                                                    </span>
+                                                    <span class="text-[11px] text-gray-400">@day.CompletedExercises/@day.TotalExercises exercises</span>
+                                                </div>
+
+                                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    @foreach (var ex in day.Exercises)
+                                                    {
+                                                        <div class="p-2.5 rounded-lg border text-xs flex flex-col justify-between @(ex.IsCompleted ? "bg-emerald-50/40 border-emerald-200" : "bg-gray-50 border-gray-200/60")">
+                                                            <div>
+                                                                <div class="flex items-start justify-between gap-2 mb-1">
+                                                                    <span class="font-bold text-gray-800 @(ex.IsCompleted ? "text-emerald-900" : "")">@ex.ExerciseName</span>
+                                                                    @if (ex.IsCompleted)
+                                                                    {
+                                                                        <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-full flex-shrink-0">✓ Done</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="text-[10px] text-gray-400 flex-shrink-0">Pending</span>
+                                                                    }
+                                                                </div>
+                                                                <div class="text-[11px] text-gray-500 space-x-1">
+                                                                    @if (ex.Sets.HasValue) { <span>@ex.Sets sets</span> }
+                                                                    @if (ex.Reps.HasValue) { <span>× @ex.Reps reps</span> }
+                                                                    @if (ex.RestSeconds.HasValue) { <span>• @ex.RestSeconds s rest</span> }
+                                                                </div>
+                                                            </div>
+
+                                                            @if (!string.IsNullOrWhiteSpace(ex.TraineeNotes))
+                                                            {
+                                                                <div class="mt-1.5 pt-1.5 border-t border-emerald-100 text-[10px] text-emerald-800 italic">
+                                                                    Trainee: "@ex.TraineeNotes"
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Recent Activity Log -->
+                        <div class="flex flex-col gap-2">
+                            @if (!progressData.RecentLogs.Any())
+                            {
+                                <div class="p-6 text-center text-xs text-gray-400 bg-gray-50 rounded-xl">
+                                    No workout completions logged yet by the trainee.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                                    @foreach (var log in progressData.RecentLogs)
+                                    {
+                                        <div class="p-3.5 hover:bg-gray-50 transition flex items-center justify-between gap-3 text-xs">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                                                    ✓
+                                                </div>
+                                                <div>
+                                                    <p class="font-bold text-gray-900">@log.ExerciseName</p>
+                                                    <p class="text-[11px] text-gray-400">Week @log.WeekNumber • Day @log.DayNumber</p>
+                                                    @if (!string.IsNullOrWhiteSpace(log.Notes))
+                                                    {
+                                                        <p class="text-[11px] text-gray-600 italic mt-0.5">Note: "@log.Notes"</p>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <span class="text-[11px] text-gray-400 font-medium flex-shrink-0">
+                                                @log.CompletedAt.ToString("MMM dd, yyyy HH:mm")
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-gray-100 flex justify-end bg-gray-50">
+                <button type="button" @onclick="HandleClose" class="px-5 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition cursor-pointer">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public Guid OrderDetailsId { get; set; }
+
+    [Parameter]
+    public string TraineeName { get; set; } = string.Empty;
+
+    [Parameter]
+    public string PackageTitle { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private CoachTraineeWorkoutProgressDto? progressData;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private int activeTab = 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && OrderDetailsId != Guid.Empty)
+        {
+            await LoadProgressAsync();
+        }
+    }
+
+    private async Task LoadProgressAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        var res = await TrainingPlanService.GetCoachTraineeProgressAsync(OrderDetailsId);
+        if (res.Success && res.Data != null)
+        {
+            progressData = res.Data;
+        }
+        else
+        {
+            errorMessage = res.Message ?? "Failed to load trainee workout progress.";
+        }
+
+        isLoading = false;
+    }
+
+    private async Task HandleClose()
+    {
+        await OnClose.InvokeAsync();
+    }
+}

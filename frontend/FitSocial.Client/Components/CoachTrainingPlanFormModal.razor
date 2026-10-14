@@ -1,0 +1,1464 @@
+@using FitSocial.Client.Models.TrainingPlans
+@using FitSocial.Client.Services.Files
+@using Microsoft.AspNetCore.Components.Forms
+@inject ITrainingPlanClientService TrainingPlanService
+@inject IFileUploadService FileUploadService
+@inject IJSRuntime JS
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-5 overflow-y-auto" role="dialog" aria-modal="true">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+             @onclick="HandleClose" aria-hidden="true"></div>
+
+        <!-- Modal Card -->
+        <div class="relative bg-white rounded-3xl shadow-2xl max-w-5xl w-full flex flex-col max-h-[92vh] border border-gray-100 transform transition-all animate-in fade-in zoom-in-95 duration-200 z-10 overflow-hidden">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-5 bg-gradient-to-r from-orange-50 via-white to-orange-50/50 border-b border-gray-100 flex items-center justify-between">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#FF8C00] to-[#FF5500] text-white flex items-center justify-center shadow-md shadow-orange-500/20 flex-shrink-0">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-orange-100 text-[#EA580C]">
+                                @(Mode == "create" ? "Create Plan" : "Update Plan")
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(TraineeName))
+                            {
+                                <span class="text-xs text-gray-500 font-medium">Trainee: <strong class="text-gray-900">@TraineeName</strong></span>
+                            }
+                        </div>
+                        <h2 class="text-xl font-black text-gray-900 tracking-tight mt-0.5">
+                            @(Mode == "create" ? "Draft New Training Plan" : "Update Training Plan")
+                        </h2>
+                    </div>
+                </div>
+
+                <button type="button"
+                        @onclick="HandleClose"
+                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition cursor-pointer"
+                        aria-label="Close modal">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Body (Scrollable) -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs font-semibold flex items-center gap-2.5">
+                        <svg class="w-5 h-5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                        <span>@errorMessage</span>
+                    </div>
+                }
+
+                @if (isFetchingInitial)
+                {
+                    <div class="py-16 flex flex-col items-center justify-center">
+                        <div class="w-10 h-10 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p class="text-xs text-gray-500 font-semibold">Loading training plan details...</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- Section 1: General Plan Info -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-4">
+                        <div class="flex items-center gap-2 border-b border-gray-100 pb-2">
+                            <svg class="w-4 h-4 text-[#EA580C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <h3 class="text-xs font-black uppercase tracking-wider text-gray-800">1. General Plan Information</h3>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="sm:col-span-2 lg:col-span-4">
+                                <label class="block text-xs font-bold text-gray-700 mb-1">
+                                    Plan Title <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text"
+                                       @bind="planTitle"
+                                       placeholder="e.g. 4-Week Hypertrophy & Fat Loss Protocol"
+                                       class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:border-[#EA580C] focus:ring-2 focus:ring-orange-100 transition" />
+                            </div>
+
+                            <div class="sm:col-span-2 lg:col-span-4">
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Description &amp; Training Objectives</label>
+                                <textarea @bind="planDescription"
+                                          rows="2"
+                                          placeholder="Notes regarding nutrition, warm-up routines, stretching, or fitness goals..."
+                                          class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 placeholder-gray-400 focus:bg-white focus:outline-none focus:border-[#EA580C] focus:ring-2 focus:ring-orange-100 transition"></textarea>
+                            </div>
+
+                            @if (PackagePurchasedAt.HasValue || PackageDurationDays.HasValue || PackageSessionCount.HasValue)
+                            {
+                                <div class="sm:col-span-2 lg:col-span-4 p-3.5 bg-orange-50/70 border border-orange-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-bold text-gray-800">Purchased Package Details:</span>
+                                        @if (PackageStartDate.HasValue)
+                                        {
+                                            <span class="px-2.5 py-1 rounded-lg bg-white border border-orange-200 text-gray-700 font-semibold shadow-2xs">
+                                                Purchased: <strong class="text-gray-900">@PackageStartDate.Value.ToString("dd/MM/yyyy")</strong>
+                                            </span>
+                                        }
+                                        @if (PackageDurationDays.HasValue)
+                                        {
+                                            <span class="px-2.5 py-1 rounded-lg bg-white border border-orange-200 text-gray-700 font-semibold shadow-2xs">
+                                                Duration: <strong class="text-gray-900">@PackageDurationDays.Value Days</strong> (@(PackageDurationDays.Value / 7) Weeks)
+                                            </span>
+                                        }
+                                        @if (PackageEndDate.HasValue)
+                                        {
+                                            <span class="px-2.5 py-1 rounded-lg bg-white border border-orange-200 text-gray-700 font-semibold shadow-2xs">
+                                                Expires: <strong class="text-gray-900">@PackageEndDate.Value.ToString("dd/MM/yyyy")</strong>
+                                            </span>
+                                        }
+                                        @if (PackageSessionCount.HasValue)
+                                        {
+                                            <span class="px-2.5 py-1 rounded-lg bg-white border border-orange-200 text-gray-700 font-semibold shadow-2xs">
+                                                Sessions: <strong class="text-[#EA580C]">@PackageSessionCount.Value Sessions</strong>
+                                            </span>
+                                        }
+                                    </div>
+                                    <div class="text-[11px] text-gray-500 font-medium">
+                                        (Start Date and End Date must fall within the purchased package validity window)
+                                    </div>
+                                </div>
+                            }
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">
+                                    Start Date <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date"
+                                       @bind="startDate"
+                                       disabled="@(Mode == "update" && startDate.HasValue && startDate.Value.Date <= DateTime.Today.Date)"
+                                       min="@(PackageStartDate?.ToString("yyyy-MM-dd"))"
+                                       max="@(PackageEndDate?.ToString("yyyy-MM-dd"))"
+                                       class="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-[#EA580C] @(Mode == "update" && startDate.HasValue && startDate.Value.Date <= DateTime.Today.Date ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-gray-50")" />
+                                @if (Mode == "update" && startDate.HasValue && startDate.Value.Date <= DateTime.Today.Date)
+                                {
+                                    <span class="text-[10px] text-gray-500 mt-1 flex items-center gap-1 font-medium">
+                                        <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                        </svg>
+                                        <span>Locked (Training plan has started)</span>
+                                    </span>
+                                }
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">
+                                    End Date <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date"
+                                       @bind="endDate"
+                                       min="@(PackageStartDate?.ToString("yyyy-MM-dd"))"
+                                       max="@(PackageEndDate?.ToString("yyyy-MM-dd"))"
+                                       class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-[#EA580C]" />
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Status</label>
+                                <select @bind="planStatus"
+                                        class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:bg-white focus:outline-none focus:border-[#EA580C]">
+                                    <option value="ACTIVE">ACTIVE (Activate Now)</option>
+                                    <option value="DRAFT">DRAFT (Save as Draft)</option>
+                                    <option value="PUBLISHED">PUBLISHED (Published)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Linked Package</label>
+                                <div class="px-3 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold truncate">
+                                    @(string.IsNullOrWhiteSpace(PackageTitle) ? "Personal Package" : PackageTitle)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Weekly Schedule & Days -->
+                    <div class="space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 pb-3">
+                            <!-- Week Tabs -->
+                            <div class="flex items-center gap-1.5 overflow-x-auto py-1">
+                                @foreach (var week in AvailableWeeks)
+                                {
+                                    var w = week;
+                                    var isWeekActive = activeWeek == w;
+                                    <button type="button"
+                                            @onclick="() => SelectWeek(w)"
+                                            class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer @(isWeekActive ? "bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white shadow-sm shadow-orange-500/30" : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200")">
+                                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        <span>Week @w</span>
+                                    </button>
+                                }
+                                @if (CanAddWeek)
+                                {
+                                    <button type="button"
+                                            @onclick="AddNewWeek"
+                                            class="px-2.5 py-1.5 bg-orange-50 text-[#EA580C] hover:bg-orange-100 border border-orange-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        <span>Add Week</span>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="px-2.5 py-1.5 bg-gray-100 text-gray-400 border border-gray-200 rounded-xl text-xs font-semibold cursor-not-allowed"
+                                          title="Đã đạt số tuần tối đa cho khoảng thời gian này (@MaxAllowedWeeks tuần)">
+                                        Max @MaxAllowedWeeks Weeks
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="flex items-center gap-3 self-end sm:self-center flex-wrap">
+                                @if (PackageSessionCount.HasValue && PackageSessionCount.Value > 0)
+                                {
+                                    var isMatch = ScheduledSessionsCount == PackageSessionCount.Value;
+                                    <div class="px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 @(isMatch ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200")">
+                                        @if (isMatch)
+                                        {
+                                            <svg class="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        }
+                                        <span>
+                                            Sessions: <strong>@ScheduledSessionsCount / @PackageSessionCount.Value</strong>
+                                            @(isMatch ? "Matches package" : $"(Requires {PackageSessionCount.Value})")
+                                        </span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        <span>Flexible Plan: <strong>@ScheduledSessionsCount</strong> sessions (Phase-by-Phase)</span>
+                                    </div>
+                                }
+                                <div class="text-xs text-gray-500 font-semibold flex items-center gap-1">
+                                    <span>Week @activeWeek:</span>
+                                    <span class="bg-gray-200 text-gray-800 px-2 py-0.5 rounded-full font-bold">
+                                        @exercises.Count(e => e.WeekNumber == activeWeek) exercises
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Days of Week Selector (Day 1 - 7) -->
+                        <div class="grid grid-cols-7 gap-2">
+                            @for (short dayIdx = 1; dayIdx <= 7; dayIdx++)
+                            {
+                                var d = dayIdx;
+                                var isDayActive = activeDay == d;
+                                var isDayLocked = IsDayLocked(activeWeek, d);
+                                var countForDay = exercises.Count(e => e.WeekNumber == activeWeek && e.DayNumber == d);
+
+                                <button type="button"
+                                        @onclick="() => SelectDay(d)"
+                                        class="p-2.5 rounded-2xl flex flex-col items-center justify-center transition border cursor-pointer @(isDayActive ? "bg-[#EA580C] text-white border-[#EA580C] shadow-md shadow-orange-500/20" : isDayLocked ? "bg-gray-100/80 text-gray-500 hover:bg-gray-200/60 border-gray-200" : "bg-white text-gray-700 hover:bg-orange-50/50 border-gray-200")">
+                                    <span class="text-xs font-black uppercase flex items-center gap-1">
+                                        @GetDayShortName(d)
+                                        @if (isDayLocked)
+                                        {
+                                            <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Locked: Past or today's session">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                            </svg>
+                                        }
+                                    </span>
+                                    <span class="text-[10px] mt-1 px-1.5 py-0.2 rounded-full font-bold @(isDayActive ? "bg-white/20 text-white" : countForDay > 0 ? "bg-orange-100 text-[#EA580C]" : "bg-gray-100 text-gray-400")">
+                                        @countForDay
+                                    </span>
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Day Content & Exercises -->
+                        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-4">
+                            @if (IsCurrentDayLocked)
+                            {
+                                <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between text-amber-900 text-xs">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-amber-950">
+                                                Session on @GetSessionDate(activeWeek, activeDay).ToString("dd/MM/yyyy") is locked
+                                            </p>
+                                            <p class="text-[11px] text-amber-800">
+                                                Workouts scheduled for today or in the past cannot be modified or deleted.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span class="px-2.5 py-1 bg-amber-200 text-amber-950 rounded-lg font-black uppercase text-[10px] flex-shrink-0">
+                                        Read-Only
+                                    </span>
+                                </div>
+                            }
+
+                            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-[#EA580C]"></div>
+                                    <h4 class="text-sm font-black text-gray-900">
+                                        Schedule: Week @activeWeek - @GetDayName(activeDay) (@GetSessionDate(activeWeek, activeDay).ToString("dd/MM/yyyy"))
+                                    </h4>
+                                    <span class="text-xs font-bold text-gray-400">
+                                        (@CurrentDayExercises.Count exercises)
+                                    </span>
+                                </div>
+
+                                @if (!IsCurrentDayLocked)
+                                {
+                                    <button type="button"
+                                            @onclick="() => AddExerciseToCurrentDay()"
+                                            class="px-3.5 py-1.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        <span>Add Exercise</span>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="px-3 py-1.5 bg-gray-100 text-gray-500 text-xs font-semibold rounded-xl flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                        </svg>
+                                        <span>Locked</span>
+                                    </span>
+                                }
+                            </div>
+
+                            @if (CurrentDayExercises.Count == 0)
+                            {
+                                <div class="py-12 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-center p-6">
+                                    <div class="w-12 h-12 mb-2 rounded-full @(IsCurrentDayLocked ? "bg-gray-100 text-gray-400" : "bg-orange-50 text-[#EA580C]") flex items-center justify-center">
+                                        @if (IsCurrentDayLocked)
+                                        {
+                                            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                            </svg>
+                                        }
+                                        else
+                                        {
+                                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                      d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                        }
+                                    </div>
+                                    <p class="text-xs font-bold text-gray-700 mb-1">
+                                        @(IsCurrentDayLocked ? "Rest Day (Past / Locked)" : "Rest Day or No Exercises Scheduled")
+                                    </p>
+                                    <p class="text-[11px] text-gray-400 max-w-sm mb-3">
+                                        @(IsCurrentDayLocked
+                                            ? $"No exercises were scheduled for {GetDayName(activeDay)} (Week {activeWeek}). Past rest days cannot be modified."
+                                            : $"No exercises planned for {GetDayName(activeDay)} (Week {activeWeek}) yet. Click below to add exercises or leave blank for a rest/recovery day.")
+                                    </p>
+                                    @if (!IsCurrentDayLocked)
+                                    {
+                                        <button type="button"
+                                                @onclick="() => AddExerciseToCurrentDay()"
+                                                class="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+                                            + Add First Exercise
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="space-y-4">
+                                    @for (int i = 0; i < CurrentDayExercises.Count; i++)
+                                    {
+                                        var exercise = CurrentDayExercises[i];
+                                        var exerciseIndex = i + 1;
+                                        var exerciseKey = exercise.GetHashCode();
+                                        var isUploading = uploadingStates.TryGetValue(exercise, out var uploading) && uploading;
+                                        var uploadError = uploadErrors.TryGetValue(exercise, out var err) ? err : null;
+
+                                        <div class="p-4 bg-gray-50/70 rounded-2xl border border-gray-200/70 hover:border-orange-200 transition space-y-3.5">
+                                            
+                                            <!-- Exercise Card Header -->
+                                            <div class="flex items-center justify-between gap-2 border-b border-gray-200/60 pb-2.5">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="w-6 h-6 rounded-lg bg-orange-100 text-[#EA580C] text-xs font-black flex items-center justify-center">
+                                                        #@exerciseIndex
+                                                    </span>
+                                                    <h5 class="text-xs font-bold text-gray-900 truncate max-w-md">
+                                                        @(string.IsNullOrWhiteSpace(exercise.ExerciseName) ? "New Exercise" : exercise.ExerciseName)
+                                                    </h5>
+                                                </div>
+
+                                                <div class="flex items-center gap-2">
+                                                    @if (IsCurrentDayLocked)
+                                                    {
+                                                        <span class="text-[11px] font-bold text-gray-500 bg-gray-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                                                            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                            </svg>
+                                                            <span>Locked</span>
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button type="button"
+                                                                @onclick="() => DuplicateExercise(exercise)"
+                                                                title="Duplicate exercise"
+                                                                class="text-xs text-gray-500 hover:text-gray-800 px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                            </svg>
+                                                            <span>Duplicate</span>
+                                                        </button>
+                                                        <button type="button"
+                                                                @onclick="() => RemoveExercise(exercise)"
+                                                                title="Delete exercise"
+                                                                class="text-xs text-red-500 hover:text-red-700 px-2 py-1 bg-white hover:bg-red-50 border border-red-200 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                            <span>Delete</span>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <!-- Row 1: Exercise Name, Sets, Reps, Duration, Rest -->
+                                            <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                                                <div class="col-span-2">
+                                                    <label class="block text-[11px] font-bold text-gray-700 mb-1">
+                                                        Exercise Name <span class="text-red-500">*</span>
+                                                    </label>
+                                                    <input type="text"
+                                                           @bind="exercise.ExerciseName"
+                                                           disabled="@IsCurrentDayLocked"
+                                                           placeholder="e.g. Barbell Squat, Dumbbell Press..."
+                                                           class="w-full px-3 py-2 border rounded-xl text-xs font-semibold focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200" : "bg-white text-gray-900 border-gray-200 focus:bg-white")" />
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-[11px] font-bold text-gray-700 mb-1">Sets</label>
+                                                    <input type="number"
+                                                           min="1"
+                                                           @bind="exercise.Sets"
+                                                           disabled="@IsCurrentDayLocked"
+                                                           placeholder="3"
+                                                           class="w-full px-3 py-2 border rounded-xl text-xs font-semibold focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200" : "bg-white text-gray-900 border-gray-200 focus:bg-white")" />
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-[11px] font-bold text-gray-700 mb-1">Reps</label>
+                                                    <input type="number"
+                                                           min="1"
+                                                           @bind="exercise.Reps"
+                                                           disabled="@IsCurrentDayLocked"
+                                                           placeholder="10"
+                                                           class="w-full px-3 py-2 border rounded-xl text-xs font-semibold focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200" : "bg-white text-gray-900 border-gray-200 focus:bg-white")" />
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-[11px] font-bold text-gray-700 mb-1">Duration (min)</label>
+                                                    <input type="number"
+                                                           min="0"
+                                                           @bind="exercise.DurationMinutes"
+                                                           disabled="@IsCurrentDayLocked"
+                                                           placeholder="15"
+                                                           class="w-full px-3 py-2 border rounded-xl text-xs font-semibold focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200" : "bg-white text-gray-900 border-gray-200 focus:bg-white")" />
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-[11px] font-bold text-gray-700 mb-1">Rest (sec)</label>
+                                                    <input type="number"
+                                                           min="0"
+                                                           @bind="exercise.RestSeconds"
+                                                           disabled="@IsCurrentDayLocked"
+                                                           placeholder="60"
+                                                           class="w-full px-3 py-2 border rounded-xl text-xs font-semibold focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200" : "bg-white text-gray-900 border-gray-200 focus:bg-white")" />
+                                                </div>
+                                            </div>
+
+                                            <!-- Row 2: Technique Notes & Video Tutorial Section -->
+                                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1 border-t border-gray-200/50">
+                                                <div>
+                                                    <label class="block text-[11px] font-bold text-gray-700 mb-1">Technique Notes for Trainee</label>
+                                                    <textarea @bind="exercise.Notes"
+                                                              disabled="@IsCurrentDayLocked"
+                                                              rows="4"
+                                                              placeholder="Keep shoulder blades locked, brace core, inhale when descending, exhale when driving up..."
+                                                              class="w-full px-3 py-2 border rounded-xl text-xs font-medium placeholder-gray-400 focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200" : "bg-white text-gray-800 border-gray-200 focus:bg-white")"></textarea>
+                                                </div>
+
+                                                <!-- Video Tutorial Guide (Upload, Library, Link) -->
+                                                <div class="bg-orange-50/50 p-3.5 rounded-xl border border-orange-100 space-y-2.5">
+                                                    <div class="flex items-center justify-between flex-wrap gap-2">
+                                                        <span class="text-xs font-black text-[#C2410C] flex items-center gap-1.5">
+                                                            <svg class="w-4 h-4 text-[#EA580C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                            </svg>
+                                                            <span>Tutorial Video Guide</span>
+                                                        </span>
+
+                                                        <!-- Video Source Segmented Selector -->
+                                                        @{
+                                                            var currentMode = GetExerciseVideoSourceMode(exercise);
+                                                        }
+                                                        @if (!IsCurrentDayLocked)
+                                                        {
+                                                            <div class="flex items-center bg-white p-0.5 rounded-lg border border-orange-200 text-[10px]">
+                                                                <button type="button"
+                                                                        @onclick="() => SetExerciseVideoSourceMode(exercise, VideoSourceMode.Upload)"
+                                                                        class="px-2 py-0.5 rounded-md font-bold transition cursor-pointer flex items-center gap-1 @(currentMode == VideoSourceMode.Upload ? "bg-[#EA580C] text-white" : "text-gray-600 hover:text-gray-900")">
+                                                                    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                                    </svg>
+                                                                    <span>Upload File</span>
+                                                                </button>
+                                                                <button type="button"
+                                                                        @onclick="() => SetExerciseVideoSourceMode(exercise, VideoSourceMode.Library)"
+                                                                        class="px-2 py-0.5 rounded-md font-bold transition cursor-pointer flex items-center gap-1 @(currentMode == VideoSourceMode.Library ? "bg-[#EA580C] text-white" : "text-gray-600 hover:text-gray-900")">
+                                                                    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                                    </svg>
+                                                                    <span>Library</span>
+                                                                </button>
+                                                                <button type="button"
+                                                                        @onclick="() => SetExerciseVideoSourceMode(exercise, VideoSourceMode.Link)"
+                                                                        class="px-2 py-0.5 rounded-md font-bold transition cursor-pointer flex items-center gap-1 @(currentMode == VideoSourceMode.Link ? "bg-[#EA580C] text-white" : "text-gray-600 hover:text-gray-900")">
+                                                                    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                                                    </svg>
+                                                                    <span>Direct Link</span>
+                                                                </button>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-[10px] font-semibold text-gray-500 bg-gray-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                                <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                                </svg>
+                                                                <span>Locked</span>
+                                                            </span>
+                                                        }
+                                                    </div>
+
+                                                    @if (!string.IsNullOrWhiteSpace(uploadError))
+                                                    {
+                                                        <div class="p-2 bg-red-100/80 border border-red-200 rounded-lg text-red-700 text-[10px] font-semibold flex items-center gap-1.5">
+                                                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                            </svg>
+                                                            <span>@uploadError</span>
+                                                        </div>
+                                                    }
+
+                                                    @* MODE 1: DIRECT VIDEO FILE UPLOAD *@
+                                                    @if (currentMode == VideoSourceMode.Upload)
+                                                    {
+                                                        <div class="space-y-2">
+                                                            @if (!IsCurrentDayLocked)
+                                                            {
+                                                                <div class="relative border-2 border-dashed border-orange-200 rounded-xl p-3 bg-white text-center hover:border-[#EA580C] transition">
+                                                                    <InputFile id="@($"file-upload-{exerciseKey}")"
+                                                                               OnChange="@(e => HandleVideoFileUploadAsync(e, exercise))"
+                                                                               accept="video/mp4,video/quicktime,video/webm,video/x-msvideo"
+                                                                               class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+
+                                                                    @if (isUploading)
+                                                                    {
+                                                                        <div class="py-2 flex flex-col items-center justify-center">
+                                                                            <div class="w-6 h-6 border-2 border-[#EA580C] border-t-transparent rounded-full animate-spin mb-1.5"></div>
+                                                                            <p class="text-[11px] font-bold text-[#EA580C]">Uploading video to Cloudinary...</p>
+                                                                            <p class="text-[9px] text-gray-400">Please wait while the file is processed.</p>
+                                                                        </div>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div class="flex flex-col items-center justify-center">
+                                                                            <svg class="w-6 h-6 text-[#EA580C] mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                                            </svg>
+                                                                            <p class="text-[11px] font-bold text-gray-800">
+                                                                                Click or drag &amp; drop to upload video file
+                                                                            </p>
+                                                                            <p class="text-[9px] text-gray-400 mt-0.5">
+                                                                                Supports MP4, MOV, WEBM (Max 100MB)
+                                                                            </p>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            }
+
+                                                            @* If video is uploaded, display URL badge and embedded HTML5 video preview *@
+                                                            @if (exercise.NewVideoTutorial != null && !string.IsNullOrWhiteSpace(exercise.NewVideoTutorial.VideoUrl))
+                                                            {
+                                                                <div class="space-y-1">
+                                                                    <div class="flex items-center justify-between text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                                                                        <span class="truncate flex items-center gap-1.5">
+                                                                            <svg class="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                                            </svg>
+                                                                            <span>Video uploaded:</span>
+                                                                            <span class="font-mono text-gray-600 truncate max-w-[200px]">@exercise.NewVideoTutorial.VideoUrl</span>
+                                                                        </span>
+                                                                        @if (!IsCurrentDayLocked)
+                                                                        {
+                                                                            <button type="button"
+                                                                                    @onclick="() => ClearUploadedVideo(exercise)"
+                                                                                    class="text-red-500 hover:text-red-700 ml-1 cursor-pointer flex items-center gap-0.5 text-[10px] font-semibold">
+                                                                                <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                                                </svg>
+                                                                                <span>Remove</span>
+                                                                            </button>
+                                                                        }
+                                                                    </div>
+                                                                    <video controls
+                                                                           src="@exercise.NewVideoTutorial.VideoUrl"
+                                                                           class="w-full max-h-36 rounded-lg bg-black object-contain shadow-xs">
+                                                                    </video>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+
+                                                    @* MODE 2: CHOOSE FROM COACH VIDEO LIBRARY *@
+                                                    else if (currentMode == VideoSourceMode.Library)
+                                                    {
+                                                        <div class="space-y-2">
+                                                            <select class="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white text-gray-800")"
+                                                                    disabled="@IsCurrentDayLocked"
+                                                                    value="@(exercise.VideoTutorialId?.ToString() ?? "")"
+                                                                    @onchange="(e) => OnSelectVideoId(exercise, e.Value?.ToString())">
+                                                                <option value="">-- Choose tutorial from your video library --</option>
+                                                                @foreach (var v in coachVideos)
+                                                                {
+                                                                    <option value="@v.VideoTutorialId">@v.Title (@v.VideoUrl)</option>
+                                                                }
+                                                            </select>
+
+                                                            @if (exercise.VideoTutorialId.HasValue)
+                                                            {
+                                                                var selectedVideo = coachVideos.FirstOrDefault(v => v.VideoTutorialId == exercise.VideoTutorialId.Value);
+                                                                <p class="text-[10px] text-emerald-600 font-bold flex items-center gap-1.5">
+                                                                    <svg class="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                    <span>Linked library tutorial: @selectedVideo?.Title</span>
+                                                                </p>
+                                                                @if (!string.IsNullOrWhiteSpace(selectedVideo?.VideoUrl))
+                                                                {
+                                                                    <video controls
+                                                                           src="@selectedVideo.VideoUrl"
+                                                                           class="w-full max-h-36 rounded-lg bg-black object-contain shadow-xs">
+                                                                    </video>
+                                                                }
+                                                            }
+                                                            else if (coachVideos.Count == 0)
+                                                            {
+                                                                <p class="text-[10px] text-gray-400 italic">
+                                                                    You have not uploaded any tutorial videos yet. Use "Upload File" above to add your first video!
+                                                                </p>
+                                                            }
+                                                        </div>
+                                                    }
+
+                                                    @* MODE 3: DIRECT VIDEO LINK *@
+                                                    else
+                                                    {
+                                                        <div class="space-y-1.5">
+                                                            <input type="text"
+                                                                   @bind="exercise.NewVideoTutorial!.Title"
+                                                                   placeholder="Video Title (defaults to exercise name)"
+                                                                   disabled="@IsCurrentDayLocked"
+                                                                   class="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium placeholder-gray-400 focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white text-gray-800")" />
+                                                            <input type="url"
+                                                                   @bind="exercise.NewVideoTutorial!.VideoUrl"
+                                                                   placeholder="Video URL (e.g., https://res.cloudinary.com/.../squat.mp4)"
+                                                                   disabled="@IsCurrentDayLocked"
+                                                                   class="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium placeholder-gray-400 focus:outline-none focus:border-[#EA580C] @(IsCurrentDayLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white text-gray-800")" />
+                                                            <p class="text-[10px] text-gray-500 italic flex items-center gap-1.5">
+                                                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                </svg>
+                                                                <span>This video will automatically be saved to your Coach Video Library upon saving the plan.</span>
+                                                            </p>
+
+                                                            @if (!string.IsNullOrWhiteSpace(exercise.NewVideoTutorial?.VideoUrl))
+                                                            {
+                                                                <video controls
+                                                                       src="@exercise.NewVideoTutorial.VideoUrl"
+                                                                       class="w-full max-h-36 rounded-lg bg-black object-contain shadow-xs mt-1">
+                                                                </video>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-4 bg-white border-t border-gray-100 flex items-center justify-between">
+                <div class="text-xs text-gray-500 font-medium">
+                    Total exercises: <strong class="text-gray-900">@exercises.Count</strong>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button type="button"
+                            @onclick="HandleClose"
+                            disabled="@isSaving"
+                            class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50">
+                        Close
+                    </button>
+
+                    <button type="button"
+                            @onclick="SaveTrainingPlanAsync"
+                            disabled="@isSaving"
+                            class="px-6 py-2.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#EA580C] hover:to-[#EA580C] text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/20 hover:shadow-orange-500/30 transition flex items-center gap-2 cursor-pointer disabled:opacity-50">
+                        @if (isSaving)
+                        {
+                            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>@(Mode == "create" ? "Create Plan" : "Save Changes")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public Guid OrderDetailsId { get; set; }
+
+    [Parameter]
+    public string? PackageTitle { get; set; }
+
+    [Parameter]
+    public string? TraineeName { get; set; }
+
+    [Parameter]
+    public string Mode { get; set; } = "create"; // "create" or "update"
+
+    [Parameter]
+    public Guid? ExistingPlanId { get; set; }
+
+    [Parameter]
+    public int? PackageDurationDays { get; set; }
+
+    [Parameter]
+    public int? PackageSessionCount { get; set; }
+
+    [Parameter]
+    public DateTime? PackagePurchasedAt { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<TrainingPlanDetailDto> OnSuccess { get; set; }
+
+    // Video Source Mode Enum
+    private enum VideoSourceMode
+    {
+        Upload,
+        Library,
+        Link
+    }
+
+    // Per-exercise video mode mapping
+    private readonly Dictionary<TrainingPlanExerciseDto, VideoSourceMode> exerciseVideoModes = new();
+    private readonly Dictionary<TrainingPlanExerciseDto, bool> uploadingStates = new();
+    private readonly Dictionary<TrainingPlanExerciseDto, string> uploadErrors = new();
+
+    // Form fields
+    private string planTitle = string.Empty;
+    private string planDescription = string.Empty;
+    private DateTime? startDate = DateTime.Today;
+    private DateTime? endDate = DateTime.Today.AddDays(30);
+    private string planStatus = "ACTIVE";
+
+    // Weekly Schedule & Exercises
+    private List<TrainingPlanExerciseDto> exercises = new();
+    private List<VideoTutorialDto> coachVideos = new();
+
+    private short activeWeek = 1;
+    private short activeDay = 1;
+
+    private bool isFetchingInitial = false;
+    private bool isSaving = false;
+    private string? errorMessage = null;
+
+    private DateTime? PackageStartDate => PackagePurchasedAt?.Date ?? startDate;
+    private DateTime? PackageEndDate => (PackageDurationDays.HasValue && PackageDurationDays.Value > 0 && PackageStartDate.HasValue)
+        ? PackageStartDate.Value.AddDays(PackageDurationDays.Value)
+        : null;
+
+    private int ScheduledSessionsCount =>
+        exercises.Where(e => !string.IsNullOrWhiteSpace(e.ExerciseName))
+                 .Select(e => new { e.WeekNumber, e.DayNumber })
+                 .Distinct()
+                 .Count();
+
+    private int GetSelectedDaysCount()
+    {
+        if (!startDate.HasValue || !endDate.HasValue || endDate.Value < startDate.Value)
+        {
+            return PackageDurationDays ?? 30;
+        }
+        return (int)(endDate.Value.Date - startDate.Value.Date).TotalDays + 1;
+    }
+
+    private int MaxAllowedWeeks
+    {
+        get
+        {
+            var totalDays = GetSelectedDaysCount();
+            return Math.Max(1, totalDays / 7);
+        }
+    }
+
+    private bool CanAddWeek
+    {
+        get
+        {
+            var currentMax = AvailableWeeks.Count > 0 ? AvailableWeeks.Max() : (short)0;
+            return currentMax < MaxAllowedWeeks;
+        }
+    }
+
+    private List<short> AvailableWeeks
+    {
+        get
+        {
+            var weeks = exercises.Select(e => e.WeekNumber).Distinct().ToList();
+            if (!weeks.Contains(1)) weeks.Add(1);
+            return weeks.OrderBy(w => w).ToList();
+        }
+    }
+
+    private List<TrainingPlanExerciseDto> CurrentDayExercises =>
+        exercises.Where(e => e.WeekNumber == activeWeek && e.DayNumber == activeDay)
+                 .OrderBy(e => e.SortOrder ?? 1)
+                 .ToList();
+
+    private static DateTime GetStartMonday(DateTime start)
+    {
+        int dayOfWeek = (int)start.DayOfWeek;
+        int daysSinceMonday = (dayOfWeek == 0 ? 7 : dayOfWeek) - 1;
+        return start.Date.AddDays(-daysSinceMonday);
+    }
+
+    private DateTime GetSessionDate(short weekNumber, short dayNumber)
+    {
+        var baseDate = startDate ?? DateTime.Today;
+        return GetStartMonday(baseDate).AddDays((weekNumber - 1) * 7 + (dayNumber - 1));
+    }
+
+    private bool IsDayLocked(short weekNumber, short dayNumber)
+    {
+        if (Mode != "update") return false;
+        return GetSessionDate(weekNumber, dayNumber).Date <= DateTime.Today.Date;
+    }
+
+    private bool IsCurrentDayLocked => IsDayLocked(activeWeek, activeDay);
+
+    private short GetUpcomingRequiredWeek()
+    {
+        var baseDate = startDate ?? DateTime.Today;
+        var startMonday = GetStartMonday(baseDate);
+        var today = DateTime.Today.Date;
+        if (today < startMonday)
+        {
+            return 1;
+        }
+        var daysDiff = (today - startMonday).Days;
+        var currentWeek = (short)((daysDiff / 7) + 1);
+        return (short)(currentWeek + 1);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            await LoadCoachVideosAsync();
+
+            if (Mode == "update" || ExistingPlanId.HasValue)
+            {
+                await LoadExistingPlanAsync();
+            }
+            else
+            {
+                ResetToCreateMode();
+            }
+        }
+    }
+
+    private async Task LoadCoachVideosAsync()
+    {
+        try
+        {
+            var res = await TrainingPlanService.GetCoachVideoTutorialsAsync();
+            if (res.Success && res.Data != null)
+            {
+                coachVideos = res.Data;
+            }
+        }
+        catch { }
+    }
+
+    private async Task LoadExistingPlanAsync()
+    {
+        isFetchingInitial = true;
+        errorMessage = null;
+
+        try
+        {
+            var res = await TrainingPlanService.GetTrainingPlanByOrderDetailAsync(OrderDetailsId);
+            if (res.Success && res.Data != null)
+            {
+                var plan = res.Data;
+                ExistingPlanId = plan.TrainingPlanId;
+                planTitle = plan.Title ?? string.Empty;
+                planDescription = plan.Description ?? string.Empty;
+                startDate = plan.StartDate;
+                endDate = plan.EndDate;
+                planStatus = plan.Status ?? "ACTIVE";
+
+                if (plan.PackageDurationDays.HasValue)
+                {
+                    PackageDurationDays ??= plan.PackageDurationDays;
+                }
+                if (plan.PackageSessionCount.HasValue)
+                {
+                    PackageSessionCount ??= plan.PackageSessionCount;
+                }
+                if (plan.PackagePurchasedAt.HasValue)
+                {
+                    PackagePurchasedAt ??= plan.PackagePurchasedAt;
+                }
+
+                exercises = plan.Exercises.Select(e =>
+                {
+                    var dto = new TrainingPlanExerciseDto
+                    {
+                        TrainingPlanExerciseId = e.TrainingPlanExerciseId,
+                        ExerciseName = e.ExerciseName ?? string.Empty,
+                        WeekNumber = e.WeekNumber ?? 1,
+                        DayNumber = e.DayNumber ?? 1,
+                        Sets = e.Sets,
+                        Reps = e.Reps,
+                        DurationMinutes = e.DurationMinutes,
+                        RestSeconds = e.RestSeconds,
+                        Notes = e.Notes,
+                        SortOrder = e.SortOrder,
+                        VideoTutorialId = e.VideoTutorialId
+                    };
+
+                    if (dto.VideoTutorialId.HasValue)
+                    {
+                        exerciseVideoModes[dto] = VideoSourceMode.Library;
+                    }
+
+                    return dto;
+                }).ToList();
+
+                if (exercises.Count > 0)
+                {
+                    var unlockedExercise = exercises.FirstOrDefault(e => !IsDayLocked(e.WeekNumber, e.DayNumber));
+                    if (unlockedExercise != null)
+                    {
+                        activeWeek = unlockedExercise.WeekNumber;
+                        activeDay = unlockedExercise.DayNumber;
+                    }
+                    else
+                    {
+                        activeWeek = exercises[0].WeekNumber;
+                        activeDay = exercises[0].DayNumber;
+                    }
+                }
+                else
+                {
+                    // Add default exercise for Week 1 Day 1
+                    AddExerciseToCurrentDay(1, 1);
+                }
+            }
+            else
+            {
+                Mode = "create";
+                ResetToCreateMode();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load plan: {ex.Message}";
+        }
+        finally
+        {
+            isFetchingInitial = false;
+        }
+    }
+
+    private void ResetToCreateMode()
+    {
+        ExistingPlanId = null;
+        planTitle = !string.IsNullOrWhiteSpace(PackageTitle) ? $"{PackageTitle} - Training Plan" : string.Empty;
+        planDescription = string.Empty;
+        
+        startDate = PackageStartDate ?? DateTime.Today;
+        var duration = (PackageDurationDays.HasValue && PackageDurationDays.Value > 0) ? PackageDurationDays.Value : 30;
+        endDate = startDate.Value.AddDays(duration);
+        
+        planStatus = "ACTIVE";
+        exercises.Clear();
+        activeWeek = 1;
+        activeDay = 1;
+
+        // Default 1 exercise for Day 1
+        AddExerciseToCurrentDay(1, 1);
+    }
+
+    private void SelectWeek(short week)
+    {
+        activeWeek = week;
+        activeDay = 1;
+    }
+
+    private void SelectDay(short day)
+    {
+        activeDay = day;
+    }
+
+    private void AddNewWeek()
+    {
+        var currentMax = AvailableWeeks.Count > 0 ? AvailableWeeks.Max() : (short)0;
+        var nextWeek = (short)(currentMax + 1);
+        if (nextWeek > MaxAllowedWeeks)
+        {
+            errorMessage = $"Cannot add Week {nextWeek}. The selected duration ({GetSelectedDaysCount()} days) allows a maximum of {MaxAllowedWeeks} weeks (1 month = 4 weeks).";
+            return;
+        }
+
+        activeWeek = nextWeek;
+        activeDay = 1;
+        AddExerciseToCurrentDay(nextWeek, 1);
+    }
+
+    private void AddExerciseToCurrentDay(short? week = null, short? day = null)
+    {
+        var targetWeek = week ?? activeWeek;
+        var targetDay = day ?? activeDay;
+
+        if (IsDayLocked(targetWeek, targetDay))
+        {
+            errorMessage = $"Cannot add exercises to past or current sessions ({GetSessionDate(targetWeek, targetDay):dd/MM/yyyy}). Only upcoming sessions can be modified.";
+            return;
+        }
+
+        short sort = (short)(exercises.Count(e => e.WeekNumber == targetWeek && e.DayNumber == targetDay) + 1);
+
+        var newEx = new TrainingPlanExerciseDto
+        {
+            ExerciseName = string.Empty,
+            WeekNumber = targetWeek,
+            DayNumber = targetDay,
+            Sets = 3,
+            Reps = 10,
+            DurationMinutes = 10,
+            RestSeconds = 60,
+            SortOrder = sort
+        };
+
+        exerciseVideoModes[newEx] = VideoSourceMode.Upload;
+        exercises.Add(newEx);
+    }
+
+    private void DuplicateExercise(TrainingPlanExerciseDto target)
+    {
+        if (IsDayLocked(target.WeekNumber, target.DayNumber))
+        {
+            errorMessage = $"Cannot duplicate exercises in past or current sessions ({GetSessionDate(target.WeekNumber, target.DayNumber):dd/MM/yyyy}).";
+            return;
+        }
+
+        var duplicate = new TrainingPlanExerciseDto
+        {
+            TrainingPlanExerciseId = null, // Fresh entity on save
+            ExerciseName = $"{target.ExerciseName} (Copy)",
+            WeekNumber = target.WeekNumber,
+            DayNumber = target.DayNumber,
+            Sets = target.Sets,
+            Reps = target.Reps,
+            DurationMinutes = target.DurationMinutes,
+            RestSeconds = target.RestSeconds,
+            Notes = target.Notes,
+            SortOrder = (short)((target.SortOrder ?? 1) + 1),
+            VideoTutorialId = target.VideoTutorialId
+        };
+
+        if (target.NewVideoTutorial != null)
+        {
+            duplicate.NewVideoTutorial = new CreateVideoTutorialDto
+            {
+                Title = target.NewVideoTutorial.Title,
+                VideoUrl = target.NewVideoTutorial.VideoUrl
+            };
+        }
+
+        exerciseVideoModes[duplicate] = exerciseVideoModes.TryGetValue(target, out var m) ? m : VideoSourceMode.Upload;
+        exercises.Add(duplicate);
+    }
+
+    private void RemoveExercise(TrainingPlanExerciseDto exercise)
+    {
+        if (IsDayLocked(exercise.WeekNumber, exercise.DayNumber))
+        {
+            errorMessage = $"Cannot remove exercises from past or current sessions ({GetSessionDate(exercise.WeekNumber, exercise.DayNumber):dd/MM/yyyy}).";
+            return;
+        }
+
+        exercises.Remove(exercise);
+        exerciseVideoModes.Remove(exercise);
+        uploadingStates.Remove(exercise);
+        uploadErrors.Remove(exercise);
+    }
+
+    private VideoSourceMode GetExerciseVideoSourceMode(TrainingPlanExerciseDto exercise)
+    {
+        if (exerciseVideoModes.TryGetValue(exercise, out var mode))
+        {
+            return mode;
+        }
+
+        if (exercise.VideoTutorialId.HasValue) return VideoSourceMode.Library;
+        if (exercise.NewVideoTutorial != null && !string.IsNullOrWhiteSpace(exercise.NewVideoTutorial.VideoUrl)) return VideoSourceMode.Upload;
+        return VideoSourceMode.Upload;
+    }
+
+    private void SetExerciseVideoSourceMode(TrainingPlanExerciseDto exercise, VideoSourceMode mode)
+    {
+        exerciseVideoModes[exercise] = mode;
+        if (mode == VideoSourceMode.Library)
+        {
+            exercise.NewVideoTutorial = null;
+        }
+        else if (mode == VideoSourceMode.Link)
+        {
+            exercise.VideoTutorialId = null;
+            if (exercise.NewVideoTutorial == null)
+            {
+                exercise.NewVideoTutorial = new CreateVideoTutorialDto
+                {
+                    Title = exercise.ExerciseName,
+                    VideoUrl = string.Empty
+                };
+            }
+        }
+        else // Upload
+        {
+            exercise.VideoTutorialId = null;
+            if (exercise.NewVideoTutorial == null)
+            {
+                exercise.NewVideoTutorial = new CreateVideoTutorialDto
+                {
+                    Title = exercise.ExerciseName,
+                    VideoUrl = string.Empty
+                };
+            }
+        }
+    }
+
+    private async Task HandleVideoFileUploadAsync(InputFileChangeEventArgs e, TrainingPlanExerciseDto exercise)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        uploadErrors.Remove(exercise);
+        uploadingStates[exercise] = true;
+        StateHasChanged();
+
+        try
+        {
+            var res = await FileUploadService.UploadExerciseVideoAsync(file);
+            if (res.Success && !string.IsNullOrWhiteSpace(res.Data))
+            {
+                if (exercise.NewVideoTutorial == null)
+                {
+                    exercise.NewVideoTutorial = new CreateVideoTutorialDto();
+                }
+                exercise.NewVideoTutorial.Title = string.IsNullOrWhiteSpace(exercise.ExerciseName) ? file.Name : exercise.ExerciseName;
+                exercise.NewVideoTutorial.VideoUrl = res.Data;
+                exercise.VideoTutorialId = null;
+            }
+            else
+            {
+                uploadErrors[exercise] = res.Message ?? "Video upload failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            uploadErrors[exercise] = $"Video upload error: {ex.Message}";
+        }
+        finally
+        {
+            uploadingStates[exercise] = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearUploadedVideo(TrainingPlanExerciseDto exercise)
+    {
+        if (exercise.NewVideoTutorial != null)
+        {
+            exercise.NewVideoTutorial.VideoUrl = string.Empty;
+        }
+    }
+
+    private void OnSelectVideoId(TrainingPlanExerciseDto exercise, string? videoIdStr)
+    {
+        if (Guid.TryParse(videoIdStr, out var id))
+        {
+            exercise.VideoTutorialId = id;
+            exercise.NewVideoTutorial = null;
+        }
+        else
+        {
+            exercise.VideoTutorialId = null;
+        }
+    }
+
+    private async Task SaveTrainingPlanAsync()
+    {
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(planTitle))
+        {
+            errorMessage = "Please enter a Plan Title.";
+            return;
+        }
+
+        if (!startDate.HasValue || !endDate.HasValue)
+        {
+            errorMessage = "Please select both Start Date and End Date.";
+            return;
+        }
+
+        if (endDate.Value.Date < startDate.Value.Date)
+        {
+            errorMessage = "End Date must be on or after Start Date.";
+            return;
+        }
+
+        if (PackageStartDate.HasValue && startDate.Value.Date < PackageStartDate.Value.Date)
+        {
+            errorMessage = $"Start Date ({startDate.Value:dd/MM/yyyy}) cannot be earlier than package purchase date ({PackageStartDate.Value:dd/MM/yyyy}).";
+            return;
+        }
+
+        if (PackageEndDate.HasValue && endDate.Value.Date > PackageEndDate.Value.Date)
+        {
+            errorMessage = $"End Date ({endDate.Value:dd/MM/yyyy}) cannot exceed package expiration date ({PackageEndDate.Value:dd/MM/yyyy}).";
+            return;
+        }
+
+        var totalDays = GetSelectedDaysCount();
+        if (PackageDurationDays.HasValue && PackageDurationDays.Value > 0 && totalDays > PackageDurationDays.Value + 1)
+        {
+            errorMessage = $"Training plan duration ({totalDays} days) cannot exceed purchased package duration ({PackageDurationDays.Value} days).";
+            return;
+        }
+
+        if (exercises.Count == 0)
+        {
+            errorMessage = "Training plan must contain at least 1 exercise.";
+            return;
+        }
+
+        foreach (var ex in exercises)
+        {
+            if (string.IsNullOrWhiteSpace(ex.ExerciseName))
+            {
+                errorMessage = $"Exercise at Week {ex.WeekNumber}, {GetDayName(ex.DayNumber)} is missing an Exercise Name.";
+                return;
+            }
+        }
+
+        // Validate max weeks: "nếu như khoảng start day và end day là 1 tháng thì không được add số tuần nhiều hơn 1 tháng."
+        var maxAllowedWeeks = MaxAllowedWeeks;
+        if (exercises.Any(e => e.WeekNumber > maxAllowedWeeks))
+        {
+            var highestWeek = exercises.Max(e => e.WeekNumber);
+            errorMessage = $"Training plan cannot exceed {maxAllowedWeeks} weeks for the selected {totalDays}-day period (exercises found in Week {highestWeek}). Please remove exceeding weeks.";
+            return;
+        }
+
+        // Validate session count: "số buổi tập cũng phải khớp với số buổi trong training package tương ứng"
+        if (PackageSessionCount.HasValue && PackageSessionCount.Value > 0)
+        {
+            var scheduled = ScheduledSessionsCount;
+            if (scheduled != PackageSessionCount.Value)
+            {
+                errorMessage = $"The number of scheduled workout sessions ({scheduled} sessions) must match the package session count ({PackageSessionCount.Value} sessions). Please adjust sessions to equal {PackageSessionCount.Value}.";
+                return;
+            }
+        }
+
+        // Validate upcoming week requirement: "không được để trống lịch tập trong tuần tiếp theo"
+        var upcomingRequiredWeek = GetUpcomingRequiredWeek();
+        if (upcomingRequiredWeek <= maxAllowedWeeks)
+        {
+            var hasUpcomingExercises = exercises.Any(e => e.WeekNumber == upcomingRequiredWeek && !string.IsNullOrWhiteSpace(e.ExerciseName));
+            if (!hasUpcomingExercises)
+            {
+                if (upcomingRequiredWeek == 1)
+                {
+                    errorMessage = "Training plan must have exercises scheduled for Week 1 (the initial week).";
+                }
+                else
+                {
+                    errorMessage = $"Upcoming week schedule required: You must schedule at least one exercise for Week {upcomingRequiredWeek} (the upcoming week) to ensure the trainee's schedule is not left empty.";
+                }
+                return;
+            }
+        }
+
+        isSaving = true;
+
+        try
+        {
+            if (Mode == "create")
+            {
+                var createDto = new CreateTrainingPlanDto
+                {
+                    OrderDetailsId = OrderDetailsId,
+                    Title = planTitle.Trim(),
+                    Description = planDescription?.Trim(),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    Status = planStatus,
+                    Exercises = exercises
+                };
+
+                var res = await TrainingPlanService.CreateTrainingPlanAsync(createDto);
+                if (res.Success && res.Data != null)
+                {
+                    if (OnSuccess.HasDelegate)
+                    {
+                        await OnSuccess.InvokeAsync(res.Data);
+                    }
+                    await HandleClose();
+                }
+                else
+                {
+                    errorMessage = res.Message ?? "Failed to create training plan.";
+                }
+            }
+            else
+            {
+                if (!ExistingPlanId.HasValue)
+                {
+                    errorMessage = "Could not find plan ID to update.";
+                    return;
+                }
+
+                var updateDto = new UpdateTrainingPlanDto
+                {
+                    Title = planTitle.Trim(),
+                    Description = planDescription?.Trim(),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    Status = planStatus,
+                    Exercises = exercises
+                };
+
+                var res = await TrainingPlanService.UpdateTrainingPlanAsync(ExistingPlanId.Value, updateDto);
+                if (res.Success && res.Data != null)
+                {
+                    if (OnSuccess.HasDelegate)
+                    {
+                        await OnSuccess.InvokeAsync(res.Data);
+                    }
+                    await HandleClose();
+                }
+                else
+                {
+                    errorMessage = res.Message ?? "Failed to update training plan.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Execution error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task HandleClose()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private static string GetDayName(short dayNumber) => dayNumber switch
+    {
+        1 => "Monday",
+        2 => "Tuesday",
+        3 => "Wednesday",
+        4 => "Thursday",
+        5 => "Friday",
+        6 => "Saturday",
+        7 => "Sunday",
+        _ => $"Day {dayNumber}"
+    };
+
+    private static string GetDayShortName(short dayNumber) => dayNumber switch
+    {
+        1 => "Mon",
+        2 => "Tue",
+        3 => "Wed",
+        4 => "Thu",
+        5 => "Fri",
+        6 => "Sat",
+        7 => "Sun",
+        _ => $"D{dayNumber}"
+    };
+}

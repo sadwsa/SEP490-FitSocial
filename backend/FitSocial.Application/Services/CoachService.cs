@@ -8,8 +8,10 @@ using FitSocial.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace FitSocial.Application.Services;
 
@@ -21,6 +23,8 @@ public class CoachService : ICoachService
     private readonly IReviewRepository _reviewRepository;
     private readonly IOrderRepository _orderRepository;
     private readonly INotificationRepository? _notificationRepository;
+    private readonly IEmailService? _emailService;
+    private readonly ILogger<CoachService>? _logger;
 
     public CoachService(
         ICoachProfileRepository coachProfiles,
@@ -28,7 +32,9 @@ public class CoachService : ICoachService
         IUnitOfWork unitOfWork,
         IReviewRepository reviewRepository,
         IOrderRepository orderRepository,
-        INotificationRepository? notificationRepository = null)
+        INotificationRepository? notificationRepository = null,
+        IEmailService? emailService = null,
+        ILogger<CoachService>? logger = null)
     {
         _coachProfiles = coachProfiles;
         _locationRepository = locationRepository;
@@ -36,6 +42,8 @@ public class CoachService : ICoachService
         _reviewRepository = reviewRepository;
         _orderRepository = orderRepository;
         _notificationRepository = notificationRepository;
+        _emailService = emailService;
+        _logger = logger;
     }
 
     public async Task<ApiResponseDto<List<TopCoachDto>>> GetTopCoachesAsync(int count = 3, CancellationToken cancellationToken = default)
@@ -277,24 +285,31 @@ public class CoachService : ICoachService
 
             var countsDict = await _coachProfiles.GetCoachApplicationStatusCountsAsync(cancellationToken);
 
-            var dtos = items.Select(c => new CoachApplicationItemDto
+            var dtos = items.Select(c =>
             {
-                CoachId = c.CoachId,
-                FullName = c.Coach?.FullName,
-                Email = c.Coach?.Email,
-                PhoneNumber = c.Coach?.PhoneNumber,
-                AvatarUrl = c.Coach?.AvatarUrl,
-                ExperienceYears = c.ExperienceYears,
-                Bio = c.Bio,
-                IdentityCardUrl = c.IdentityCardUrl,
-                CertificateUrl = c.CertificateUrl,
-                CertificatesCount = c.CoachCertificates?.Count ?? 0,
-                ApprovalStatus = string.IsNullOrWhiteSpace(c.ApprovalStatus) ? "PENDING" : c.ApprovalStatus,
-                Status = c.Status,
-                CreatedAt = c.Coach?.CreatedAt ?? c.UpdatedAt,
-                UpdatedAt = c.UpdatedAt,
-                ApprovedByName = c.ApprovedByNavigation?.FullName,
-                Locations = c.Locations?.Select(l => l.LocationName).ToList() ?? new List<string>()
+                var certs = c.CoachCertificates?.ToList() ?? new List<Domain.Entities.CoachCertificate>();
+                var (_, canApprove, effectiveStatus) = EvaluateCoachApplicationStatus(c);
+
+                return new CoachApplicationItemDto
+                {
+                    CoachId = c.CoachId,
+                    FullName = c.Coach?.FullName,
+                    Email = c.Coach?.Email,
+                    PhoneNumber = c.Coach?.PhoneNumber,
+                    AvatarUrl = c.Coach?.AvatarUrl,
+                    ExperienceYears = c.ExperienceYears,
+                    Bio = c.Bio,
+                    IdentityCardUrl = c.IdentityCardUrl,
+                    CertificateUrl = c.CertificateUrl,
+                    CertificatesCount = certs.Count,
+                    ApprovalStatus = effectiveStatus,
+                    CanApprove = canApprove,
+                    Status = c.Status,
+                    CreatedAt = c.Coach?.CreatedAt ?? c.UpdatedAt,
+                    UpdatedAt = c.UpdatedAt,
+                    ApprovedByName = c.ApprovedByNavigation?.FullName,
+                    Locations = c.Locations?.Select(l => l.LocationName).ToList() ?? new List<string>()
+                };
             }).ToList();
 
             var pagedResult = PagedResultDto<CoachApplicationItemDto>.Create(dtos, totalCount, pageNumber, pageSize);
@@ -330,6 +345,19 @@ public class CoachService : ICoachService
             if (c == null)
             {
                 return ApiResponseDto<CoachApplicationDetailDto>.Fail("Coach application not found.");
+            }
+
+            var (shouldAutoReject, _, _) = EvaluateCoachApplicationStatus(c);
+            if (shouldAutoReject && (string.IsNullOrWhiteSpace(c.ApprovalStatus) || string.Equals(c.ApprovalStatus, "PENDING", StringComparison.OrdinalIgnoreCase)))
+            {
+                c.ApprovalStatus = "REJECTED";
+                c.UpdatedAt = DateTime.UtcNow;
+                if (c.Coach != null)
+                {
+                    c.Coach.IsLocked = true;
+                    c.Coach.UpdatedAt = DateTime.UtcNow;
+                }
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
             var detail = MapToCoachApplicationDetailDto(c);
@@ -380,6 +408,30 @@ public class CoachService : ICoachService
             if (currentStatus != "PENDING")
             {
                 return ApiResponseDto<CoachApplicationDetailDto>.Fail($"Only pending applications can be approved. Current status is {currentStatus}.");
+            }
+
+            var (shouldAutoReject, canApprove, _) = EvaluateCoachApplicationStatus(profile);
+            if (shouldAutoReject)
+            {
+                profile.ApprovalStatus = "REJECTED";
+                profile.UpdatedAt = DateTime.UtcNow;
+                if (profile.Coach != null)
+                {
+                    profile.Coach.IsLocked = true;
+                    profile.Coach.UpdatedAt = DateTime.UtcNow;
+                }
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                var certs = profile.CoachCertificates?.ToList() ?? new List<Domain.Entities.CoachCertificate>();
+                var hasNoCertificates = certs.Count == 0 && string.IsNullOrWhiteSpace(profile.CertificateUrl);
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail(hasNoCertificates
+                    ? "Cannot approve this application because no certificates were submitted. The application has been automatically rejected."
+                    : "Cannot approve this application because all certificates have been rejected.");
+            }
+
+            if (!canApprove)
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail("Cannot approve this application. At least one certificate must be approved.");
             }
 
             var now = DateTime.UtcNow;
@@ -448,6 +500,22 @@ public class CoachService : ICoachService
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // 6. Send email notification to applicant
+            if (_emailService != null && !string.IsNullOrWhiteSpace(profile.Coach?.Email))
+            {
+                try
+                {
+                    await SendCoachApplicationApprovedEmailAsync(
+                        profile.Coach.Email,
+                        profile.Coach.FullName,
+                        request?.Note);
+                }
+                catch (Exception emailEx)
+                {
+                    _logger?.LogWarning(emailEx, "Failed to send coach approval email to {Email}", profile.Coach.Email);
+                }
+            }
 
             var detail = MapToCoachApplicationDetailDto(profile);
             return ApiResponseDto<CoachApplicationDetailDto>.Ok(detail, "Coach application approved successfully.");
@@ -544,6 +612,22 @@ public class CoachService : ICoachService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // 6. Send email notification to applicant
+            if (_emailService != null && !string.IsNullOrWhiteSpace(profile.Coach?.Email))
+            {
+                try
+                {
+                    await SendCoachApplicationRejectedEmailAsync(
+                        profile.Coach.Email,
+                        profile.Coach.FullName,
+                        request?.Reason);
+                }
+                catch (Exception emailEx)
+                {
+                    _logger?.LogWarning(emailEx, "Failed to send coach rejection email to {Email}", profile.Coach.Email);
+                }
+            }
+
             var detail = MapToCoachApplicationDetailDto(profile);
             return ApiResponseDto<CoachApplicationDetailDto>.Ok(detail, "Coach application rejected successfully.");
         }
@@ -553,9 +637,163 @@ public class CoachService : ICoachService
         }
     }
 
+    public async Task<ApiResponseDto<CoachApplicationDetailDto>> ReviewCertificateAsync(
+        Guid coachId,
+        Guid certificateId,
+        Guid reviewerId,
+        ReviewCertificateRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var profile = await _coachProfiles.GetCoachApplicationDetailsAsync(coachId, cancellationToken);
+            if (profile == null)
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail("Coach application not found.");
+            }
+
+            var currentStatus = profile.ApprovalStatus?.Trim().ToUpperInvariant() ?? "PENDING";
+            if (currentStatus == "APPROVED")
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail("Cannot review certificates for an already approved coach application.");
+            }
+
+            var cert = profile.CoachCertificates?.FirstOrDefault(c => c.CertificateId == certificateId);
+            if (cert == null)
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail("Certificate not found.");
+            }
+
+            var newStatus = request.Status?.Trim().ToUpperInvariant();
+            if (newStatus != "APPROVED" && newStatus != "REJECTED")
+            {
+                return ApiResponseDto<CoachApplicationDetailDto>.Fail("Verification status must be either APPROVED or REJECTED.");
+            }
+
+            var now = DateTime.UtcNow;
+            cert.VerificationStatus = newStatus;
+            cert.VerifiedBy = reviewerId;
+            cert.VerifiedAt = now;
+            cert.UpdatedAt = now;
+            if (newStatus == "REJECTED")
+            {
+                cert.RejectedReason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+            }
+            else
+            {
+                cert.RejectedReason = null;
+            }
+
+            var (shouldAutoReject, _, _) = EvaluateCoachApplicationStatus(profile);
+            if (shouldAutoReject)
+            {
+                profile.ApprovalStatus = "REJECTED";
+                profile.ApprovedBy = reviewerId;
+                profile.UpdatedAt = now;
+                if (profile.Coach != null)
+                {
+                    profile.Coach.IsLocked = true;
+                    profile.Coach.UpdatedAt = now;
+                }
+
+                if (_notificationRepository != null)
+                {
+                    var notification = new Domain.Entities.Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = profile.CoachId,
+                        ActorId = reviewerId,
+                        Type = "COACH_APPLICATION_REJECTED",
+                        Description = string.IsNullOrWhiteSpace(cert.RejectedReason)
+                            ? "Your coach application has been automatically rejected because all submitted certificates were rejected."
+                            : $"Your coach application has been automatically rejected because all certificates were rejected. Reason: {cert.RejectedReason}",
+                        CreatedAt = now,
+                        IsRead = false
+                    };
+                    await _notificationRepository.AddAsync(notification, cancellationToken);
+                }
+            }
+            else
+            {
+                // "còn nếu có một cái reject mà những cái khác được duyệt hoặc pending thì vẫn ở trạng thái pedding"
+                if (string.IsNullOrWhiteSpace(profile.ApprovalStatus) || string.Equals(profile.ApprovalStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                {
+                    profile.ApprovalStatus = "PENDING";
+                    profile.UpdatedAt = now;
+                }
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (shouldAutoReject && _emailService != null && !string.IsNullOrWhiteSpace(profile.Coach?.Email))
+            {
+                try
+                {
+                    await SendCoachApplicationRejectedEmailAsync(
+                        profile.Coach.Email,
+                        profile.Coach.FullName,
+                        string.IsNullOrWhiteSpace(cert.RejectedReason)
+                            ? "All submitted certificates were rejected."
+                            : $"All submitted certificates were rejected. Reason: {cert.RejectedReason}");
+                }
+                catch (Exception emailEx)
+                {
+                    _logger?.LogWarning(emailEx, "Failed to send coach rejection email on auto-reject to {Email}", profile.Coach.Email);
+                }
+            }
+
+            var detail = MapToCoachApplicationDetailDto(profile);
+            var message = shouldAutoReject
+                ? "Certificate rejected. All certificates are rejected, so the coach application has been automatically rejected."
+                : (newStatus == "APPROVED"
+                    ? "Certificate approved successfully."
+                    : "Certificate rejected successfully. Coach application remains pending.");
+
+            return ApiResponseDto<CoachApplicationDetailDto>.Ok(detail, message);
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<CoachApplicationDetailDto>.Fail($"Error reviewing certificate: {ex.Message}");
+        }
+    }
+
+    private static (bool ShouldAutoReject, bool CanApprove, string EffectiveStatus) EvaluateCoachApplicationStatus(
+        Domain.Entities.CoachProfile profile)
+    {
+        var certs = profile.CoachCertificates?.ToList() ?? new List<Domain.Entities.CoachCertificate>();
+        var hasNoCertificates = certs.Count == 0 && string.IsNullOrWhiteSpace(profile.CertificateUrl);
+        var allRejected = certs.Count > 0 && certs.All(cert => string.Equals(cert.VerificationStatus, "REJECTED", StringComparison.OrdinalIgnoreCase));
+        var anyApproved = certs.Any(cert => string.Equals(cert.VerificationStatus, "APPROVED", StringComparison.OrdinalIgnoreCase));
+
+        var currentAppStatus = string.IsNullOrWhiteSpace(profile.ApprovalStatus) ? "PENDING" : profile.ApprovalStatus.Trim().ToUpperInvariant();
+        var shouldAutoReject = hasNoCertificates || allRejected;
+
+        if (shouldAutoReject && currentAppStatus == "PENDING")
+        {
+            currentAppStatus = "REJECTED";
+        }
+
+        var isPending = currentAppStatus == "PENDING";
+        var canApprove = isPending && anyApproved;
+
+        return (shouldAutoReject, canApprove, currentAppStatus);
+    }
+
     private static CoachApplicationDetailDto MapToCoachApplicationDetailDto(Domain.Entities.CoachProfile c)
     {
+        var certs = c.CoachCertificates?.ToList() ?? new List<Domain.Entities.CoachCertificate>();
+        var (_, canApprove, effectiveStatus) = EvaluateCoachApplicationStatus(c);
+
         var latestEkyc = c.CoachEkycVerifications?.OrderByDescending(e => e.CreatedAt).FirstOrDefault();
+
+        var livePhotos = c.CoachEkycVerifications?
+            .OrderByDescending(e => e.CreatedAt)
+            .Select(e => e.FaceImageUrl)
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .SelectMany(u => u!.Split(new[] { ';', ',', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Distinct()
+            .ToList() ?? new List<string>();
 
         return new CoachApplicationDetailDto
         {
@@ -570,14 +808,15 @@ public class CoachService : ICoachService
             Bio = c.Bio,
             IdentityCardUrl = c.IdentityCardUrl,
             CertificateUrl = c.CertificateUrl,
-            CertificatesCount = c.CoachCertificates?.Count ?? 0,
-            ApprovalStatus = string.IsNullOrWhiteSpace(c.ApprovalStatus) ? "PENDING" : c.ApprovalStatus,
+            CertificatesCount = certs.Count,
+            ApprovalStatus = effectiveStatus,
+            CanApprove = canApprove,
             Status = c.Status,
             CreatedAt = c.Coach?.CreatedAt ?? c.UpdatedAt,
             UpdatedAt = c.UpdatedAt,
             ApprovedByName = c.ApprovedByNavigation?.FullName,
             Locations = c.Locations?.Select(l => l.LocationName).ToList() ?? new List<string>(),
-            Certificates = c.CoachCertificates?.Select(cert => new CoachCertificateDetailDto
+            Certificates = certs.Select(cert => new CoachCertificateDetailDto
             {
                 CertificateId = cert.CertificateId,
                 CertificateName = cert.CertificateName,
@@ -585,8 +824,11 @@ public class CoachService : ICoachService
                 IssuedBy = cert.IssuedBy,
                 IssuedDate = cert.IssuedDate,
                 ExpiryDate = cert.ExpiryDate,
-                VerificationStatus = cert.VerificationStatus
-            }).ToList() ?? new List<CoachCertificateDetailDto>(),
+                VerificationStatus = cert.VerificationStatus,
+                RejectedReason = cert.RejectedReason,
+                VerifiedAt = cert.VerifiedAt
+            }).ToList(),
+            LivePhotoUrls = livePhotos,
             Ekyc = latestEkyc == null ? null : new CoachApplicationEkycDto
             {
                 FullNameOnCard = latestEkyc.FullNameOnCard,
@@ -595,6 +837,7 @@ public class CoachService : ICoachService
                 FrontCardUrl = latestEkyc.FrontCardUrl,
                 BackCardUrl = latestEkyc.BackCardUrl,
                 FaceImageUrl = latestEkyc.FaceImageUrl,
+                LivePhotoUrls = livePhotos,
                 LivenessScore = latestEkyc.LivenessScore,
                 FaceMatchConfidence = latestEkyc.FaceMatchConfidence,
                 VerificationStatus = latestEkyc.VerificationStatus,
@@ -602,5 +845,166 @@ public class CoachService : ICoachService
                 CreatedAt = latestEkyc.CreatedAt
             }
         };
+    }
+
+    private static string EscapeHtml(string? input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+        return input
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;")
+            .Replace("'", "&#39;");
+    }
+
+    private async Task SendCoachApplicationApprovedEmailAsync(
+        string toEmail,
+        string? fullName,
+        string? adminNote)
+    {
+        if (_emailService == null) return;
+
+        var safeName = EscapeHtml(string.IsNullOrWhiteSpace(fullName) ? "Coach" : fullName);
+        var subject = "[FitConnect] Congratulations! Your Coach Application Has Been Approved";
+
+        var noteHtml = string.IsNullOrWhiteSpace(adminNote)
+            ? string.Empty
+            : $@"
+            <div style=""background-color: #fff8e1; border-left: 4px solid #ffb300; padding: 14px 18px; margin: 0 0 20px; border-radius: 4px;"">
+                <p style=""margin: 0; font-size: 14px; font-weight: 600; color: #b78103;"">Note from Administration:</p>
+                <p style=""margin: 6px 0 0; font-size: 14px; color: #5d4037;"">{EscapeHtml(adminNote)}</p>
+            </div>";
+
+        var body = $@"
+            <div style=""background-color: #f4f6f8; padding: 30px 15px; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333333; line-height: 1.6;"">
+                <div style=""max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;"">
+                    <!-- Header -->
+                    <div style=""background: linear-gradient(135deg, #FF5722 0%, #FF8A65 100%); padding: 28px 24px; text-align: center;"">
+                        <h1 style=""color: #ffffff; margin: 0 0 4px; font-size: 26px; font-weight: 700; letter-spacing: 0.5px;"">FitConnect</h1>
+                        <p style=""color: #ffe0b2; margin: 0; font-size: 14px; font-weight: 500;"">Sports & Fitness Community Platform</p>
+                    </div>
+
+                    <!-- Status Banner -->
+                    <div style=""background-color: #e8f5e9; border-left: 5px solid #2e7d32; padding: 18px 24px; margin: 24px 24px 0;"">
+                        <div style=""display: flex; align-items: center;"">
+                            <span style=""color: #1b5e20; font-size: 16px; font-weight: 700;"">APPLICATION APPROVED</span>
+                        </div>
+                        <p style=""margin: 6px 0 0; color: #2e7d32; font-size: 14px;"">Congratulations! You are now officially recognized as a Coach on FitConnect.</p>
+                    </div>
+
+                    <!-- Body Content -->
+                    <div style=""padding: 24px;"">
+                        <p style=""font-size: 16px; margin: 0 0 16px;"">Hello <strong>{safeName}</strong>,</p>
+                        <p style=""font-size: 15px; margin: 0 0 16px; color: #4a5568;"">
+                            We are thrilled to inform you that your <strong>Coach Application</strong> has been reviewed and officially approved by the FitConnect administration team.
+                        </p>
+                        <p style=""font-size: 14px; color: #718096; margin: 0 0 20px;"">
+                            Your account permissions have been upgraded to Coach status, giving you full access to all coach platform features.
+                        </p>
+
+                        {noteHtml}
+
+                        <!-- Next Steps -->
+                        <div style=""background-color: #f8fafc; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px; border: 1px solid #edf2f7;"">
+                            <h4 style=""margin: 0 0 12px; color: #2d3748; font-size: 15px; font-weight: 600;"">Here is how you can get started:</h4>
+                            <ul style=""margin: 0; padding-left: 20px; color: #4a5568; font-size: 14px; line-height: 1.8;"">
+                                <li>Access your <strong>Coach Dashboard</strong> to review your profile and status.</li>
+                                <li>Update your personal biography, coaching specializations, and portfolio photos.</li>
+                                <li>Set up your <strong>Training Packages</strong> so prospective trainees can book sessions.</li>
+                                <li>Manage your workout schedules and chat directly with trainees on the platform.</li>
+                            </ul>
+                        </div>
+
+                        <!-- CTA Button -->
+                        <div style=""text-align: center; margin: 30px 0 16px;"">
+                            <a href=""http://localhost:5112/coach/dashboard"" style=""display: inline-block; background-color: #FF5722; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600; box-shadow: 0 4px 10px rgba(255, 87, 34, 0.3);"">
+                                Go to Coach Dashboard →
+                            </a>
+                        </div>
+                        <p style=""text-align: center; font-size: 13px; color: #a0aec0; margin: 0 0 10px;"">Or sign in directly through the official FitConnect website.</p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style=""background-color: #f7fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #edf2f7;"">
+                        <p style=""margin: 0 0 6px; font-size: 13px; color: #718096;"">Need assistance? Please reach out to <a href=""mailto:support@fitconnect.vn"" style=""color: #FF5722; text-decoration: none;"">support@fitconnect.vn</a></p>
+                        <p style=""margin: 0; font-size: 12px; color: #a0aec0;"">© 2026 FitConnect. All rights reserved.</p>
+                    </div>
+                </div>
+            </div>";
+
+        await _emailService.SendEmailAsync(toEmail, subject, body);
+    }
+
+    private async Task SendCoachApplicationRejectedEmailAsync(
+        string toEmail,
+        string? fullName,
+        string? rejectReason)
+    {
+        if (_emailService == null) return;
+
+        var safeName = EscapeHtml(string.IsNullOrWhiteSpace(fullName) ? "Applicant" : fullName);
+        var subject = "[FitConnect] Important Update on Your Coach Application";
+        var safeReason = EscapeHtml(
+            string.IsNullOrWhiteSpace(rejectReason)
+                ? "Submitted documents or verification credentials do not meet platform verification criteria."
+                : rejectReason);
+
+        var body = $@"
+            <div style=""background-color: #f4f6f8; padding: 30px 15px; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333333; line-height: 1.6;"">
+                <div style=""max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;"">
+                    <!-- Header -->
+                    <div style=""background: linear-gradient(135deg, #455A64 0%, #607D8B 100%); padding: 28px 24px; text-align: center;"">
+                        <h1 style=""color: #ffffff; margin: 0 0 4px; font-size: 26px; font-weight: 700; letter-spacing: 0.5px;"">FitConnect</h1>
+                        <p style=""color: #cfd8dc; margin: 0; font-size: 14px; font-weight: 500;"">Sports & Fitness Community Platform</p>
+                    </div>
+
+                    <!-- Status Banner -->
+                    <div style=""background-color: #ffebee; border-left: 5px solid #d32f2f; padding: 18px 24px; margin: 24px 24px 0;"">
+                        <div style=""display: flex; align-items: center;"">
+                            <span style=""color: #b71c1c; font-size: 16px; font-weight: 700;"">APPLICATION NOT APPROVED</span>
+                        </div>
+                        <p style=""margin: 6px 0 0; color: #c62828; font-size: 14px;"">Notification regarding your coach application verification result</p>
+                    </div>
+
+                    <!-- Body Content -->
+                    <div style=""padding: 24px;"">
+                        <p style=""font-size: 16px; margin: 0 0 16px;"">Hello <strong>{safeName}</strong>,</p>
+                        <p style=""font-size: 15px; margin: 0 0 16px; color: #4a5568;"">
+                            Thank you for your interest in joining FitConnect as a Coach. After carefully reviewing your submitted credentials and verification records, we regret to inform you that your coach application could not be approved at this time.
+                        </p>
+
+                        <!-- Rejection Reason Box -->
+                        <div style=""background-color: #fff5f5; border-left: 4px solid #e53e3e; padding: 16px 20px; margin-bottom: 24px; border-radius: 4px;"">
+                            <p style=""margin: 0; font-size: 14px; font-weight: 700; color: #c53030;"">Rejection Reason:</p>
+                            <p style=""margin: 8px 0 0; font-size: 15px; color: #2d3748; line-height: 1.5; font-style: italic;"">
+                                ""{safeReason}""
+                            </p>
+                        </div>
+
+                        <!-- Guidance / Next Steps -->
+                        <div style=""background-color: #f8fafc; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px; border: 1px solid #edf2f7;"">
+                            <h4 style=""margin: 0 0 12px; color: #2d3748; font-size: 15px; font-weight: 600;"">What should you do next?</h4>
+                            <ul style=""margin: 0; padding-left: 20px; color: #4a5568; font-size: 14px; line-height: 1.8;"">
+                                <li>Review the reason stated above and prepare updated or clearer documentation.</li>
+                                <li>Ensure that all identity verification photos (eKYC / ID card) and professional certificates are clear and valid.</li>
+                                <li>Feel free to contact our support team if you require assistance or guidance regarding resubmission.</li>
+                            </ul>
+                        </div>
+
+                        <p style=""font-size: 14px; color: #4a5568; margin: 0 0 20px;"">
+                            If you believe this decision was made in error or if you have additional documents to substantiate your application, please contact our support team for assistance.
+                        </p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style=""background-color: #f7fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #edf2f7;"">
+                        <p style=""margin: 0 0 6px; font-size: 13px; color: #718096;"">Support Department: <a href=""mailto:support@fitconnect.vn"" style=""color: #FF5722; text-decoration: none;"">support@fitconnect.vn</a></p>
+                        <p style=""margin: 0; font-size: 12px; color: #a0aec0;"">© 2026 FitConnect. All rights reserved.</p>
+                    </div>
+                </div>
+            </div>";
+
+        await _emailService.SendEmailAsync(toEmail, subject, body);
     }
 }

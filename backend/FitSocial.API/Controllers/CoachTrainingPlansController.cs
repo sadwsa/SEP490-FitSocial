@@ -152,6 +152,36 @@ public class CoachTrainingPlansController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Monitor Trainee Workout Progress: Retrieves completion stats and logs for a trainee's purchased package.
+    /// </summary>
+    [HttpGet("trainee-progress/{orderDetailsId:guid}")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachTraineeWorkoutProgressDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCoachTraineeProgress(
+        [FromRoute] Guid orderDetailsId,
+        CancellationToken cancellationToken = default)
+    {
+        var coachId = GetCurrentCoachId();
+        if (coachId == Guid.Empty)
+        {
+            return Unauthorized(ApiResponseDto<CoachTraineeWorkoutProgressDto>.Fail("Unauthorized: Invalid coach identity in token."));
+        }
+
+        try
+        {
+            var result = await _trainingPlanService.GetCoachTraineeProgressAsync(coachId, orderDetailsId, cancellationToken);
+            return Ok(ApiResponseDto<CoachTraineeWorkoutProgressDto>.Ok(result, "Trainee workout progress retrieved successfully."));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CoachTrainingPlans] Error getting progress for order detail {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
+            throw;
+        }
+    }
+
     private Guid GetCurrentCoachId()
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value

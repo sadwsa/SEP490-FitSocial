@@ -60,12 +60,12 @@ public class PayOSPayoutGateway : IBankTransferGateway
     }
 
     /// <summary>
-    /// Shared HttpClient forced onto IPv4. PayOS payout calls are IP-allowlisted
+    /// HttpClient forced onto IPv4. PayOS payout calls are IP-allowlisted
     /// (IPv4), but .NET prefers IPv6 when the network has it — PayOS would then
     /// see an unlisted IPv6 source and answer 403 even with correct keys.
+    /// A fresh instance is created per transfer because the PayOS SDK rewrites
+    /// DefaultRequestHeaders on construction, which throws on a reused client.
     /// </summary>
-    private static readonly HttpClient SharedIPv4Client = CreateIPv4HttpClient();
-
     private static HttpClient CreateIPv4HttpClient()
     {
         var handler = new System.Net.Http.SocketsHttpHandler
@@ -96,7 +96,7 @@ public class PayOSPayoutGateway : IBankTransferGateway
         return new HttpClient(handler);
     }
 
-    private async Task<PayOSClient> CreateClientAsync(CancellationToken cancellationToken = default)
+    private async Task<(PayOSClient Client, HttpClient Http)> CreateClientAsync(CancellationToken cancellationToken = default)
     {
         string clientId;
         string apiKey;
@@ -107,13 +107,14 @@ public class PayOSPayoutGateway : IBankTransferGateway
             var dbCreds = await _credentials.GetPayoutCredentialsAsync(cancellationToken);
             if (dbCreds != null)
             {
-                return new PayOSClient(new PayOSOptions
+                var http = CreateIPv4HttpClient();
+                return (new PayOSClient(new PayOSOptions
                 {
                     ClientId = dbCreds.ClientId,
                     ApiKey = dbCreds.ApiKey,
                     ChecksumKey = dbCreds.ChecksumKey,
-                    HttpClient = SharedIPv4Client
-                });
+                    HttpClient = http
+                }), http);
             }
         }
 
@@ -133,13 +134,14 @@ public class PayOSPayoutGateway : IBankTransferGateway
             throw new InvalidOperationException("PayOS payout is not configured on the server.");
         }
 
-        return new PayOSClient(new PayOSOptions
+        var fallbackHttp = CreateIPv4HttpClient();
+        return (new PayOSClient(new PayOSOptions
         {
             ClientId = clientId,
             ApiKey = apiKey,
             ChecksumKey = checksumKey,
-            HttpClient = SharedIPv4Client
-        });
+            HttpClient = fallbackHttp
+        }), fallbackHttp);
     }
 
     public static string? ResolveBin(string? bankCode)
@@ -158,28 +160,130 @@ public class PayOSPayoutGateway : IBankTransferGateway
         return BankBins.TryGetValue(code, out var bin) ? bin : null;
     }
 
-    public async Task<BankTransferResult> TransferAsync(BankTransferRequest request, CancellationToken cancellationToken = default)
+    public async Task<CreatedTransfer> CreateTransferAsync(BankTransferRequest request, CancellationToken cancellationToken = default)
     {
         PayOSClient client;
+        HttpClient http;
         try
         {
-            client = await CreateClientAsync(cancellationToken);
+            (client, http) = await CreateClientAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            return new BankTransferResult(false, null, ex.Message);
+            return new CreatedTransfer(false, null, false, null, ex.Message, null);
         }
 
+        try
+        {
+            return await CreateTransferCoreAsync(client, request, cancellationToken);
+        }
+        finally
+        {
+            client.Dispose();
+            http.Dispose();
+        }
+    }
+
+    public async Task<BankTransferStatus?> GetTransferStatusAsync(string gatewayPayoutId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(gatewayPayoutId))
+        {
+            return null;
+        }
+
+        PayOSClient client;
+        HttpClient http;
+        try
+        {
+            (client, http) = await CreateClientAsync(cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+
+        try
+        {
+            var payout = await client.Payouts.GetAsync(gatewayPayoutId.Trim());
+            return MapStatus(payout);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            client.Dispose();
+            http.Dispose();
+        }
+    }
+
+    public async Task<BankTransferStatus?> FindTransferByReferenceAsync(string referenceId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(referenceId))
+        {
+            return null;
+        }
+
+        PayOSClient client;
+        HttpClient http;
+        try
+        {
+            (client, http) = await CreateClientAsync(cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+
+        try
+        {
+            var page = await client.Payouts.ListAsync(
+                new GetPayoutListParam { ReferenceId = referenceId.Trim(), Limit = 5 });
+            var payout = page?.Data?.FirstOrDefault(p => string.Equals(p.ReferenceId, referenceId.Trim(), StringComparison.OrdinalIgnoreCase))
+                ?? page?.Data?.FirstOrDefault();
+            return payout == null ? null : MapStatus(payout);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            client.Dispose();
+            http.Dispose();
+        }
+    }
+
+    private static BankTransferStatus MapStatus(Payout payout)
+    {
+        var tx = payout.Transactions?.FirstOrDefault();
+        var succeeded = tx != null && tx.State == PayoutTransactionState.Succeeded;
+        var state = tx?.State.ToString() ?? payout.ApprovalState.ToString();
+        string? failure = null;
+        if (!succeeded && tx != null && (tx.State == PayoutTransactionState.Failed
+            || tx.State == PayoutTransactionState.Cancelled
+            || tx.State == PayoutTransactionState.Reversed))
+        {
+            failure = !string.IsNullOrWhiteSpace(tx.ErrorMessage) ? tx.ErrorMessage : $"PayOS transaction {tx.State}.";
+        }
+        return new BankTransferStatus(true, succeeded, state, failure, payout.Id, payout.Id);
+    }
+
+    private async Task<CreatedTransfer> CreateTransferCoreAsync(
+        PayOSClient client, BankTransferRequest request, CancellationToken cancellationToken)
+    {
         var bin = ResolveBin(request.BankCode);
         if (bin == null)
         {
-            return new BankTransferResult(false, null,
-                $"Unsupported bank code '{request.BankCode}'. Update the coach bank account with a valid code.");
+            return new CreatedTransfer(false, null, false, null,
+                $"Unsupported bank code '{request.BankCode}'. Update the coach bank account with a valid code.", null);
         }
 
         if (string.IsNullOrWhiteSpace(request.AccountNumber) || request.Amount <= 0)
         {
-            return new BankTransferResult(false, null, "Beneficiary account rejected: invalid account number or amount.");
+            return new CreatedTransfer(false, null, false, null,
+                "Beneficiary account rejected: invalid account number or amount.", null);
         }
 
         var referenceId = string.IsNullOrWhiteSpace(request.Reference)
@@ -201,7 +305,7 @@ public class PayOSPayoutGateway : IBankTransferGateway
         var balanceError = await CheckBalanceAsync(client, amount, cancellationToken);
         if (balanceError != null)
         {
-            return new BankTransferResult(false, null, balanceError);
+            return new CreatedTransfer(false, null, false, null, balanceError, null);
         }
 
         Payout payout;
@@ -213,25 +317,18 @@ public class PayOSPayoutGateway : IBankTransferGateway
         }
         catch (Exception ex)
         {
-            return new BankTransferResult(false, null, MapPayOSException(ex, amount));
+            return new CreatedTransfer(false, null, false, null, MapPayOSException(ex, amount), null);
         }
 
         var tx = payout.Transactions?.FirstOrDefault();
-        if (tx == null)
-        {
-            return new BankTransferResult(false, payout.Id,
-                $"PayOS accepted the order ({payout.ApprovalState}) but returned no transaction. Check the PayOS dashboard.");
-        }
-
-        if (tx.State == PayoutTransactionState.Succeeded)
-        {
-            return new BankTransferResult(true, payout.Id, null);
-        }
-
-        var reason = !string.IsNullOrWhiteSpace(tx.ErrorMessage)
-            ? tx.ErrorMessage
-            : $"PayOS transaction state: {tx.State} (approval: {payout.ApprovalState}).";
-        return new BankTransferResult(false, payout.Id, reason);
+        var succeeded = tx != null && tx.State == PayoutTransactionState.Succeeded;
+        return new CreatedTransfer(
+            true,
+            payout.Id,
+            succeeded,
+            tx?.State.ToString() ?? payout.ApprovalState.ToString(),
+            succeeded ? null : (!string.IsNullOrWhiteSpace(tx?.ErrorMessage) ? tx.ErrorMessage : null),
+            payout.Id);
     }
 
     /// <summary>

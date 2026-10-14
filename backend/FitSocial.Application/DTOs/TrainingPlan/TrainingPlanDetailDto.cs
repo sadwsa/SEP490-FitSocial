@@ -16,6 +16,9 @@ public class TrainingPlanDetailDto
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public DateTime? PublishedAt { get; set; }
+    public int? PackageDurationDays { get; set; }
+    public int? PackageSessionCount { get; set; }
+    public DateTime? PackagePurchasedAt { get; set; }
 
     public List<TrainingPlanExerciseDetailDto> Exercises { get; set; } = new();
 }

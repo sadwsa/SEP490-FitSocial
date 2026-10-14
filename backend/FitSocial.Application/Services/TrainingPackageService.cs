@@ -101,7 +101,7 @@ namespace FitSocial.Application.Services
             if (dto.Description != null) package.Description = dto.Description;
             if (dto.Price.HasValue) package.Price = dto.Price.Value;
             if (dto.DurationDays.HasValue) package.DurationDays = dto.DurationDays.Value;
-            if (dto.SessionCount.HasValue) package.SessionCount = dto.SessionCount.Value;
+            package.SessionCount = dto.SessionCount;
             if (dto.MinAge.HasValue) package.MinAge = dto.MinAge.Value;
             if (dto.TargetAudience != null) package.TargetAudience = dto.TargetAudience;
             if (dto.IsActive.HasValue) package.IsActive = dto.IsActive.Value;
@@ -156,6 +156,23 @@ namespace FitSocial.Application.Services
                     dto.UserRating = userReview.Rating;
                     dto.UserComment = userReview.Comment;
                 }
+
+                var myOrderDetail = pkg.OrderDetails?
+                    .Where(od => od.Order?.BuyerId == currentUserId)
+                    .OrderByDescending(od => od.CreatedAt)
+                    .FirstOrDefault();
+
+                if (myOrderDetail != null)
+                {
+                    dto.OrderDetailsId = myOrderDetail.OrderDetailsId;
+                    var plan = myOrderDetail.TrainingPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+                    if (plan != null)
+                    {
+                        dto.TrainingPlanId = plan.TrainingPlanId;
+                        dto.PlanStatus = plan.Status;
+                    }
+                }
+
                 return dto;
             });
         }

@@ -290,8 +290,209 @@
                             </div>
                         }
                     </div>
+                    <!-- ========================================== -->
+                    <!--                REVIEWS & RATINGS           -->
+                    <!-- ========================================== -->
+                    <div class="mt-4 p-6 sm:p-8">
+                        <h3 class="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                            <span>Customer Reviews & Ratings</span>
+                            <span class="text-sm font-normal text-gray-500">(@reviewSummary.TotalReviews reviews)</span>
+                        </h3>
+
+                        <!-- Review Score Overview Banner (Shopee Style) -->
+                        <div class="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 mb-8 flex flex-col sm:flex-row items-center gap-6">
+                            <!-- Score Box -->
+                            <div class="text-center sm:border-r sm:border-orange-200/60 sm:pr-8">
+                                <div class="text-4xl font-extrabold text-[#FF5500] mb-1">
+                                    @(reviewSummary.TotalReviews > 0 ? reviewSummary.AverageRating.ToString("0.0") : "5.0")
+                                    <span class="text-lg font-medium text-gray-500">/ 5</span>
+                                </div>
+                                <div class="flex items-center justify-center gap-1 text-yellow-400">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        <svg class="w-5 h-5 @(i <= Math.Round(reviewSummary.AverageRating) ? "fill-current" : "text-gray-200 fill-current")" viewBox="0 0 20 20">
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                        </svg>
+                                    }
+                                </div>
+                                <span class="text-xs text-gray-500 font-medium mt-1 inline-block">Overall Satisfaction</span>
+                            </div>
+
+                            <!-- Star Breakdown Filter Badges -->
+                            <div class="flex-1 flex flex-wrap gap-2">
+                                <button type="button" @onclick="() => selectedStarFilter = null"
+                                        class="px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer @(selectedStarFilter == null ? "bg-[#FF5500] text-white border-[#FF5500] shadow-xs" : "bg-white text-gray-700 border-gray-200 hover:border-gray-300")">
+                                    All (@reviewSummary.TotalReviews)
+                                </button>
+                                @for (int s = 5; s >= 1; s--)
+                                {
+                                    int starVal = s;
+                                    int count = reviewSummary.RatingCounts.ContainsKey(starVal) ? reviewSummary.RatingCounts[starVal] : 0;
+                                    <button type="button" @onclick="() => selectedStarFilter = starVal"
+                                            class="px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer @(selectedStarFilter == starVal ? "bg-[#FF5500] text-white border-[#FF5500] shadow-xs" : "bg-white text-gray-700 border-gray-200 hover:border-gray-300")">
+                                        @($"{starVal} Stars ({count})")
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Reviews List -->
+                        @if (isLoadingReviews)
+                        {
+                            <div class="flex justify-center py-8">
+                                <div class="w-7 h-7 border-3 border-[#FF5500] border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                        }
+                        else if (!FilteredReviews.Any())
+                        {
+                            <div class="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                <p class="text-sm text-gray-500">No reviews found for this selection.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="divide-y divide-gray-100">
+                                @foreach (var review in FilteredReviews)
+                                {
+                                    var isMyReview = currentUserId.HasValue && review.TraineeId == currentUserId.Value;
+
+                                    <div class="py-5 @(isMyReview ? "bg-orange-50/40 -mx-4 px-4 rounded-2xl border border-orange-200 mb-2" : "")">
+                                        <div class="flex items-start gap-3.5">
+                                            <!-- Trainee Avatar -->
+                                            <div class="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0">
+                                                @if (!string.IsNullOrWhiteSpace(review.TraineeAvatarUrl))
+                                                {
+                                                    <img src="@review.TraineeAvatarUrl" alt="Avatar" class="w-full h-full object-cover" />
+                                                }
+                                                else
+                                                {
+                                                    <span>@(string.IsNullOrWhiteSpace(review.TraineeName) ? "T" : review.TraineeName[0].ToString().ToUpper())</span>
+                                                }
+                                            </div>
+
+                                            <!-- Trainee Name, Stars & Content -->
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center justify-between">
+                                                    <div class="flex items-center gap-2 flex-wrap">
+                                                        <h5 class="text-sm font-bold text-gray-900">@review.TraineeName</h5>
+                                                        @if (isMyReview)
+                                                        {
+                                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FF5500] text-white">Your Review</span>
+                                                        }
+                                                        @if (review.IsEdited)
+                                                        {
+                                                            <span class="text-[11px] text-gray-400 italic">(Edited)</span>
+                                                        }
+                                                    </div>
+
+                                                    <div class="flex items-center gap-2 relative">
+                                                        <span class="text-xs text-gray-400" title="@(review.IsEdited && review.UpdatedAt.HasValue ? $"Original: {FormatDateTime(review.CreatedAt)}" : "")">
+                                                            @FormatDateTime(review.IsEdited && review.UpdatedAt.HasValue ? review.UpdatedAt : review.CreatedAt)
+                                                        </span>
+
+                                                        <!-- THREE DOTS MENU FOR OWN REVIEW -->
+                                                        @if (isMyReview)
+                                                        {
+                                                            <div class="relative">
+                                                                <button type="button" @onclick="() => ToggleMenu(review.ReviewId)"
+                                                                        class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-500 transition cursor-pointer">
+                                                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                @if (openMenuReviewId == review.ReviewId)
+                                                                {
+                                                                    <div class="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 animate-in fade-in zoom-in-95">
+                                                                        @if (!review.IsEdited)
+                                                                        {
+                                                                            <button type="button" @onclick="() => OpenEditReviewModal(review)"
+                                                                                    class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition flex items-center gap-2 cursor-pointer">
+                                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                                                                Edit Review
+                                                                            </button>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <div class="px-3.5 py-2 text-[11px] text-gray-400 italic">
+                                                                                Edited once (Cannot edit again)
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                <!-- Stars -->
+                                                <div class="flex items-center gap-0.5 my-1 text-yellow-400">
+                                                    @for (int i = 1; i <= 5; i++)
+                                                    {
+                                                        <svg class="w-4 h-4 @(i <= review.Rating ? "fill-current" : "text-gray-200 fill-current")" viewBox="0 0 20 20">
+                                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                        </svg>
+                                                    }
+                                                </div>
+
+                                                <!-- Comment text -->
+                                                @if (!string.IsNullOrWhiteSpace(review.Comment))
+                                                {
+                                                    <p class="text-sm text-gray-700 leading-relaxed mt-1.5 whitespace-pre-line">@review.Comment</p>
+                                                }
+
+                                                <!-- COACH RESPONSE BOX -->
+                                                @if (!string.IsNullOrWhiteSpace(review.Reply))
+                                                {
+                                                    <div class="mt-3.5 bg-orange-50/60 border-l-3 border-[#FF5500] p-3.5 rounded-r-xl">
+                                                        <div class="flex items-center justify-between mb-1">
+                                                            <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                                                                <svg class="w-3.5 h-3.5 text-[#FF5500]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd"></path></svg>
+                                                                Coach
+                                                            </span>
+                                                            <span class="text-[11px] text-gray-400">@FormatDateTime(review.UpdatedAt ?? review.CreatedAt)</span>
+                                                        </div>
+                                                        <p class="text-xs text-gray-600 leading-relaxed">@review.Reply</p>
+                                                    </div>
+                                                }
+
+                                                <!-- COACH REPLY ACTION -->
+                                                @if (isOwnPackage)
+                                                {
+                                                    @if (activeReplyingReviewId == review.ReviewId)
+                                                    {
+                                                        <div class="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                                                            <label class="block text-xs font-bold text-gray-700 mb-1">Your reply:</label>
+                                                            <textarea @bind="replyText" rows="2" class="w-full text-xs p-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500" placeholder="Write a reply to the trainee..."></textarea>
+                                                            <div class="flex justify-end gap-2 mt-2">
+                                                                <button type="button" @onclick="() => activeReplyingReviewId = null" class="px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded-lg transition cursor-pointer">Cancel</button>
+                                                                <button type="button" @onclick="() => SubmitReplyAsync(review.ReviewId)" disabled="@isSubmittingReply" class="px-3 py-1 text-xs font-semibold text-white bg-[#FF5500] hover:bg-orange-600 rounded-lg transition disabled:opacity-50 cursor-pointer">
+                                                                    @(isSubmittingReply ? "Posting..." : "Post Reply")
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="mt-2 text-right">
+                                                            <button type="button" @onclick="() => StartReplying(review)" class="text-xs font-semibold text-[#FF5500] hover:underline cursor-pointer">
+                                                                @(string.IsNullOrWhiteSpace(review.Reply) ? "💬 Reply to review" : "✏️ Edit reply")
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                            </div>
+                        }
+                    </div>
                 </div>
             }
+          
+
         </section>
 
         <!-- Right Sidebar (Empty) -->
@@ -303,7 +504,64 @@
                                PackageTitle="@package?.Title"
                                OnClose="() => showAlreadyInCartModal = false"
                                OnViewCart="NavigateToCart" />
+
 </div>
+<!-- EDIT REVIEW MODAL (EDITABLE ONCE ONLY) -->
+@if (isEditModalOpen)
+{
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95">
+            <h3 class="text-xl font-bold text-gray-900 mb-2 text-center">Edit Your Review</h3>
+
+            <!-- Notice: Edit once only -->
+            <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl mb-5 flex items-start gap-2.5">
+                <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs text-amber-800 font-medium">Notice: You can only edit this review <strong>once</strong>. After saving, you will not be able to modify it again.</span>
+            </div>
+
+            @if (!string.IsNullOrEmpty(editErrorMessage))
+            {
+                <div class="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 font-medium border border-red-100">
+                    @editErrorMessage
+                </div>
+            }
+
+            <EditForm Model="editReviewDto" OnValidSubmit="SubmitEditReview">
+                <!-- Stars Selection -->
+                <div class="flex justify-center gap-2 mb-6">
+                    @for (int i = 1; i <= 5; i++)
+                    {
+                        int star = i;
+                        <button type="button" @onclick="() => editReviewDto.Rating = star" class="focus:outline-none transition-transform hover:scale-110 cursor-pointer">
+                            <svg class="w-10 h-10 @(star <= editReviewDto.Rating ? "text-yellow-400" : "text-gray-200")" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                            </svg>
+                        </button>
+                    }
+                </div>
+
+                <!-- Comment Input -->
+                <div class="mb-6">
+                    <label class="block text-xs font-bold text-gray-700 mb-1">Your Review Comment:</label>
+                    <InputTextArea @bind-Value="editReviewDto.Comment" rows="4" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none text-sm" placeholder="Share your experience with this training package..."></InputTextArea>
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <button type="button" @onclick="() => isEditModalOpen = false" class="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition cursor-pointer">Cancel</button>
+                    <button type="submit" disabled="@isSubmittingEdit" class="px-5 py-2.5 text-sm font-semibold text-white bg-[#FF5500] hover:bg-orange-600 rounded-xl disabled:opacity-50 transition flex items-center gap-2 cursor-pointer">
+                        @if (isSubmittingEdit)
+                        {
+                            <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        }
+                        Save Changes
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
 
 @code {
     [Parameter]
@@ -334,6 +592,126 @@
     private string userName = "User";
     private string userInitials = "U";
     private string userRole = "Trainee";
+    // Reviews state
+    private PackageReviewSummaryDto reviewSummary = new PackageReviewSummaryDto();
+    private bool isLoadingReviews = true;
+    private int? selectedStarFilter = null;
+
+    // Pin own review to the top
+    private IEnumerable<PackageReviewDto> FilteredReviews
+    {
+        get
+        {
+            var list = selectedStarFilter == null
+                ? reviewSummary.Reviews
+                : reviewSummary.Reviews.Where(r => r.Rating == selectedStarFilter.Value);
+
+            if (currentUserId.HasValue)
+            {
+                return list.OrderByDescending(r => r.TraineeId == currentUserId.Value)
+                           .ThenByDescending(r => r.CreatedAt);
+            }
+
+            return list.OrderByDescending(r => r.CreatedAt);
+        }
+    }
+
+    // Coach Reply state
+    private Guid? activeReplyingReviewId = null;
+    private string replyText = string.Empty;
+    private bool isSubmittingReply = false;
+
+    // Edit Review state
+    private Guid? openMenuReviewId = null;
+    private bool isEditModalOpen = false;
+    private CreatePackageReviewDto editReviewDto = new CreatePackageReviewDto();
+    private bool isSubmittingEdit = false;
+    private string? editErrorMessage;
+
+    private void ToggleMenu(Guid reviewId)
+    {
+        openMenuReviewId = (openMenuReviewId == reviewId) ? null : reviewId;
+    }
+
+    private void OpenEditReviewModal(PackageReviewDto review)
+    {
+        openMenuReviewId = null;
+        editReviewDto = new CreatePackageReviewDto
+        {
+            Rating = review.Rating,
+            Comment = review.Comment
+        };
+        editErrorMessage = null;
+        isEditModalOpen = true;
+    }
+
+    private async Task SubmitEditReview()
+    {
+        isSubmittingEdit = true;
+        editErrorMessage = null;
+
+        var res = await PackageService.SubmitPackageReviewAsync(Id, editReviewDto);
+        if (res.Success)
+        {
+            isEditModalOpen = false;
+            ShowSuccessToast("Review updated successfully!");
+            await LoadReviewsAsync();
+        }
+        else
+        {
+            editErrorMessage = res.Message ?? "Failed to update review.";
+        }
+        isSubmittingEdit = false;
+    }
+
+    private async Task LoadReviewsAsync()
+    {
+        isLoadingReviews = true;
+        var res = await PackageService.GetPackageReviewsAsync(Id);
+        if (res.Success && res.Data != null)
+        {
+            reviewSummary = res.Data;
+        }
+        isLoadingReviews = false;
+    }
+
+    private void StartReplying(PackageReviewDto review)
+    {
+        activeReplyingReviewId = review.ReviewId;
+        replyText = review.Reply ?? string.Empty;
+    }
+
+    private async Task SubmitReplyAsync(Guid reviewId)
+    {
+        if (string.IsNullOrWhiteSpace(replyText)) return;
+
+        isSubmittingReply = true;
+        var res = await PackageService.ReplyToReviewAsync(Id, reviewId, new ReplyReviewDto { Reply = replyText });
+        if (res.Success)
+        {
+            activeReplyingReviewId = null;
+            replyText = string.Empty;
+            ShowSuccessToast("Reply posted successfully!");
+            await LoadReviewsAsync();
+        }
+        else
+        {
+            ShowErrorToast(res.Message ?? "Failed to post reply.");
+        }
+        isSubmittingReply = false;
+    }
+
+    private static string FormatDateTime(DateTime? dt)
+    {
+        if (!dt.HasValue) return string.Empty;
+        var utc = dt.Value.Kind == DateTimeKind.Utc
+            ? dt.Value
+            : DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc);
+        return utc.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+    }
+
+  
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -344,6 +722,8 @@
             package = response.Data;
             selectedImageUrl = package?.ImageUrls?.FirstOrDefault();
             await CheckCartStatusAsync();
+            // THÊM DÒNG NÀY ĐỂ TẢI REVIEWS:
+            await LoadReviewsAsync();
         }
         else
         {

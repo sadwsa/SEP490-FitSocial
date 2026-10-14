@@ -132,5 +132,96 @@ public class ReportService : IReportService
             };
         }
     }
+
+    public async Task<ApiResponse<PagedResult<ReportListItemDto>>> GetAppealsAsync(
+        string? appealStatus = null,
+        string? searchTerm = null,
+        int pageNumber = 1,
+        int pageSize = 10)
+    {
+        try
+        {
+            var query = new List<string>();
+
+            // "ALL" means no appeal-status filter.
+            if (!string.IsNullOrWhiteSpace(appealStatus) &&
+                !string.Equals(appealStatus.Trim(), "ALL", StringComparison.OrdinalIgnoreCase))
+            {
+                query.Add($"appealStatus={Uri.EscapeDataString(appealStatus.Trim().ToUpperInvariant())}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                query.Add($"searchTerm={Uri.EscapeDataString(searchTerm.Trim())}");
+            }
+
+            query.Add($"pageNumber={Math.Max(1, pageNumber)}");
+            query.Add($"pageSize={Math.Max(1, pageSize)}");
+
+            var endpoint = "reports?" + string.Join("&", query);
+
+            var result = await _apiClient.GetAsync<PagedResult<ReportListItemDto>>(endpoint);
+            if (result != null && result.Success && result.Data == null)
+            {
+                result.Data = new PagedResult<ReportListItemDto>();
+            }
+
+            return result ?? new ApiResponse<PagedResult<ReportListItemDto>>
+            {
+                Success = false,
+                Message = "Unable to load appeals. Please try again."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<PagedResult<ReportListItemDto>>
+            {
+                Success = false,
+                Message = $"Error loading appeals: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<ReportListItemDto>> ReviewAppealAsync(Guid reportId, ReviewAppealRequest request)
+    {
+        try
+        {
+            var result = await _apiClient.PutAsync<ReviewAppealRequest, ReportListItemDto>($"reports/{reportId}/appeal", request);
+            return result ?? new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = "Unable to review appeal."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = $"Error reviewing appeal: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<ReportListItemDto>> ReportUserAsync(CreateUserReportRequest request)
+    {
+        try
+        {
+            var result = await _apiClient.PostAsync<CreateUserReportRequest, ReportListItemDto>("reports/user", request);
+            return result ?? new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = "Unable to submit user report."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = $"Error reporting user: {ex.Message}"
+            };
+        }
+    }
 }
 

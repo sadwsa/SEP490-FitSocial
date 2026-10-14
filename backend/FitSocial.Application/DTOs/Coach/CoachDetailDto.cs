@@ -44,6 +44,8 @@ public class CoachCertificateDetailDto
     public DateOnly? IssuedDate { get; set; }
     public DateOnly? ExpiryDate { get; set; }
     public string? VerificationStatus { get; set; }
+    public string? RejectedReason { get; set; }
+    public DateTime? VerifiedAt { get; set; }
 }
 
 public class UpdateCoachProfileDto

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Coach;
@@ -25,6 +25,9 @@ public class CoachDashboardService : ICoachDashboardService
         _dashboardRepository = dashboardRepository;
         _userRepository = userRepository;
     }
+
+   
+
 
     /// <inheritdoc/>
     public async Task<ApiResponseDto<CoachDashboardMetricsDto>> GetCoachDashboardMetricsAsync(
@@ -64,4 +67,58 @@ public class CoachDashboardService : ICoachDashboardService
 
         return ApiResponseDto<CoachDashboardMetricsDto>.Ok(metrics, "Coach dashboard metrics retrieved successfully.");
     }
+    // Thêm method này vào trong class CoachDashboardService
+
+    public async Task<ApiResponseDto<CoachDashboardDto>> GetCoachDashboardAnalyticsAsync(Guid coachId, CancellationToken cancellationToken = default)
+    {
+        var coach = await _userRepository.GetByIdAsync(coachId, cancellationToken);
+        if (coach == null)
+        {
+            throw new NotFoundException("Coach account not found.");
+        }
+
+        // Gọi đồng thời các queries vào db nếu cần hoặc tuần tự
+        var summary = await _dashboardRepository.GetAnalyticsSummaryAsync(coachId, cancellationToken);
+        var topTrainees = await _dashboardRepository.GetTopTraineesAsync(coachId, 5, cancellationToken);
+
+        // Cấu hình mốc thời gian 6 tháng
+        var now = DateTime.UtcNow;
+        var sixMonthsAgo = now.AddMonths(-5);
+        var startDate = new DateTime(sixMonthsAgo.Year, sixMonthsAgo.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var monthlyStatsRaw = await _dashboardRepository.GetMonthlyStatsAsync(coachId, startDate, cancellationToken);
+
+        // Đảm bảo trả về đúng 6 tháng, fill dữ liệu bằng 0 cho tháng không có đơn
+        var monthlyStats = new List<MonthlyStatDto>();
+        for (int i = 0; i < 6; i++)
+        {
+            var targetMonth = startDate.AddMonths(i);
+            var stat = monthlyStatsRaw.FirstOrDefault(s => s.Year == targetMonth.Year && s.Month == targetMonth.Month);
+
+            monthlyStats.Add(new MonthlyStatDto
+            {
+                Month = targetMonth.ToString("MM/yyyy"),
+                Revenue = stat != default ? stat.Revenue : 0,
+                TotalOrders = stat != default ? stat.TotalOrders : 0
+            });
+        }
+
+        var result = new CoachDashboardDto
+        {
+            TotalRevenue = summary.TotalRevenue,
+            TotalOrders = summary.TotalOrders,
+            RetentionRate = summary.RetentionRate,
+            MonthlyStats = monthlyStats,
+            TopTrainees = topTrainees.Select(t => new TopTraineeDto
+            {
+                TraineeId = t.TraineeId,
+                TraineeName = t.TraineeName,
+                TotalSpent = t.TotalSpent,
+                TotalOrders = t.TotalOrders
+            }).ToList()
+        };
+
+        return ApiResponseDto<CoachDashboardDto>.Ok(result, "Analytics retrieved successfully.");
+    }
+
 }

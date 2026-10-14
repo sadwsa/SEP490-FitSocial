@@ -108,7 +108,18 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
             var st = status.Trim().ToUpperInvariant();
             if (st == "PENDING")
             {
-                query = query.Where(c => c.ApprovalStatus == null || c.ApprovalStatus.ToUpper() == "PENDING");
+                query = query.Where(c =>
+                    (c.ApprovalStatus == null || c.ApprovalStatus.ToUpper() == "PENDING") &&
+                    (c.CoachCertificates.Any() || c.CertificateUrl != null) &&
+                    (!c.CoachCertificates.Any() || c.CoachCertificates.Any(cert => cert.VerificationStatus == null || cert.VerificationStatus.ToUpper() != "REJECTED")));
+            }
+            else if (st == "REJECTED")
+            {
+                query = query.Where(c =>
+                    (c.ApprovalStatus != null && c.ApprovalStatus.ToUpper() == "REJECTED") ||
+                    ((c.ApprovalStatus == null || c.ApprovalStatus.ToUpper() == "PENDING") &&
+                     ((!c.CoachCertificates.Any() && c.CertificateUrl == null) ||
+                      (c.CoachCertificates.Any() && c.CoachCertificates.All(cert => cert.VerificationStatus != null && cert.VerificationStatus.ToUpper() == "REJECTED")))));
             }
             else
             {
@@ -166,13 +177,31 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
     public async Task<Dictionary<string, int>> GetCoachApplicationStatusCountsAsync(CancellationToken cancellationToken = default)
     {
         var allProfiles = await DbSet.AsNoTracking()
-            .Select(c => c.ApprovalStatus)
+            .Include(c => c.CoachCertificates)
             .ToListAsync(cancellationToken);
 
         var total = allProfiles.Count;
-        var pending = allProfiles.Count(s => string.IsNullOrEmpty(s) || s.Equals("PENDING", StringComparison.OrdinalIgnoreCase));
-        var approved = allProfiles.Count(s => !string.IsNullOrEmpty(s) && s.Equals("APPROVED", StringComparison.OrdinalIgnoreCase));
-        var rejected = allProfiles.Count(s => !string.IsNullOrEmpty(s) && s.Equals("REJECTED", StringComparison.OrdinalIgnoreCase));
+        var pending = 0;
+        var approved = 0;
+        var rejected = 0;
+
+        foreach (var p in allProfiles)
+        {
+            var certs = p.CoachCertificates?.ToList() ?? new List<CoachCertificate>();
+            var hasNoCertificates = certs.Count == 0 && string.IsNullOrWhiteSpace(p.CertificateUrl);
+            var allRejected = certs.Count > 0 && certs.All(cert => string.Equals(cert.VerificationStatus, "REJECTED", StringComparison.OrdinalIgnoreCase));
+            var shouldAutoReject = hasNoCertificates || allRejected;
+
+            var st = string.IsNullOrWhiteSpace(p.ApprovalStatus) ? "PENDING" : p.ApprovalStatus.Trim().ToUpperInvariant();
+            if (shouldAutoReject && st == "PENDING")
+            {
+                st = "REJECTED";
+            }
+
+            if (st == "APPROVED") approved++;
+            else if (st == "REJECTED") rejected++;
+            else pending++;
+        }
 
         return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {

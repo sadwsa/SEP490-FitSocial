@@ -105,4 +105,34 @@ public class PayoutsController : ControllerBase
 
         return Ok(result);
     }
+
+    public sealed record ProcessItemsRequest(List<Guid> PayoutItemIds);
+
+    /// <summary>
+    /// Pay selected lines only (one package): transfers just their net amount.
+    /// The payout stays PENDING until every line is paid.
+    /// </summary>
+    [HttpPost("{id:guid}/process-items")]
+    [ProducesResponseType(typeof(ApiResponseDto<ProcessPayoutResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ProcessItems(Guid id, [FromBody] ProcessItemsRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var staffId))
+        {
+            return Unauthorized(ApiResponseDto<ProcessPayoutResultDto>.Fail("Unauthorized"));
+        }
+
+        if (request?.PayoutItemIds == null || request.PayoutItemIds.Count == 0)
+        {
+            return BadRequest(ApiResponseDto<ProcessPayoutResultDto>.Fail("Select at least one package line to pay."));
+        }
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _payoutService.ProcessPackageItemsAsync(id, request.PayoutItemIds, staffId, ipAddress, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
 }

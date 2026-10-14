@@ -23,5 +23,16 @@ namespace FitSocial.Application.DTOs.TrainingPackage
         public List<TrainingPackageMediaDto> Media { get; set; } = new();
         public List<string> ImageUrls => Media.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).ToList();
         public string? ThumbnailUrl => ImageUrls.FirstOrDefault();
+
+        // Review state of the current trainee
+        public bool HasReviewed { get; set; }
+        public bool IsReviewEdited { get; set; }
+        public int? UserRating { get; set; }
+        public string? UserComment { get; set; }
+
+        // Training Plan & Order Details state
+        public Guid? OrderDetailsId { get; set; }
+        public Guid? TrainingPlanId { get; set; }
+        public string? PlanStatus { get; set; }
     }
 }

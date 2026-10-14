@@ -1,0 +1,837 @@
+@page "/admin/coach-certificates"
+@layout AdminLayout
+@attribute [Authorize(Roles = "STAFF,ADMIN")]
+@implements IDisposable
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.CoachCertificate
+@using FitSocial.Client.Services.CoachCertificate
+@inject ICoachCertificateService CertificateService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Coach Certificate Management - FitSocial Admin Console</PageTitle>
+
+<AuthorizeView Roles="STAFF,ADMIN">
+    <Authorized>
+        <!-- Toast / Alert Message -->
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert @(toastType == "error" ? "error" : "info")" role="alert">
+                <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
+                <span class="alert-text">@toastMessage</span>
+                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
+            </div>
+        }
+
+        <!-- Page Header -->
+        <div class="view-header">
+            <div class="title-with-badge">
+                <h2 class="view-title">Coach Certificate Management</h2>
+                <span class="badge-pending-pill">
+                    <span class="pill-dot"></span>
+                    @statusCounts.Pending Pending Review
+                </span>
+            </div>
+            <p class="view-sub">Review, verify, and manage coach certification credentials submitted across FitSocial.</p>
+        </div>
+
+        <!-- Status Filter Tabs -->
+        <div class="cat-tabs-bar">
+            <button type="button" class="tab-btn @(currentStatusFilter == "ALL" ? "active" : "")" @onclick='() => SetStatusFilterAsync("ALL")'>
+                <span class="tab-label">All Certificates</span>
+                <span class="tab-count-pill">@statusCounts.All</span>
+            </button>
+            <button type="button" class="tab-btn @(currentStatusFilter == "PENDING" ? "active" : "")" @onclick='() => SetStatusFilterAsync("PENDING")'>
+                <span class="tab-label">Pending Review</span>
+                <span class="tab-count-pill">@statusCounts.Pending</span>
+            </button>
+            <button type="button" class="tab-btn @(currentStatusFilter == "APPROVED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("APPROVED")'>
+                <span class="tab-label">Approved</span>
+                <span class="tab-count-pill">@statusCounts.Approved</span>
+            </button>
+            <button type="button" class="tab-btn @(currentStatusFilter == "REJECTED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("REJECTED")'>
+                <span class="tab-label">Rejected</span>
+                <span class="tab-count-pill">@statusCounts.Rejected</span>
+            </button>
+        </div>
+
+        <!-- Toolbar: Search, Sorting & Actions -->
+        <div class="toolbar">
+            <div class="search-wrap">
+                <span class="search-icon"><AppIcon Name="search" /></span>
+                <input value="@searchTerm"
+                       @oninput="OnSearchInput"
+                       @onkeydown="HandleSearchKeyDown"
+                       class="toolbar-input"
+                       placeholder="Search by coach name, email, certificate name, or issuer..." />
+            </div>
+
+            <select value="@sortBy" @onchange="OnSortChanged" class="toolbar-select">
+                <option value="date_desc">Sort: Submission (Newest first)</option>
+                <option value="date_asc">Sort: Submission (Oldest first)</option>
+                <option value="name_asc">Sort: Certificate Title (A-Z)</option>
+                <option value="name_desc">Sort: Certificate Title (Z-A)</option>
+                <option value="coach_asc">Sort: Coach Name (A-Z)</option>
+                <option value="coach_desc">Sort: Coach Name (Z-A)</option>
+            </select>
+
+            <button type="button" class="icon-refresh-btn" @onclick="LoadCertificatesAsync" disabled="@isLoading" title="Refresh">
+                <AppIcon Name="refresh" />
+            </button>
+        </div>
+
+        <!-- Loading Indicator -->
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Loading coach certificates...</span>
+            </div>
+        }
+        else if (pagedCertificates.Items.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="empty-icon"><AppIcon Name="shield" /></div>
+                <h3>No certificates found</h3>
+                <p>@(string.IsNullOrWhiteSpace(searchTerm) ? "No coach certificates found in this category." : $"No certificates match \"{searchTerm}\".")</p>
+            </div>
+        }
+        else
+        {
+            <!-- Data Table -->
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>COACH APPLICANT</th>
+                            <th>CERTIFICATE DETAILS</th>
+                            <th>SUBMITTED</th>
+                            <th>STATUS</th>
+                            <th>REVIEW DETAILS</th>
+                            <th class="text-end">ACTIONS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cert in pagedCertificates.Items)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="coach-cell">
+                                        <img src="@GetAvatar(cert.CoachAvatarUrl, cert.CoachName)" alt="@cert.CoachName" class="coach-avatar" />
+                                        <div class="coach-info">
+                                            <div class="coach-name">@(string.IsNullOrWhiteSpace(cert.CoachName) ? "Unknown Coach" : cert.CoachName)</div>
+                                            <div class="coach-email">@cert.CoachEmail</div>
+                                            @if (!string.IsNullOrWhiteSpace(cert.CoachPhoneNumber))
+                                            {
+                                                <div class="coach-phone">@cert.CoachPhoneNumber</div>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="cert-cell">
+                                        <div class="cert-name-text">
+                                            @(string.IsNullOrWhiteSpace(cert.CertificateName) ? "Certificate Document" : cert.CertificateName)
+                                        </div>
+                                        <div class="cert-subtext">
+                                            @if (!string.IsNullOrWhiteSpace(cert.IssuedBy))
+                                            {
+                                                <span>Issued by: <strong>@cert.IssuedBy</strong></span>
+                                            }
+                                            @if (cert.IssuedDate.HasValue)
+                                            {
+                                                <span> • @cert.IssuedDate.Value.ToString("dd/MM/yyyy")</span>
+                                            }
+                                            @if (cert.ExpiryDate.HasValue)
+                                            {
+                                                <span> • Expires: @cert.ExpiryDate.Value.ToString("dd/MM/yyyy")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="date-cell">
+                                        <div>@FormatDate(cert.CreatedAt)</div>
+                                        <small class="text-muted">@FormatTime(cert.CreatedAt)</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-badge @(cert.VerificationStatus?.ToLowerInvariant() ?? "pending")">
+                                        @(cert.VerificationStatus ?? "PENDING")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="review-cell">
+                                        @if (string.Equals(cert.VerificationStatus, "APPROVED", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <div class="reviewed-text text-success">
+                                                <span>✓ Verified by @(cert.VerifiedByName ?? "Staff")</span>
+                                                @if (cert.VerifiedAt.HasValue)
+                                                {
+                                                    <small class="text-muted d-block">@FormatDateTime(cert.VerifiedAt)</small>
+                                                }
+                                            </div>
+                                        }
+                                        else if (string.Equals(cert.VerificationStatus, "REJECTED", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <div class="reviewed-text text-danger">
+                                                <span>✕ Rejected by @(cert.VerifiedByName ?? "Staff")</span>
+                                                @if (!string.IsNullOrWhiteSpace(cert.RejectedReason))
+                                                {
+                                                    <div class="reject-reason-snippet" title="@cert.RejectedReason">
+                                                        "@cert.RejectedReason"
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted text-sm">Awaiting review</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <div class="action-buttons">
+                                        <button type="button" class="btn-action btn-view" @onclick="() => OpenDetailModalAsync(cert.CertificateId)" title="View Certificate Details">
+                                            View Details
+                                        </button>
+                                        @if (string.Equals(cert.VerificationStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <button type="button" class="btn-action btn-approve" @onclick="() => PromptApprove(cert)" title="Approve Certificate">
+                                                Approve
+                                            </button>
+                                            <button type="button" class="btn-action btn-reject" @onclick="() => PromptReject(cert)" title="Reject Certificate">
+                                                Reject
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-bar">
+                <div class="pagination-info">
+                    Showing @(((pagedCertificates.PageNumber - 1) * pagedCertificates.PageSize) + 1) to
+                    @(Math.Min(pagedCertificates.PageNumber * pagedCertificates.PageSize, pagedCertificates.TotalCount)) of @pagedCertificates.TotalCount certificates
+                </div>
+
+                <div class="pagination-controls">
+                    <button type="button" class="page-btn" disabled="@(!pagedCertificates.HasPreviousPage)" @onclick="() => ChangePageAsync(pagedCertificates.PageNumber - 1)">
+                        Previous
+                    </button>
+
+                    @for (int i = 1; i <= pagedCertificates.TotalPages; i++)
+                    {
+                        var pageIndex = i;
+                        if (i == 1 || i == pagedCertificates.TotalPages || (i >= pagedCertificates.PageNumber - 2 && i <= pagedCertificates.PageNumber + 2))
+                        {
+                            <button type="button" class="page-btn @(pagedCertificates.PageNumber == pageIndex ? "active" : "")" @onclick="() => ChangePageAsync(pageIndex)">
+                                @pageIndex
+                            </button>
+                        }
+                        else if (i == pagedCertificates.PageNumber - 3 || i == pagedCertificates.PageNumber + 3)
+                        {
+                            <span class="page-ellipsis">…</span>
+                        }
+                    }
+
+                    <button type="button" class="page-btn" disabled="@(!pagedCertificates.HasNextPage)" @onclick="() => ChangePageAsync(pagedCertificates.PageNumber + 1)">
+                        Next
+                    </button>
+
+                    <select class="page-size-select" value="@pageSize" @onchange="OnPageSizeChangedAsync">
+                        <option value="10">10 / page</option>
+                        <option value="20">20 / page</option>
+                        <option value="50">50 / page</option>
+                    </select>
+                </div>
+            </div>
+        }
+
+        <!-- DETAIL MODAL -->
+        @if (selectedDetail != null && isDetailModalOpen)
+        {
+            <div class="modal-backdrop" @onclick="CloseModals">
+                <div class="modal-card modal-lg" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <div>
+                            <h3 class="modal-title">Certificate Details</h3>
+                            <p class="modal-sub">Review certificate documentation and coach background information</p>
+                        </div>
+                        <button type="button" class="modal-close" @onclick="CloseModals">✕</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <!-- Coach Profile Summary Card -->
+                        <div class="detail-section-card">
+                            <h5 class="section-heading">Coach Information</h5>
+                            <div class="coach-detail-row">
+                                <img src="@GetAvatar(selectedDetail.CoachAvatarUrl, selectedDetail.CoachName)" alt="@selectedDetail.CoachName" class="coach-detail-avatar" />
+                                <div class="coach-detail-meta">
+                                    <div class="coach-detail-name">@selectedDetail.CoachName</div>
+                                    <div class="coach-detail-info-grid">
+                                        <div><strong>Email:</strong> @selectedDetail.CoachEmail</div>
+                                        <div><strong>Phone:</strong> @(selectedDetail.CoachPhoneNumber ?? "Not provided")</div>
+                                        <div><strong>Experience:</strong> @(selectedDetail.CoachExperienceYears.HasValue ? $"{selectedDetail.CoachExperienceYears.Value} years" : "Not specified")</div>
+                                        <div><strong>Account Status:</strong> <span class="status-badge-inline">@(selectedDetail.CoachApprovalStatus ?? "PENDING")</span></div>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(selectedDetail.CoachBio))
+                                    {
+                                        <div class="coach-bio-text mt-2">
+                                            <strong>Bio:</strong> @selectedDetail.CoachBio
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Certificate Information Card -->
+                        <div class="detail-section-card">
+                            <div class="flex-between">
+                                <h5 class="section-heading mb-0">Certificate Information</h5>
+                                <span class="status-badge @(selectedDetail.VerificationStatus?.ToLowerInvariant() ?? "pending")">
+                                    @(selectedDetail.VerificationStatus ?? "PENDING")
+                                </span>
+                            </div>
+
+                            <div class="cert-detail-grid mt-3">
+                                <div><strong>Certificate Title:</strong> @(string.IsNullOrWhiteSpace(selectedDetail.CertificateName) ? "Certificate Document" : selectedDetail.CertificateName)</div>
+                                <div><strong>Issued By:</strong> @(selectedDetail.IssuedBy ?? "Not specified")</div>
+                                <div><strong>Issue Date:</strong> @(selectedDetail.IssuedDate.HasValue ? selectedDetail.IssuedDate.Value.ToString("dd/MM/yyyy") : "—")</div>
+                                <div><strong>Expiry Date:</strong> @(selectedDetail.ExpiryDate.HasValue ? selectedDetail.ExpiryDate.Value.ToString("dd/MM/yyyy") : "No expiry date")</div>
+                                <div><strong>Submitted At:</strong> @FormatDateTime(selectedDetail.CreatedAt)</div>
+                                <div><strong>Last Updated:</strong> @FormatDateTime(selectedDetail.UpdatedAt)</div>
+                            </div>
+
+                            <!-- Review Status & Notes -->
+                            @if (string.Equals(selectedDetail.VerificationStatus, "APPROVED", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="alert-box alert-success mt-3">
+                                    <span class="alert-icon">✓</span>
+                                    <div>
+                                        <strong>Approved</strong> by @(selectedDetail.VerifiedByName ?? selectedDetail.VerifiedByEmail ?? "Staff") on @FormatDateTime(selectedDetail.VerifiedAt).
+                                    </div>
+                                </div>
+                            }
+                            else if (string.Equals(selectedDetail.VerificationStatus, "REJECTED", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="alert-box alert-danger mt-3">
+                                    <span class="alert-icon">✕</span>
+                                    <div>
+                                        <strong>Rejected</strong> by @(selectedDetail.VerifiedByName ?? selectedDetail.VerifiedByEmail ?? "Staff") on @FormatDateTime(selectedDetail.VerifiedAt).
+                                        @if (!string.IsNullOrWhiteSpace(selectedDetail.RejectedReason))
+                                        {
+                                            <div class="reject-reason-full mt-1">
+                                                <strong>Reason:</strong> @selectedDetail.RejectedReason
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Certificate Document Preview -->
+                        <div class="detail-section-card">
+                            <h5 class="section-heading">Certificate Document Preview</h5>
+                            @if (!string.IsNullOrWhiteSpace(selectedDetail.CertificateUrl))
+                            {
+                                var url = selectedDetail.CertificateUrl;
+                                var isPdf = url.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+
+                                @if (isPdf)
+                                {
+                                    <div class="pdf-preview-box">
+                                        <div class="pdf-icon-wrap">
+                                            <AppIcon Name="doc" />
+                                        </div>
+                                        <div class="pdf-info">
+                                            <strong>PDF Document</strong>
+                                            <p>This certificate was submitted as a PDF document.</p>
+                                            <a href="@url" target="_blank" rel="noopener noreferrer" class="btn-external-link">
+                                                Open PDF Document in New Tab ↗
+                                            </a>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="image-preview-container">
+                                        <div class="img-preview-box" @onclick='() => OpenLightbox(url, selectedDetail.CertificateName ?? "Certificate Document")'>
+                                            <img src="@url" alt="@selectedDetail.CertificateName" class="cert-preview-img" />
+                                            <div class="img-overlay-tip">
+                                                <span>🔍 Click to enlarge image</span>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-center">
+                                            <a href="@url" target="_blank" rel="noopener noreferrer" class="view-link-sm">
+                                                Open original file in new tab ↗
+                                            </a>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="no-doc-box">
+                                    <AppIcon Name="warning" />
+                                    <span>No certificate file or document URL was attached to this submission.</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" @onclick="CloseModals">Close</button>
+
+                        @if (string.Equals(selectedDetail.VerificationStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <button type="button" class="btn-danger" @onclick="() => PromptRejectFromDetail()" disabled="@isProcessing">
+                                Reject Certificate
+                            </button>
+                            <button type="button" class="btn-primary-action" @onclick="() => PromptApproveFromDetail()" disabled="@isProcessing">
+                                Approve Certificate
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- APPROVE CONFIRMATION MODAL -->
+        @if (isApproveModalOpen && targetCertificate != null)
+        {
+            <div class="modal-backdrop" @onclick="CloseModals">
+                <div class="modal-card modal-sm" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Approve Certificate</h4>
+                        <button type="button" class="modal-close" @onclick="CloseModals">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="confirm-text">
+                            Are you sure you want to approve this certificate?
+                        </p>
+                        <div class="confirm-summary-box">
+                            <div><strong>Coach:</strong> @(targetCertificate.CoachName ?? "Coach")</div>
+                            <div><strong>Certificate:</strong> @(targetCertificate.CertificateName ?? "Certificate Document")</div>
+                        </div>
+                        <p class="text-muted text-sm mt-2">
+                            The coach will be automatically notified that their certificate has been approved.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" @onclick="CloseModals" disabled="@isProcessing">Cancel</button>
+                        <button type="button" class="btn-primary-action" @onclick="ExecuteApproveAsync" disabled="@isProcessing">
+                            @if (isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                                <span>Approving...</span>
+                            }
+                            else
+                            {
+                                <span>Confirm Approval</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- REJECT CONFIRMATION MODAL -->
+        @if (isRejectModalOpen && targetCertificate != null)
+        {
+            <div class="modal-backdrop" @onclick="CloseModals">
+                <div class="modal-card modal-sm" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Reject Certificate</h4>
+                        <button type="button" class="modal-close" @onclick="CloseModals">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="confirm-text">
+                            Please provide a clear reason for rejecting this certificate. The reason will be sent to the coach.
+                        </p>
+                        <div class="confirm-summary-box mb-3">
+                            <div><strong>Coach:</strong> @(targetCertificate.CoachName ?? "Coach")</div>
+                            <div><strong>Certificate:</strong> @(targetCertificate.CertificateName ?? "Certificate Document")</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                Rejection Reason <span class="text-danger">*</span>
+                            </label>
+                            <textarea @bind="rejectionReason"
+                                      @bind:event="oninput"
+                                      class="form-control-textarea @(rejectionValidationFailed ? "is-invalid" : "")"
+                                      rows="4"
+                                      maxlength="1000"
+                                      placeholder="e.g. Expired credential, illegible text, or document does not match coach identity."
+                                      disabled="@isProcessing"></textarea>
+                            <div class="textarea-footer">
+                                @if (rejectionValidationFailed)
+                                {
+                                    <span class="text-danger text-sm">Please provide a rejection reason (minimum 5 characters).</span>
+                                }
+                                <span class="char-count text-muted text-sm">@(rejectionReason?.Length ?? 0) / 1000</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" @onclick="CloseModals" disabled="@isProcessing">Cancel</button>
+                        <button type="button" class="btn-danger" @onclick="ExecuteRejectAsync" disabled="@(isProcessing || string.IsNullOrWhiteSpace(rejectionReason))">
+                            @if (isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                                <span>Rejecting...</span>
+                            }
+                            else
+                            {
+                                <span>Confirm Rejection</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- IMAGE LIGHTBOX MODAL -->
+        @if (isLightboxOpen && !string.IsNullOrWhiteSpace(lightboxImageUrl))
+        {
+            <div class="lightbox-overlay" @onclick="CloseLightbox">
+                <div class="lightbox-content" @onclick:stopPropagation="true">
+                    <button type="button" class="lightbox-close-btn" @onclick="CloseLightbox">✕</button>
+                    <img src="@lightboxImageUrl" alt="@lightboxTitle" class="lightbox-img" />
+                    <div class="lightbox-caption">@lightboxTitle</div>
+                </div>
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <div class="empty-state">
+            <div class="empty-icon"><AppIcon Name="shield" /></div>
+            <h3>Access Denied</h3>
+            <p>You do not have permission to view or manage coach certificates.</p>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private PagedResult<CoachCertificateItemModel> pagedCertificates = new();
+    private CoachCertificateStatusCountsModel statusCounts = new();
+
+    private string currentStatusFilter = "ALL";
+    private string searchTerm = string.Empty;
+    private string sortBy = "date_desc";
+    private int pageNumber = 1;
+    private int pageSize = 10;
+
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private string? toastMessage;
+    private string toastType = "info";
+
+    // Modals
+    private CoachCertificateDetailModel? selectedDetail;
+    private bool isDetailModalOpen = false;
+
+    private CoachCertificateItemModel? targetCertificate;
+    private bool isApproveModalOpen = false;
+    private bool isRejectModalOpen = false;
+    private string rejectionReason = string.Empty;
+    private bool rejectionValidationFailed = false;
+
+    // Lightbox
+    private bool isLightboxOpen = false;
+    private string? lightboxImageUrl;
+    private string? lightboxTitle;
+
+    // Debounce timer for search
+    private System.Timers.Timer? searchDebounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCertificatesAsync();
+    }
+
+    private async Task LoadCertificatesAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var query = new GetCoachCertificatesQueryModel
+            {
+                Search = searchTerm,
+                Status = currentStatusFilter,
+                SortBy = sortBy,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+
+            var response = await CertificateService.GetCertificatesAsync(query);
+            if (response.Success && response.Data != null)
+            {
+                pagedCertificates = response.Data.Certificates;
+                statusCounts = response.Data.StatusCounts;
+            }
+            else
+            {
+                ShowToast(response.Message ?? "Failed to load coach certificates.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Error loading certificates: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SetStatusFilterAsync(string status)
+    {
+        currentStatusFilter = status;
+        pageNumber = 1;
+        await LoadCertificatesAsync();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+
+        searchDebounceTimer = new System.Timers.Timer(400);
+        searchDebounceTimer.AutoReset = false;
+        searchDebounceTimer.Elapsed += async (_, _) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                pageNumber = 1;
+                await LoadCertificatesAsync();
+                StateHasChanged();
+            });
+        };
+        searchDebounceTimer.Start();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            searchDebounceTimer?.Stop();
+            pageNumber = 1;
+            await LoadCertificatesAsync();
+        }
+    }
+
+    private async Task OnSortChanged(ChangeEventArgs e)
+    {
+        sortBy = e.Value?.ToString() ?? "date_desc";
+        pageNumber = 1;
+        await LoadCertificatesAsync();
+    }
+
+    private async Task ChangePageAsync(int newPage)
+    {
+        if (newPage < 1 || (pagedCertificates.TotalPages > 0 && newPage > pagedCertificates.TotalPages))
+            return;
+
+        pageNumber = newPage;
+        await LoadCertificatesAsync();
+    }
+
+    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size))
+        {
+            pageSize = size;
+            pageNumber = 1;
+            await LoadCertificatesAsync();
+        }
+    }
+
+    private async Task OpenDetailModalAsync(Guid certificateId)
+    {
+        try
+        {
+            var response = await CertificateService.GetCertificateByIdAsync(certificateId);
+            if (response.Success && response.Data != null)
+            {
+                selectedDetail = response.Data;
+                isDetailModalOpen = true;
+            }
+            else
+            {
+                ShowToast(response.Message ?? "Unable to load certificate details.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Error loading details: {ex.Message}", "error");
+        }
+    }
+
+    private void PromptApprove(CoachCertificateItemModel cert)
+    {
+        targetCertificate = cert;
+        isApproveModalOpen = true;
+    }
+
+    private void PromptApproveFromDetail()
+    {
+        if (selectedDetail == null) return;
+        targetCertificate = selectedDetail;
+        isApproveModalOpen = true;
+    }
+
+    private void PromptReject(CoachCertificateItemModel cert)
+    {
+        targetCertificate = cert;
+        rejectionReason = string.Empty;
+        rejectionValidationFailed = false;
+        isRejectModalOpen = true;
+    }
+
+    private void PromptRejectFromDetail()
+    {
+        if (selectedDetail == null) return;
+        targetCertificate = selectedDetail;
+        rejectionReason = string.Empty;
+        rejectionValidationFailed = false;
+        isRejectModalOpen = true;
+    }
+
+    private async Task ExecuteApproveAsync()
+    {
+        if (targetCertificate == null) return;
+
+        isProcessing = true;
+        try
+        {
+            var response = await CertificateService.ApproveCertificateAsync(targetCertificate.CertificateId);
+            if (response.Success)
+            {
+                ShowToast("Coach certificate approved successfully.", "info");
+                isApproveModalOpen = false;
+
+                // Update detail view if open
+                if (selectedDetail != null && selectedDetail.CertificateId == targetCertificate.CertificateId && response.Data != null)
+                {
+                    selectedDetail = response.Data;
+                }
+                else
+                {
+                    isDetailModalOpen = false;
+                }
+
+                await LoadCertificatesAsync();
+            }
+            else
+            {
+                ShowToast(response.Message ?? "Failed to approve certificate.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Error: {ex.Message}", "error");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task ExecuteRejectAsync()
+    {
+        if (targetCertificate == null) return;
+
+        if (string.IsNullOrWhiteSpace(rejectionReason) || rejectionReason.Trim().Length < 5)
+        {
+            rejectionValidationFailed = true;
+            return;
+        }
+
+        rejectionValidationFailed = false;
+        isProcessing = true;
+        try
+        {
+            var req = new RejectCoachCertificateModel { Reason = rejectionReason.Trim() };
+            var response = await CertificateService.RejectCertificateAsync(targetCertificate.CertificateId, req);
+            if (response.Success)
+            {
+                ShowToast("Coach certificate rejected successfully.", "info");
+                isRejectModalOpen = false;
+
+                if (selectedDetail != null && selectedDetail.CertificateId == targetCertificate.CertificateId && response.Data != null)
+                {
+                    selectedDetail = response.Data;
+                }
+                else
+                {
+                    isDetailModalOpen = false;
+                }
+
+                await LoadCertificatesAsync();
+            }
+            else
+            {
+                ShowToast(response.Message ?? "Failed to reject certificate.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Error: {ex.Message}", "error");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void CloseModals()
+    {
+        isApproveModalOpen = false;
+        isRejectModalOpen = false;
+        isDetailModalOpen = false;
+        rejectionValidationFailed = false;
+    }
+
+    private void OpenLightbox(string imageUrl, string title)
+    {
+        lightboxImageUrl = imageUrl;
+        lightboxTitle = title;
+        isLightboxOpen = true;
+    }
+
+    private void CloseLightbox()
+    {
+        isLightboxOpen = false;
+        lightboxImageUrl = null;
+        lightboxTitle = null;
+    }
+
+    private void ShowToast(string message, string type)
+    {
+        toastMessage = message;
+        toastType = type;
+    }
+
+    private static string FormatDate(DateTime? dt) => dt.HasValue ? dt.Value.ToString("dd/MM/yyyy") : "—";
+    private static string FormatTime(DateTime? dt) => dt.HasValue ? dt.Value.ToString("HH:mm") : "";
+    private static string FormatDateTime(DateTime? dt) => dt.HasValue ? dt.Value.ToString("dd/MM/yyyy HH:mm") : "—";
+
+    private static string GetAvatar(string? avatarUrl, string? name)
+    {
+        if (!string.IsNullOrWhiteSpace(avatarUrl)) return avatarUrl;
+        var display = !string.IsNullOrWhiteSpace(name) ? name : "Coach";
+        return $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(display)}&background=ff5500&color=fff";
+    }
+
+    public void Dispose()
+    {
+        searchDebounceTimer?.Dispose();
+    }
+}

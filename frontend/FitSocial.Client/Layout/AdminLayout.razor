@@ -24,6 +24,9 @@
             <button type="button" class="side-item @(IsActive("/admin/coach-applications") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-applications")'>
                 <AppIcon Name="doc" /><span>Coach Applications</span>
             </button>
+            <button type="button" class="side-item @(IsActive("/admin/coach-certificates") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-certificates")'>
+                <AppIcon Name="shield" /><span>Coach Certificates</span>
+            </button>
             <button type="button" class="side-item @(IsActive("/admin/coach-subscription-plans") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/coach-subscription-plans")'>
                 <AppIcon Name="trophy" /><span>Coach Registration Plans</span>
             </button>
@@ -32,6 +35,9 @@
             </button>
             <button type="button" class="side-item @(IsActive("/admin/reports") || IsActive("/reports") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/reports")'>
                 <AppIcon Name="flag" /><span>Reports</span>
+            </button>
+            <button type="button" class="side-item @(IsActive("/admin/appeals") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/appeals")'>
+                <AppIcon Name="shield" /><span>Appeals</span>
             </button>
             <button type="button" class="side-item @(IsActive("/admin/payouts") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payouts")'>
                 <AppIcon Name="chart" /><span>Coach Payouts</span>

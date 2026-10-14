@@ -46,7 +46,7 @@ public class ReportRepository : Repository<Report>, IReportRepository
             }
             else if (t == "USER")
             {
-                query = query.Where(r => r.ReportedUserId != null);
+                query = query.Where(r => r.ReportedPostId == null && r.ReportedUserId != null);
             }
         }
 

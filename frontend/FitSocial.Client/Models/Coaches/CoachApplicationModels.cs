@@ -18,6 +18,7 @@ public class CoachApplicationItemDto
     public string? CertificateUrl { get; set; }
     public int CertificatesCount { get; set; }
     public string? ApprovalStatus { get; set; }
+    public bool CanApprove { get; set; }
     public string? Status { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -30,6 +31,7 @@ public class CoachApplicationDetailDto : CoachApplicationItemDto
     public string? Gender { get; set; }
     public DateOnly? DateOfBirth { get; set; }
     public List<CoachApplicationCertificateDto> Certificates { get; set; } = new();
+    public List<string> LivePhotoUrls { get; set; } = new();
     public CoachApplicationEkycDto? Ekyc { get; set; }
 }
 
@@ -42,6 +44,8 @@ public class CoachApplicationCertificateDto
     public DateOnly? IssuedDate { get; set; }
     public DateOnly? ExpiryDate { get; set; }
     public string? VerificationStatus { get; set; }
+    public string? RejectedReason { get; set; }
+    public DateTime? VerifiedAt { get; set; }
 }
 
 public class CoachApplicationEkycDto
@@ -52,6 +56,7 @@ public class CoachApplicationEkycDto
     public string? FrontCardUrl { get; set; }
     public string? BackCardUrl { get; set; }
     public string? FaceImageUrl { get; set; }
+    public List<string> LivePhotoUrls { get; set; } = new();
     public decimal? LivenessScore { get; set; }
     public decimal? FaceMatchConfidence { get; set; }
     public string? VerificationStatus { get; set; }
@@ -80,6 +85,12 @@ public class ApproveCoachApplicationRequestModel
 
 public class RejectCoachApplicationRequestModel
 {
+    public string? Reason { get; set; }
+}
+
+public class ReviewCertificateRequestModel
+{
+    public string Status { get; set; } = string.Empty; // "APPROVED" or "REJECTED"
     public string? Reason { get; set; }
 }
 

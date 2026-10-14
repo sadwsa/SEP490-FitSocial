@@ -28,4 +28,12 @@ public interface ICoachDashboardRepository
     /// Gets the total count of pending requests awaiting coach action (pending orders, draft/pending plans, refund requests).
     /// </summary>
     Task<int> GetPendingRequestsCountAsync(Guid coachId, CancellationToken cancellationToken = default);
+
+    // Thêm các method này vào trong ICoachDashboardRepository interface
+    Task<(decimal TotalRevenue, int TotalOrders, double RetentionRate)> GetAnalyticsSummaryAsync(Guid coachId, CancellationToken cancellationToken = default);
+
+    Task<List<(int Year, int Month, decimal Revenue, int TotalOrders)>> GetMonthlyStatsAsync(Guid coachId, DateTime startDate, CancellationToken cancellationToken = default);
+
+    Task<List<(Guid TraineeId, string TraineeName, decimal TotalSpent, int TotalOrders)>> GetTopTraineesAsync(Guid coachId, int limit, CancellationToken cancellationToken = default);
+
 }

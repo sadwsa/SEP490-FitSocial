@@ -12,19 +12,14 @@ public record GatewayCredentials(
 /// <summary>
 /// Resolves payment gateway credentials from the DB-managed
 /// PaymentGatewayConfigs table (admin UI), so key rotation no longer
-/// requires redeploying appsettings.
+/// requires redeploying appsettings. Collection (thu tiền) and payout
+/// (chi tiền) channels resolve independently by the IsPayout flag.
 /// </summary>
 public interface IPaymentGatewayCredentialProvider
 {
-    /// <summary>
-    /// Returns the first usable active config among <paramref name="gatewayNames"/>
-    /// (in order), or null when none exists or decrypts cleanly.
-    /// </summary>
-    Task<GatewayCredentials?> GetDbCredentialsAsync(IEnumerable<string> gatewayNames, CancellationToken cancellationToken = default);
+    /// <summary>Active collection channel (IsPayout = false).</summary>
+    Task<GatewayCredentials?> GetCollectCredentialsAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Returns credentials only when the DB holds exactly one active config
-    /// (convenience so a differently-named single gateway still resolves).
-    /// </summary>
-    Task<GatewayCredentials?> GetSingleActiveCredentialsAsync(CancellationToken cancellationToken = default);
+    /// <summary>Active payout channel (IsPayout = true).</summary>
+    Task<GatewayCredentials?> GetPayoutCredentialsAsync(CancellationToken cancellationToken = default);
 }

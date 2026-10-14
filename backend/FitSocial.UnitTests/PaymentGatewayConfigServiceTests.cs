@@ -50,6 +50,8 @@ public class PaymentGatewayConfigServiceTests
         _encryptionMock.Setup(e => e.Decrypt(encApiKey)).Returns(dto.ApiKey);
         _encryptionMock.Setup(e => e.Decrypt(encChecksumKey)).Returns(dto.ChecksumKey);
 
+        _configRepoMock.Setup(r => r.GetAllConfigsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<PaymentGatewayConfig>());
         _configRepoMock.Setup(r => r.AddAsync(It.IsAny<PaymentGatewayConfig>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))

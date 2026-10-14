@@ -128,7 +128,18 @@
                                     <span class="px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-wide">
                                         Enrolled Program
                                     </span>
-                                    <span class="text-xs text-gray-400">Coach: <strong class="text-gray-700">@workoutPlan.CoachName</strong></span>
+                                    <span class="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
+                                        <span>Coach: <strong class="text-gray-700">@workoutPlan.CoachName</strong></span>
+                                        @if (workoutPlan.CoachId != Guid.Empty)
+                                        {
+                                            <button type="button" @onclick="() => showReportCoachModal = true"
+                                                    title="Report Coach"
+                                                    class="px-2 py-0.5 text-[10px] text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition inline-flex items-center gap-1 cursor-pointer">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path></svg>
+                                                <span>Report Coach</span>
+                                            </button>
+                                        }
+                                    </span>
                                 </div>
                                 <h1 class="text-xl sm:text-2xl font-black text-gray-900 leading-snug">@workoutPlan.PackageTitle</h1>
                                 <p class="text-xs sm:text-sm text-gray-500 mt-1 line-clamp-2">@workoutPlan.PlanTitle - @(string.IsNullOrWhiteSpace(workoutPlan.PlanDescription) ? "Follow your scheduled exercises and complete daily sessions." : workoutPlan.PlanDescription)</p>
@@ -379,6 +390,17 @@
             }
         </main>
     </div>
+
+    @if (showReportCoachModal && workoutPlan != null && workoutPlan.CoachId != Guid.Empty)
+    {
+        <ReportUserModal IsVisible="@showReportCoachModal"
+                         ReportedUserId="@workoutPlan.CoachId"
+                         ReportedUserName="@workoutPlan.CoachName"
+                         IsCoach="true"
+                         PackageContext="@workoutPlan.PackageTitle"
+                         OnClose="() => showReportCoachModal = false"
+                         OnReportSubmitted="HandleCoachReportSubmitted" />
+    }
 </div>
 
 @code {
@@ -389,6 +411,7 @@
     private bool isLoading = true;
     private string? errorMessage;
     private string? toastMessage;
+    private bool showReportCoachModal = false;
 
     private short selectedWeekNumber = 1;
     private short selectedDayNumber = 1;
@@ -497,6 +520,12 @@
         }
 
         togglingExerciseId = null;
+    }
+
+    private void HandleCoachReportSubmitted(Guid coachId)
+    {
+        showReportCoachModal = false;
+        ShowToast("Coach report submitted successfully. Our team will review it.");
     }
 
     private void ShowToast(string message)

@@ -49,6 +49,7 @@ public class MealPlanService : IMealPlanService
                         ?? plan.OrderDetails?.Package?.Title
                         ?? "Training Package",
             PackageThumbnailUrl = thumbnailUrl,
+            CoachId = plan.Coach?.CoachId ?? plan.CoachId,
             CoachName = plan.Coach?.Coach?.FullName ?? "Your Coach",
             Title = plan.Title,
             Description = plan.Description,

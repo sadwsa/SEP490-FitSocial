@@ -43,6 +43,12 @@ public class TraineeWorkoutExerciseDto
     public Guid? WorkoutCompletionLogId { get; set; }
     public DateTime? CompletedAt { get; set; }
     public string? TraineeNotes { get; set; }
+
+    /// <summary>COMPLETED, INCOMPLETE, or null when not logged yet.</summary>
+    public string? Status { get; set; }
+
+    /// <summary>Calendar date this exercise is scheduled for.</summary>
+    public DateTime? ScheduledDate { get; set; }
 }
 
 public class TraineeWorkoutDayDto
@@ -53,6 +59,12 @@ public class TraineeWorkoutDayDto
     public int CompletedExercises { get; set; }
     public bool IsAllCompleted => TotalExercises > 0 && CompletedExercises >= TotalExercises;
     public List<TraineeWorkoutExerciseDto> Exercises { get; set; } = new();
+
+    /// <summary>Calendar date for this day; null when outside the plan range.</summary>
+    public DateTime? ScheduledDate { get; set; }
+
+    /// <summary>Only today can be marked complete.</summary>
+    public bool IsToday { get; set; }
 }
 
 public class TraineeWorkoutWeekDto

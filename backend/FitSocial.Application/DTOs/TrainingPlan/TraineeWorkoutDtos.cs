@@ -43,6 +43,12 @@ public class TraineeWorkoutExerciseDto
     public Guid? WorkoutCompletionLogId { get; set; }
     public DateTime? CompletedAt { get; set; }
     public string? TraineeNotes { get; set; }
+
+    /// <summary>COMPLETED, INCOMPLETE, or null when the day is not due yet.</summary>
+    public string? Status { get; set; }
+
+    /// <summary>Calendar date this exercise is scheduled for, derived from plan StartDate.</summary>
+    public DateTime? ScheduledDate { get; set; }
 }
 
 public class TraineeWorkoutDayDto
@@ -53,6 +59,12 @@ public class TraineeWorkoutDayDto
     public int CompletedExercises { get; set; }
     public bool IsAllCompleted => TotalExercises > 0 && CompletedExercises >= TotalExercises;
     public List<TraineeWorkoutExerciseDto> Exercises { get; set; } = new();
+
+    /// <summary>Calendar date for this day, derived from plan StartDate. Null when outside the plan range.</summary>
+    public DateTime? ScheduledDate { get; set; }
+
+    /// <summary>False for the past and the future; the UI uses this to gate the Complete button.</summary>
+    public bool IsToday { get; set; }
 }
 
 public class TraineeWorkoutWeekDto

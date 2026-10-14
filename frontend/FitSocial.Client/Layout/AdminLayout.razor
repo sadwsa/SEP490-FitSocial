@@ -54,15 +54,9 @@
                     <button type="button" class="side-item @(IsActive("/admin/content") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/content")'>
                         <AppIcon Name="shield" /><span>Content Moderation</span>
                     </button>
-                </Authorized>
-            </AuthorizeView>
-
-            <button type="button" class="side-item @(IsActive("/admin/logs") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/logs")'>
-                <AppIcon Name="doc" /><span>Activity Logs</span>
-            </button>
-
-            <AuthorizeView Roles="ADMIN">
-                <Authorized>
+                    <button type="button" class="side-item @(IsActive("/admin/system-logs") || IsActive("/admin/logs") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/system-logs")'>
+                        <AppIcon Name="doc" /><span>System Logs</span>
+                    </button>
                     <button type="button" class="side-item @(IsActive("/admin/settings") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/settings")'>
                         <AppIcon Name="gear" /><span>System Settings</span>
                     </button>

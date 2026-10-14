@@ -1,0 +1,1192 @@
+@page "/admin/system-logs"
+@page "/admin/logs"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN")]
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.SystemLogs
+@using FitSocial.Client.Services.SystemLogs
+@inject ISystemLogService LogService
+@inject NavigationManager Navigation
+
+<PageTitle>System Logs - FitSocial Admin Console</PageTitle>
+
+<style>
+    .view-title {
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+        color: #1e293b !important;
+        margin: 0 0 2px !important;
+    }
+    .view-sub {
+        font-size: 0.8rem !important;
+        color: #64748b !important;
+        margin: 0 0 14px !important;
+    }
+
+    /* Category Tabs */
+    .cat-tabs, .level-tabs {
+        display: flex !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+        margin-bottom: 12px !important;
+    }
+    .cat-tab, .level-tab {
+        border: 1px solid #e2e8f0 !important;
+        background: #ffffff !important;
+        border-radius: 999px !important;
+        font-size: 0.76rem !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+        padding: 6px 14px !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        box-shadow: none !important;
+        text-decoration: none !important;
+        transition: all 0.15s ease !important;
+    }
+    .cat-tab:hover, .level-tab:hover {
+        border-color: #cbd5e1 !important;
+        color: #334155 !important;
+        background: #f8fafc !important;
+    }
+    .cat-tab.active, .level-tab.active {
+        border-color: #FF5500 !important;
+        color: #FF5500 !important;
+        background: #fff7f3 !important;
+        box-shadow: none !important;
+    }
+    .status-dot {
+        display: inline-block !important;
+        width: 8px !important;
+        height: 8px !important;
+        border-radius: 50% !important;
+        box-shadow: none !important;
+    }
+    .status-dot.dot-active, .status-dot.dot-info {
+        background: #16a34a !important;
+    }
+    .status-dot.dot-warn {
+        background: #f59e0b !important;
+    }
+    .status-dot.dot-locked, .status-dot.dot-error {
+        background: #dc2626 !important;
+    }
+
+    /* Toolbar */
+    .toolbar {
+        display: flex !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
+        align-items: center !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        backdrop-filter: none !important;
+    }
+    .toolbar.wrap {
+        flex-wrap: wrap !important;
+    }
+    .search-wrap, .search-box {
+        position: relative !important;
+        flex: 1 !important;
+        min-width: 200px !important;
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+    }
+    .search-icon {
+        position: absolute !important;
+        left: 10px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        display: flex !important;
+        color: #94a3b8 !important;
+        pointer-events: none !important;
+        z-index: 2 !important;
+    }
+    .search-icon svg {
+        width: 15px !important;
+        height: 15px !important;
+    }
+    .toolbar-input {
+        width: 100% !important;
+        font-size: 0.83rem !important;
+        border: 1px solid #dbe3ec !important;
+        border-radius: 8px !important;
+        padding: 8px 12px 8px 32px !important;
+        color: #1e293b !important;
+        background: #ffffff !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    .toolbar-input::placeholder {
+        color: #94a3b8 !important;
+    }
+    .toolbar-input:focus {
+        border-color: #FF5500 !important;
+        box-shadow: 0 0 0 3px rgba(255, 87, 34, 0.13) !important;
+    }
+    .clear-input-btn {
+        position: absolute !important;
+        right: 8px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        background: transparent !important;
+        border: none !important;
+        color: #94a3b8 !important;
+        cursor: pointer !important;
+        font-size: 0.85rem !important;
+        padding: 2px 4px !important;
+        z-index: 2 !important;
+    }
+    .toolbar-select {
+        font-size: 0.83rem !important;
+        border: 1px solid #dbe3ec !important;
+        border-radius: 8px !important;
+        padding: 8px 10px !important;
+        color: #334155 !important;
+        background: #ffffff !important;
+        outline: none !important;
+        cursor: pointer !important;
+    }
+    .toolbar-select:focus {
+        border-color: #FF5500 !important;
+        box-shadow: 0 0 0 3px rgba(255, 87, 34, 0.13) !important;
+    }
+    .date-filter-group {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+    .filter-label {
+        font-size: 0.78rem !important;
+        color: #64748b !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+    }
+    .date-input {
+        width: auto !important;
+        padding: 7px 10px !important;
+        color-scheme: light !important;
+        background: #ffffff !important;
+        color: #1e293b !important;
+        border: 1px solid #dbe3ec !important;
+        border-radius: 8px !important;
+    }
+
+    /* Buttons */
+    .row-btn {
+        font-size: 0.74rem !important;
+        font-weight: 600 !important;
+        border-radius: 7px !important;
+        padding: 7px 14px !important;
+        cursor: pointer !important;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #475569 !important;
+        white-space: nowrap !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        box-shadow: none !important;
+        transition: all 0.15s ease !important;
+    }
+    .row-btn:hover:not(:disabled) {
+        border-color: #FF5500 !important;
+        color: #FF5500 !important;
+        background: #fff7f3 !important;
+    }
+    .row-btn:disabled {
+        opacity: 0.5 !important;
+        cursor: not-allowed !important;
+    }
+    .row-btn.primary {
+        background: linear-gradient(90deg, #FF8C00, #FF5500) !important;
+        border: none !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    .row-btn.primary:hover:not(:disabled) {
+        box-shadow: 0 2px 8px rgba(255, 85, 0, 0.35) !important;
+        color: #ffffff !important;
+    }
+    .btn-ic {
+        display: inline-flex !important;
+        align-items: center !important;
+    }
+    .btn-ic svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
+
+    /* Table */
+    .table-wrap, .table-card {
+        overflow-x: hidden !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        margin-bottom: 12px !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .data-table, .logs-table {
+        table-layout: fixed !important;
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 0.8rem !important;
+        background: #ffffff !important;
+    }
+    .data-table th, .logs-table th {
+        text-align: left !important;
+        font-size: 0.68rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        color: #64748b !important;
+        background: #f8fafc !important;
+        padding: 9px 8px !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        white-space: nowrap !important;
+        font-weight: 700 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .data-table td, .logs-table td {
+        padding: 8px 8px !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+        color: #334155 !important;
+        vertical-align: middle !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
+    }
+    .data-table tr:hover td, .logs-table tr:hover td, .log-row:hover td {
+        background: #f8fafc !important;
+    }
+    .data-table tr:last-child td, .logs-table tr:last-child td {
+        border-bottom: none !important;
+    }
+
+    /* Badges */
+    .status-badge {
+        font-size: 0.7rem !important;
+        font-weight: 700 !important;
+        border-radius: 999px !important;
+        padding: 2px 10px !important;
+        white-space: nowrap !important;
+        display: inline-block !important;
+    }
+    .status-badge.active {
+        color: #15803d !important;
+        background: #f0fdf4 !important;
+        border: 1px solid #bbf7d0 !important;
+    }
+    .status-badge.warning {
+        color: #b45309 !important;
+        background: #fffbeb !important;
+        border: 1px solid #fde68a !important;
+    }
+    .status-badge.locked {
+        color: #b91c1c !important;
+        background: #fef2f2 !important;
+        border: 1px solid #fecaca !important;
+    }
+
+    .role-badge {
+        font-size: 0.7rem !important;
+        font-weight: 700 !important;
+        border-radius: 999px !important;
+        padding: 2px 10px !important;
+        white-space: nowrap !important;
+        display: inline-block !important;
+    }
+    .role-badge.coach {
+        color: #15803d !important;
+        background: #f0fdf4 !important;
+        border: 1px solid #bbf7d0 !important;
+    }
+    .role-badge.payout {
+        color: #c2410c !important;
+        background: #fff7ed !important;
+        border: 1px solid #fed7aa !important;
+    }
+    .role-badge.staff {
+        color: #b45309 !important;
+        background: #fffbeb !important;
+        border: 1px solid #fde68a !important;
+    }
+    .role-badge.trainee {
+        color: #1d4ed8 !important;
+        background: #eff6ff !important;
+        border: 1px solid #bfdbfe !important;
+    }
+    .role-badge.refund {
+        color: #6d28d9 !important;
+        background: #f5f3ff !important;
+        border: 1px solid #ddd6fe !important;
+    }
+    .role-badge.default {
+        color: #475569 !important;
+        background: #f1f5f9 !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+
+    .action-tag {
+        font-size: 0.7rem !important;
+        font-weight: 700 !important;
+        font-family: ui-monospace, SFMono-Regular, monospace !important;
+        border-radius: 6px !important;
+        padding: 2px 8px !important;
+        white-space: nowrap !important;
+        display: inline-block !important;
+    }
+    .action-tag.action-danger {
+        color: #b91c1c !important;
+        background: #fef2f2 !important;
+        border: 1px solid #fecaca !important;
+    }
+    .action-tag.action-warning {
+        color: #b45309 !important;
+        background: #fffbeb !important;
+        border: 1px solid #fde68a !important;
+    }
+    .action-tag.action-success {
+        color: #15803d !important;
+        background: #f0fdf4 !important;
+        border: 1px solid #bbf7d0 !important;
+    }
+    .action-tag.action-default {
+        color: #1d4ed8 !important;
+        background: #eff6ff !important;
+        border: 1px solid #bfdbfe !important;
+    }
+
+    /* Column Widths (Fixed layout that fits 100% width) */
+    .col-id {
+        width: 86px !important;
+    }
+    .col-time {
+        width: 106px !important;
+    }
+    .col-level {
+        width: 88px !important;
+    }
+    .col-source {
+        width: 105px !important;
+    }
+    .col-action {
+        width: 140px !important;
+    }
+    .col-message {
+        width: auto !important;
+    }
+    .col-actor {
+        width: 135px !important;
+    }
+    .col-ip {
+        width: 60px !important;
+    }
+    .col-view {
+        width: 65px !important;
+        text-align: right !important;
+    }
+
+    .col-view .row-btn {
+        padding: 4px 10px !important;
+        font-size: 0.72rem !important;
+        margin: 0 !important;
+    }
+
+    .role-badge, .source-tag {
+        max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        display: inline-block !important;
+        box-sizing: border-box !important;
+    }
+
+    .action-tag {
+        max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        display: inline-block !important;
+        box-sizing: border-box !important;
+    }
+
+    .actor-name, .actor-email {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
+    .truncate {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
+    .log-id-badge {
+        display: inline-block !important;
+        padding: 2px 8px !important;
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 6px !important;
+        color: #0284c7 !important;
+        font-size: 0.74rem !important;
+        font-weight: 700 !important;
+    }
+    .message-truncate {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        color: #334155 !important;
+        font-size: 0.8rem !important;
+        max-width: 100% !important;
+    }
+    .muted {
+        color: #94a3b8 !important;
+        font-size: 0.74rem !important;
+    }
+    .font-mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    }
+    .text-end {
+        text-align: right !important;
+    }
+
+    @@media (max-width: 1100px) {
+        .col-ip {
+            display: none !important;
+        }
+    }
+
+    /* Modal & Scrollbar Fixes */
+    .modal-backdrop {
+        position: fixed !important;
+        inset: 0 !important;
+        background: rgba(15, 23, 42, 0.45) !important;
+        backdrop-filter: blur(4px) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 9999 !important;
+        padding: 20px !important;
+        overflow-y: auto !important;
+    }
+
+    .modal-card {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 14px !important;
+        width: 100% !important;
+        max-width: 760px !important;
+        max-height: 88vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.06) !important;
+        overflow: hidden !important;
+        margin: auto !important;
+    }
+
+    .modal-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 16px 20px !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        flex-shrink: 0 !important;
+        background: #ffffff !important;
+    }
+
+    .modal-title-group {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .modal-title {
+        font-size: 1.1rem !important;
+        font-weight: 800 !important;
+        color: #1e293b !important;
+        margin: 0 !important;
+    }
+
+    .log-id-pill {
+        font-family: ui-monospace, monospace !important;
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        background: #eff6ff !important;
+        border: 1px solid #bfdbfe !important;
+        padding: 2px 8px !important;
+        border-radius: 6px !important;
+        color: #1d4ed8 !important;
+    }
+
+    .modal-close {
+        background: transparent !important;
+        border: none !important;
+        color: #64748b !important;
+        font-size: 1.2rem !important;
+        cursor: pointer !important;
+        transition: color 0.15s !important;
+        padding: 4px !important;
+    }
+
+    .modal-close:hover {
+        color: #1e293b !important;
+    }
+
+    .modal-body {
+        padding: 20px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+
+    .detail-grid {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+        gap: 12px !important;
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        padding: 14px !important;
+        border-radius: 8px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .detail-item label {
+        display: block !important;
+        font-size: 0.7rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        color: #64748b !important;
+        font-weight: 700 !important;
+        margin-bottom: 4px !important;
+    }
+
+    .detail-item div {
+        font-size: 0.83rem !important;
+        color: #1e293b !important;
+        font-weight: 600 !important;
+    }
+
+    .detail-message-box {
+        background: #fff7f3 !important;
+        border-left: 4px solid var(--primary-color, #FF5500) !important;
+        padding: 12px 16px !important;
+        border-radius: 0 8px 8px 0 !important;
+        flex-shrink: 0 !important;
+    }
+
+    .detail-message-box label {
+        display: block !important;
+        font-size: 0.7rem !important;
+        text-transform: uppercase !important;
+        color: var(--primary-color, #FF5500) !important;
+        margin-bottom: 4px !important;
+        font-weight: 700 !important;
+    }
+
+    .detail-message-box p {
+        margin: 0 !important;
+        font-size: 0.85rem !important;
+        color: #1e293b !important;
+        line-height: 1.45 !important;
+    }
+
+    .json-block {
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+        flex-shrink: 0 !important;
+    }
+
+    .json-header {
+        background: #f1f5f9 !important;
+        padding: 8px 12px !important;
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        color: #475569 !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+    }
+
+    .json-content {
+        margin: 0 !important;
+        padding: 12px 14px !important;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important;
+        font-size: 0.78rem !important;
+        color: #1e293b !important;
+        background: #ffffff !important;
+        line-height: 1.5 !important;
+        overflow: auto !important;
+        max-height: 280px !important;
+        white-space: pre-wrap !important;
+        word-break: break-all !important;
+    }
+
+    .no-payload-notice {
+        text-align: center !important;
+        padding: 16px !important;
+        background: #f8fafc !important;
+        border: 1px dashed #cbd5e1 !important;
+        border-radius: 8px !important;
+        font-size: 0.8rem !important;
+        color: #64748b !important;
+        flex-shrink: 0 !important;
+    }
+
+    .modal-footer {
+        display: flex !important;
+        justify-content: flex-end !important;
+        padding: 12px 20px !important;
+        border-top: 1px solid #e2e8f0 !important;
+        flex-shrink: 0 !important;
+        background: #ffffff !important;
+    }
+
+    .modal-body::-webkit-scrollbar, .json-content::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    .modal-body::-webkit-scrollbar-thumb, .json-content::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+    .modal-body::-webkit-scrollbar-thumb:hover, .json-content::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+</style>
+
+<AuthorizeView Roles="ADMIN">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="auth-alert error" role="alert">
+                <AppIcon Name="warning" />
+                <span class="alert-text">@errorMessage</span>
+                <button type="button" class="alert-close" @onclick="() => errorMessage = null">✕</button>
+            </div>
+        }
+
+        <h2 class="view-title">System Logs</h2>
+        <p class="view-sub">Audit trail, operational events, and system activity records</p>
+
+        <!-- Quick Level Filter Tabs -->
+        <div class="cat-tabs mb-3">
+            <button type="button" class="cat-tab @(string.IsNullOrEmpty(selectedLevel) ? "active" : "")" @onclick='() => SetLevelFilterAsync("")'>
+                All Logs
+            </button>
+            <button type="button" class="cat-tab @(selectedLevel == "Information" ? "active" : "")" @onclick='() => SetLevelFilterAsync("Information")'>
+                <span class="status-dot dot-active"></span> Information
+            </button>
+            <button type="button" class="cat-tab @(selectedLevel == "Warning" ? "active" : "")" @onclick='() => SetLevelFilterAsync("Warning")'>
+                <span class="status-dot dot-warn"></span> Warning
+            </button>
+            <button type="button" class="cat-tab @(selectedLevel == "Error" ? "active" : "")" @onclick='() => SetLevelFilterAsync("Error")'>
+                <span class="status-dot dot-locked"></span> Error
+            </button>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="toolbar wrap">
+            <div class="search-wrap">
+                <span class="search-icon"><AppIcon Name="search" /></span>
+                <input value="@searchTerm"
+                       @oninput="OnSearchInput"
+                       @onkeydown="HandleSearchKeyDown"
+                       class="toolbar-input"
+                       placeholder="Search logs by keyword, action, user, module or IP..." />
+                @if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    <button type="button" class="clear-input-btn" @onclick="ClearSearchAsync">✕</button>
+                }
+            </div>
+
+            <select class="toolbar-select" value="@selectedSource" @onchange="OnSourceChanged">
+                <option value="">All Modules</option>
+                <option value="CoachSubscriptionPlan">Coach Plans</option>
+                <option value="RefundRequest">Refund Requests</option>
+                <option value="Payout">Coach Payouts</option>
+                <option value="Order">Orders</option>
+                <option value="User">User Accounts</option>
+                <option value="System">System Runtime</option>
+            </select>
+
+            <div class="date-filter-group">
+                <span class="filter-label">From:</span>
+                <input type="date" class="toolbar-input date-input" @bind="fromDateFilter" />
+                <span class="filter-label">To:</span>
+                <input type="date" class="toolbar-input date-input" @bind="toDateFilter" />
+                <button type="button" class="row-btn primary" @onclick="ApplyDateFilterAsync">Apply</button>
+                @if (fromDateFilter.HasValue || toDateFilter.HasValue)
+                {
+                    <button type="button" class="row-btn" @onclick="ClearDateFilterAsync">Clear</button>
+                }
+            </div>
+
+            <button type="button" class="row-btn" @onclick="LoadLogsAsync" disabled="@isLoading" title="Refresh logs">
+                <span class="btn-ic @(isLoading ? "spinning" : "")"><AppIcon Name="refresh" /></span> Refresh
+            </button>
+        </div>
+
+        <!-- Content Area -->
+        @if (isLoading)
+        {
+            <div class="state-card loading">
+                <div class="spinner"></div>
+                <span>Loading system logs...</span>
+            </div>
+        }
+        else if (pagedLogs.Items.Count == 0)
+        {
+            <div class="state-card empty">
+                <div class="empty-icon"><AppIcon Name="doc" /></div>
+                <h3>No system logs found</h3>
+                <p>No log records match your current filter and search criteria.</p>
+                @if (HasActiveFilters())
+                {
+                    <button type="button" class="row-btn primary mt-3" @onclick="ResetAllFiltersAsync">Reset Filters</button>
+                }
+            </div>
+        }
+        else
+        {
+            <!-- Logs Data Table -->
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th class="col-id">Log ID</th>
+                            <th class="col-time">Timestamp</th>
+                            <th class="col-level">Level</th>
+                            <th class="col-source">Module</th>
+                            <th class="col-action">Action</th>
+                            <th class="col-message">Description</th>
+                            <th class="col-actor">Actor</th>
+                            <th class="col-ip">IP Address</th>
+                            <th class="col-view text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in pagedLogs.Items)
+                        {
+                            <tr class="log-row" @onclick="() => OpenDetailModal(log)">
+                                <td class="col-id font-mono">
+                                    <span class="log-id-badge">@log.LogIdDisplay</span>
+                                </td>
+                                <td class="col-time">
+                                    <div><strong>@log.Timestamp.ToLocalTime().ToString("MMM dd, yyyy")</strong></div>
+                                    <small class="muted font-mono">@log.Timestamp.ToLocalTime().ToString("HH:mm:ss")</small>
+                                </td>
+                                <td class="col-level">
+                                    <span class="status-badge @GetLevelBadgeClass(log.Level)">
+                                        @log.Level
+                                    </span>
+                                </td>
+                                <td class="col-source">
+                                    <span class="role-badge @GetSourceClass(log.Source)" title="@FormatSource(log.Source)">@FormatSource(log.Source)</span>
+                                </td>
+                                <td class="col-action">
+                                    <span class="action-tag @GetActionClass(log.Action)" title="@log.Action">@log.Action</span>
+                                </td>
+                                <td class="col-message" title="@log.Message">
+                                    <div class="message-truncate">@log.Message</div>
+                                </td>
+                                <td class="col-actor">
+                                    <div class="actor-name truncate" title="@(log.ActorName ?? "System")"><strong>@(log.ActorName ?? "System")</strong></div>
+                                    @if (!string.IsNullOrEmpty(log.ActorEmail))
+                                    {
+                                        <div class="actor-email truncate muted" title="@log.ActorEmail"><small>@log.ActorEmail</small></div>
+                                    }
+                                </td>
+                                <td class="col-ip font-mono muted">
+                                    @(string.IsNullOrWhiteSpace(log.IpAddress) ? "—" : log.IpAddress)
+                                </td>
+                                <td class="col-view text-end" @onclick:stopPropagation="true">
+                                    <button type="button" class="row-btn" @onclick="() => OpenDetailModal(log)" title="View Details">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-bar">
+                <div class="pagination-info">
+                    Showing <strong>@GetStartIndex()</strong> to <strong>@GetEndIndex()</strong> of <strong>@pagedLogs.TotalCount</strong> logs
+                </div>
+
+                <div class="pagination-controls">
+                    <div class="page-size-selector">
+                        <span>Show:</span>
+                        <select value="@pageSize" @onchange="OnPageSizeChanged">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+
+                    <div class="page-buttons">
+                        <button type="button" class="page-btn" disabled="@(!pagedLogs.HasPreviousPage)" @onclick="() => GoToPageAsync(currentPage - 1)">
+                            ‹ Previous
+                        </button>
+
+                        <span class="page-indicator">
+                            Page <strong>@currentPage</strong> of <strong>@Math.Max(1, pagedLogs.TotalPages)</strong>
+                        </span>
+
+                        <button type="button" class="page-btn" disabled="@(!pagedLogs.HasNextPage)" @onclick="() => GoToPageAsync(currentPage + 1)">
+                            Next ›
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Detail Modal -->
+        @if (selectedLog != null)
+        {
+            <div class="modal-backdrop" @onclick="CloseDetailModal">
+                <div class="modal-card" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <div class="modal-title-group">
+                            <h3 class="modal-title">Log Entry Details</h3>
+                            <span class="log-id-pill">@selectedLog.LogIdDisplay</span>
+                            <span class="status-badge @GetLevelBadgeClass(selectedLog.Level)">
+                                @selectedLog.Level
+                            </span>
+                        </div>
+                        <button type="button" class="modal-close" @onclick="CloseDetailModal">✕</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <!-- Key Metadata Grid -->
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label>Timestamp</label>
+                                <div>@selectedLog.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") UTC@(TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).Hours >= 0 ? "+" : "")@TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).Hours</div>
+                            </div>
+                            <div class="detail-item">
+                                <label>Module / Source</label>
+                                <div><span class="role-badge @GetSourceClass(selectedLog.Source)">@FormatSource(selectedLog.Source)</span></div>
+                            </div>
+                            <div class="detail-item">
+                                <label>Action</label>
+                                <div><span class="action-tag @GetActionClass(selectedLog.Action)">@selectedLog.Action</span></div>
+                            </div>
+                            <div class="detail-item">
+                                <label>Target Entity ID</label>
+                                <div class="font-mono">@(string.IsNullOrWhiteSpace(selectedLog.EntityId) ? "N/A" : selectedLog.EntityId)</div>
+                            </div>
+                            <div class="detail-item">
+                                <label>Actor</label>
+                                <div>@(selectedLog.ActorName ?? "System") @(!string.IsNullOrEmpty(selectedLog.ActorEmail) ? $"({selectedLog.ActorEmail})" : "")</div>
+                            </div>
+                            <div class="detail-item">
+                                <label>Client IP</label>
+                                <div class="font-mono">@(string.IsNullOrWhiteSpace(selectedLog.IpAddress) ? "N/A" : selectedLog.IpAddress)</div>
+                            </div>
+                        </div>
+
+                        <!-- Description Banner -->
+                        <div class="detail-message-box">
+                            <label>Event Summary</label>
+                            <p>@selectedLog.Message</p>
+                        </div>
+
+                        <!-- Changes & Values -->
+                        @if (!string.IsNullOrWhiteSpace(selectedLog.OldValue))
+                        {
+                            <div class="json-block">
+                                <div class="json-header">
+                                    <span>Previous Value (Old Value)</span>
+                                </div>
+                                <pre class="json-content">@FormatJson(selectedLog.OldValue)</pre>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(selectedLog.NewValue))
+                        {
+                            <div class="json-block">
+                                <div class="json-header">
+                                    <span>Current Value / Payload (New Value)</span>
+                                </div>
+                                <pre class="json-content">@FormatJson(selectedLog.NewValue)</pre>
+                            </div>
+                        }
+
+                        @if (string.IsNullOrWhiteSpace(selectedLog.OldValue) && string.IsNullOrWhiteSpace(selectedLog.NewValue))
+                        {
+                            <div class="no-payload-notice">
+                                <span>No additional payload data stored for this event.</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="row-btn" @onclick="CloseDetailModal">Close</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <div class="unauthorized-card">
+            <h3>Access Denied</h3>
+            <p>You do not have permission to access the System Logs console. This page requires Administrator privileges.</p>
+            <button type="button" class="btn-sm btn-primary mt-3" @onclick='() => Navigation.NavigateTo("/admin")'>
+                Back to Dashboard
+            </button>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private PagedResult<SystemLogItemModel> pagedLogs = new();
+    private SystemLogItemModel? selectedLog;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    // Filters
+    private string searchTerm = string.Empty;
+    private string selectedLevel = string.Empty;
+    private string selectedSource = string.Empty;
+    private DateTime? fromDateFilter;
+    private DateTime? toDateFilter;
+    private int currentPage = 1;
+    private int pageSize = 20;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLogsAsync();
+    }
+
+    private async Task LoadLogsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var request = new GetSystemLogsRequest
+            {
+                Search = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim(),
+                Level = string.IsNullOrWhiteSpace(selectedLevel) ? null : selectedLevel.Trim(),
+                Source = string.IsNullOrWhiteSpace(selectedSource) ? null : selectedSource.Trim(),
+                FromDate = fromDateFilter,
+                ToDate = toDateFilter.HasValue ? toDateFilter.Value.Date.AddDays(1).AddTicks(-1) : null,
+                PageNumber = currentPage,
+                PageSize = pageSize
+            };
+
+            var response = await LogService.GetSystemLogsAsync(request);
+            if (response.Success && response.Data != null)
+            {
+                pagedLogs = response.Data;
+            }
+            else
+            {
+                errorMessage = response.Message ?? "Failed to load system logs.";
+                pagedLogs = new PagedResult<SystemLogItemModel>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "A connection error occurred while retrieving logs: " + ex.Message;
+            pagedLogs = new PagedResult<SystemLogItemModel>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SetLevelFilterAsync(string level)
+    {
+        selectedLevel = level;
+        currentPage = 1;
+        await LoadLogsAsync();
+    }
+
+    private async Task OnSourceChanged(ChangeEventArgs e)
+    {
+        selectedSource = e.Value?.ToString() ?? string.Empty;
+        currentPage = 1;
+        await LoadLogsAsync();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadLogsAsync();
+        }
+    }
+
+    private async Task ClearSearchAsync()
+    {
+        searchTerm = string.Empty;
+        currentPage = 1;
+        await LoadLogsAsync();
+    }
+
+    private async Task ApplyDateFilterAsync()
+    {
+        currentPage = 1;
+        await LoadLogsAsync();
+    }
+
+    private async Task ClearDateFilterAsync()
+    {
+        fromDateFilter = null;
+        toDateFilter = null;
+        currentPage = 1;
+        await LoadLogsAsync();
+    }
+
+    private async Task ResetAllFiltersAsync()
+    {
+        searchTerm = string.Empty;
+        selectedLevel = string.Empty;
+        selectedSource = string.Empty;
+        fromDateFilter = null;
+        toDateFilter = null;
+        currentPage = 1;
+        await LoadLogsAsync();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(searchTerm) ||
+               !string.IsNullOrWhiteSpace(selectedLevel) ||
+               !string.IsNullOrWhiteSpace(selectedSource) ||
+               fromDateFilter.HasValue ||
+               toDateFilter.HasValue;
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        if (page < 1 || (pagedLogs.TotalPages > 0 && page > pagedLogs.TotalPages)) return;
+        currentPage = page;
+        await LoadLogsAsync();
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size))
+        {
+            pageSize = size;
+            currentPage = 1;
+            await LoadLogsAsync();
+        }
+    }
+
+    private void OpenDetailModal(SystemLogItemModel log)
+    {
+        selectedLog = log;
+    }
+
+    private void CloseDetailModal()
+    {
+        selectedLog = null;
+    }
+
+    private string GetLevelBadgeClass(string? level)
+    {
+        return (level?.ToLowerInvariant()) switch
+        {
+            "error" or "critical" => "locked",
+            "warning" => "warning",
+            _ => "active"
+        };
+    }
+
+    private string GetSourceClass(string? source)
+    {
+        return (source?.ToLowerInvariant()) switch
+        {
+            "coachsubscriptionplan" or "coachprofile" or "coachupgrade" => "coach",
+            "payout" => "payout",
+            "refundrequest" => "refund",
+            "order" => "staff",
+            "user" => "trainee",
+            _ => "default"
+        };
+    }
+
+    private string GetActionClass(string? action)
+    {
+        if (string.IsNullOrWhiteSpace(action)) return "action-default";
+        var upper = action.ToUpperInvariant();
+        if (upper.Contains("FAIL") || upper.Contains("ERROR") || upper.Contains("REJECT") || upper.Contains("CANCEL") || upper.Contains("DENIED"))
+            return "action-danger";
+        if (upper.Contains("SUCCESS") || upper.Contains("COMPLETE") || upper.Contains("APPROVE") || upper.Contains("CREATE"))
+            return "action-success";
+        if (upper.Contains("PARTIAL") || upper.Contains("PENDING") || upper.Contains("WARN"))
+            return "action-warning";
+        return "action-default";
+    }
+
+    private string FormatSource(string? source)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return "System";
+        return source switch
+        {
+            "CoachSubscriptionPlan" => "Coach Plan",
+            "RefundRequest" => "Refund",
+            "CoachProfile" => "Coach Profile",
+            "CoachUpgrade" => "Coach Upgrade",
+            _ => source
+        };
+    }
+
+    private string FormatJson(string? rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson)) return string.Empty;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(rawJson);
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+        catch
+        {
+            return rawJson;
+        }
+    }
+
+    private int GetStartIndex()
+    {
+        if (pagedLogs.TotalCount == 0) return 0;
+        return (currentPage - 1) * pageSize + 1;
+    }
+
+    private int GetEndIndex()
+    {
+        return Math.Min(currentPage * pageSize, pagedLogs.TotalCount);
+    }
+}

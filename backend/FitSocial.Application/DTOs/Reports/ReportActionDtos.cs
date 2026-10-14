@@ -33,6 +33,12 @@ public class ReviewAppealRequestDto
 
     [StringLength(1000)]
     public string? AppealReviewNote { get; set; }
+
+    /// <summary>When approving, decrement the reported user's violation count by 1.</summary>
+    public bool RemoveViolation { get; set; } = false;
+
+    /// <summary>When approving, unblock/unlock the reported user's account.</summary>
+    public bool UnblockAccount { get; set; } = false;
 }
 
 public class CreateUserReportRequestDto

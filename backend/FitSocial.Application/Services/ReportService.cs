@@ -284,19 +284,38 @@ public class ReportService : IReportService
         report.AppealReviewedAt = now;
         report.AppealReviewNote = request.AppealReviewNote?.Trim();
 
-        // If appeal was approved, reverse warning if applicable
+        // If appeal was approved, apply requested actions
         if (normalizedStatus == "APPROVED" && report.ReportedUserId.HasValue)
         {
             var reportedUser = await _userRepository.GetByIdAsync(report.ReportedUserId.Value, cancellationToken);
-            if (reportedUser != null && reportedUser.WarningCount > 0)
+            if (reportedUser != null)
             {
-                reportedUser.WarningCount -= 1;
-                if (reportedUser.IsLocked == true && reportedUser.WarningCount < 3)
+                if (request.RemoveViolation && reportedUser.WarningCount > 0)
                 {
-                    reportedUser.IsLocked = false;
-                    reportedUser.LockedBy = null;
+                    reportedUser.WarningCount -= 1;
+                    reportedUser.UpdatedAt = now;
                 }
-                reportedUser.UpdatedAt = now;
+
+                if (request.UnblockAccount)
+                {
+                    if (reportedUser.IsLocked == true)
+                    {
+                        reportedUser.IsLocked = false;
+                        reportedUser.LockedBy = null;
+                        reportedUser.UpdatedAt = now;
+                    }
+
+                    // Also unblock coach profile if coach was blocked
+                    if (_coachProfileRepository != null)
+                    {
+                        var coachProfile = await _coachProfileRepository.GetByIdAsync(report.ReportedUserId.Value, cancellationToken);
+                        if (coachProfile != null && string.Equals(coachProfile.Status, "BLOCKED", StringComparison.OrdinalIgnoreCase))
+                        {
+                            coachProfile.Status = "ACTIVE";
+                            coachProfile.UpdatedAt = now;
+                        }
+                    }
+                }
             }
         }
 
@@ -633,7 +652,7 @@ public class ReportService : IReportService
                 {
                     if (_coachProfileRepository != null)
                     {
-                        var coachProfile = await _coachProfileRepository.GetByIdAsync(reportedUser.UserId, cancellationToken);
+                        var coachProfile = await _coachProfileRepository.GetByIdAsync(report.ReportedUserId.Value, cancellationToken);
                         if (coachProfile != null)
                         {
                             coachProfile.Status = "BLOCKED";

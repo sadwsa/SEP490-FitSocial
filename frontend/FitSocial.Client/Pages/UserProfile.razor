@@ -14,28 +14,28 @@
                UserAvatarUrl="@headerUserAvatarUrl" CartCount="@headerCartCount" OnLogout="HandleLogout" />
 
     <style>
-        @@media (min-width: 1024px) {
-            .home-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
-                align-items: start !important;
-            }
+            @@media (min-width: 1024px) {
+                .home-3col-layout {
+                    display: grid !important;
+                    grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
+                    align-items: start !important;
+                }
 
-            .home-left-sidebar {
-                justify-self: start !important;
-            }
+                .home-left-sidebar {
+                    justify-self: start !important;
+                }
 
-            .home-center-feed {
-                justify-self: end !important;
-                width: 100% !important;
-                max-width: 42rem !important;
-                min-width: 0 !important;
-            }
+                .home-center-feed {
+                    justify-self: end !important;
+                    width: 100% !important;
+                    max-width: 42rem !important;
+                    min-width: 0 !important;
+                }
 
-            .home-right-sidebar {
-                justify-self: center !important;
+                .home-right-sidebar {
+                    justify-self: center !important;
+                }
             }
-        }
     </style>
 
     <!-- Main Content Layout -->
@@ -202,6 +202,17 @@
                                     </svg>
                                     <span>Report</span>
                                 </button>
+                                @if (profile.IsCoach && (viewerIsTrainee || viewerIsCoach))
+                                {
+                                    <button type="button" @onclick='() => Navigation.NavigateTo($"/coach-complaint?coachId={profile.UserId}")'
+                                            title="Report Coach"
+                                            class="inline-flex items-center justify-center p-2.5 bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded-xl transition cursor-pointer">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </button>
+                                }
                             </div>
                         }
                     </div>

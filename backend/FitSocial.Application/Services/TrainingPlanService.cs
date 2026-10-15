@@ -540,6 +540,7 @@ public class TrainingPlanService : ITrainingPlanService
             };
         }
 
+        await BackfillIncompleteLogsAsync(plan, traineeId, ct);
         return MapToTraineeProgressDto(plan, traineeId);
     }
 
@@ -559,7 +560,59 @@ public class TrainingPlanService : ITrainingPlanService
             throw new NotFoundException("No active training plan found for this purchased package.");
         }
 
+        await BackfillIncompleteLogsAsync(plan, traineeId, ct);
         return MapToTraineeProgressDto(plan, traineeId);
+    }
+
+    /// <summary>
+    /// Records an explicit INCOMPLETE log for every scheduled exercise whose day has already
+    /// passed and that has no log yet. Completed exercises are left untouched.
+    /// Idempotent: running it again only fills the gaps that are still missing.
+    /// </summary>
+    private async Task BackfillIncompleteLogsAsync(TrainingPlan plan, Guid traineeId, CancellationToken ct)
+    {
+        if (!plan.StartDate.HasValue)
+        {
+            return;
+        }
+
+        var todayUtc = DateTime.UtcNow.Date;
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        var created = false;
+
+        foreach (var exercise in plan.TrainingPlanExercises ?? new List<TrainingPlanExercise>())
+        {
+            var scheduledDate = ResolveScheduledDate(plan.StartDate, plan.EndDate, exercise.WeekNumber ?? 1, exercise.DayNumber ?? 1);
+            if (!scheduledDate.HasValue || scheduledDate.Value.Date >= todayUtc)
+            {
+                // Outside the plan range, not scheduled yet, or scheduled for today/future -> skip.
+                continue;
+            }
+
+            var alreadyLogged = exercise.WorkoutCompletionLogs?
+                .Any(l => l.TraineeId == traineeId) == true;
+            if (alreadyLogged)
+            {
+                continue;
+            }
+
+            await _trainingPlanRepository.AddWorkoutLogAsync(new WorkoutCompletionLog
+            {
+                WorkoutCompletionLogId = Guid.NewGuid(),
+                TraineeId = traineeId,
+                TrainingPlanExerciseId = exercise.TrainingPlanExerciseId,
+                LogDate = scheduledDate.Value,
+                Status = "INCOMPLETE",
+                CreatedAt = now
+            }, ct);
+
+            created = true;
+        }
+
+        if (created)
+        {
+            await _unitOfWork.SaveChangesAsync(ct);
+        }
     }
 
     public async Task<WorkoutCompletionResultDto> ToggleWorkoutCompletionAsync(
@@ -599,8 +652,20 @@ public class TrainingPlanService : ITrainingPlanService
 
         if (existingLog != null)
         {
-            if (string.Equals(dto.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase) ||
-                (string.Equals(existingLog.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(dto.Notes) && string.IsNullOrWhiteSpace(dto.Status)))
+            if (string.Equals(dto.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase))
+            {
+                // Persist "not completed" instead of deleting the row so adherence can be measured later.
+                existingLog.Status = "INCOMPLETE";
+                if (!string.IsNullOrWhiteSpace(dto.Notes)) existingLog.Notes = dto.Notes;
+                if (dto.LogDate.HasValue)
+                {
+                    existingLog.LogDate = DateTime.SpecifyKind(dto.LogDate.Value, DateTimeKind.Unspecified);
+                }
+                isNowCompleted = false;
+                logId = existingLog.WorkoutCompletionLogId;
+                savedNotes = existingLog.Notes;
+            }
+            else if (string.Equals(existingLog.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(dto.Notes) && string.IsNullOrWhiteSpace(dto.Status))
             {
                 // Toggle OFF -> Delete log
                 _trainingPlanRepository.RemoveWorkoutLog(existingLog);
@@ -696,7 +761,7 @@ public class TrainingPlanService : ITrainingPlanService
         }
 
         var buyer = plan.OrderDetails?.Order?.Buyer;
-        var weeks = BuildWeeksBreakdown(plan.TrainingPlanExercises, buyer?.UserId);
+        var weeks = BuildWeeksBreakdown(plan.TrainingPlanExercises, buyer?.UserId, plan.StartDate, plan.EndDate);
 
         var allLogs = plan.TrainingPlanExercises
             .SelectMany(e => e.WorkoutCompletionLogs.Select(l => new { Exercise = e, Log = l }))
@@ -742,7 +807,7 @@ public class TrainingPlanService : ITrainingPlanService
     private static TraineeWorkoutPlanProgressDto MapToTraineeProgressDto(TrainingPlan plan, Guid traineeId)
     {
         var exercises = plan.TrainingPlanExercises ?? new List<TrainingPlanExercise>();
-        var weeks = BuildWeeksBreakdown(exercises, traineeId);
+        var weeks = BuildWeeksBreakdown(exercises, traineeId, plan.StartDate, plan.EndDate);
 
         int totalCount = weeks.Sum(w => w.TotalExercises);
         int completedCount = weeks.Sum(w => w.CompletedExercises);
@@ -770,8 +835,11 @@ public class TrainingPlanService : ITrainingPlanService
 
     private static List<TraineeWorkoutWeekDto> BuildWeeksBreakdown(
         IEnumerable<TrainingPlanExercise> exercises,
-        Guid? filterTraineeId)
+        Guid? filterTraineeId,
+        DateTime? planStartDate = null,
+        DateTime? planEndDate = null)
     {
+        var todayUtc = DateTime.UtcNow.Date;
         var weeks = new List<TraineeWorkoutWeekDto>();
         var groupedByWeek = exercises
             .GroupBy(e => e.WeekNumber ?? 1)
@@ -791,19 +859,40 @@ public class TrainingPlanService : ITrainingPlanService
 
             foreach (var dayGroup in groupedByDay)
             {
+                var scheduledDate = ResolveScheduledDate(planStartDate, planEndDate, weekGroup.Key, dayGroup.Key);
+
+                // A plan without a StartDate is not on a calendar, so every day stays markable.
+                var hasSchedule = planStartDate.HasValue;
+
                 var dayDto = new TraineeWorkoutDayDto
                 {
                     DayNumber = dayGroup.Key,
-                    Title = $"Day {dayGroup.Key}"
+                    Title = $"Day {dayGroup.Key}",
+                    ScheduledDate = scheduledDate,
+                    IsToday = !hasSchedule || (scheduledDate.HasValue && scheduledDate.Value.Date == todayUtc)
                 };
 
                 foreach (var ex in dayGroup.OrderBy(e => e.SortOrder ?? 1))
                 {
-                    var completionLog = filterTraineeId.HasValue
-                        ? ex.WorkoutCompletionLogs?.FirstOrDefault(l => l.TraineeId == filterTraineeId.Value && l.Status == "COMPLETED")
-                        : ex.WorkoutCompletionLogs?.OrderByDescending(l => l.CreatedAt).FirstOrDefault(l => l.Status == "COMPLETED");
+                    // Scheduled outside [StartDate, EndDate] -> hide it from the trainee entirely.
+                    if (hasSchedule && !scheduledDate.HasValue)
+                    {
+                        break;
+                    }
 
-                    var isCompleted = completionLog != null;
+                    // Prefer a COMPLETED log; fall back to the most recent log (e.g. INCOMPLETE).
+                    WorkoutCompletionLog? relevantLog = null;
+                    if (ex.WorkoutCompletionLogs != null)
+                    {
+                        var mine = ex.WorkoutCompletionLogs
+                            .Where(l => !filterTraineeId.HasValue || l.TraineeId == filterTraineeId.Value)
+                            .ToList();
+
+                        relevantLog = mine.FirstOrDefault(l => string.Equals(l.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+                                      ?? mine.OrderByDescending(l => l.CreatedAt).FirstOrDefault();
+                    }
+
+                    var isCompleted = string.Equals(relevantLog?.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase);
 
                     dayDto.Exercises.Add(new TraineeWorkoutExerciseDto
                     {
@@ -820,15 +909,29 @@ public class TrainingPlanService : ITrainingPlanService
                         SortOrder = ex.SortOrder,
                         VideoTutorial = ex.VideoTutorial != null ? MapVideoToDto(ex.VideoTutorial) : null,
                         IsCompleted = isCompleted,
-                        WorkoutCompletionLogId = completionLog?.WorkoutCompletionLogId,
-                        CompletedAt = completionLog?.CreatedAt,
-                        TraineeNotes = completionLog?.Notes
+                        WorkoutCompletionLogId = relevantLog?.WorkoutCompletionLogId,
+                        CompletedAt = relevantLog?.CreatedAt,
+                        TraineeNotes = relevantLog?.Notes,
+                        Status = relevantLog?.Status,
+                        ScheduledDate = scheduledDate
                     });
                 }
 
                 dayDto.TotalExercises = dayDto.Exercises.Count;
                 dayDto.CompletedExercises = dayDto.Exercises.Count(e => e.IsCompleted);
+
+                // Every exercise of this day fell outside the plan range: drop the day too.
+                if (dayDto.TotalExercises == 0)
+                {
+                    continue;
+                }
+
                 weekDto.Days.Add(dayDto);
+            }
+
+            if (weekDto.Days.Count == 0)
+            {
+                continue;
             }
 
             weekDto.TotalExercises = weekDto.Days.Sum(d => d.TotalExercises);
@@ -837,6 +940,8 @@ public class TrainingPlanService : ITrainingPlanService
         }
 
         return weeks;
+    }
+
     public static DateTime GetStartMonday(DateTime startDate)
     {
         int dayOfWeek = (int)startDate.DayOfWeek;
@@ -956,5 +1061,34 @@ public class TrainingPlanService : ITrainingPlanService
                 throw new ValidationException($"The number of scheduled workout sessions ({scheduledSessions}) must match the package session count ({sessionCount.Value} sessions).");
             }
         }
+    }
+
+    /// <summary>
+    /// Maps a (WeekNumber, DayNumber) pair onto a real calendar date using the plan StartDate.
+    /// Weeks are treated as 7-day blocks, so Week 3 Day 3 = StartDate + 17 days.
+    /// Returns null when the plan has no StartDate or the date falls outside [StartDate, EndDate].
+    /// </summary>
+    private static DateTime? ResolveScheduledDate(DateTime? planStartDate, DateTime? planEndDate, short weekNumber, short dayNumber)
+    {
+        if (!planStartDate.HasValue)
+        {
+            return null;
+        }
+
+        var start = planStartDate.Value.Date;
+        var offset = ((weekNumber - 1) * 7) + (dayNumber - 1);
+        var date = start.AddDays(offset);
+
+        if (date < start)
+        {
+            return null;
+        }
+
+        if (planEndDate.HasValue && date > planEndDate.Value.Date)
+        {
+            return null;
+        }
+
+        return date;
     }
 }

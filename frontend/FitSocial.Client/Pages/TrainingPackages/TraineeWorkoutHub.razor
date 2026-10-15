@@ -201,7 +201,7 @@
                                         {
                                             <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
                                         }
-                                        <span>Day @day.DayNumber</span>
+                                        <span>@FormatDayLabel(day)</span>
                                         <span class="text-[10px] opacity-75">(@day.CompletedExercises/@day.TotalExercises)</span>
                                     </button>
                                 }
@@ -364,6 +364,13 @@
                                                 Completed
                                             </span>
                                         }
+                                        else if (!(CurrentDay?.IsToday ?? false))
+                                        {
+                                            @* Past or future day: the Complete action is not available. *@
+                                            <span class="px-4 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 select-none @(IsDayPast(ex) ? "bg-gray-100 text-gray-500 border-gray-200" : "bg-blue-50 text-blue-600 border-blue-100")">
+                                                @(IsDayPast(ex) ? "Missed" : "Upcoming")
+                                            </span>
+                                        }
                                         else
                                         {
                                             <button type="button"
@@ -426,6 +433,31 @@
         CurrentWeek?.Days.FirstOrDefault(d => d.DayNumber == selectedDayNumber)
         ?? CurrentWeek?.Days.FirstOrDefault();
 
+    /// <summary>UTC today, matching how the backend derives IsToday.</summary>
+    private static DateTime UtcToday => DateTime.UtcNow.Date;
+
+    private static string FormatDayLabel(TraineeWorkoutDayDto day)
+    {
+        if (!day.ScheduledDate.HasValue)
+        {
+            return $"Day {day.DayNumber}";
+        }
+
+        var date = day.ScheduledDate.Value;
+        var label = date.ToString("dd/MM");
+
+        return day.IsToday
+            ? $"Day {day.DayNumber} · {label} · Today"
+            : $"Day {day.DayNumber} · {label}";
+    }
+
+    /// <summary>True when the exercise's scheduled day is before UTC today.</summary>
+    private bool IsDayPast(TraineeWorkoutExerciseDto ex)
+    {
+        var date = ex.ScheduledDate ?? CurrentDay?.ScheduledDate;
+        return date.HasValue && date.Value.Date < UtcToday;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadWorkoutPlanAsync();
@@ -481,11 +513,18 @@
     {
         if (ex.IsCompleted) return; // Already completed, do nothing
 
+        // Only today's session can be marked complete; past and future days are read-only.
+        if (!(CurrentDay?.IsToday ?? false))
+        {
+            ShowToast("You can only complete today's workout.");
+            return;
+        }
+
         togglingExerciseId = ex.TrainingPlanExerciseId;
         var dto = new ToggleWorkoutCompletionDto
         {
             TrainingPlanExerciseId = ex.TrainingPlanExerciseId,
-            LogDate = DateTime.UtcNow,
+            LogDate = ex.ScheduledDate ?? CurrentDay?.ScheduledDate ?? DateTime.UtcNow,
             Status = "COMPLETED"
         };
 
@@ -495,6 +534,7 @@
             ex.IsCompleted = res.Data.IsCompleted;
             ex.WorkoutCompletionLogId = res.Data.WorkoutCompletionLogId;
             ex.CompletedAt = res.Data.CompletedAt;
+            ex.Status = res.Data.Status;
 
             if (workoutPlan != null)
             {

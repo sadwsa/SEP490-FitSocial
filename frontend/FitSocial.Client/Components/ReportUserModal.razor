@@ -3,7 +3,7 @@
 
 @if (IsVisible && ReportedUserId.HasValue)
 {
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-all animate-in fade-in"
+    <div class="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-all animate-in fade-in"
          @onclick="CloseModal">
         <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 animate-in zoom-in-95 duration-150"
              @onclick:stopPropagation="true">

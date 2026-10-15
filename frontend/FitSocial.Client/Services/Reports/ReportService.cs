@@ -133,6 +133,15 @@ public class ReportService : IReportService
         }
     }
 
+    public async Task<ApiResponse<ReportListItemDto>> SubmitCoachComplaintAsync(SubmitCoachComplaintRequest request)
+    {
+        try
+        {
+            var result = await _apiClient.PostAsync<SubmitCoachComplaintRequest, ReportListItemDto>("reports/coach", request);
+            return result ?? new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = "Unable to submit coach complaint. Please try again."
     public async Task<ApiResponse<PagedResult<ReportListItemDto>>> GetAppealsAsync(
         string? appealStatus = null,
         string? searchTerm = null,
@@ -219,9 +228,11 @@ public class ReportService : IReportService
             return new ApiResponse<ReportListItemDto>
             {
                 Success = false,
+                Message = $"Error submitting coach complaint: {ex.Message}"
                 Message = $"Error reporting user: {ex.Message}"
             };
         }
     }
 }
+
 

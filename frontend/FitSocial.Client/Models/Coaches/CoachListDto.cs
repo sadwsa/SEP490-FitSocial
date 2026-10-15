@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace FitSocial.Client.Models.Coaches;
 
@@ -10,4 +10,7 @@ public class CoachListDto
     public int? ExperienceYears { get; set; }
     public string? Bio { get; set; }
     public string? CertificateUrl { get; set; }
+    public string? Status { get; set; }
+    public string? ApprovalStatus { get; set; }
 }
+

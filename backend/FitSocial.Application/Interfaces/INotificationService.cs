@@ -10,6 +10,7 @@ namespace FitSocial.Application.Interfaces;
 public interface INotificationService
 {
     Task<ApiResponseDto<List<NotificationDto>>> GetUserNotificationsAsync(Guid userId);
+    Task<ApiResponseDto<List<NotificationDto>>> GetUserNotificationsAsync(Guid userId, string? category);
     Task<ApiResponseDto<bool>> MarkAsReadAsync(Guid notificationId, Guid userId);
     Task<ApiResponseDto<bool>> MarkAllAsReadAsync(Guid userId);
     Task CreateAndSendNewMessageNotificationAsync(Message message, User sender, List<Guid> recipientUserIds);

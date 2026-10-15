@@ -24,6 +24,7 @@
     <ProjectReference Include="..\FitSocial.Domain\FitSocial.Domain.csproj" />
     <ProjectReference Include="..\FitSocial.Application\FitSocial.Application.csproj" />
     <ProjectReference Include="..\FitSocial.Infrastructure\FitSocial.Infrastructure.csproj" />
+    <ProjectReference Include="..\FitSocial.API\FitSocial.API.csproj" />
   </ItemGroup>
 
 </Project>

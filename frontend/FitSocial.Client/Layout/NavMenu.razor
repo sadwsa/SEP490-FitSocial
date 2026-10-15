@@ -35,6 +35,16 @@
                 <span>Trang cá nhân</span>
             </NavLink>
         </div>
+        <AuthorizeView Roles="TRAINEE,COACH">
+            <Authorized>
+                <div class="nav-item">
+                    <NavLink class="nav-link px-3 py-2" href="notifications">
+                        <span class="nav-icon">🔔</span>
+                        <span>Thông báo</span>
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
         <div class="nav-item">
             <NavLink class="nav-link px-3 py-2" href="messages">
                 <span class="nav-icon">💬</span>

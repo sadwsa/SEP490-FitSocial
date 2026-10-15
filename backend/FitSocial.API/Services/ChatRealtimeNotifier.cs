@@ -12,11 +12,15 @@ namespace FitSocial.API.Services;
 
 public class ChatRealtimeNotifier : IChatRealtimeNotifier
 {
-    private readonly IHubContext<ChatHub> _hubContext;
+    private readonly IHubContext<ChatHub> _chatHubContext;
+    private readonly IHubContext<NotificationHub> _notificationHubContext;
 
-    public ChatRealtimeNotifier(IHubContext<ChatHub> hubContext)
+    public ChatRealtimeNotifier(
+        IHubContext<ChatHub> chatHubContext,
+        IHubContext<NotificationHub> notificationHubContext)
     {
-        _hubContext = hubContext;
+        _chatHubContext = chatHubContext;
+        _notificationHubContext = notificationHubContext;
     }
 
     public async Task BroadcastMessageAsync(List<Guid> participantUserIds, MessageDto message)
@@ -27,7 +31,7 @@ public class ChatRealtimeNotifier : IChatRealtimeNotifier
         }
 
         var groupNames = participantUserIds.Select(id => $"User_{id}").ToList();
-        await _hubContext.Clients.Groups(groupNames).SendAsync("ReceiveMessage", message);
+        await _chatHubContext.Clients.Groups(groupNames).SendAsync("ReceiveMessage", message);
     }
 
     public async Task SendNotificationAsync(Guid recipientUserId, NotificationDto notification)
@@ -37,6 +41,19 @@ public class ChatRealtimeNotifier : IChatRealtimeNotifier
             return;
         }
 
-        await _hubContext.Clients.Group($"User_{recipientUserId}").SendAsync("ReceiveNotification", notification);
+        var isChatMessage = string.Equals(notification.Type, "NewMessage", StringComparison.OrdinalIgnoreCase);
+
+        if (isChatMessage)
+        {
+            // Message events go to ChatHub
+            await _chatHubContext.Clients.Group($"User_{recipientUserId}").SendAsync("ReceiveNotification", notification);
+        }
+        else
+        {
+            // Application notifications go to NotificationHub, NEVER to ChatHub
+            var title = notification.Type ?? "Notification";
+            var message = notification.MessagePreview ?? string.Empty;
+            await _notificationHubContext.Clients.Group($"User_{recipientUserId}").SendAsync("ReceiveNotification", title, message);
+        }
     }
 }

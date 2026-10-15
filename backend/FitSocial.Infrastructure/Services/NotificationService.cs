@@ -124,13 +124,34 @@ public class NotificationService : INotificationService
         }
     }
 
-    public async Task<ApiResponseDto<List<NotificationDto>>> GetUserNotificationsAsync(Guid userId)
+    public Task<ApiResponseDto<List<NotificationDto>>> GetUserNotificationsAsync(Guid userId)
+    {
+        return GetUserNotificationsAsync(userId, null);
+    }
+
+    public async Task<ApiResponseDto<List<NotificationDto>>> GetUserNotificationsAsync(Guid userId, string? category)
     {
         try
         {
-            var notifications = await _context.Notifications
+            var query = _context.Notifications
                 .AsNoTracking()
-                .Where(n => n.UserId == userId)
+                .Include(n => n.Actor)
+                .Where(n => n.UserId == userId);
+
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                var cat = category.Trim().ToUpperInvariant();
+                if (cat == "MESSAGE")
+                {
+                    query = query.Where(n => n.Type == "NewMessage" || n.Type == "NEW_MESSAGE");
+                }
+                else if (cat == "NOTIFICATION")
+                {
+                    query = query.Where(n => n.Type != "NewMessage" && n.Type != "NEW_MESSAGE");
+                }
+            }
+
+            var notifications = await query
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(50)
                 .ToListAsync();
@@ -187,6 +208,21 @@ public class NotificationService : INotificationService
                         preview = preview.Substring(0, 97) + "...";
                     }
                     dto.MessagePreview = preview;
+                }
+                else
+                {
+                    if (n.Actor != null)
+                    {
+                        dto.SenderId = n.Actor.UserId;
+                        dto.SenderName = n.Actor.FullName ?? n.Actor.Email ?? "FitSocial User";
+                        dto.SenderAvatar = n.Actor.AvatarUrl;
+                    }
+                    else if (n.ActorId.HasValue)
+                    {
+                        dto.SenderId = n.ActorId.Value;
+                    }
+
+                    dto.MessagePreview = n.Description;
                 }
 
                 dtos.Add(dto);

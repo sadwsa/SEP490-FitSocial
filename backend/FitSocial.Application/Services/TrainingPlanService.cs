@@ -940,6 +940,8 @@ public class TrainingPlanService : ITrainingPlanService
         }
 
         return weeks;
+    }
+
     public static DateTime GetStartMonday(DateTime startDate)
     {
         int dayOfWeek = (int)startDate.DayOfWeek;

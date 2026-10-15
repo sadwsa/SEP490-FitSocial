@@ -142,6 +142,18 @@ public class ReportService : IReportService
             {
                 Success = false,
                 Message = "Unable to submit coach complaint. Please try again."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ReportListItemDto>
+            {
+                Success = false,
+                Message = $"Error submitting coach complaint: {ex.Message}"
+            };
+        }
+    } 
+
     public async Task<ApiResponse<PagedResult<ReportListItemDto>>> GetAppealsAsync(
         string? appealStatus = null,
         string? searchTerm = null,
@@ -228,7 +240,6 @@ public class ReportService : IReportService
             return new ApiResponse<ReportListItemDto>
             {
                 Success = false,
-                Message = $"Error submitting coach complaint: {ex.Message}"
                 Message = $"Error reporting user: {ex.Message}"
             };
         }

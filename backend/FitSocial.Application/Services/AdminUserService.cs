@@ -279,6 +279,33 @@ public class AdminUserService : IAdminUserService
             await _userRepository.AddAsync(staffUser, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                        action: "CREATE_STAFF",
+                        entityType: "Staff",
+                        entityId: staffUser.UserId.ToString(),
+                        description: $"Staff account created for {staffUser.FullName} ({staffUser.Email}).",
+                        oldValue: null,
+                        newValue: new
+                        {
+                            userId = staffUser.UserId,
+                            fullName = staffUser.FullName,
+                            email = staffUser.Email,
+                            phone = staffUser.PhoneNumber,
+                            role = staffUser.RoleCode
+                        },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log failure is non-fatal
+                }
+            }
+
             return ApiResponseDto<AdminUserDto>.Ok(MapToAdminDto(staffUser), "Staff account created successfully.");
         }
         catch (Exception ex)
@@ -367,12 +394,45 @@ public class AdminUserService : IAdminUserService
                 user.TokenVersion++;
             }
 
+            var oldValues = new
+            {
+                fullName = user.FullName,
+                email = user.Email,
+                phone = user.PhoneNumber
+            };
+
             user.FullName = trimmedFullName;
             user.Email = normalizedEmail;
             user.PhoneNumber = trimmedPhone;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                        action: "UPDATE_STAFF",
+                        entityType: "Staff",
+                        entityId: user.UserId.ToString(),
+                        description: $"Staff account updated for {user.FullName} ({user.Email}).",
+                        oldValue: oldValues,
+                        newValue: new
+                        {
+                            userId = user.UserId,
+                            fullName = user.FullName,
+                            email = user.Email,
+                            phone = user.PhoneNumber
+                        },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log failure is non-fatal
+                }
+            }
 
             return ApiResponseDto<AdminUserDto>.Ok(MapToAdminDto(user), "Staff account updated successfully.");
         }

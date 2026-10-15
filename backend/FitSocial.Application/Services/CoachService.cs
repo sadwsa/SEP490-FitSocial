@@ -25,6 +25,7 @@ public class CoachService : ICoachService
     private readonly INotificationRepository? _notificationRepository;
     private readonly IEmailService? _emailService;
     private readonly ILogger<CoachService>? _logger;
+    private readonly IAuditLogService? _auditLogService;
 
     public CoachService(
         ICoachProfileRepository coachProfiles,
@@ -34,7 +35,8 @@ public class CoachService : ICoachService
         IOrderRepository orderRepository,
         INotificationRepository? notificationRepository = null,
         IEmailService? emailService = null,
-        ILogger<CoachService>? logger = null)
+        ILogger<CoachService>? logger = null,
+        IAuditLogService? auditLogService = null)
     {
         _coachProfiles = coachProfiles;
         _locationRepository = locationRepository;
@@ -44,6 +46,7 @@ public class CoachService : ICoachService
         _notificationRepository = notificationRepository;
         _emailService = emailService;
         _logger = logger;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDto<List<TopCoachDto>>> GetTopCoachesAsync(int count = 3, CancellationToken cancellationToken = default)
@@ -499,6 +502,29 @@ public class CoachService : ICoachService
                 await _notificationRepository.AddAsync(notification, cancellationToken);
             }
 
+            // 6. Audit log for APPROVE_COACH_APPLICATION
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: approverId,
+                        action: "APPROVE_COACH_APPLICATION",
+                        entityType: "CoachProfile",
+                        entityId: profile.CoachId.ToString(),
+                        description: string.IsNullOrWhiteSpace(request?.Note)
+                            ? $"Coach application for {profile.Coach?.FullName ?? profile.Coach?.Email} approved."
+                            : $"Coach application for {profile.Coach?.FullName ?? profile.Coach?.Email} approved. Note: {request.Note}",
+                        oldValue: new { approvalStatus = currentStatus },
+                        newValue: new { approvalStatus = "APPROVED", status = "ACTIVE", approvedBy = approverId, note = request?.Note },
+                        cancellationToken: cancellationToken);
+                }
+                catch (Exception auditEx)
+                {
+                    _logger?.LogWarning(auditEx, "Failed to record audit log for coach approval {CoachId}", profile.CoachId);
+                }
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             // 6. Send email notification to applicant
@@ -608,6 +634,29 @@ public class CoachService : ICoachService
                     IsRead = false
                 };
                 await _notificationRepository.AddAsync(notification, cancellationToken);
+            }
+
+            // 6. Audit log for REJECT_COACH_APPLICATION
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: rejectorId,
+                        action: "REJECT_COACH_APPLICATION",
+                        entityType: "CoachProfile",
+                        entityId: profile.CoachId.ToString(),
+                        description: string.IsNullOrWhiteSpace(request?.Reason)
+                            ? $"Coach application for {profile.Coach?.FullName ?? profile.Coach?.Email} rejected."
+                            : $"Coach application for {profile.Coach?.FullName ?? profile.Coach?.Email} rejected. Reason: {request.Reason}",
+                        oldValue: new { approvalStatus = currentStatus },
+                        newValue: new { approvalStatus = "REJECTED", reason = request?.Reason, rejectedBy = rejectorId },
+                        cancellationToken: cancellationToken);
+                }
+                catch (Exception auditEx)
+                {
+                    _logger?.LogWarning(auditEx, "Failed to record audit log for coach rejection {CoachId}", profile.CoachId);
+                }
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);

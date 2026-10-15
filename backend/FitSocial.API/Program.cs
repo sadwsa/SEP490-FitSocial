@@ -64,6 +64,7 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();

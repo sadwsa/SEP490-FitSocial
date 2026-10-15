@@ -833,12 +833,18 @@
     private string FormatNotificationTime(DateTime? dt)
     {
         if (!dt.HasValue) return "";
-        var span = DateTime.UtcNow - dt.Value.ToUniversalTime();
+        var utcTime = dt.Value.Kind switch
+        {
+            DateTimeKind.Utc => dt.Value,
+            DateTimeKind.Local => dt.Value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc)
+        };
+        var span = DateTime.UtcNow - utcTime;
         if (span.TotalMinutes < 1) return "Just now";
         if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
         if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
         if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
-        return dt.Value.ToString("dd/MM/yyyy");
+        return utcTime.ToLocalTime().ToString("dd/MM/yyyy");
     }
 
     private async Task LoadCurrentUserAsync()

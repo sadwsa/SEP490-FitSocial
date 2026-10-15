@@ -185,4 +185,44 @@ public class AuditLogServiceTests
         Assert.Equal("Staff User", result.Data.ActorName);
         Assert.Equal("STAFF", result.Data.ActorRole);
     }
+
+    [Fact]
+    public async Task LogAsync_AutoResolvesActorFromCurrentUserContext_WhenOmitted()
+    {
+        // Arrange
+        var contextUserId = Guid.NewGuid();
+        var mockUserContext = new Mock<FitSocial.Application.Interfaces.ICurrentUserContext>();
+        mockUserContext.Setup(c => c.UserId).Returns(contextUserId);
+        mockUserContext.Setup(c => c.Role).Returns("STAFF");
+        mockUserContext.Setup(c => c.IpAddress).Returns("192.168.1.100");
+
+        var serviceWithContext = new AuditLogService(
+            _mockRepo.Object,
+            _mockUow.Object,
+            _mockLogger.Object,
+            mockUserContext.Object);
+
+        AuditLog? capturedLog = null;
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<AuditLog>(), It.IsAny<CancellationToken>()))
+            .Callback<AuditLog, CancellationToken>((l, ct) => capturedLog = l)
+            .Returns(Task.CompletedTask);
+
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act - call LogAsync without passing actorAccountId, actorRole, ipAddress
+        var result = await serviceWithContext.LogAsync(
+            actorAccountId: null,
+            action: "UPDATE_STAFF",
+            entityType: "Staff",
+            entityId: "staff-123",
+            description: "Staff profile updated");
+
+        // Assert
+        Assert.NotNull(capturedLog);
+        Assert.Equal(contextUserId, capturedLog.ActorAccountId);
+        Assert.Equal("192.168.1.100", capturedLog.Ipaddress);
+        Assert.Contains("STAFF", capturedLog.NewValue);
+        Assert.Contains("Staff profile updated", capturedLog.NewValue);
+    }
 }

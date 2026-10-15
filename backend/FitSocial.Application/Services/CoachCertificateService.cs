@@ -22,6 +22,7 @@ public class CoachCertificateService : ICoachCertificateService
     private readonly INotificationRepository? _notifications;
     private readonly IUserRepository? _users;
     private readonly IChatRealtimeNotifier? _realtimeNotifier;
+    private readonly IAuditLogService? _auditLogService;
 
     public CoachCertificateService(
         ICoachCertificateRepository certificateRepository,
@@ -30,7 +31,8 @@ public class CoachCertificateService : ICoachCertificateService
         IAuditLogRepository? auditLogs = null,
         INotificationRepository? notifications = null,
         IUserRepository? users = null,
-        IChatRealtimeNotifier? realtimeNotifier = null)
+        IChatRealtimeNotifier? realtimeNotifier = null,
+        IAuditLogService? auditLogService = null)
     {
         _certificateRepository = certificateRepository;
         _coachProfileRepository = coachProfileRepository;
@@ -39,6 +41,7 @@ public class CoachCertificateService : ICoachCertificateService
         _notifications = notifications;
         _users = users;
         _realtimeNotifier = realtimeNotifier;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDto<CoachCertificateAdminListResponseDto>> GetCertificatesAsync(
@@ -168,8 +171,27 @@ public class CoachCertificateService : ICoachCertificateService
                 }
             }
 
-            // Audit log (OldValue and NewValue must be valid JSON for jsonb column)
-            if (_auditLogs != null)
+            // Audit log
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: reviewerId,
+                        action: "APPROVE_COACH_CERTIFICATE",
+                        entityType: "CoachCertificate",
+                        entityId: cert.CertificateId.ToString(),
+                        description: $"Coach certificate approved by reviewer {reviewerId}.",
+                        oldValue: new { status = currentStatus },
+                        newValue: new { status = "APPROVED", verifiedBy = reviewerId, verifiedAt = now },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Non-fatal audit log failure
+                }
+            }
+            else if (_auditLogs != null)
             {
                 try
                 {
@@ -301,8 +323,27 @@ public class CoachCertificateService : ICoachCertificateService
                 }
             }
 
-            // Audit log (OldValue and NewValue must be valid JSON for jsonb column)
-            if (_auditLogs != null)
+            // Audit log
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: reviewerId,
+                        action: "REJECT_COACH_CERTIFICATE",
+                        entityType: "CoachCertificate",
+                        entityId: cert.CertificateId.ToString(),
+                        description: $"Coach certificate rejected by reviewer {reviewerId}. Reason: {reason}",
+                        oldValue: new { status = currentStatus },
+                        newValue: new { status = "REJECTED", reason, verifiedBy = reviewerId, verifiedAt = now },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Non-fatal
+                }
+            }
+            else if (_auditLogs != null)
             {
                 try
                 {

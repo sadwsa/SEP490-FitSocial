@@ -19,6 +19,7 @@ public class AuditLogService : IAuditLogService
     private readonly IAuditLogRepository _auditLogRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<AuditLogService> _logger;
+    private readonly ICurrentUserContext? _currentUserContext;
 
     private static readonly Regex SensitiveKeyRegex = new(
         @"""(?i)(password|passwordhash|token|access_token|refresh_token|jwt|tokenhash|secret|secretkey|checksumkey|apikey|api_key|privatekey|connectionstring|connection_string)""\s*:\s*(""[^""]*""|[^\s,}\]]+)",
@@ -27,11 +28,13 @@ public class AuditLogService : IAuditLogService
     public AuditLogService(
         IAuditLogRepository auditLogRepository,
         IUnitOfWork unitOfWork,
-        ILogger<AuditLogService> logger)
+        ILogger<AuditLogService> logger,
+        ICurrentUserContext? currentUserContext = null)
     {
         _auditLogRepository = auditLogRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _currentUserContext = currentUserContext;
     }
 
     public async Task<AuditLog> LogAsync(CreateAuditLogDto dto, CancellationToken cancellationToken = default)
@@ -69,6 +72,16 @@ public class AuditLogService : IAuditLogService
         try
         {
             var now = DateTime.UtcNow;
+
+            actorAccountId ??= _currentUserContext?.UserId;
+            if (string.IsNullOrWhiteSpace(actorRole))
+            {
+                actorRole = _currentUserContext?.Role;
+            }
+            if (string.IsNullOrWhiteSpace(ipAddress))
+            {
+                ipAddress = _currentUserContext?.IpAddress;
+            }
 
             var oldValueJson = SerializeAndSanitizeJson(oldValue);
             var newValueJson = PrepareNewValueJson(newValue, description, actorRole);

@@ -104,7 +104,9 @@ public class NotificationService : INotificationService
                     ConversationId = message.ConversationId,
                     MessageId = message.MessageId,
                     MessagePreview = preview,
-                    CreatedAt = createdAt,
+                    CreatedAt = createdAt.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(createdAt, DateTimeKind.Utc)
+                        : createdAt.ToUniversalTime(),
                     IsRead = false
                 };
 
@@ -184,7 +186,11 @@ public class NotificationService : INotificationService
                 {
                     NotificationId = n.Id,
                     Type = n.Type ?? "NewMessage",
-                    CreatedAt = n.CreatedAt,
+                    CreatedAt = n.CreatedAt.HasValue
+                        ? (n.CreatedAt.Value.Kind == DateTimeKind.Unspecified
+                            ? DateTime.SpecifyKind(n.CreatedAt.Value, DateTimeKind.Utc)
+                            : n.CreatedAt.Value.ToUniversalTime())
+                        : null,
                     IsRead = n.IsRead == true
                 };
 

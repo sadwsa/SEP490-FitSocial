@@ -17,12 +17,18 @@ public class AdminUserService : IAdminUserService
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IAuditLogService? _auditLogService;
 
-    public AdminUserService(IUserRepository userRepository, IUnitOfWork unitOfWork, IPasswordHasher passwordHasher)
+    public AdminUserService(
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        IPasswordHasher passwordHasher,
+        IAuditLogService? auditLogService = null)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDto<PagedResultDto<AdminUserDto>>> GetUsersAsync(
@@ -99,6 +105,28 @@ public class AdminUserService : IAdminUserService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    var action = isLocked ? "LOCK_USER" : "UNLOCK_USER";
+                    var desc = $"User account '{user.FullName ?? user.Email}' ({user.UserId}) was {(isLocked ? "locked" : "unlocked")}.";
+                    await _auditLogService.LogAsync(
+                        actorAccountId: adminId,
+                        action: action,
+                        entityType: "User",
+                        entityId: user.UserId.ToString(),
+                        description: desc,
+                        oldValue: new { isLocked = !isLocked },
+                        newValue: new { isLocked, lockedBy = user.LockedBy, updatedAt = user.UpdatedAt },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log non-fatal
+                }
+            }
+
             var actionText = isLocked ? "locked" : "unlocked";
             return ApiResponseDto<bool>.Ok(true, $"User '{user.FullName ?? user.Email}' has been {actionText}.");
         }
@@ -134,6 +162,28 @@ public class AdminUserService : IAdminUserService
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    var action = user.WarningCount >= 3 ? "LOCK_USER" : "WARN_USER";
+                    var desc = $"Warning issued to user '{user.FullName ?? user.Email}' ({user.UserId}). Total warnings: {user.WarningCount}. Reason: {reason ?? "Violation"}";
+                    await _auditLogService.LogAsync(
+                        actorAccountId: staffId,
+                        action: action,
+                        entityType: "User",
+                        entityId: user.UserId.ToString(),
+                        description: desc,
+                        oldValue: new { warningCount = user.WarningCount - 1, isLocked = false },
+                        newValue: new { warningCount = user.WarningCount, isLocked = user.IsLocked, reason },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log non-fatal
+                }
+            }
 
             var msg = user.WarningCount >= 3
                 ? $"User '{user.FullName ?? user.Email}' has reached {user.WarningCount} warnings and has been locked."
@@ -229,6 +279,33 @@ public class AdminUserService : IAdminUserService
             await _userRepository.AddAsync(staffUser, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                        action: "CREATE_STAFF",
+                        entityType: "Staff",
+                        entityId: staffUser.UserId.ToString(),
+                        description: $"Staff account created for {staffUser.FullName} ({staffUser.Email}).",
+                        oldValue: null,
+                        newValue: new
+                        {
+                            userId = staffUser.UserId,
+                            fullName = staffUser.FullName,
+                            email = staffUser.Email,
+                            phone = staffUser.PhoneNumber,
+                            role = staffUser.RoleCode
+                        },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log failure is non-fatal
+                }
+            }
+
             return ApiResponseDto<AdminUserDto>.Ok(MapToAdminDto(staffUser), "Staff account created successfully.");
         }
         catch (Exception ex)
@@ -317,12 +394,45 @@ public class AdminUserService : IAdminUserService
                 user.TokenVersion++;
             }
 
+            var oldValues = new
+            {
+                fullName = user.FullName,
+                email = user.Email,
+                phone = user.PhoneNumber
+            };
+
             user.FullName = trimmedFullName;
             user.Email = normalizedEmail;
             user.PhoneNumber = trimmedPhone;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                        action: "UPDATE_STAFF",
+                        entityType: "Staff",
+                        entityId: user.UserId.ToString(),
+                        description: $"Staff account updated for {user.FullName} ({user.Email}).",
+                        oldValue: oldValues,
+                        newValue: new
+                        {
+                            userId = user.UserId,
+                            fullName = user.FullName,
+                            email = user.Email,
+                            phone = user.PhoneNumber
+                        },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log failure is non-fatal
+                }
+            }
 
             return ApiResponseDto<AdminUserDto>.Ok(MapToAdminDto(user), "Staff account updated successfully.");
         }

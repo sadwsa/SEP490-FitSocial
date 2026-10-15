@@ -26,6 +26,7 @@ public class RefundRequestService : IRefundRequestService
     private readonly ITermsAndPolicyRepository? _terms;
     private readonly IUserRepository? _users;
     private readonly IChatRealtimeNotifier? _realtimeNotifier;
+    private readonly IAuditLogService? _auditLogService;
 
     public RefundRequestService(
         IRefundRequestRepository refundRequestRepository,
@@ -36,7 +37,8 @@ public class RefundRequestService : IRefundRequestService
         ITrainingPlanRepository? trainingPlans = null,
         ITermsAndPolicyRepository? terms = null,
         IUserRepository? users = null,
-        IChatRealtimeNotifier? realtimeNotifier = null)
+        IChatRealtimeNotifier? realtimeNotifier = null,
+        IAuditLogService? auditLogService = null)
     {
         _refundRequestRepository = refundRequestRepository;
         _orderRepository = orderRepository;
@@ -47,6 +49,7 @@ public class RefundRequestService : IRefundRequestService
         _terms = terms;
         _users = users;
         _realtimeNotifier = realtimeNotifier;
+        _auditLogService = auditLogService;
     }
 
     private async Task<string> GetStaffNameAsync(Guid staffUserId, CancellationToken cancellationToken)
@@ -254,9 +257,31 @@ public class RefundRequestService : IRefundRequestService
             }
 
             // 3. AuditLog for CREATE_REFUND_REQUEST
-            if (_auditLogs != null)
+            var auditDesc = $"Refund request created.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOriginal Paid Amount: {snapshotPaidAmount:N0} VND\nPurchase Date: {purchaseTime.Value:dd/MM/yyyy HH:mm}\nRequested At: {now:dd/MM/yyyy HH:mm}\nStatus: PENDING\nReason: {refundRequest.Reason}";
+            if (_auditLogService != null)
             {
-                var auditDesc = $"Refund request created.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOriginal Paid Amount: {snapshotPaidAmount:N0} VND\nPurchase Date: {purchaseTime.Value:dd/MM/yyyy HH:mm}\nRequested At: {now:dd/MM/yyyy HH:mm}\nStatus: PENDING\nReason: {refundRequest.Reason}";
+                await _auditLogService.LogAsync(
+                    actorAccountId: userId,
+                    action: "CREATE_REFUND_REQUEST",
+                    entityType: "RefundRequest",
+                    entityId: refundRequest.RefundRequestId.ToString(),
+                    description: auditDesc,
+                    oldValue: null,
+                    newValue: new
+                    {
+                        buyer = buyerName,
+                        seller = coachName,
+                        package = packageName,
+                        paidAmount = snapshotPaidAmount,
+                        purchaseDate = purchaseTime.Value,
+                        requestedAt = now,
+                        status = "PENDING",
+                        reason = refundRequest.Reason
+                    },
+                    cancellationToken: cancellationToken);
+            }
+            else if (_auditLogs != null)
+            {
                 await _auditLogs.AddAsync(new AuditLog
                 {
                     ActorAccountId = userId,
@@ -554,9 +579,36 @@ public class RefundRequestService : IRefundRequestService
             }
 
             // 3. Audit log for APPROVE_REFUND
-            if (_auditLogs != null)
+            var auditDesc = $"Refund request approved.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nRequested At: {(item.RequestedAt.HasValue ? item.RequestedAt.Value.ToString("dd/MM/yyyy HH:mm") : now.ToString("dd/MM/yyyy HH:mm"))}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nPrevious Status: PENDING\nNew Status: APPROVED\nProcessed By: {staffName}";
+            if (_auditLogService != null)
             {
-                var auditDesc = $"Refund request approved.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nRequested At: {(item.RequestedAt.HasValue ? item.RequestedAt.Value.ToString("dd/MM/yyyy HH:mm") : now.ToString("dd/MM/yyyy HH:mm"))}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nPrevious Status: PENDING\nNew Status: APPROVED\nProcessed By: {staffName}";
+                await _auditLogService.LogAsync(
+                    actorAccountId: staffUserId,
+                    action: "APPROVE_REFUND",
+                    entityType: "RefundRequest",
+                    entityId: item.RefundRequestId.ToString(),
+                    description: auditDesc,
+                    oldValue: new { status = currentStatus, requestedAmount = item.RequestedAmount },
+                    newValue: new
+                    {
+                        buyer = buyerName,
+                        seller = coachName,
+                        package = packageName,
+                        order = orderRef,
+                        originalPaidAmount = snapshotAmount,
+                        refundAmount = approvedAmount,
+                        status = "APPROVED",
+                        approvedAmount,
+                        refundTransactionRef = txRef,
+                        staffNote = item.StaffNote,
+                        processedBy = staffName,
+                        processedAt = now
+                    },
+                    ipAddress: ipAddress,
+                    cancellationToken: cancellationToken);
+            }
+            else if (_auditLogs != null)
+            {
                 await _auditLogs.AddAsync(new AuditLog
                 {
                     ActorAccountId = staffUserId,
@@ -732,9 +784,33 @@ public class RefundRequestService : IRefundRequestService
             }
 
             // 3. Audit log for REJECT_REFUND
-            if (_auditLogs != null)
+            var auditDesc = $"Refund request rejected.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nPurchase Date: {(order?.CreatedAt.HasValue == true ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nRequested At: {(item.RequestedAt.HasValue ? item.RequestedAt.Value.ToString("dd/MM/yyyy HH:mm") : now.ToString("dd/MM/yyyy HH:mm"))}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nPrevious Status: PENDING\nNew Status: REJECTED\nProcessed By: {staffName}\nRejection Reason: {rejectionReason}";
+            if (_auditLogService != null)
             {
-                var auditDesc = $"Refund request rejected.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nPurchase Date: {(order?.CreatedAt.HasValue == true ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nRequested At: {(item.RequestedAt.HasValue ? item.RequestedAt.Value.ToString("dd/MM/yyyy HH:mm") : now.ToString("dd/MM/yyyy HH:mm"))}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nPrevious Status: PENDING\nNew Status: REJECTED\nProcessed By: {staffName}\nRejection Reason: {rejectionReason}";
+                await _auditLogService.LogAsync(
+                    actorAccountId: staffUserId,
+                    action: "REJECT_REFUND",
+                    entityType: "RefundRequest",
+                    entityId: item.RefundRequestId.ToString(),
+                    description: auditDesc,
+                    oldValue: new { status = currentStatus },
+                    newValue: new
+                    {
+                        buyer = buyerName,
+                        seller = coachName,
+                        package = packageName,
+                        order = orderRef,
+                        status = "REJECTED",
+                        staffNote = item.StaffNote,
+                        processedBy = staffName,
+                        rejectionReason,
+                        processedAt = now
+                    },
+                    ipAddress: ipAddress,
+                    cancellationToken: cancellationToken);
+            }
+            else if (_auditLogs != null)
+            {
                 await _auditLogs.AddAsync(new AuditLog
                 {
                     ActorAccountId = staffUserId,

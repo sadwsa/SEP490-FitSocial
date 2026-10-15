@@ -49,6 +49,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingPlanService, TrainingPlanService>();
         services.AddScoped<IMealPlanService, MealPlanService>();
         services.AddScoped<ICoachCertificateService, CoachCertificateService>();
+        services.AddScoped<ICurrentUserContext, CurrentUserContext>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
         return services;
     }
 

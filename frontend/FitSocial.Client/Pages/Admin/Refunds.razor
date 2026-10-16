@@ -848,9 +848,19 @@
             var response = await RefundService.ApproveRefundRequestAsync(selectedRefund.RefundRequestId, req);
             if (response.Success)
             {
+                var targetId = selectedRefund.RefundRequestId;
+                var approvedAmt = req.ApprovedAmount;
+                var found = pagedRefunds?.Items?.FirstOrDefault(x => x.RefundRequestId == targetId);
+                if (found != null)
+                {
+                    found.Status = "APPROVED";
+                    found.ApprovedAmount = approvedAmt;
+                    found.ReviewedAt = DateTime.UtcNow;
+                }
+
                 ShowToast("Refund request approved and processed successfully.", "success");
                 CloseModals();
-                await LoadRefundRequestsAsync();
+                _ = LoadRefundRequestsAsync();
             }
             else
             {
@@ -922,9 +932,17 @@
             var response = await RefundService.RejectRefundRequestAsync(selectedRefund.RefundRequestId, req);
             if (response.Success)
             {
+                var targetId = selectedRefund.RefundRequestId;
+                var found = pagedRefunds?.Items?.FirstOrDefault(x => x.RefundRequestId == targetId);
+                if (found != null)
+                {
+                    found.Status = "REJECTED";
+                    found.ReviewedAt = DateTime.UtcNow;
+                }
+
                 ShowToast("Refund request rejected.", "info");
                 CloseModals();
-                await LoadRefundRequestsAsync();
+                _ = LoadRefundRequestsAsync();
             }
             else
             {

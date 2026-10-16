@@ -115,6 +115,10 @@
                                 <td>
                                     <div class="req-id-cell">
                                         <span class="ref-badge">@FormatReferenceCode(r)</span>
+                                        @if (!string.IsNullOrEmpty(r.RefundCase))
+                                        {
+                                            <span class="case-badge @GetCaseBadgeClass(r.RefundCase)">@r.RefundCase</span>
+                                        }
                                         @if (!string.IsNullOrWhiteSpace(r.RefundTransactionRef))
                                         {
                                             <small class="text-muted" title="Transaction Reference">Tx: @r.RefundTransactionRef</small>
@@ -338,6 +342,83 @@
                             </div>
                         </div>
 
+                        <!-- Policy Calculation Breakdown Section -->
+                        <div class="detail-section policy-section">
+                            <div class="policy-header">
+                                <h4 class="section-title">Refund Policy Evaluation</h4>
+                                <span class="case-badge @GetCaseBadgeClass(selectedRefund.RefundCase)">
+                                    @(selectedRefund.RefundCaseTitle ?? selectedRefund.RefundCase ?? "Policy Evaluation")
+                                </span>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(selectedRefund.RefundCaseDescription))
+                            {
+                                <p class="policy-desc">@selectedRefund.RefundCaseDescription</p>
+                            }
+
+                            <div class="detail-grid mt-2">
+                                <div class="detail-item">
+                                    <span class="detail-label">Total Sessions</span>
+                                    <span class="detail-value font-bold">@(selectedRefund.TotalSessions ?? 0) sessions</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Completed / Attended</span>
+                                    <span class="detail-value text-indigo font-bold">@(selectedRefund.CompletedSessions ?? 0) sessions</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Unperformed Sessions</span>
+                                    <span class="detail-value text-amber font-bold">@(selectedRefund.UnperformedSessions ?? 0) sessions</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Unit Price per Session</span>
+                                    <span class="detail-value">@FormatCurrency(selectedRefund.UnitPricePerSession ?? 0)</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Trainee Refund Portion</span>
+                                    <span class="detail-value text-emerald font-bold text-lg">
+                                        @FormatCurrency(selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount ?? 0)
+                                    </span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Coach Effort Payout</span>
+                                    <span class="detail-value text-indigo font-bold text-lg">
+                                        @FormatCurrency(selectedRefund.CoachPayoutAmount ?? 0)
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trainee Payout Bank Account Target Section -->
+                        <div class="detail-section bank-section">
+                            <h4 class="section-title">Trainee Payout Bank Account (Target)</h4>
+                            @if (selectedRefund.BankAccountId.HasValue || !string.IsNullOrWhiteSpace(selectedRefund.MaskedAccountNumber))
+                            {
+                                <div class="bank-card">
+                                    <div class="bank-card-icon"><AppIcon Name="shield" /></div>
+                                    <div class="bank-card-info">
+                                        <div class="bank-card-title">@selectedRefund.BankName (@selectedRefund.BankCode)</div>
+                                        <div class="bank-card-acc">@selectedRefund.MaskedAccountNumber</div>
+                                        <div class="bank-card-holder">@selectedRefund.AccountName</div>
+                                    </div>
+                                    <div class="bank-card-tag">
+                                        <span class="badge badge-approved">Napas 24/7 Verified</span>
+                                    </div>
+                                </div>
+                                <small class="text-muted mt-2 d-block">
+                                    The refund will be automatically disbursed to this bank account upon request approval.
+                                </small>
+                            }
+                            else
+                            {
+                                <div class="bank-warning-box">
+                                    <AppIcon Name="warning" />
+                                    <div>
+                                        <strong>No Bank Account Configured</strong>
+                                        <p>The trainee has not linked a payout bank account under Payout Account. Please ask the trainee to set up a bank account before approving this refund.</p>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
                         <!-- Refund Request Details -->
                         <div class="detail-section">
                             <h4 class="section-title">Reason & Supporting Evidence</h4>
@@ -436,24 +517,68 @@
                         <div class="confirm-warning">
                             <AppIcon Name="warning" />
                             <div>
-                                <strong>Are you sure you want to approve this refund?</strong>
-                                <p>This action will mark the order as <strong>REFUNDED</strong>, cancel the trainee's active training plan enrollment, and record the financial refund. <strong>This action cannot be undone.</strong></p>
+                                <strong>Confirm refund approval & automatic disbursement?</strong>
+                                <p>The system will automatically disburse the refund directly into the trainee's bank account, cancel the active package enrollment, and update the order status to <strong>REFUNDED</strong>.</p>
                             </div>
                         </div>
 
-                        <div class="confirm-summary">
-                            <div class="summary-row">
-                                <span>Trainee:</span>
-                                <strong>@(selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail)</strong>
+                        <!-- Policy breakdown preview in modal -->
+                        <div class="policy-modal-card">
+                            <div class="policy-modal-header">
+                                <span class="case-badge @GetCaseBadgeClass(selectedRefund.RefundCase)">
+                                    @(selectedRefund.RefundCaseTitle ?? selectedRefund.RefundCase ?? "Policy Calculated")
+                                </span>
                             </div>
-                            <div class="summary-row">
-                                <span>Training Package:</span>
-                                <strong>@(selectedRefund.PackageTitle ?? "Training Package")</strong>
+                            <div class="policy-modal-body">
+                                <div class="summary-row">
+                                    <span>Trainee:</span>
+                                    <strong>@(selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail)</strong>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Training Package:</span>
+                                    <strong>@(selectedRefund.PackageTitle ?? "Training Package")</strong>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Training Progress:</span>
+                                    <span><strong>@(selectedRefund.CompletedSessions ?? 0)</strong> completed / <strong>@(selectedRefund.TotalSessions ?? 0)</strong> total sessions</span>
+                                </div>
+                                <div class="summary-row highlight-refund">
+                                    <span>Trainee Refund Amount:</span>
+                                    <strong class="text-emerald text-lg">
+                                         @FormatCurrency(selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount ?? 0)
+                                    </strong>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Coach Payout Amount:</span>
+                                    <strong class="text-indigo">
+                                        @FormatCurrency(selectedRefund.CoachPayoutAmount ?? 0)
+                                    </strong>
+                                </div>
                             </div>
-                            <div class="summary-row">
-                                <span>Refund Amount (Snapshot):</span>
-                                <strong class="text-emerald text-lg">@FormatCurrency(selectedRefund.RequestedAmount ?? 0)</strong>
+                        </div>
+
+                        <!-- Payout bank target preview in modal -->
+                        <div class="target-bank-modal-card mt-3">
+                            <div class="target-bank-header">
+                                <span>Payout Bank Account (Target):</span>
                             </div>
+                            @if (selectedRefund.BankAccountId.HasValue || !string.IsNullOrWhiteSpace(selectedRefund.MaskedAccountNumber))
+                            {
+                                <div class="bank-mini-row">
+                                    <span class="bank-mini-name">🏦 @selectedRefund.BankName (@selectedRefund.BankCode)</span>
+                                    <span class="bank-mini-acc">@selectedRefund.MaskedAccountNumber</span>
+                                    <span class="bank-mini-holder">@selectedRefund.AccountName</span>
+                                </div>
+                                <div class="bank-auto-transfer-notice">
+                                    ⚡ The above amount will be instantly and automatically disbursed via Napas 24/7 to this bank account upon clicking "Confirm & Disburse Refund".
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="bank-warning-alert">
+                                    ⚠️ <strong>Cannot Disburse:</strong> Trainee has not set up a payout bank account. The trainee must add a bank account under Payout Account before approving the refund.
+                                </div>
+                            }
                         </div>
 
                         <div class="form-group mt-3">
@@ -466,14 +591,14 @@
                         <button type="button" class="modal-btn modal-btn-cancel" @onclick="CloseModals" disabled="@isProcessing">
                             Cancel
                         </button>
-                        <button type="button" class="modal-btn modal-btn-approve" @onclick="ExecuteApproveAsync" disabled="@isProcessing">
+                        <button type="button" class="modal-btn modal-btn-approve" @onclick="ExecuteApproveAsync" disabled="@(isProcessing || (!selectedRefund.BankAccountId.HasValue && string.IsNullOrWhiteSpace(selectedRefund.MaskedAccountNumber)))">
                             @if (isProcessing)
                             {
-                                <span>Processing...</span>
+                                <span>Processing & Disbursing...</span>
                             }
                             else
                             {
-                                <span>Confirm & Approve Refund</span>
+                                <span>Confirm & Disburse Refund</span>
                             }
                         </button>
                     </div>
@@ -645,17 +770,49 @@
         }
     }
 
-    private void OpenDetailModal(RefundRequestItem item)
+    private async Task OpenDetailModal(RefundRequestItem item)
     {
         selectedRefund = item;
         isDetailModalOpen = true;
+        if (selectedRefund.TraineeRefundAmount == null)
+        {
+            try
+            {
+                var polResp = await RefundService.CalculatePolicyForRefundRequestAsync(item.RefundRequestId);
+                if (polResp.Success && polResp.Data != null)
+                {
+                    ApplyPolicyCalculation(selectedRefund, polResp.Data);
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
     }
 
-    private void OpenApproveModal(RefundRequestItem item)
+    private async Task OpenApproveModal(RefundRequestItem item)
     {
         selectedRefund = item;
         approvalNote = "";
         isApproveModalOpen = true;
+        if (selectedRefund.TraineeRefundAmount == null)
+        {
+            try
+            {
+                var polResp = await RefundService.CalculatePolicyForRefundRequestAsync(item.RefundRequestId);
+                if (polResp.Success && polResp.Data != null)
+                {
+                    ApplyPolicyCalculation(selectedRefund, polResp.Data);
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
     }
 
     private void OpenRejectModal(RefundRequestItem item)
@@ -683,7 +840,8 @@
         {
             var req = new ApproveRefundRequest
             {
-                ApprovedAmount = selectedRefund.RequestedAmount,
+                ApprovedAmount = selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount,
+                BankAccountId = selectedRefund.BankAccountId,
                 StaffNote = string.IsNullOrWhiteSpace(approvalNote) ? null : approvalNote.Trim()
             };
 
@@ -707,6 +865,39 @@
         {
             isProcessing = false;
         }
+    }
+
+    private static void ApplyPolicyCalculation(RefundRequestItem item, RefundPolicyCalculation calc)
+    {
+        item.RefundCase = calc.RefundCase;
+        item.RefundCaseTitle = calc.CaseTitle;
+        item.RefundCaseDescription = calc.CaseDescription;
+        item.TotalSessions = calc.TotalSessions;
+        item.CompletedSessions = calc.CompletedSessions;
+        item.UnperformedSessions = calc.UnperformedSessions;
+        item.UnitPricePerSession = calc.UnitPricePerSession;
+        item.TraineeRefundAmount = calc.TraineeRefundAmount;
+        item.CoachPayoutAmount = calc.CoachPayoutAmount;
+        item.IsWithin7Days = calc.IsWithin7Days;
+        item.IsPlanSent = calc.IsPlanSent;
+        item.IsPlanCreated = calc.IsPlanCreated;
+        item.IsLateScheduleViolation = calc.IsLateScheduleViolation;
+        item.BankAccountId = calc.TargetBankAccountId;
+        item.BankName = calc.TargetBankName;
+        item.BankCode = calc.TargetBankCode;
+        item.AccountName = calc.TargetAccountName;
+        item.MaskedAccountNumber = calc.TargetAccountNumberMasked;
+    }
+
+    private static string GetCaseBadgeClass(string? refundCase)
+    {
+        return (refundCase?.ToUpperInvariant()) switch
+        {
+            "CASE_1" => "case-1",
+            "CASE_2" => "case-2",
+            "CASE_3" => "case-3",
+            _ => "case-1"
+        };
     }
 
     private async Task ExecuteRejectAsync()

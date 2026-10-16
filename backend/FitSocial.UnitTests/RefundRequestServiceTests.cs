@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.Application.DTOs.Payouts;
 using FitSocial.Application.DTOs.Refunds;
 using FitSocial.Application.Exceptions;
+using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
@@ -627,6 +629,364 @@ public class RefundRequestServiceTests
         _auditLogRepoMock.Verify(a => a.AddAsync(
             It.Is<AuditLog>(log => log.ActorAccountId == staffId && log.Action == "REJECT_REFUND" && log.EntityType == "RefundRequest"),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task EvaluatePolicy_Case1_Within7Days_NoSessions_NoPlan_Calculates100PercentRefund()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var order = new Order
+        {
+            OrderId = orderId,
+            BuyerId = userId,
+            OrderStatus = "PAID",
+            TotalAmount = 1000000,
+            CreatedAt = DateTime.UtcNow.AddDays(-3),
+            OrderDetails = new List<OrderDetail>
+            {
+                new()
+                {
+                    OrderDetailsId = Guid.NewGuid(),
+                    PackagePrice = 1000000,
+                    PackageDurationDays = 30,
+                    Package = new TrainingPackage { Title = "Beginner Yoga", SessionCount = 10, DurationDays = 30 }
+                }
+            }
+        };
+
+        // Act
+        var calc = await _service.EvaluateRefundPolicyCoreAsync(order, "Change mind within 3 days");
+
+        // Assert
+        Assert.Equal("CASE_1", calc.RefundCase);
+        Assert.Equal(1000000, calc.TraineeRefundAmount);
+        Assert.Equal(0, calc.CoachPayoutAmount);
+        Assert.Equal(10, calc.TotalSessions);
+        Assert.Equal(0, calc.CompletedSessions);
+        Assert.Equal(10, calc.UnperformedSessions);
+        Assert.True(calc.IsWithin7Days);
+        Assert.False(calc.IsPlanSent);
+    }
+
+    [Fact]
+    public async Task EvaluatePolicy_Case2_Within7Days_OneCompletedSession_DeductsCoachEffort()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+
+        var plan = new TrainingPlan
+        {
+            TrainingPlanId = Guid.NewGuid(),
+            OrderDetailsId = orderDetailsId,
+            Status = "ACTIVE",
+            PublishedAt = DateTime.UtcNow.AddDays(-2),
+            TrainingPlanExercises = new List<TrainingPlanExercise>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = Guid.NewGuid(),
+                    WeekNumber = 1,
+                    DayNumber = 1,
+                    WorkoutCompletionLogs = new List<WorkoutCompletionLog>
+                    {
+                        new() { TraineeId = userId, Status = "COMPLETED" }
+                    }
+                }
+            }
+        };
+
+        var order = new Order
+        {
+            OrderId = orderId,
+            BuyerId = userId,
+            OrderStatus = "PAID",
+            TotalAmount = 1000000,
+            CreatedAt = DateTime.UtcNow.AddDays(-3),
+            OrderDetails = new List<OrderDetail>
+            {
+                new()
+                {
+                    OrderDetailsId = orderDetailsId,
+                    PackagePrice = 1000000,
+                    Package = new TrainingPackage { Title = "Pro Fit", SessionCount = 10, DurationDays = 30 }
+                }
+            }
+        };
+
+        _trainingPlanRepoMock.Setup(t => t.GetTraineePlanWithLogsAsync(orderDetailsId, userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+
+        // Act
+        var calc = await _service.EvaluateRefundPolicyCoreAsync(order, "Personal reason");
+
+        // Assert
+        Assert.Equal("CASE_2", calc.RefundCase);
+        Assert.Equal(1, calc.CompletedSessions);
+        Assert.Equal(9, calc.UnperformedSessions);
+        Assert.Equal(100000, calc.CoachPayoutAmount); // 100,000 per session * 1
+        Assert.Equal(900000, calc.TraineeRefundAmount); // 1,000,000 - 100,000
+        Assert.True(calc.IsWithin7Days);
+    }
+
+    [Fact]
+    public async Task EvaluatePolicy_Case3_MidTerm_CoachLateSchedule_CalculatesProRataRefund()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+
+        var plan = new TrainingPlan
+        {
+            TrainingPlanId = Guid.NewGuid(),
+            OrderDetailsId = orderDetailsId,
+            Status = "ACTIVE",
+            PublishedAt = DateTime.UtcNow.AddDays(-15),
+            TrainingPlanExercises = new List<TrainingPlanExercise>
+            {
+                new()
+                {
+                    TrainingPlanExerciseId = Guid.NewGuid(),
+                    WeekNumber = 1,
+                    DayNumber = 1,
+                    WorkoutCompletionLogs = new List<WorkoutCompletionLog>
+                    {
+                        new() { TraineeId = userId, Status = "COMPLETED" }
+                    }
+                },
+                new()
+                {
+                    TrainingPlanExerciseId = Guid.NewGuid(),
+                    WeekNumber = 1,
+                    DayNumber = 2,
+                    WorkoutCompletionLogs = new List<WorkoutCompletionLog>
+                    {
+                        new() { TraineeId = userId, Status = "COMPLETED" }
+                    }
+                },
+                new()
+                {
+                    TrainingPlanExerciseId = Guid.NewGuid(),
+                    WeekNumber = 1,
+                    DayNumber = 3,
+                    WorkoutCompletionLogs = new List<WorkoutCompletionLog>
+                    {
+                        new() { TraineeId = userId, Status = "COMPLETED" }
+                    }
+                }
+            }
+        };
+
+        var order = new Order
+        {
+            OrderId = orderId,
+            BuyerId = userId,
+            OrderStatus = "PAID",
+            TotalAmount = 1000000,
+            CreatedAt = DateTime.UtcNow.AddDays(-16), // Beyond 7 days
+            OrderDetails = new List<OrderDetail>
+            {
+                new()
+                {
+                    OrderDetailsId = orderDetailsId,
+                    PackagePrice = 1000000,
+                    Package = new TrainingPackage { Title = "Pro Fit", SessionCount = 10, DurationDays = 30 }
+                }
+            }
+        };
+
+        _trainingPlanRepoMock.Setup(t => t.GetTraineePlanWithLogsAsync(orderDetailsId, userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+
+        // Act
+        var calc = await _service.EvaluateRefundPolicyCoreAsync(order, "HLV trễ lịch tập các buổi tiếp theo");
+
+        // Assert
+        Assert.Equal("CASE_3", calc.RefundCase);
+        Assert.Equal(3, calc.CompletedSessions);
+        Assert.Equal(7, calc.UnperformedSessions);
+        Assert.Equal(300000, calc.CoachPayoutAmount); // 3 completed sessions
+        Assert.Equal(700000, calc.TraineeRefundAmount); // 7 unperformed sessions * 100k
+        Assert.False(calc.IsWithin7Days);
+        Assert.True(calc.IsLateScheduleViolation);
+    }
+
+    [Fact]
+    public async Task ApproveRefundRequestAsync_WithPayoutBankAccount_DisbursesViaBankTransferGateway()
+    {
+        // Arrange
+        var bankAccountRepoMock = new Mock<ICoachBankAccountRepository>();
+        var encryptionServiceMock = new Mock<IEncryptionService>();
+        var bankTransferGatewayMock = new Mock<IBankTransferGateway>();
+
+        var service = new RefundRequestService(
+            _refundRepoMock.Object,
+            _orderRepoMock.Object,
+            _unitOfWorkMock.Object,
+            _auditLogRepoMock.Object,
+            _notificationRepoMock.Object,
+            _trainingPlanRepoMock.Object,
+            _termsRepoMock.Object,
+            null,
+            null,
+            null,
+            bankAccountRepoMock.Object,
+            encryptionServiceMock.Object,
+            bankTransferGatewayMock.Object);
+
+        var refundId = Guid.NewGuid();
+        var buyerId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+        var staffId = Guid.NewGuid();
+        var bankId = Guid.NewGuid();
+
+        var encBytes = System.Text.Encoding.UTF8.GetBytes("enc_19031234567890");
+        var bankAccount = new CoachBankAccount
+        {
+            BankId = bankId,
+            CoachId = buyerId,
+            BankName = "Techcombank",
+            BankCode = "TCB",
+            AccountName = "NGUYEN VAN A",
+            EncryptedAccountNumber = encBytes,
+            IsActive = true,
+            IsDefault = true
+        };
+
+        var order = new Order
+        {
+            OrderId = Guid.NewGuid(),
+            BuyerId = buyerId,
+            CoachId = coachId,
+            OrderStatus = "PAID",
+            TotalAmount = 500000,
+            CreatedAt = DateTime.UtcNow.AddDays(-2),
+            OrderDetails = new List<OrderDetail>
+            {
+                new()
+                {
+                    OrderDetailsId = Guid.NewGuid(),
+                    PackagePrice = 500000,
+                    PackageTitle = "Gym 101",
+                    Package = new TrainingPackage { Title = "Gym 101", SessionCount = 10, DurationDays = 30 }
+                }
+            }
+        };
+
+        var refundRequest = new RefundRequest
+        {
+            RefundRequestId = refundId,
+            OrderId = order.OrderId,
+            Order = order,
+            RequestedBy = buyerId,
+            Status = "PENDING",
+            RequestedAmount = 500000
+        };
+
+        _refundRepoMock.Setup(r => r.GetByIdWithDetailsAsync(refundId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(refundRequest);
+        _unitOfWorkMock.Setup(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _unitOfWorkMock.Setup(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        bankAccountRepoMock.Setup(b => b.ListActiveByCoachIdAsync(buyerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CoachBankAccount> { bankAccount });
+        encryptionServiceMock.Setup(e => e.Decrypt(encBytes))
+            .Returns("19031234567890");
+        bankTransferGatewayMock.Setup(g => g.CreateTransferAsync(It.IsAny<BankTransferRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CreatedTransfer(true, "GATEWAY-REF-123", true, "SUCCESS", null, "TX-REF-123"));
+
+        var dto = new ApproveRefundRequestDto
+        {
+            ApprovedAmount = 500000,
+            BankAccountId = bankId,
+            StaffNote = "Policy Case 1 - 100% refund approved."
+        };
+
+        // Act
+        var result = await service.ApproveRefundRequestAsync(refundId, staffId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("APPROVED", result.Data.Status);
+        Assert.Equal(500000, result.Data.ApprovedAmount);
+
+        // Verify gateway transfer was called with the decrypted account and amount
+        bankTransferGatewayMock.Verify(g => g.CreateTransferAsync(
+            It.Is<BankTransferRequest>(req =>
+                req.AccountNumber == "19031234567890" &&
+                req.AccountName == "NGUYEN VAN A" &&
+                req.Amount == 500000 &&
+                req.BankCode == "TCB"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApproveRefundRequestAsync_WhenTraineeHasNoPayoutBankAccount_ThrowsBusinessException()
+    {
+        // Arrange
+        var bankAccountRepoMock = new Mock<ICoachBankAccountRepository>();
+        var encryptionServiceMock = new Mock<IEncryptionService>();
+        var bankTransferGatewayMock = new Mock<IBankTransferGateway>();
+
+        var service = new RefundRequestService(
+            _refundRepoMock.Object,
+            _orderRepoMock.Object,
+            _unitOfWorkMock.Object,
+            _auditLogRepoMock.Object,
+            _notificationRepoMock.Object,
+            _trainingPlanRepoMock.Object,
+            _termsRepoMock.Object,
+            null,
+            null,
+            null,
+            bankAccountRepoMock.Object,
+            encryptionServiceMock.Object,
+            bankTransferGatewayMock.Object);
+
+        var refundId = Guid.NewGuid();
+        var buyerId = Guid.NewGuid();
+        var staffId = Guid.NewGuid();
+
+        var order = new Order
+        {
+            OrderId = Guid.NewGuid(),
+            BuyerId = buyerId,
+            OrderStatus = "PAID",
+            TotalAmount = 500000,
+            CreatedAt = DateTime.UtcNow.AddDays(-2)
+        };
+
+        var refundRequest = new RefundRequest
+        {
+            RefundRequestId = refundId,
+            OrderId = order.OrderId,
+            Order = order,
+            RequestedBy = buyerId,
+            Status = "PENDING",
+            RequestedAmount = 500000
+        };
+
+        _refundRepoMock.Setup(r => r.GetByIdWithDetailsAsync(refundId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(refundRequest);
+        _unitOfWorkMock.Setup(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Trainee has 0 bank accounts configured
+        bankAccountRepoMock.Setup(b => b.ListActiveByCoachIdAsync(buyerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CoachBankAccount>());
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.ApproveRefundRequestAsync(refundId, staffId, new ApproveRefundRequestDto { ApprovedAmount = 500000 }));
+
+        Assert.Contains("Payout Bank Account", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 }
 

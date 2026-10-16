@@ -26,6 +26,7 @@ public class TrainingPackageResponseDto
     public short? SessionCount { get; set; }
     public short? MinAge { get; set; }
     public string? TargetAudience { get; set; }
+    public string? PackageType { get; set; } = "BOTH";
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
 
@@ -39,8 +40,10 @@ public class TrainingPackageResponseDto
     public int? UserRating { get; set; }
     public string? UserComment { get; set; }
 
-    // Training Plan & Order Details state
+    // Training Plan, Meal Plan & Order Details state
     public Guid? OrderDetailsId { get; set; }
     public Guid? TrainingPlanId { get; set; }
     public string? PlanStatus { get; set; }
+    public Guid? MealPlanId { get; set; }
+    public string? MealPlanStatus { get; set; }
 }

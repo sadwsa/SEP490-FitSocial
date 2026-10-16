@@ -86,6 +86,8 @@ namespace FitSocial.Infrastructure.Repositories
                     .ThenInclude(od => od.Order)
                 .Include(x => x.OrderDetails.Where(od => od.Order.BuyerId == traineeId))
                     .ThenInclude(od => od.TrainingPlans)
+                .Include(x => x.OrderDetails.Where(od => od.Order.BuyerId == traineeId))
+                    .ThenInclude(od => od.MealPlans)
                 .Where(x => x.OrderDetails.Any(od =>
                     od.Order.BuyerId == traineeId && 
                     od.Order.OrderStatus != null &&

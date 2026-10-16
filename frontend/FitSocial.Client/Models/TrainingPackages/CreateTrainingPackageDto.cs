@@ -29,6 +29,8 @@ public class CreateTrainingPackageDto
     [MaxLength(100, ErrorMessage = "Target audience must not exceed 100 characters")]
     public string? TargetAudience { get; set; }
 
+    public string PackageType { get; set; } = "BOTH";
+
     public bool IsActive { get; set; } = true;
 
     public List<string> ImageUrls { get; set; } = new();

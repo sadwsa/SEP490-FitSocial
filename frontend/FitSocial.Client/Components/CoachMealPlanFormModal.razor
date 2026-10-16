@@ -1,0 +1,977 @@
+@using FitSocial.Client.Models.MealPlans
+@using Microsoft.AspNetCore.Components.Forms
+@inject FitSocial.Client.Services.MealPlans.IMealPlanClientService MealPlanService
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-5 overflow-y-auto" role="dialog" aria-modal="true">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+             @onclick="HandleClose" aria-hidden="true"></div>
+
+        <!-- Modal Card -->
+        <div class="relative bg-white rounded-3xl shadow-2xl max-w-5xl w-full flex flex-col max-h-[92vh] border border-gray-100 transform transition-all animate-in fade-in zoom-in-95 duration-200 z-10 overflow-hidden">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-5 bg-gradient-to-r from-emerald-50 via-white to-teal-50/50 border-b border-gray-100 flex items-center justify-between">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 flex-shrink-0">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-emerald-100 text-emerald-800">
+                                @(Mode == "create" ? "Create Meal Plan" : "Update Meal Plan")
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(TraineeName))
+                            {
+                                <span class="text-xs text-gray-500 font-medium">Trainee: <strong class="text-gray-900">@TraineeName</strong></span>
+                            }
+                        </div>
+                        <h2 class="text-xl font-black text-gray-900 tracking-tight mt-0.5">
+                            @(Mode == "create" ? "Draft Customized Nutrition & Meal Plan" : "Update Nutrition & Meal Plan")
+                        </h2>
+                    </div>
+                </div>
+
+                <button type="button"
+                        @onclick="HandleClose"
+                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition cursor-pointer"
+                        aria-label="Close modal">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Body (Scrollable) -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs font-semibold flex items-center gap-2.5">
+                        <svg class="w-5 h-5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                        <span>@errorMessage</span>
+                    </div>
+                }
+
+                @if (isFetchingInitial)
+                {
+                    <div class="py-16 flex flex-col items-center justify-center">
+                        <div class="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p class="text-xs text-gray-500 font-semibold">Loading meal plan details...</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- Section 1: General Plan Info -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-4">
+                        <div class="flex items-center gap-2 border-b border-gray-100 pb-2">
+                            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <h3 class="text-xs font-black uppercase tracking-wider text-gray-800">1. General Nutrition &amp; Plan Information</h3>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="sm:col-span-2 lg:col-span-4">
+                                <label class="block text-xs font-bold text-gray-700 mb-1">
+                                    Meal Plan Title <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text"
+                                       @bind="planTitle"
+                                       placeholder="e.g. 4-Week High-Protein Clean Diet Plan"
+                                       class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition" />
+                            </div>
+
+                            <div class="sm:col-span-2 lg:col-span-4">
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Dietary Guidelines &amp; Calorie Targets</label>
+                                <textarea @bind="planDescription"
+                                          rows="2"
+                                          placeholder="Notes regarding daily calorie target, water intake, meal timing, food allergies, supplements..."
+                                          class="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 placeholder-gray-400 focus:bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition"></textarea>
+                            </div>
+
+                            @if (PackagePurchasedAt.HasValue || PackageDurationDays.HasValue)
+                            {
+                                <div class="sm:col-span-2 lg:col-span-4 p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-bold text-gray-800">Purchased Package Constraints:</span>
+                                        @if (PackageStartDate.HasValue)
+                                        {
+                                            <span class="px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-gray-700 font-semibold shadow-2xs">
+                                                Purchased: <strong class="text-gray-900">@PackageStartDate.Value.ToString("dd/MM/yyyy")</strong>
+                                            </span>
+                                        }
+                                        @if (PackageDurationDays.HasValue)
+                                        {
+                                            <span class="px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-gray-700 font-semibold shadow-2xs">
+                                                Duration: <strong class="text-gray-900">@PackageDurationDays.Value Days</strong> (@(PackageDurationDays.Value / 7) Weeks)
+                                            </span>
+                                        }
+                                        @if (PackageEndDate.HasValue)
+                                        {
+                                            <span class="px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-gray-700 font-semibold shadow-2xs">
+                                                Expires: <strong class="text-gray-900">@PackageEndDate.Value.ToString("dd/MM/yyyy")</strong>
+                                            </span>
+                                        }
+                                    </div>
+                                    <span class="text-[11px] text-emerald-800 font-semibold bg-emerald-100 px-2 py-0.5 rounded-md">
+                                        Plan dates cannot exceed package bounds
+                                    </span>
+                                </div>
+                            }
+
+                            <!-- Start Date -->
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">
+                                    Start Date <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date"
+                                       value="@(startDate?.ToString("yyyy-MM-dd"))"
+                                       @onchange="OnStartDateChanged"
+                                       disabled="@(Mode == "update" && IsStartDateLocked)"
+                                       min="@(PackageStartDate?.ToString("yyyy-MM-dd"))"
+                                       max="@(PackageEndDate?.ToString("yyyy-MM-dd"))"
+                                       class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition disabled:opacity-60 disabled:cursor-not-allowed" />
+                                @if (Mode == "update" && IsStartDateLocked)
+                                {
+                                    <span class="text-[10px] text-gray-400 mt-1 block">Locked: Plan schedule has already started</span>
+                                }
+                            </div>
+
+                            <!-- End Date -->
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">
+                                    End Date <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date"
+                                       value="@(endDate?.ToString("yyyy-MM-dd"))"
+                                       @onchange="OnEndDateChanged"
+                                       min="@(startDate?.ToString("yyyy-MM-dd") ?? PackageStartDate?.ToString("yyyy-MM-dd"))"
+                                       max="@(PackageEndDate?.ToString("yyyy-MM-dd"))"
+                                       class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition" />
+                                @if (startDate.HasValue && endDate.HasValue && endDate.Value >= startDate.Value)
+                                {
+                                    <span class="text-[10px] text-emerald-700 font-bold mt-1 block">
+                                        Selected: @GetSelectedDaysCount() Days (Max @MaxAllowedWeeks Weeks)
+                                    </span>
+                                }
+                            </div>
+
+                            <!-- Status -->
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Status</label>
+                                <select @bind="planStatus"
+                                        class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-emerald-500 transition cursor-pointer">
+                                    <option value="ACTIVE">Active (In Progress)</option>
+                                    <option value="PUBLISHED">Published</option>
+                                    <option value="DRAFT">Draft</option>
+                                </select>
+                            </div>
+
+                            <!-- Calorie Summary Indicator -->
+                            <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">Total Scheduled Meals</label>
+                                <div class="px-3.5 py-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+                                    <span class="text-xs font-black text-emerald-700">@items.Count Meals</span>
+                                    <span class="text-[11px] text-emerald-600 font-bold">@TotalPlanCalories kcal</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Weekly Schedule & Meal Items -->
+                    <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <h3 class="text-xs font-black uppercase tracking-wider text-gray-800">2. Weekly Nutrition Schedule &amp; Daily Menus</h3>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-500">
+                                    Week <strong class="text-gray-900">@activeWeek</strong> / @MaxAllowedWeeks
+                                </span>
+                                @if (CanAddWeek)
+                                {
+                                    <button type="button"
+                                            @onclick="AddNewWeek"
+                                            class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-200 transition flex items-center gap-1 cursor-pointer">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                        <span>Add Week @(AvailableWeeks.Count + 1)</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Week Navigation Tabs -->
+                        <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                            @foreach (var week in AvailableWeeks)
+                            {
+                                var w = week;
+                                var weekItemsCount = items.Count(i => i.WeekNumber == w);
+                                var weekCalories = items.Where(i => i.WeekNumber == w).Sum(i => i.Calories ?? 0);
+                                var isUpcoming = w == GetUpcomingRequiredWeek();
+                                <button type="button"
+                                        @onclick="() => SelectWeek(w)"
+                                        class="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer flex-shrink-0 @(activeWeek == w ? "bg-emerald-600 text-white shadow-xs" : "bg-gray-100 hover:bg-gray-200 text-gray-700")">
+                                    <span>Week @w</span>
+                                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold @(activeWeek == w ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600")">
+                                        @weekItemsCount
+                                    </span>
+                                    @if (isUpcoming)
+                                    {
+                                        <span class="w-2 h-2 rounded-full bg-amber-400" title="Upcoming week (must not be empty)"></span>
+                                    }
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Day Navigation (Mon - Sun) -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                            @for (short d = 1; d <= 7; d++)
+                            {
+                                var dayNum = d;
+                                var sessionDate = GetSessionDate(activeWeek, dayNum);
+                                var dayItems = items.Where(i => i.WeekNumber == activeWeek && i.DayNumber == dayNum).ToList();
+                                var dayCals = dayItems.Sum(i => i.Calories ?? 0);
+                                var isLocked = IsDayLocked(activeWeek, dayNum);
+                                var isSelected = activeDay == dayNum;
+
+                                <button type="button"
+                                        @onclick="() => SelectDay(dayNum)"
+                                        class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer @(isSelected ? "bg-emerald-50/80 border-emerald-500 shadow-2xs ring-1 ring-emerald-400" : isLocked ? "bg-gray-100/70 border-gray-200 opacity-75" : "bg-white hover:bg-gray-50 border-gray-200")">
+                                    <div class="flex items-center justify-between gap-1 w-full">
+                                        <span class="text-xs font-black @(isSelected ? "text-emerald-800" : "text-gray-700")">
+                                            @GetDayShortName(dayNum)
+                                        </span>
+                                        @if (isLocked)
+                                        {
+                                            <span class="text-[9px] font-bold text-gray-400" title="Past/Current day (Locked)">🔒</span>
+                                        }
+                                        else if (dayItems.Count > 0)
+                                        {
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        }
+                                    </div>
+                                    <div class="mt-1">
+                                        <span class="text-[10px] text-gray-400 block">@sessionDate.ToString("dd/MM")</span>
+                                        <span class="text-[11px] font-bold @(dayItems.Count > 0 ? "text-emerald-700" : "text-gray-400")">
+                                            @(dayItems.Count > 0 ? $"{dayCals} kcal" : "No meals")
+                                        </span>
+                                    </div>
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Active Day Menu Container -->
+                        <div class="bg-gray-50/80 border border-gray-200 rounded-2xl p-4 sm:p-5 space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200/60 pb-3">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-sm font-black text-gray-900">
+                                            @GetDayName(activeDay) - Week @activeWeek (@GetSessionDate(activeWeek, activeDay).ToString("dd/MM/yyyy"))
+                                        </h4>
+                                        @if (IsCurrentDayLocked)
+                                        {
+                                            <span class="px-2 py-0.5 bg-gray-200 text-gray-600 rounded-md text-[10px] font-bold">
+                                                Locked (Past / Today)
+                                            </span>
+                                        }
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-0.5">
+                                        Daily Calorie Subtotal: <strong class="text-emerald-700 font-bold">@CurrentDayCalories kcal</strong> across @CurrentDayItems.Count meals
+                                    </p>
+                                </div>
+
+                                @if (!IsCurrentDayLocked)
+                                {
+                                    <button type="button"
+                                            @onclick="() => AddMealToCurrentDay()"
+                                            class="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                        <span>Add Meal</span>
+                                    </button>
+                                }
+                            </div>
+
+                            <!-- List of Meal Items for Current Day -->
+                            @if (CurrentDayItems.Count == 0)
+                            {
+                                <div class="py-10 text-center flex flex-col items-center justify-center">
+                                    <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                        </svg>
+                                    </div>
+                                    <p class="text-xs text-gray-500 font-semibold">No meals scheduled for @GetDayName(activeDay).</p>
+                                    @if (!IsCurrentDayLocked)
+                                    {
+                                        <button type="button"
+                                                @onclick="() => AddMealToCurrentDay()"
+                                                class="mt-3 text-xs font-bold text-emerald-600 hover:underline cursor-pointer">
+                                            + Add Breakfast / Lunch / Dinner
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="space-y-3">
+                                    @for (int i = 0; i < CurrentDayItems.Count; i++)
+                                    {
+                                        var idx = i;
+                                        var item = CurrentDayItems[i];
+                                        var isItemLocked = IsCurrentDayLocked;
+
+                                        <div class="bg-white rounded-2xl p-4 border border-gray-200/80 shadow-2xs space-y-3">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center justify-center">
+                                                        @(idx + 1)
+                                                    </span>
+                                                    <!-- Meal Type Picker/Datalist -->
+                                                    <select @bind="item.MealType"
+                                                            disabled="@isItemLocked"
+                                                            class="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:border-emerald-500 disabled:opacity-60 cursor-pointer">
+                                                        <option value="Breakfast">Breakfast</option>
+                                                        <option value="Lunch">Lunch</option>
+                                                        <option value="Dinner">Dinner</option>
+                                                        <option value="Snack">Snack</option>
+                                                        <option value="Pre-Workout">Pre-Workout</option>
+                                                        <option value="Post-Workout">Post-Workout</option>
+                                                    </select>
+                                                </div>
+
+                                                @if (!isItemLocked)
+                                                {
+                                                    <div class="flex items-center gap-2">
+                                                        <button type="button"
+                                                                @onclick="() => DuplicateMeal(item)"
+                                                                title="Duplicate meal"
+                                                                class="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                                        </button>
+                                                        <button type="button"
+                                                                @onclick="() => RemoveMeal(item)"
+                                                                title="Delete meal"
+                                                                class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                                <!-- Food Description -->
+                                                <div class="sm:col-span-3">
+                                                    <label class="block text-[11px] font-semibold text-gray-600 mb-1">
+                                                        Food Items &amp; Portion Details <span class="text-red-500">*</span>
+                                                    </label>
+                                                    <input type="text"
+                                                           @bind="item.FoodDescription"
+                                                           disabled="@isItemLocked"
+                                                           placeholder="e.g. 150g grilled chicken breast, 1 bowl brown rice, 150g steamed broccoli"
+                                                           class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 placeholder-gray-400 focus:bg-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition disabled:opacity-60" />
+                                                </div>
+
+                                                <!-- Calories -->
+                                                <div>
+                                                    <label class="block text-[11px] font-semibold text-gray-600 mb-1">
+                                                        Estimated Calories (kcal)
+                                                    </label>
+                                                    <div class="relative">
+                                                        <input type="number"
+                                                               @bind="item.Calories"
+                                                               disabled="@isItemLocked"
+                                                               placeholder="e.g. 550"
+                                                               min="0"
+                                                               max="5000"
+                                                               class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 placeholder-gray-400 focus:bg-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition disabled:opacity-60" />
+                                                        <span class="absolute right-3 top-2 text-[10px] text-gray-400 font-bold">kcal</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-4 bg-white border-t border-gray-100 flex items-center justify-between gap-3">
+                <button type="button"
+                        @onclick="HandleClose"
+                        class="px-5 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer">
+                    Cancel
+                </button>
+
+                <div class="flex items-center gap-3">
+                    <button type="button"
+                            @onclick="SaveMealPlanAsync"
+                            disabled="@isSaving"
+                            class="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 hover:shadow-lg transition flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                        @if (isSaving)
+                        {
+                            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>@(Mode == "create" ? "Save Meal Plan" : "Update Meal Plan")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public Guid OrderDetailsId { get; set; }
+
+    [Parameter]
+    public string PackageTitle { get; set; } = string.Empty;
+
+    [Parameter]
+    public string TraineeName { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Mode { get; set; } = "create"; // "create" or "update"
+
+    [Parameter]
+    public Guid? ExistingPlanId { get; set; }
+
+    [Parameter]
+    public int? PackageDurationDays { get; set; }
+
+    [Parameter]
+    public DateTime? PackagePurchasedAt { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<TraineeMealPlanModel> OnSuccess { get; set; }
+
+    // Form fields
+    private string planTitle = string.Empty;
+    private string planDescription = string.Empty;
+    private DateTime? startDate = DateTime.Today;
+    private DateTime? endDate = DateTime.Today.AddDays(30);
+    private string planStatus = "ACTIVE";
+
+    // Schedule items
+    private List<CreateMealPlanItemDto> items = new();
+    private short activeWeek = 1;
+    private short activeDay = 1;
+
+    private bool isFetchingInitial = false;
+    private bool isSaving = false;
+    private string? errorMessage = null;
+
+    private DateTime? PackageStartDate => PackagePurchasedAt?.Date ?? startDate;
+    private DateTime? PackageEndDate => (PackageDurationDays.HasValue && PackageDurationDays.Value > 0 && PackageStartDate.HasValue)
+        ? PackageStartDate.Value.AddDays(PackageDurationDays.Value)
+        : null;
+
+    private int TotalPlanCalories => items.Sum(i => i.Calories ?? 0);
+
+    private int GetSelectedDaysCount()
+    {
+        if (!startDate.HasValue || !endDate.HasValue || endDate.Value < startDate.Value)
+        {
+            return PackageDurationDays ?? 30;
+        }
+        return (int)(endDate.Value.Date - startDate.Value.Date).TotalDays + 1;
+    }
+
+    private int MaxAllowedWeeks
+    {
+        get
+        {
+            var totalDays = GetSelectedDaysCount();
+            return Math.Max(1, totalDays / 7);
+        }
+    }
+
+    private bool CanAddWeek
+    {
+        get
+        {
+            var currentMax = AvailableWeeks.Count > 0 ? AvailableWeeks.Max() : (short)0;
+            return currentMax < MaxAllowedWeeks;
+        }
+    }
+
+    private List<short> AvailableWeeks
+    {
+        get
+        {
+            var weeks = items.Select(e => e.WeekNumber).Distinct().ToList();
+            if (!weeks.Contains(1)) weeks.Add(1);
+            return weeks.OrderBy(w => w).ToList();
+        }
+    }
+
+    private List<CreateMealPlanItemDto> CurrentDayItems =>
+        items.Where(e => e.WeekNumber == activeWeek && e.DayNumber == activeDay)
+             .OrderBy(e => e.SortOrder ?? 1)
+             .ToList();
+
+    private int CurrentDayCalories => CurrentDayItems.Sum(i => i.Calories ?? 0);
+
+    private static DateTime GetStartMonday(DateTime start)
+    {
+        int dayOfWeek = (int)start.DayOfWeek;
+        int daysSinceMonday = (dayOfWeek == 0 ? 7 : dayOfWeek) - 1;
+        return start.Date.AddDays(-daysSinceMonday);
+    }
+
+    private DateTime GetSessionDate(short weekNumber, short dayNumber)
+    {
+        var baseDate = startDate ?? DateTime.Today;
+        var startMonday = GetStartMonday(baseDate);
+        return startMonday.AddDays((weekNumber - 1) * 7 + (dayNumber - 1));
+    }
+
+    private bool IsStartDateLocked
+    {
+        get
+        {
+            if (Mode != "update") return false;
+            var today = DateTime.Today.Date;
+            var isStarted = startDate.HasValue && startDate.Value.Date <= today;
+            var hasPastSession = items.Any(e => GetSessionDate(e.WeekNumber, e.DayNumber).Date <= today);
+            return isStarted || hasPastSession;
+        }
+    }
+
+    private bool IsDayLocked(short weekNumber, short dayNumber)
+    {
+        if (Mode != "update") return false;
+        return GetSessionDate(weekNumber, dayNumber).Date <= DateTime.Today.Date;
+    }
+
+    private bool IsCurrentDayLocked => IsDayLocked(activeWeek, activeDay);
+
+    private short GetUpcomingRequiredWeek()
+    {
+        var baseDate = startDate ?? DateTime.Today;
+        var startMonday = GetStartMonday(baseDate);
+        var today = DateTime.Today.Date;
+        if (today < startMonday)
+        {
+            return 1;
+        }
+        var daysDiff = (today - startMonday).Days;
+        var currentWeek = (short)((daysDiff / 7) + 1);
+        return (short)(currentWeek + 1);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            if (Mode == "update" || ExistingPlanId.HasValue)
+            {
+                await LoadExistingPlanAsync();
+            }
+            else
+            {
+                ResetToCreateMode();
+            }
+        }
+    }
+
+    private async Task LoadExistingPlanAsync()
+    {
+        isFetchingInitial = true;
+        errorMessage = null;
+
+        try
+        {
+            var res = await MealPlanService.GetCoachMealPlanByOrderDetailAsync(OrderDetailsId);
+            if (res.Success && res.Data != null)
+            {
+                var plan = res.Data;
+                ExistingPlanId = plan.MealPlanId;
+                Mode = "update";
+
+                planTitle = plan.Title ?? string.Empty;
+                planDescription = plan.Description ?? string.Empty;
+                startDate = plan.StartDate ?? DateTime.Today;
+                endDate = plan.EndDate ?? DateTime.Today.AddDays(PackageDurationDays ?? 30);
+                planStatus = plan.Status ?? "ACTIVE";
+
+                items.Clear();
+                foreach (var week in plan.Weeks)
+                {
+                    foreach (var day in week.Days)
+                    {
+                        foreach (var itm in day.Items)
+                        {
+                            items.Add(new CreateMealPlanItemDto
+                            {
+                                WeekNumber = week.WeekNumber,
+                                DayNumber = day.DayNumber,
+                                MealType = itm.MealType ?? "Breakfast",
+                                FoodDescription = itm.FoodDescription ?? string.Empty,
+                                Calories = itm.Calories,
+                                SortOrder = itm.SortOrder
+                            });
+                        }
+                    }
+                }
+
+                if (items.Count > 0)
+                {
+                    var unlockedItem = items.FirstOrDefault(i => !IsDayLocked(i.WeekNumber, i.DayNumber));
+                    if (unlockedItem != null)
+                    {
+                        activeWeek = unlockedItem.WeekNumber;
+                        activeDay = unlockedItem.DayNumber;
+                    }
+                    else
+                    {
+                        activeWeek = items[0].WeekNumber;
+                        activeDay = items[0].DayNumber;
+                    }
+                }
+                else
+                {
+                    AddMealToCurrentDay(1, 1);
+                }
+            }
+            else
+            {
+                Mode = "create";
+                ResetToCreateMode();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load meal plan: {ex.Message}";
+        }
+        finally
+        {
+            isFetchingInitial = false;
+        }
+    }
+
+    private void ResetToCreateMode()
+    {
+        ExistingPlanId = null;
+        planTitle = !string.IsNullOrWhiteSpace(PackageTitle) ? $"{PackageTitle} - Nutrition & Meal Plan" : "Custom Nutrition & Meal Plan";
+        planDescription = string.Empty;
+
+        startDate = PackageStartDate ?? DateTime.Today;
+        var duration = (PackageDurationDays.HasValue && PackageDurationDays.Value > 0) ? PackageDurationDays.Value : 30;
+        endDate = startDate.Value.AddDays(duration);
+
+        planStatus = "ACTIVE";
+        items.Clear();
+        activeWeek = 1;
+        activeDay = 1;
+
+        // Default 3 meals for Day 1
+        items.Add(new CreateMealPlanItemDto { WeekNumber = 1, DayNumber = 1, MealType = "Breakfast", FoodDescription = "Oatmeal, unsweetened yogurt, berries", Calories = 400 });
+        items.Add(new CreateMealPlanItemDto { WeekNumber = 1, DayNumber = 1, MealType = "Lunch", FoodDescription = "150g grilled chicken breast, 1 cup brown rice, steamed broccoli", Calories = 550 });
+        items.Add(new CreateMealPlanItemDto { WeekNumber = 1, DayNumber = 1, MealType = "Dinner", FoodDescription = "150g grilled salmon, mixed salad with olive oil", Calories = 450 });
+    }
+
+    private void SelectWeek(short week)
+    {
+        activeWeek = week;
+        activeDay = 1;
+    }
+
+    private void SelectDay(short day)
+    {
+        activeDay = day;
+    }
+
+    private void AddNewWeek()
+    {
+        var currentMax = AvailableWeeks.Count > 0 ? AvailableWeeks.Max() : (short)0;
+        var nextWeek = (short)(currentMax + 1);
+        if (nextWeek > MaxAllowedWeeks)
+        {
+            errorMessage = $"Cannot add Week {nextWeek}. The selected duration ({GetSelectedDaysCount()} days) allows a maximum of {MaxAllowedWeeks} weeks.";
+            return;
+        }
+
+        activeWeek = nextWeek;
+        activeDay = 1;
+        AddMealToCurrentDay(nextWeek, 1);
+    }
+
+    private void AddMealToCurrentDay(short? week = null, short? day = null)
+    {
+        var targetWeek = week ?? activeWeek;
+        var targetDay = day ?? activeDay;
+
+        if (IsDayLocked(targetWeek, targetDay))
+        {
+            errorMessage = $"Cannot add meals to past or current days ({GetSessionDate(targetWeek, targetDay):dd/MM/yyyy}). Only upcoming days can be modified.";
+            return;
+        }
+
+        short sort = (short)(items.Count(i => i.WeekNumber == targetWeek && i.DayNumber == targetDay) + 1);
+
+        items.Add(new CreateMealPlanItemDto
+        {
+            WeekNumber = targetWeek,
+            DayNumber = targetDay,
+            MealType = "Lunch",
+            FoodDescription = string.Empty,
+            Calories = 500,
+            SortOrder = sort
+        });
+    }
+
+    private void DuplicateMeal(CreateMealPlanItemDto target)
+    {
+        if (IsDayLocked(target.WeekNumber, target.DayNumber))
+        {
+            errorMessage = "Cannot duplicate meals into past/current days.";
+            return;
+        }
+
+        var duplicate = new CreateMealPlanItemDto
+        {
+            WeekNumber = target.WeekNumber,
+            DayNumber = target.DayNumber,
+            MealType = target.MealType,
+            FoodDescription = $"{target.FoodDescription} (Copy)",
+            Calories = target.Calories,
+            SortOrder = (short)((target.SortOrder ?? 1) + 1)
+        };
+        items.Add(duplicate);
+    }
+
+    private void RemoveMeal(CreateMealPlanItemDto item)
+    {
+        if (IsDayLocked(item.WeekNumber, item.DayNumber))
+        {
+            errorMessage = $"Cannot remove meals from past or current days ({GetSessionDate(item.WeekNumber, item.DayNumber):dd/MM/yyyy}).";
+            return;
+        }
+
+        items.Remove(item);
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var parsedDate))
+        {
+            startDate = parsedDate;
+            if (endDate.HasValue && endDate.Value < startDate.Value)
+            {
+                endDate = startDate.Value.AddDays(PackageDurationDays ?? 30);
+            }
+        }
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var parsedDate))
+        {
+            endDate = parsedDate;
+        }
+    }
+
+    private async Task SaveMealPlanAsync()
+    {
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(planTitle))
+        {
+            errorMessage = "Please enter a title for the meal plan.";
+            return;
+        }
+
+        if (!startDate.HasValue || !endDate.HasValue)
+        {
+            errorMessage = "Please select valid Start Date and End Date.";
+            return;
+        }
+
+        if (endDate.Value.Date < startDate.Value.Date)
+        {
+            errorMessage = "End Date must be on or after Start Date.";
+            return;
+        }
+
+        if (PackageStartDate.HasValue && startDate.Value.Date < PackageStartDate.Value.Date)
+        {
+            errorMessage = $"Start Date cannot be earlier than package purchase date ({PackageStartDate.Value:dd/MM/yyyy}).";
+            return;
+        }
+
+        if (PackageEndDate.HasValue && endDate.Value.Date > PackageEndDate.Value.Date)
+        {
+            errorMessage = $"End Date cannot exceed package expiration date ({PackageEndDate.Value:dd/MM/yyyy}).";
+            return;
+        }
+
+        var totalDays = (int)(endDate.Value.Date - startDate.Value.Date).TotalDays + 1;
+        var maxWeeks = Math.Max(1, totalDays / 7);
+
+        if (items.Any(e => e.WeekNumber > maxWeeks))
+        {
+            var highest = items.Max(e => e.WeekNumber);
+            errorMessage = $"Meal plan cannot exceed {maxWeeks} weeks for the selected {totalDays}-day period (highest week found: {highest}).";
+            return;
+        }
+
+        // Upcoming week requirement
+        var upcomingRequiredWeek = GetUpcomingRequiredWeek();
+        if (upcomingRequiredWeek <= maxWeeks)
+        {
+            var hasUpcomingMeal = items.Any(e => e.WeekNumber == upcomingRequiredWeek && !string.IsNullOrWhiteSpace(e.FoodDescription));
+            if (!hasUpcomingMeal)
+            {
+                if (upcomingRequiredWeek == 1)
+                {
+                    errorMessage = "Upcoming week schedule required: Week 1 (starting week) cannot be empty. Please schedule meals for Week 1.";
+                }
+                else
+                {
+                    errorMessage = $"Upcoming week schedule required: You must schedule meals for Week {upcomingRequiredWeek} (the upcoming week) to ensure the trainee's meal schedule is not left empty.";
+                }
+                return;
+            }
+        }
+
+        isSaving = true;
+
+        try
+        {
+            if (Mode == "create")
+            {
+                var createDto = new CreateMealPlanDto
+                {
+                    OrderDetailsId = OrderDetailsId,
+                    Title = planTitle.Trim(),
+                    Description = planDescription?.Trim(),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    Status = planStatus,
+                    Items = items
+                };
+
+                var res = await MealPlanService.CreateMealPlanAsync(createDto);
+                if (res.Success && res.Data != null)
+                {
+                    if (OnSuccess.HasDelegate)
+                    {
+                        await OnSuccess.InvokeAsync(res.Data);
+                    }
+                    await HandleClose();
+                }
+                else
+                {
+                    errorMessage = res.Message ?? "Failed to create meal plan.";
+                }
+            }
+            else
+            {
+                if (!ExistingPlanId.HasValue)
+                {
+                    errorMessage = "Could not find plan ID to update.";
+                    return;
+                }
+
+                var updateDto = new UpdateMealPlanDto
+                {
+                    Title = planTitle.Trim(),
+                    Description = planDescription?.Trim(),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    Status = planStatus,
+                    Items = items.Select(i => new UpdateMealPlanItemDto
+                    {
+                        WeekNumber = i.WeekNumber,
+                        DayNumber = i.DayNumber,
+                        MealType = i.MealType,
+                        FoodDescription = i.FoodDescription,
+                        Calories = i.Calories,
+                        SortOrder = i.SortOrder
+                    }).ToList()
+                };
+
+                var res = await MealPlanService.UpdateMealPlanAsync(ExistingPlanId.Value, updateDto);
+                if (res.Success && res.Data != null)
+                {
+                    if (OnSuccess.HasDelegate)
+                    {
+                        await OnSuccess.InvokeAsync(res.Data);
+                    }
+                    await HandleClose();
+                }
+                else
+                {
+                    errorMessage = res.Message ?? "Failed to update meal plan.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Execution error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task HandleClose()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private static string GetDayName(short dayNumber) => dayNumber switch
+    {
+        1 => "Monday",
+        2 => "Tuesday",
+        3 => "Wednesday",
+        4 => "Thursday",
+        5 => "Friday",
+        6 => "Saturday",
+        7 => "Sunday",
+        _ => $"Day {dayNumber}"
+    };
+
+    private static string GetDayShortName(short dayNumber) => dayNumber switch
+    {
+        1 => "Mon",
+        2 => "Tue",
+        3 => "Wed",
+        4 => "Thu",
+        5 => "Fri",
+        6 => "Sat",
+        7 => "Sun",
+        _ => $"D{dayNumber}"
+    };
+}

@@ -496,6 +496,7 @@ public class PaymentService : IPaymentService
             PackagePrice = fee,
             PackageTitle = package.Title ?? "Training Package",
             PackageDurationDays = package.DurationDays ?? 30,
+            PackageType = package.PackageType ?? "BOTH",
             CoachName = coachName,
             CreatedAt = now
         });

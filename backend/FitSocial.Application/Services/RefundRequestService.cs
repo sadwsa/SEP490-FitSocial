@@ -659,12 +659,8 @@ public class RefundRequestService : IRefundRequestService
             throw new ValidationException("Staff user ID is required.");
         }
 
-        // LEVEL 1 Concurrency Snapshot: Transactional execution with optimistic concurrency token check
-        await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-        try
-        {
-            var item = await _refundRequestRepository.GetByIdWithDetailsAsync(id, cancellationToken);
+        // LEVEL 1 Concurrency Snapshot: Validation and gateway execution
+        var item = await _refundRequestRepository.GetByIdWithDetailsAsync(id, cancellationToken);
             if (item == null)
             {
                 throw new NotFoundException("Refund request not found.");
@@ -805,210 +801,232 @@ public class RefundRequestService : IRefundRequestService
                 ? bankTransferSummary
                 : (bankTransferSummary != null ? $"{staffNoteText}\n{bankTransferSummary}" : staffNoteText);
 
-            // Update RefundRequest entity (Concurrency token on Status property ensures atomic transition)
-            item.Status = "APPROVED";
-            item.ApprovedAmount = approvedAmount;
-            item.RefundTransactionRef = txRef;
-            item.ReviewedBy = staffUserId;
-            item.ReviewedAt = now;
-            item.RefundedAt = now;
-            item.StaffNote = finalStaffNote;
-            item.UpdatedAt = now;
+            // Atomic database state mutation
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-            // Update Order state
-            order.OrderStatus = PaymentConstants.OrderStatusRefunded;
-
-            // Update Payment state
-            if (payment != null)
+            try
             {
-                payment.Status = PaymentConstants.PaymentStatusRefunded;
-                payment.UpdatedAt = now;
-            }
+                // Update RefundRequest entity (Concurrency token on Status property ensures atomic transition)
+                item.Status = "APPROVED";
+                item.ApprovedAmount = approvedAmount;
+                item.RefundTransactionRef = txRef;
+                item.ReviewedBy = staffUserId;
+                item.ReviewedAt = now;
+                item.RefundedAt = now;
+                item.StaffNote = finalStaffNote;
+                item.UpdatedAt = now;
 
-            // Revoke active training plan enrollment associated with the order detail
-            if (_trainingPlans != null && order.OrderDetails != null)
-            {
-                foreach (var detail in order.OrderDetails)
+                // Update Order state
+                order.OrderStatus = PaymentConstants.OrderStatusRefunded;
+
+                // Update Payment state
+                if (payment != null)
                 {
-                    try
+                    payment.Status = PaymentConstants.PaymentStatusRefunded;
+                    payment.UpdatedAt = now;
+                }
+
+                // Revoke active training plan enrollment associated with the order detail
+                if (_trainingPlans != null && order.OrderDetails != null)
+                {
+                    foreach (var detail in order.OrderDetails)
                     {
-                        var activePlan = await _trainingPlans.GetActiveByOrderDetailsIdAsync(detail.OrderDetailsId, cancellationToken);
-                        if (activePlan != null)
+                        try
                         {
-                            activePlan.Status = "CANCELLED";
-                            activePlan.UpdatedAt = now;
+                            var activePlan = await _trainingPlans.GetActiveByOrderDetailsIdAsync(detail.OrderDetailsId, cancellationToken);
+                            if (activePlan != null)
+                            {
+                                activePlan.Status = "CANCELLED";
+                                activePlan.UpdatedAt = now;
+                            }
+                        }
+                        catch
+                        {
+                            // Plan cancellation non-fatal to refund
                         }
                     }
-                    catch
-                    {
-                        // Plan cancellation non-fatal to refund
-                    }
                 }
-            }
 
-            var firstDetail = order.OrderDetails?.FirstOrDefault();
-            var packageName = firstDetail?.PackageTitle ?? firstDetail?.Package?.Title ?? "Training Package";
-            var buyerName = item.RequestedByNavigation?.FullName ?? order.Buyer?.FullName ?? item.RequestedByNavigation?.Email ?? "Buyer";
-            var coachId = order.CoachId ?? firstDetail?.Package?.CoachId;
-            var coachName = order.Coach?.Coach?.FullName ?? firstDetail?.CoachName ?? "Assigned Coach";
-            var orderRef = $"#ORD-{order.OrderId.ToString("N")[..8].ToUpperInvariant()}";
-            var staffName = await GetStaffNameAsync(staffUserId, cancellationToken);
+                var firstDetail = order.OrderDetails?.FirstOrDefault();
+                var packageName = firstDetail?.PackageTitle ?? firstDetail?.Package?.Title ?? "Training Package";
+                var buyerName = item.RequestedByNavigation?.FullName ?? order.Buyer?.FullName ?? item.RequestedByNavigation?.Email ?? "Buyer";
+                var coachId = order.CoachId ?? firstDetail?.Package?.CoachId;
+                var coachName = order.Coach?.Coach?.FullName ?? firstDetail?.CoachName ?? "Assigned Coach";
+                var orderRef = $"#ORD-{order.OrderId.ToString("N")[..8].ToUpperInvariant()}";
+                var staffName = await GetStaffNameAsync(staffUserId, cancellationToken);
 
-            var notificationsToSend = new List<(Guid RecipientId, string Type, string Message)>();
+                var notificationsToSend = new List<(Guid RecipientId, string Type, string Message)>();
 
-            // 1. Notification for Buyer
-            var buyerBankMsg = bank != null ? $" The funds have been transferred to your {bank.BankName} account ({MaskAccountNumber(plainAccountNumber)})." : "";
-            var buyerMsg = $"Your refund request for \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{buyerBankMsg}";
-            if (_notifications != null)
-            {
-                await _notifications.AddAsync(new Notification
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = item.RequestedBy,
-                    ActorId = staffUserId,
-                    ReferenceId = item.RefundRequestId,
-                    Type = "REFUND_APPROVED",
-                    Description = buyerMsg,
-                    IsRead = false,
-                    CreatedAt = now
-                }, cancellationToken);
-            }
-            notificationsToSend.Add((item.RequestedBy, "REFUND_APPROVED", buyerMsg));
-
-            // 2. Notification for Seller (Coach)
-            var coachEarningMsg = calc.CoachPayoutAmount > 0
-                ? $" You have been disbursed {calc.CoachPayoutAmount:N0} VND for completed sessions/curriculum design effort."
-                : "";
-            if (coachId.HasValue && coachId.Value != Guid.Empty && coachId.Value != item.RequestedBy)
-            {
-                var coachMsg = $"A refund request for your training package \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{coachEarningMsg}";
+                // 1. Notification for Buyer
+                var buyerBankMsg = bank != null ? $" The funds have been transferred to your {bank.BankName} account ({MaskAccountNumber(plainAccountNumber)})." : "";
+                var buyerMsg = $"Your refund request for \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{buyerBankMsg}";
                 if (_notifications != null)
                 {
                     await _notifications.AddAsync(new Notification
                     {
                         Id = Guid.NewGuid(),
-                        UserId = coachId.Value,
+                        UserId = item.RequestedBy,
                         ActorId = staffUserId,
                         ReferenceId = item.RefundRequestId,
                         Type = "REFUND_APPROVED",
-                        Description = coachMsg,
+                        Description = buyerMsg,
                         IsRead = false,
                         CreatedAt = now
                     }, cancellationToken);
                 }
-                notificationsToSend.Add((coachId.Value, "REFUND_APPROVED", coachMsg));
-            }
+                notificationsToSend.Add((item.RequestedBy, "REFUND_APPROVED", buyerMsg));
 
-            // 3. Audit log for APPROVE_REFUND
-            var auditDesc = $"Refund request approved & disbursed.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nCoach Payout Portion: {calc.CoachPayoutAmount:N0} VND\nPolicy Case: {calc.RefundCase} ({calc.CaseTitle})\nTarget Bank: {(bank != null ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})" : "None")}\nTx Ref: {txRef}\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nProcessed By: {staffName}";
-            if (_auditLogService != null)
-            {
-                await _auditLogService.LogAsync(
-                    actorAccountId: staffUserId,
-                    action: "APPROVE_REFUND",
-                    entityType: "RefundRequest",
-                    entityId: item.RefundRequestId.ToString(),
-                    description: auditDesc,
-                    oldValue: new { status = currentStatus, requestedAmount = item.RequestedAmount },
-                    newValue: new
-                    {
-                        buyer = buyerName,
-                        seller = coachName,
-                        package = packageName,
-                        order = orderRef,
-                        originalPaidAmount = snapshotAmount,
-                        refundAmount = approvedAmount,
-                        coachPayoutPortion = calc.CoachPayoutAmount,
-                        policyCase = calc.RefundCase,
-                        bankAccount = bank != null ? $"{bank.BankName} ({MaskAccountNumber(plainAccountNumber)})" : null,
-                        status = "APPROVED",
-                        approvedAmount,
-                        refundTransactionRef = txRef,
-                        staffNote = item.StaffNote,
-                        processedBy = staffName,
-                        processedAt = now
-                    },
-                    ipAddress: ipAddress,
-                    cancellationToken: cancellationToken);
-            }
-            else if (_auditLogs != null)
-            {
-                await _auditLogs.AddAsync(new AuditLog
+                // 2. Notification for Seller (Coach)
+                var coachEarningMsg = calc.CoachPayoutAmount > 0
+                    ? $" You have been disbursed {calc.CoachPayoutAmount:N0} VND for completed sessions/curriculum design effort."
+                    : "";
+                if (coachId.HasValue && coachId.Value != Guid.Empty && coachId.Value != item.RequestedBy)
                 {
-                    ActorAccountId = staffUserId,
-                    Action = "APPROVE_REFUND",
-                    EntityType = "RefundRequest",
-                    EntityId = item.RefundRequestId.ToString(),
-                    OldValue = JsonSerializer.Serialize(new { status = currentStatus, requestedAmount = item.RequestedAmount }),
-                    NewValue = JsonSerializer.Serialize(new
+                    var coachMsg = $"A refund request for your training package \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{coachEarningMsg}";
+                    if (_notifications != null)
                     {
-                        description = auditDesc,
-                        buyer = buyerName,
-                        seller = coachName,
-                        package = packageName,
-                        order = orderRef,
-                        originalPaidAmount = snapshotAmount,
-                        refundAmount = approvedAmount,
-                        coachPayoutPortion = calc.CoachPayoutAmount,
-                        policyCase = calc.RefundCase,
-                        status = "APPROVED",
-                        approvedAmount,
-                        refundTransactionRef = txRef,
-                        staffNote = item.StaffNote,
-                        processedBy = staffName,
-                        processedAt = now
-                    }),
-                    Ipaddress = ipAddress,
-                    CreatedAt = now
-                }, cancellationToken);
-            }
-
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-            // 4. Realtime notifications strictly AFTER transaction commit
-            if (_realtimeNotifier != null)
-            {
-                foreach (var (recipientId, type, msg) in notificationsToSend)
-                {
-                    try
-                    {
-                        await _realtimeNotifier.SendNotificationAsync(recipientId, new DTOs.Notifications.NotificationDto
+                        await _notifications.AddAsync(new Notification
                         {
-                            NotificationId = Guid.NewGuid(),
-                            Type = type,
-                            SenderId = staffUserId,
-                            SenderName = staffName,
-                            MessagePreview = msg,
-                            CreatedAt = now,
-                            IsRead = false
-                        });
+                            Id = Guid.NewGuid(),
+                            UserId = coachId.Value,
+                            ActorId = staffUserId,
+                            ReferenceId = item.RefundRequestId,
+                            Type = "REFUND_APPROVED",
+                            Description = coachMsg,
+                            IsRead = false,
+                            CreatedAt = now
+                        }, cancellationToken);
                     }
-                    catch
+                    notificationsToSend.Add((coachId.Value, "REFUND_APPROVED", coachMsg));
+                }
+
+                // 3. Audit log for APPROVE_REFUND
+                var auditDesc = $"Refund request approved & disbursed.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nCoach Payout Portion: {calc.CoachPayoutAmount:N0} VND\nPolicy Case: {calc.RefundCase} ({calc.CaseTitle})\nTarget Bank: {(bank != null ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})" : "None")}\nTx Ref: {txRef}\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nProcessed By: {staffName}";
+                if (_auditLogService != null)
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: staffUserId,
+                        action: "APPROVE_REFUND",
+                        entityType: "RefundRequest",
+                        entityId: item.RefundRequestId.ToString(),
+                        description: auditDesc,
+                        oldValue: new { status = currentStatus, requestedAmount = item.RequestedAmount },
+                        newValue: new
+                        {
+                            buyer = buyerName,
+                            seller = coachName,
+                            package = packageName,
+                            order = orderRef,
+                            originalPaidAmount = snapshotAmount,
+                            refundAmount = approvedAmount,
+                            coachPayoutPortion = calc.CoachPayoutAmount,
+                            policyCase = calc.RefundCase,
+                            bankAccount = bank != null ? $"{bank.BankName} ({MaskAccountNumber(plainAccountNumber)})" : null,
+                            status = "APPROVED",
+                            approvedAmount,
+                            refundTransactionRef = txRef,
+                            staffNote = item.StaffNote,
+                            processedBy = staffName,
+                            processedAt = now
+                        },
+                        ipAddress: ipAddress,
+                        cancellationToken: cancellationToken);
+                }
+                else if (_auditLogs != null)
+                {
+                    await _auditLogs.AddAsync(new AuditLog
                     {
-                        // Realtime push non-fatal
+                        ActorAccountId = staffUserId,
+                        Action = "APPROVE_REFUND",
+                        EntityType = "RefundRequest",
+                        EntityId = item.RefundRequestId.ToString(),
+                        OldValue = JsonSerializer.Serialize(new { status = currentStatus, requestedAmount = item.RequestedAmount }),
+                        NewValue = JsonSerializer.Serialize(new
+                        {
+                            description = auditDesc,
+                            buyer = buyerName,
+                            seller = coachName,
+                            package = packageName,
+                            order = orderRef,
+                            originalPaidAmount = snapshotAmount,
+                            refundAmount = approvedAmount,
+                            coachPayoutPortion = calc.CoachPayoutAmount,
+                            policyCase = calc.RefundCase,
+                            status = "APPROVED",
+                            approvedAmount,
+                            refundTransactionRef = txRef,
+                            staffNote = item.StaffNote,
+                            processedBy = staffName,
+                            processedAt = now
+                        }),
+                        Ipaddress = ipAddress,
+                        CreatedAt = now
+                    }, cancellationToken);
+                }
+
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                // 4. Realtime notifications strictly AFTER transaction commit
+                if (_realtimeNotifier != null)
+                {
+                    foreach (var (recipientId, type, msg) in notificationsToSend)
+                    {
+                        try
+                        {
+                            await _realtimeNotifier.SendNotificationAsync(recipientId, new DTOs.Notifications.NotificationDto
+                            {
+                                NotificationId = Guid.NewGuid(),
+                                Type = type,
+                                SenderId = staffUserId,
+                                SenderName = staffName,
+                                MessagePreview = msg,
+                                CreatedAt = now,
+                                IsRead = false
+                            });
+                        }
+                        catch
+                        {
+                            // Realtime push non-fatal
+                        }
                     }
                 }
+
+                // 5. Send email notification asynchronously in the background so staff approval responds immediately
+                if (_emailService != null)
+                {
+                    var emailData = PrepareRefundEmail(item, order, approvedAmount, txRef, bank, plainAccountNumber, calc, staffName);
+                    if (!string.IsNullOrWhiteSpace(emailData.Email))
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _emailService.SendEmailAsync(emailData.Email, emailData.Subject, emailData.Body);
+                            }
+                            catch
+                            {
+                                // Non-fatal background email delivery
+                            }
+                        });
+                    }
+                }
+
+                var resultDto = MapToDto(item);
+                ApplyPolicyToDto(resultDto, calc);
+                return ApiResponseDto<RefundRequestDto>.Ok(resultDto, "Refund request approved and processed successfully.");
             }
+            catch (DbUpdateConcurrencyException)
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                throw new BusinessException("This refund request was processed by another staff member. Please refresh the page.");
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                throw;
+            }
+        }
 
-            // 5. Send email notification to user about refund disbursement (similar to coach payout email)
-            await SendRefundDisbursementEmailAsync(
-                item, order, approvedAmount, txRef, bank, plainAccountNumber, calc, staffName, cancellationToken);
-
-            var resultDto = MapToDto(item);
-            await EnrichDtoWithPolicyAsync(item, resultDto, cancellationToken);
-            return ApiResponseDto<RefundRequestDto>.Ok(resultDto, "Refund request approved and processed successfully.");
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw new BusinessException("This refund request was processed by another staff member. Please refresh the page.");
-        }
-        catch
-        {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
-    }
 
     public async Task<ApiResponseDto<RefundRequestDto>> RejectRefundRequestAsync(
         Guid id,
@@ -1279,6 +1297,28 @@ public class RefundRequestService : IRefundRequestService
         return ApiResponseDto<RefundPolicyCalculationDto>.Ok(calc, "Refund policy calculation completed.");
     }
 
+    private static void ApplyPolicyToDto(RefundRequestDto dto, RefundPolicyCalculationDto calc)
+    {
+        dto.RefundCase = calc.RefundCase;
+        dto.RefundCaseTitle = calc.CaseTitle;
+        dto.RefundCaseDescription = calc.CaseDescription;
+        dto.TotalSessions = calc.TotalSessions;
+        dto.CompletedSessions = calc.CompletedSessions;
+        dto.UnperformedSessions = calc.UnperformedSessions;
+        dto.UnitPricePerSession = calc.UnitPricePerSession;
+        dto.TraineeRefundAmount = calc.TraineeRefundAmount;
+        dto.CoachPayoutAmount = calc.CoachPayoutAmount;
+        dto.IsPlanCreated = calc.IsPlanCreated;
+        dto.IsPlanSent = calc.IsPlanSent;
+        dto.IsWithin7Days = calc.IsWithin7Days;
+        dto.IsLateScheduleViolation = calc.IsLateScheduleViolation;
+        dto.BankAccountId = calc.TargetBankAccountId;
+        dto.BankName = calc.TargetBankName;
+        dto.BankCode = calc.TargetBankCode;
+        dto.AccountName = calc.TargetAccountName;
+        dto.MaskedAccountNumber = calc.TargetAccountNumberMasked;
+    }
+
     private async Task EnrichDtoWithPolicyAsync(RefundRequest r, RefundRequestDto dto, CancellationToken ct)
     {
         try
@@ -1287,23 +1327,7 @@ public class RefundRequestService : IRefundRequestService
             if (order != null)
             {
                 var calc = await EvaluateRefundPolicyCoreAsync(order, r.Reason, null, ct);
-                dto.RefundCase = calc.RefundCase;
-                dto.RefundCaseTitle = calc.CaseTitle;
-                dto.RefundCaseDescription = calc.CaseDescription;
-                dto.TotalSessions = calc.TotalSessions;
-                dto.CompletedSessions = calc.CompletedSessions;
-                dto.UnperformedSessions = calc.UnperformedSessions;
-                dto.UnitPricePerSession = calc.UnitPricePerSession;
-                dto.TraineeRefundAmount = calc.TraineeRefundAmount;
-                dto.CoachPayoutAmount = calc.CoachPayoutAmount;
-                dto.IsPlanCreated = calc.IsPlanCreated;
-                dto.IsPlanSent = calc.IsPlanSent;
-                dto.IsWithin7Days = calc.IsWithin7Days;
-                dto.BankAccountId = calc.TargetBankAccountId;
-                dto.BankName = calc.TargetBankName;
-                dto.BankCode = calc.TargetBankCode;
-                dto.AccountName = calc.TargetAccountName;
-                dto.MaskedAccountNumber = calc.TargetAccountNumberMasked;
+                ApplyPolicyToDto(dto, calc);
             }
         }
         catch
@@ -1393,7 +1417,7 @@ public class RefundRequestService : IRefundRequestService
             .ToList();
     }
 
-    private async Task SendRefundDisbursementEmailAsync(
+    private static (string Email, string Subject, string Body) PrepareRefundEmail(
         RefundRequest item,
         Order order,
         decimal amount,
@@ -1401,104 +1425,85 @@ public class RefundRequestService : IRefundRequestService
         CoachBankAccount? bank,
         string plainAccountNumber,
         RefundPolicyCalculationDto calc,
-        string staffName,
-        CancellationToken ct)
+        string staffName)
     {
-        try
+        var traineeEmail = item.RequestedByNavigation?.Email ?? order.Buyer?.Email;
+        if (string.IsNullOrWhiteSpace(traineeEmail))
         {
-            if (_emailService == null)
-            {
-                return;
-            }
-
-            var traineeEmail = item.RequestedByNavigation?.Email ?? order.Buyer?.Email;
-            if (string.IsNullOrWhiteSpace(traineeEmail) && _users != null)
-            {
-                var user = await _users.GetByIdAsync(item.RequestedBy, ct);
-                traineeEmail = user?.Email;
-            }
-
-            if (string.IsNullOrWhiteSpace(traineeEmail))
-            {
-                return;
-            }
-
-            var traineeName = item.RequestedByNavigation?.FullName ?? order.Buyer?.FullName ?? traineeEmail;
-            var firstDetail = order.OrderDetails?.FirstOrDefault();
-            var packageName = firstDetail?.PackageTitle ?? firstDetail?.Package?.Title ?? "Training Package";
-            var orderRef = $"#ORD-{order.OrderId.ToString("N")[..8].ToUpperInvariant()}";
-            var bankInfo = bank != null
-                ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})"
-                : "Linked Payout Bank Account";
-
-            var subject = $"[FitSocial] Refund Confirmation: {amount:N0} VND - {orderRef}";
-            var body = $@"
-            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;"">
-                <div style=""text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #FF5722;"">
-                    <h2 style=""color: #FF5722; margin: 0; font-size: 24px; font-weight: bold;"">FitSocial</h2>
-                    <p style=""color: #666; margin: 6px 0 0; font-size: 14px;"">Online Tuition Refund Notification (PayOS Napas 24/7)</p>
-                </div>
-
-                <p style=""color: #333; font-size: 16px; margin-bottom: 16px;"">Hello <strong>{System.Net.WebUtility.HtmlEncode(traineeName)}</strong>,</p>
-                <p style=""color: #555; line-height: 1.6; margin-bottom: 20px;"">
-                    Your refund request for order <strong>{System.Net.WebUtility.HtmlEncode(orderRef)}</strong> has been approved by customer support, and the system has processed a direct bank transfer payout.
-                </p>
-
-                <div style=""background: #fff8f5; border: 1px solid #ffccbc; border-radius: 6px; padding: 16px; margin-bottom: 20px;"">
-                    <h3 style=""color: #d84315; margin: 0 0 12px 0; font-size: 16px;"">Refund Transaction Breakdown</h3>
-                    <table style=""width: 100%; border-collapse: collapse; font-size: 14px;"">
-                        <tr>
-                            <td style=""padding: 6px 0; color: #777; width: 40%;"">Training Package:</td>
-                            <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(packageName)}</td>
-                        </tr>
-                        <tr>
-                            <td style=""padding: 6px 0; color: #777;"">Order Reference:</td>
-                            <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(orderRef)}</td>
-                        </tr>
-                        <tr>
-                            <td style=""padding: 6px 0; color: #777;"">Refund Amount:</td>
-                            <td style=""padding: 6px 0; color: #2e7d32; font-size: 18px; font-weight: bold;"">{amount:N0} VND</td>
-                        </tr>
-                        <tr>
-                            <td style=""padding: 6px 0; color: #777;"">Receiving Bank Account:</td>
-                            <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(bankInfo)}</td>
-                        </tr>
-                        <tr>
-                            <td style=""padding: 6px 0; color: #777;"">Transaction Reference:</td>
-                            <td style=""padding: 6px 0; color: #333; font-family: monospace; font-size: 13px;"">{System.Net.WebUtility.HtmlEncode(transactionRef)}</td>
-                        </tr>
-                        <tr>
-                            <td style=""padding: 6px 0; color: #777;"">Policy Applied:</td>
-                            <td style=""padding: 6px 0; color: #333;"">{System.Net.WebUtility.HtmlEncode(calc.CaseTitle ?? "FitSocial Refund Policy")}</td>
-                        </tr>
-                        <tr>
-                            <td style=""padding: 6px 0; color: #777;"">Processed Time:</td>
-                            <td style=""padding: 6px 0; color: #333;"">{DateTime.UtcNow.AddHours(7):dd/MM/yyyy HH:mm:ss} (GMT+7)</td>
-                        </tr>
-                        <tr>
-                            <td style=""padding: 6px 0; color: #777;"">Reviewed By:</td>
-                            <td style=""padding: 6px 0; color: #333;"">{System.Net.WebUtility.HtmlEncode(staffName)}</td>
-                        </tr>
-                    </table>
-                </div>
-
-                <p style=""color: #555; line-height: 1.6; margin-bottom: 16px;"">
-                    Funds have been transferred via the Napas 24/7 interbank payment gateway. Please check your account balance in your banking application.
-                </p>
-
-                <hr style=""border: none; border-top: 1px solid #eeeeee; margin: 24px 0;"" />
-                <p style=""color: #888; font-size: 12px; text-align: center; margin: 0; line-height: 1.5;"">
-                    If you have any questions or require further assistance, please contact FitSocial support via email or hotline.<br />
-                    © {DateTime.UtcNow.Year} FitSocial Platform. All rights reserved.
-                </p>
-            </div>";
-
-            await _emailService.SendEmailAsync(traineeEmail, subject, body);
+            return (string.Empty, string.Empty, string.Empty);
         }
-        catch
-        {
-            // Email notification failure must never interrupt refund transaction
-        }
+
+        var traineeName = item.RequestedByNavigation?.FullName ?? order.Buyer?.FullName ?? traineeEmail;
+        var firstDetail = order.OrderDetails?.FirstOrDefault();
+        var packageName = firstDetail?.PackageTitle ?? firstDetail?.Package?.Title ?? "Training Package";
+        var orderRef = $"#ORD-{order.OrderId.ToString("N")[..8].ToUpperInvariant()}";
+        var bankInfo = bank != null
+            ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})"
+            : "Linked Payout Bank Account";
+
+        var subject = $"[FitSocial] Refund Confirmation: {amount:N0} VND - {orderRef}";
+        var body = $@"
+        <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;"">
+            <div style=""text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #FF5722;"">
+                <h2 style=""color: #FF5722; margin: 0; font-size: 24px; font-weight: bold;"">FitSocial</h2>
+                <p style=""color: #666; margin: 6px 0 0; font-size: 14px;"">Online Tuition Refund Notification (PayOS Napas 24/7)</p>
+            </div>
+
+            <p style=""color: #333; font-size: 16px; margin-bottom: 16px;"">Hello <strong>{System.Net.WebUtility.HtmlEncode(traineeName)}</strong>,</p>
+            <p style=""color: #555; line-height: 1.6; margin-bottom: 20px;"">
+                Your refund request for order <strong>{System.Net.WebUtility.HtmlEncode(orderRef)}</strong> has been approved by customer support, and the system has processed a direct bank transfer payout.
+            </p>
+
+            <div style=""background: #fff8f5; border: 1px solid #ffccbc; border-radius: 6px; padding: 16px; margin-bottom: 20px;"">
+                <h3 style=""color: #d84315; margin: 0 0 12px 0; font-size: 16px;"">Refund Transaction Breakdown</h3>
+                <table style=""width: 100%; border-collapse: collapse; font-size: 14px;"">
+                    <tr>
+                        <td style=""padding: 6px 0; color: #777; width: 40%;"">Training Package:</td>
+                        <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(packageName)}</td>
+                    </tr>
+                    <tr>
+                        <td style=""padding: 6px 0; color: #777;"">Order Reference:</td>
+                        <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(orderRef)}</td>
+                    </tr>
+                    <tr>
+                        <td style=""padding: 6px 0; color: #777;"">Refund Amount:</td>
+                        <td style=""padding: 6px 0; color: #2e7d32; font-size: 18px; font-weight: bold;"">{amount:N0} VND</td>
+                    </tr>
+                    <tr>
+                        <td style=""padding: 6px 0; color: #777;"">Receiving Bank Account:</td>
+                        <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(bankInfo)}</td>
+                    </tr>
+                    <tr>
+                        <td style=""padding: 6px 0; color: #777;"">Transaction Reference:</td>
+                        <td style=""padding: 6px 0; color: #333; font-family: monospace; font-size: 13px;"">{System.Net.WebUtility.HtmlEncode(transactionRef)}</td>
+                    </tr>
+                    <tr>
+                        <td style=""padding: 6px 0; color: #777;"">Policy Applied:</td>
+                        <td style=""padding: 6px 0; color: #333;"">{System.Net.WebUtility.HtmlEncode(calc.CaseTitle ?? "FitSocial Refund Policy")}</td>
+                    </tr>
+                    <tr>
+                        <td style=""padding: 6px 0; color: #777;"">Processed Time:</td>
+                        <td style=""padding: 6px 0; color: #333;"">{DateTime.UtcNow.AddHours(7):dd/MM/yyyy HH:mm:ss} (GMT+7)</td>
+                    </tr>
+                    <tr>
+                        <td style=""padding: 6px 0; color: #777;"">Reviewed By:</td>
+                        <td style=""padding: 6px 0; color: #333;"">{System.Net.WebUtility.HtmlEncode(staffName)}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <p style=""color: #555; line-height: 1.6; margin-bottom: 16px;"">
+                Funds have been transferred via the Napas 24/7 interbank payment gateway. Please check your account balance in your banking application.
+            </p>
+
+            <hr style=""border: none; border-top: 1px solid #eeeeee; margin: 24px 0;"" />
+            <p style=""color: #888; font-size: 12px; text-align: center; margin: 0; line-height: 1.5;"">
+                If you have any questions or require further assistance, please contact FitSocial support via email or hotline.<br />
+                © {DateTime.UtcNow.Year} FitSocial Platform. All rights reserved.
+            </p>
+        </div>";
+
+        return (traineeEmail, subject, body);
     }
 }
 

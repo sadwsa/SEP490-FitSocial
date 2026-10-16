@@ -82,4 +82,97 @@ public class CoachBankAccountServiceTests
             acc.BankCode == "VCB" &&
             acc.IsDefault == true), It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task AddAccountAsync_WhenUserIsTrainee_ShouldEncryptAndSaveAccount()
+    {
+        // Arrange
+        var traineeId = Guid.NewGuid();
+        var traineeUser = new User
+        {
+            UserId = traineeId,
+            Email = "trainee@fitsocial.com",
+            FullName = "Trainee User",
+            RoleCode = "TRAINEE"
+        };
+        var dto = new CreateCoachBankAccountDto
+        {
+            BankName = "Techcombank",
+            BankCode = "TCB",
+            AccountName = "TRAINEE USER",
+            AccountNumber = "190312345678",
+            Branch = "Danang",
+            IsDefault = true
+        };
+
+        var cipherBytes = new byte[] { 50, 60, 70, 80 };
+        var mockUserRepo = new Mock<IUserRepository>();
+        mockUserRepo.Setup(u => u.GetByIdAsync(traineeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(traineeUser);
+
+        var serviceWithUserRepo = new CoachBankAccountService(
+            _mockBankRepo.Object,
+            _mockCoachRepo.Object,
+            _mockEncryption.Object,
+            _mockUow.Object,
+            new Mock<IHttpClientFactory>().Object,
+            null,
+            mockUserRepo.Object);
+
+        _mockBankRepo.Setup(b => b.ListByCoachIdAsync(traineeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CoachBankAccount>());
+        _mockEncryption.Setup(e => e.Encrypt(dto.AccountNumber, false))
+            .Returns(cipherBytes);
+        _mockEncryption.Setup(e => e.Decrypt(cipherBytes))
+            .Returns(dto.AccountNumber);
+        _mockBankRepo.Setup(b => b.AddAsync(It.IsAny<CoachBankAccount>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await serviceWithUserRepo.AddAccountAsync(traineeId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("TCB", result.Data!.BankCode);
+        Assert.Equal("190312345678", result.Data.AccountNumber);
+        Assert.True(result.Data.IsDefault);
+
+        _mockBankRepo.Verify(b => b.AddAsync(It.Is<CoachBankAccount>(acc =>
+            acc.CoachId == traineeId &&
+            acc.EncryptedAccountNumber == cipherBytes &&
+            acc.BankCode == "TCB"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAccountAsync_WhenAccountExists_ShouldDeleteSuccessfully()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var bankId = Guid.NewGuid();
+        var account = new CoachBankAccount
+        {
+            BankId = bankId,
+            CoachId = userId,
+            BankName = "MBBank",
+            BankCode = "MBB",
+            IsDefault = true
+        };
+
+        _mockBankRepo.Setup(b => b.ListByCoachIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CoachBankAccount> { account });
+        _mockBankRepo.Setup(b => b.Remove(account));
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.DeleteAccountAsync(userId, bankId);
+
+        // Assert
+        Assert.True(result.Success);
+        _mockBankRepo.Verify(b => b.Remove(account), Times.Once);
+        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

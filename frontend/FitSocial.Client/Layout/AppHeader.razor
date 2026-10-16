@@ -413,7 +413,8 @@
                         </svg>
                         Change Password
                     </a>
-                    @if (EffectiveUserRole == "Coach")
+                    @if (string.Equals(EffectiveUserRole, "Coach", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(EffectiveUserRole, "Trainee", StringComparison.OrdinalIgnoreCase))
                     {
                         <a href="/coach/payout-account" @onclick="CloseProfileMenu"
                            class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">

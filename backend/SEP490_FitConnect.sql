@@ -87,7 +87,7 @@ CREATE TABLE CoachProfiles (
 
 CREATE TABLE CoachBankAccounts (
     BankID UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    CoachID UUID REFERENCES CoachProfiles(CoachID),
+    CoachID UUID REFERENCES Users(UserID),
     BankName VARCHAR(255),
     BankCode VARCHAR(50),
     AccountName VARCHAR(255),

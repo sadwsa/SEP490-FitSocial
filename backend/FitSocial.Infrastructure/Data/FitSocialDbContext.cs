@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using FitSocial.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -242,6 +242,7 @@ public partial class FitSocialDbContext : DbContext
 
             entity.HasOne(d => d.Coach).WithMany(p => p.CoachBankAccounts)
                 .HasForeignKey(d => d.CoachId)
+                .IsRequired(false)
                 .HasConstraintName("CoachBankAccounts_CoachID_fkey");
         });
 

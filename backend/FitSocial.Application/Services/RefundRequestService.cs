@@ -27,6 +27,9 @@ public class RefundRequestService : IRefundRequestService
     private readonly IUserRepository? _users;
     private readonly IChatRealtimeNotifier? _realtimeNotifier;
     private readonly IAuditLogService? _auditLogService;
+    private readonly ICoachBankAccountRepository? _bankAccountRepository;
+    private readonly IEncryptionService? _encryptionService;
+    private readonly IBankTransferGateway? _bankTransferGateway;
 
     public RefundRequestService(
         IRefundRequestRepository refundRequestRepository,
@@ -38,7 +41,10 @@ public class RefundRequestService : IRefundRequestService
         ITermsAndPolicyRepository? terms = null,
         IUserRepository? users = null,
         IChatRealtimeNotifier? realtimeNotifier = null,
-        IAuditLogService? auditLogService = null)
+        IAuditLogService? auditLogService = null,
+        ICoachBankAccountRepository? bankAccountRepository = null,
+        IEncryptionService? encryptionService = null,
+        IBankTransferGateway? bankTransferGateway = null)
     {
         _refundRequestRepository = refundRequestRepository;
         _orderRepository = orderRepository;
@@ -50,6 +56,9 @@ public class RefundRequestService : IRefundRequestService
         _users = users;
         _realtimeNotifier = realtimeNotifier;
         _auditLogService = auditLogService;
+        _bankAccountRepository = bankAccountRepository;
+        _encryptionService = encryptionService;
+        _bankTransferGateway = bankTransferGateway;
     }
 
     private async Task<string> GetStaffNameAsync(Guid staffUserId, CancellationToken cancellationToken)
@@ -70,6 +79,207 @@ public class RefundRequestService : IRefundRequestService
             }
         }
         return "Admin / Staff";
+    }
+
+    private static string MaskAccountNumber(string? account)
+    {
+        if (string.IsNullOrWhiteSpace(account)) return "—";
+        var trimmed = account.Trim();
+        if (trimmed.Length <= 4) return "****";
+        var prefix = trimmed.Length > 8 ? trimmed[..4] : trimmed[..2];
+        var suffix = trimmed[^4..];
+        return $"{prefix}******{suffix}";
+    }
+
+    /// <summary>
+    /// Core engine implementing the 3-case Refund Policy:
+    /// - Case 1: Within 7 days, 0 completed/no-show sessions AND training plan not sent -> 100% Trainee refund, 0 Coach payout.
+    /// - Case 2: Within 7 days, 1-2 sessions attended OR coach created/drafted curriculum -> Deduct coach effort, Trainee gets remainder.
+    /// - Case 3: Mid-term / Coach late schedule (rules require plan at least 2 days before session) -> Pro-rata for unperformed sessions.
+    /// </summary>
+    public async Task<RefundPolicyCalculationDto> EvaluateRefundPolicyCoreAsync(
+        Order order,
+        string? reason = null,
+        Guid? preferredBankAccountId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var firstDetail = order.OrderDetails?.FirstOrDefault();
+        var package = firstDetail?.Package;
+        var totalAmount = order.TotalAmount ?? firstDetail?.PackagePrice ?? 0;
+
+        // 1. Determine Total Sessions
+        int totalSessions = package?.SessionCount ?? 0;
+        int durationDays = firstDetail?.PackageDurationDays ?? package?.DurationDays ?? 30;
+
+        TrainingPlan? plan = null;
+        if (_trainingPlans != null && firstDetail != null)
+        {
+            try
+            {
+                plan = await _trainingPlans.GetTraineePlanWithLogsAsync(firstDetail.OrderDetailsId, order.BuyerId, cancellationToken)
+                       ?? await _trainingPlans.GetActiveByOrderDetailsIdAsync(firstDetail.OrderDetailsId, cancellationToken);
+            }
+            catch
+            {
+                // Fallback if query fails
+            }
+        }
+
+        if (totalSessions <= 0)
+        {
+            if (plan?.TrainingPlanExercises != null && plan.TrainingPlanExercises.Any())
+            {
+                totalSessions = plan.TrainingPlanExercises
+                    .Select(e => (e.WeekNumber ?? 1, e.DayNumber ?? 1))
+                    .Distinct()
+                    .Count();
+            }
+            else
+            {
+                totalSessions = Math.Max(1, durationDays / 2);
+            }
+        }
+        totalSessions = Math.Max(1, totalSessions);
+
+        // 2. Determine Completed / Attended Sessions
+        int completedSessions = 0;
+        if (plan?.TrainingPlanExercises != null && plan.TrainingPlanExercises.Any())
+        {
+            completedSessions = plan.TrainingPlanExercises
+                .Where(e => e.WorkoutCompletionLogs != null && e.WorkoutCompletionLogs.Any(l =>
+                    l.TraineeId == order.BuyerId &&
+                    (string.Equals(l.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(l.Status, "TRAINEE_NO_SHOW", StringComparison.OrdinalIgnoreCase))))
+                .Select(e => (e.WeekNumber ?? 1, e.DayNumber ?? 1))
+                .Distinct()
+                .Count();
+        }
+        completedSessions = Math.Min(totalSessions, completedSessions);
+        int unperformedSessions = Math.Max(0, totalSessions - completedSessions);
+
+        // 3. Determine Plan Sent and Plan Created status
+        bool isPlanSent = plan != null && (plan.PublishedAt.HasValue ||
+            string.Equals(plan.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(plan.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase));
+
+        bool isPlanCreated = isPlanSent || (plan != null && plan.TrainingPlanExercises != null && plan.TrainingPlanExercises.Any());
+
+        // 4. Check 7-day policy window
+        var purchaseTime = order.Payments?.FirstOrDefault(p =>
+                               p.Status == PaymentConstants.PaymentStatusSuccess
+                               || p.Status == PaymentConstants.OrderStatusPaid
+                               || p.Status == PaymentConstants.OrderStatusCompleted)?.ProcessedAt
+                           ?? order.CreatedAt ?? DateTime.UtcNow;
+        var daysSincePurchase = (DateTime.UtcNow - purchaseTime).TotalDays;
+        bool isWithin7Days = daysSincePurchase <= 7.0;
+
+        // 5. Check late schedule violation flag
+        var reasonLower = (reason ?? string.Empty).ToLowerInvariant();
+        bool isLateScheduleViolation = reasonLower.Contains("trễ lịch") ||
+                                       reasonLower.Contains("trễ giáo án") ||
+                                       reasonLower.Contains("muộn lịch") ||
+                                       reasonLower.Contains("chậm lịch") ||
+                                       reasonLower.Contains("chậm giáo án") ||
+                                       reasonLower.Contains("late plan") ||
+                                       reasonLower.Contains("late schedule") ||
+                                       reasonLower.Contains("coach late") ||
+                                       reasonLower.Contains("chưa có lịch") ||
+                                       reasonLower.Contains("không có lịch") ||
+                                       reasonLower.Contains("vi phạm lịch");
+
+        decimal unitPrice = totalSessions > 0 ? Math.Round(totalAmount / totalSessions, 0) : totalAmount;
+        string refundCase;
+        string caseTitle;
+        string caseDescription;
+        decimal traineeRefund;
+        decimal coachPayout;
+
+        if (isWithin7Days && completedSessions == 0 && !isPlanSent)
+        {
+            // Case 1: Trong 7 ngày đầu, học viên chưa học buổi nào VÀ HLV chưa gửi lịch trình tập luyện
+            refundCase = "CASE_1";
+            caseTitle = "Trường hợp 1: Trong 7 ngày đầu, chưa học buổi nào & HLV chưa gửi lịch tập";
+            caseDescription = "Hệ thống tự động tính hoàn 100% học phí cho học viên. HLV không nhận giải ngân vì chưa thực hiện buổi tập và chưa gửi lịch trình.";
+            traineeRefund = totalAmount;
+            coachPayout = 0;
+        }
+        else if (isWithin7Days && (completedSessions > 0 || isPlanCreated))
+        {
+            // Case 2: Trong 7 ngày đó học viên đã tập 1-2 buổi hoặc HLV ĐÃ tốn công soạn Lịch tập
+            refundCase = "CASE_2";
+            caseTitle = "Trường hợp 2: Trong 7 ngày đầu, đã tập buổi hoặc HLV đã soạn lịch tập";
+            caseDescription = "Khấu trừ chi phí công sức HLV đã bỏ ra (các buổi đã tập hoặc công sức thiết kế lịch tập). Phần còn lại được hoàn cho học viên.";
+
+            if (completedSessions > 0)
+            {
+                coachPayout = Math.Min(totalAmount, unitPrice * completedSessions);
+            }
+            else
+            {
+                // HLV ĐÃ tốn công soạn Lịch tập nhưng học viên chưa tập buổi nào -> bồi hoàn công sức HLV tương đương 1 buổi
+                coachPayout = Math.Min(totalAmount, unitPrice * 1);
+            }
+            traineeRefund = Math.Max(0, totalAmount - coachPayout);
+        }
+        else
+        {
+            // Case 3: Vi phạm xảy ra giữa kỳ đã tập một số buổi / HLV trễ lịch tập các buổi tiếp theo (trước 2 ngày tập phải có lịch)
+            refundCase = "CASE_3";
+            caseTitle = "Trường hợp 3: Vi phạm giữa kỳ / HLV trễ lịch tập (Quy tắc trước 2 ngày)";
+            caseDescription = "Áp dụng hoàn tiền theo tỷ lệ cho toàn bộ số buổi chưa học. HLV chỉ được thanh toán cho những buổi đã có trạng thái Completed.";
+
+            traineeRefund = Math.Min(totalAmount, Math.Round(unitPrice * unperformedSessions, 0));
+            coachPayout = Math.Min(totalAmount - traineeRefund, Math.Round(unitPrice * completedSessions, 0));
+        }
+
+        // Payout Bank Account Target lookup
+        CoachBankAccount? targetBank = null;
+        string? maskedAccount = null;
+        if (_bankAccountRepository != null)
+        {
+            try
+            {
+                var banks = await _bankAccountRepository.ListActiveByCoachIdAsync(order.BuyerId, cancellationToken);
+                if (preferredBankAccountId.HasValue)
+                {
+                    targetBank = banks.FirstOrDefault(b => b.BankId == preferredBankAccountId.Value);
+                }
+                targetBank ??= banks.FirstOrDefault(b => b.IsDefault == true) ?? banks.FirstOrDefault();
+
+                if (targetBank != null && _encryptionService != null)
+                {
+                    var plain = _encryptionService.Decrypt(targetBank.EncryptedAccountNumber);
+                    maskedAccount = MaskAccountNumber(plain);
+                }
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
+
+        return new RefundPolicyCalculationDto
+        {
+            RefundCase = refundCase,
+            CaseTitle = caseTitle,
+            CaseDescription = caseDescription,
+            IsWithin7Days = isWithin7Days,
+            TotalSessions = totalSessions,
+            CompletedSessions = completedSessions,
+            UnperformedSessions = unperformedSessions,
+            UnitPricePerSession = unitPrice,
+            TotalPaidAmount = totalAmount,
+            TraineeRefundAmount = traineeRefund,
+            CoachPayoutAmount = coachPayout,
+            IsPlanSent = isPlanSent,
+            IsPlanCreated = isPlanCreated,
+            IsLateScheduleViolation = isLateScheduleViolation,
+            TargetBankAccountId = targetBank?.BankId,
+            TargetBankName = targetBank?.BankName,
+            TargetBankCode = targetBank?.BankCode,
+            TargetAccountName = targetBank?.AccountName,
+            TargetAccountNumberMasked = maskedAccount
+        };
     }
 
     public async Task<ApiResponseDto<RefundRequestDto>> CreateRefundRequestAsync(
@@ -116,22 +326,20 @@ public class RefundRequestService : IRefundRequestService
             throw new ValidationException($"Cannot request refund for order with status '{order.OrderStatus}'.");
         }
 
-        // LEVEL 2 Snapshot: Validate 7-day refund policy based on UTC purchase time
-        var purchaseTime = order.Payments?.FirstOrDefault(p =>
-                               p.Status == PaymentConstants.PaymentStatusSuccess
-                               || p.Status == PaymentConstants.OrderStatusPaid
-                               || p.Status == PaymentConstants.OrderStatusCompleted)?.ProcessedAt
-                           ?? order.CreatedAt;
+        // Evaluate 3-case policy breakdown
+        var calc = await EvaluateRefundPolicyCoreAsync(order, dto.Reason, dto.BankAccountId, cancellationToken);
 
-        if (!purchaseTime.HasValue)
+        if (!calc.IsWithin7Days)
         {
-            throw new BusinessException("Cannot determine the purchase date.");
-        }
+            if (calc.UnperformedSessions <= 0)
+            {
+                throw new BusinessException("The package has already completed all sessions and is no longer eligible for refund.");
+            }
 
-        var refundDeadline = purchaseTime.Value.AddDays(7);
-        if (DateTime.UtcNow > refundDeadline)
-        {
-            throw new BusinessException("The refund request period has expired (refunds are only permitted within 7 days of purchase).");
+            if (!calc.IsLateScheduleViolation)
+            {
+                throw new BusinessException("The refund request period has expired (refunds are only permitted within 7 days of purchase or for mid-term coach schedule violations).");
+            }
         }
 
         // Mutual Consistency: Check if coach payout has already been processed for this order
@@ -182,9 +390,16 @@ public class RefundRequestService : IRefundRequestService
         }
 
         var now = DateTime.UtcNow;
+        var purchaseTime = order.Payments?.FirstOrDefault(p =>
+                               p.Status == PaymentConstants.PaymentStatusSuccess
+                               || p.Status == PaymentConstants.OrderStatusPaid
+                               || p.Status == PaymentConstants.OrderStatusCompleted)?.ProcessedAt
+                           ?? order.CreatedAt ?? now;
 
-        // Purchase financial snapshot: Always use Order.TotalAmount / OrderDetail price at purchase
-        var snapshotPaidAmount = order.TotalAmount ?? order.OrderDetails.FirstOrDefault()?.PackagePrice ?? 0;
+        // Auto-calculated refund amount adhering strictly to policy cases
+        var snapshotPaidAmount = calc.TraineeRefundAmount > 0 ? calc.TraineeRefundAmount : (order.TotalAmount ?? order.OrderDetails.FirstOrDefault()?.PackagePrice ?? 0);
+
+        var policySnapshotNote = $"[Policy: {calc.RefundCase} | Buổi: {calc.CompletedSessions}/{calc.TotalSessions} | Trainee hoàn: {calc.TraineeRefundAmount:N0} VND | Coach giải ngân: {calc.CoachPayoutAmount:N0} VND{(calc.TargetBankName != null ? $" | TK: {calc.TargetBankName} - {calc.TargetAccountName} ({calc.TargetAccountNumberMasked})" : "")}]";
 
         var refundRequest = new RefundRequest
         {
@@ -197,6 +412,7 @@ public class RefundRequestService : IRefundRequestService
             Reason = dto.Reason.Trim(),
             EvidenceUrls = evidenceStr,
             Status = "PENDING",
+            StaffNote = policySnapshotNote,
             RequestedAt = now,
             CreatedAt = now,
             UpdatedAt = now
@@ -257,7 +473,7 @@ public class RefundRequestService : IRefundRequestService
             }
 
             // 3. AuditLog for CREATE_REFUND_REQUEST
-            var auditDesc = $"Refund request created.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOriginal Paid Amount: {snapshotPaidAmount:N0} VND\nPurchase Date: {purchaseTime.Value:dd/MM/yyyy HH:mm}\nRequested At: {now:dd/MM/yyyy HH:mm}\nStatus: PENDING\nReason: {refundRequest.Reason}";
+            var auditDesc = $"Refund request created.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOriginal Paid Amount: {snapshotPaidAmount:N0} VND\nPurchase Date: {purchaseTime:dd/MM/yyyy HH:mm}\nRequested At: {now:dd/MM/yyyy HH:mm}\nStatus: PENDING\nReason: {refundRequest.Reason}";
             if (_auditLogService != null)
             {
                 await _auditLogService.LogAsync(
@@ -273,7 +489,7 @@ public class RefundRequestService : IRefundRequestService
                         seller = coachName,
                         package = packageName,
                         paidAmount = snapshotPaidAmount,
-                        purchaseDate = purchaseTime.Value,
+                        purchaseDate = purchaseTime,
                         requestedAt = now,
                         status = "PENDING",
                         reason = refundRequest.Reason
@@ -296,7 +512,7 @@ public class RefundRequestService : IRefundRequestService
                         seller = coachName,
                         package = packageName,
                         paidAmount = snapshotPaidAmount,
-                        purchaseDate = purchaseTime.Value,
+                        purchaseDate = purchaseTime,
                         requestedAt = now,
                         status = "PENDING",
                         reason = refundRequest.Reason
@@ -333,7 +549,9 @@ public class RefundRequestService : IRefundRequestService
             }
 
             var created = await _refundRequestRepository.GetByIdWithDetailsAsync(refundRequest.RefundRequestId, cancellationToken) ?? refundRequest;
-            return ApiResponseDto<RefundRequestDto>.Ok(MapToDto(created), "Refund request submitted successfully.");
+            var createdDto = MapToDto(created);
+            await EnrichDtoWithPolicyAsync(created, createdDto, cancellationToken);
+            return ApiResponseDto<RefundRequestDto>.Ok(createdDto, "Refund request submitted successfully.");
         }
         catch
         {
@@ -347,7 +565,13 @@ public class RefundRequestService : IRefundRequestService
         CancellationToken cancellationToken = default)
     {
         var list = await _refundRequestRepository.ListByUserIdAsync(userId, cancellationToken);
-        var dtos = list.Select(MapToDto).ToList();
+        var dtos = new List<RefundRequestDto>();
+        foreach (var item in list)
+        {
+            var dto = MapToDto(item);
+            await EnrichDtoWithPolicyAsync(item, dto, cancellationToken);
+            dtos.Add(dto);
+        }
         return ApiResponseDto<List<RefundRequestDto>>.Ok(dtos, "My refund requests retrieved.");
     }
 
@@ -356,7 +580,13 @@ public class RefundRequestService : IRefundRequestService
         CancellationToken cancellationToken = default)
     {
         var list = await _refundRequestRepository.ListAllWithDetailsAsync(status, cancellationToken);
-        var dtos = list.Select(MapToDto).ToList();
+        var dtos = new List<RefundRequestDto>();
+        foreach (var item in list)
+        {
+            var dto = MapToDto(item);
+            await EnrichDtoWithPolicyAsync(item, dto, cancellationToken);
+            dtos.Add(dto);
+        }
         return ApiResponseDto<List<RefundRequestDto>>.Ok(dtos, "Refund requests retrieved.");
     }
 
@@ -375,7 +605,14 @@ public class RefundRequestService : IRefundRequestService
             query.PageSize,
             cancellationToken);
 
-        var dtos = items.Select(MapToDto).ToList();
+        var dtos = new List<RefundRequestDto>();
+        foreach (var item in items)
+        {
+            var dto = MapToDto(item);
+            await EnrichDtoWithPolicyAsync(item, dto, cancellationToken);
+            dtos.Add(dto);
+        }
+
         var pagedResult = PagedResultDto<RefundRequestDto>.Create(dtos, totalCount, query.PageNumber, query.PageSize);
         return ApiResponseDto<PagedResultDto<RefundRequestDto>>.Ok(pagedResult, "Refund requests retrieved successfully.");
     }
@@ -397,7 +634,9 @@ public class RefundRequestService : IRefundRequestService
             throw new ForbiddenException("You do not have permission to view this refund request.");
         }
 
-        return ApiResponseDto<RefundRequestDto>.Ok(MapToDto(item));
+        var dto = MapToDto(item);
+        await EnrichDtoWithPolicyAsync(item, dto, cancellationToken);
+        return ApiResponseDto<RefundRequestDto>.Ok(dto);
     }
 
     public async Task<ApiResponseDto<RefundRequestDto>> ApproveRefundRequestAsync(
@@ -468,15 +707,45 @@ public class RefundRequestService : IRefundRequestService
                 throw new BusinessException("This payment has already been refunded.");
             }
 
-            // Financial snapshot amount: Stored at transaction time
+            // Evaluate policy to determine refund breakdown
+            var calc = await EvaluateRefundPolicyCoreAsync(order, item.Reason, dto?.BankAccountId, cancellationToken);
+
+            // Financial snapshot amount: Stored at transaction time or policy calculated
             var snapshotAmount = item.RequestedAmount ?? order.TotalAmount ?? 0;
             var approvedAmount = dto?.ApprovedAmount is > 0
                 ? dto.ApprovedAmount.Value
-                : snapshotAmount;
+                : (calc.TraineeRefundAmount > 0 ? calc.TraineeRefundAmount : snapshotAmount);
 
             if (approvedAmount > (order.TotalAmount ?? snapshotAmount))
             {
                 throw new ValidationException($"Approved amount ({approvedAmount:N0} VND) cannot exceed the original paid amount ({order.TotalAmount:N0} VND).");
+            }
+
+            // Payout Bank Account for Trainee
+            CoachBankAccount? bank = null;
+            string plainAccountNumber = string.Empty;
+            if (_bankAccountRepository != null)
+            {
+                var targetBankId = dto?.BankAccountId ?? calc.TargetBankAccountId;
+                var banks = await _bankAccountRepository.ListActiveByCoachIdAsync(item.RequestedBy, cancellationToken);
+                bank = (targetBankId.HasValue ? banks.FirstOrDefault(b => b.BankId == targetBankId.Value) : null)
+                       ?? banks.FirstOrDefault(b => b.IsDefault == true)
+                       ?? banks.FirstOrDefault();
+
+                if (bank == null)
+                {
+                    throw new BusinessException("Học viên chưa thiết lập tài khoản ngân hàng nhận tiền (Payout Bank Account). Vui lòng yêu cầu học viên thêm tài khoản ngân hàng tại mục Payout Account trước khi duyệt hoàn tiền.");
+                }
+
+                if (_encryptionService != null)
+                {
+                    plainAccountNumber = _encryptionService.Decrypt(bank.EncryptedAccountNumber) ?? string.Empty;
+                }
+
+                if (string.IsNullOrWhiteSpace(plainAccountNumber))
+                {
+                    throw new BusinessException("Không thể giải mã số tài khoản ngân hàng của học viên.");
+                }
             }
 
             // Idempotent refund transaction reference
@@ -484,9 +753,54 @@ public class RefundRequestService : IRefundRequestService
                 ? dto.RefundTransactionRef.Trim()
                 : (!string.IsNullOrWhiteSpace(item.RefundTransactionRef)
                     ? item.RefundTransactionRef
-                    : $"REF-{item.RefundRequestId:N}"[..18].ToUpperInvariant());
+                    : $"RF{item.RefundRequestId:N}"[..18].ToUpperInvariant());
+
+            // Automated Disbursement via Banking Gateway (PayOS Napas 24/7)
+            if (_bankTransferGateway != null && bank != null && approvedAmount > 0)
+            {
+                var transferReq = new BankTransferRequest(
+                    BankCode: bank.BankCode ?? string.Empty,
+                    AccountNumber: plainAccountNumber,
+                    AccountName: bank.AccountName ?? string.Empty,
+                    Amount: approvedAmount,
+                    Currency: "VND",
+                    Description: $"REFUND ORD {order.OrderId.ToString("N")[..8].ToUpperInvariant()}",
+                    Reference: txRef);
+
+                CreatedTransfer transferResult;
+                try
+                {
+                    transferResult = await _bankTransferGateway.CreateTransferAsync(transferReq, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    throw new BusinessException($"Lỗi kết nối cổng thanh toán ngân hàng khi hoàn tiền: {ex.Message}. Yêu cầu hoàn tiền chưa được duyệt.");
+                }
+
+                if (!transferResult.Created || (!transferResult.Succeeded && !string.IsNullOrWhiteSpace(transferResult.FailureReason)))
+                {
+                    throw new BusinessException($"Chuyển khoản hoàn tiền thất bại qua ngân hàng: {transferResult.FailureReason ?? "Giao dịch không thành công"}. Yêu cầu hoàn tiền vẫn được giữ ở trạng thái PENDING.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(transferResult.TransactionRef))
+                {
+                    txRef = transferResult.TransactionRef;
+                }
+                else if (!string.IsNullOrWhiteSpace(transferResult.GatewayRef))
+                {
+                    txRef = transferResult.GatewayRef;
+                }
+            }
 
             var now = DateTime.UtcNow;
+
+            var staffNoteText = dto?.StaffNote?.Trim();
+            var bankTransferSummary = bank != null
+                ? $"[Tự động chuyển khoản {approvedAmount:N0} VND đến {bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)}) - Ref: {txRef}]"
+                : null;
+            var finalStaffNote = string.IsNullOrWhiteSpace(staffNoteText)
+                ? bankTransferSummary
+                : (bankTransferSummary != null ? $"{staffNoteText}\n{bankTransferSummary}" : staffNoteText);
 
             // Update RefundRequest entity (Concurrency token on Status property ensures atomic transition)
             item.Status = "APPROVED";
@@ -495,7 +809,7 @@ public class RefundRequestService : IRefundRequestService
             item.ReviewedBy = staffUserId;
             item.ReviewedAt = now;
             item.RefundedAt = now;
-            item.StaffNote = dto?.StaffNote?.Trim();
+            item.StaffNote = finalStaffNote;
             item.UpdatedAt = now;
 
             // Update Order state
@@ -540,7 +854,8 @@ public class RefundRequestService : IRefundRequestService
             var notificationsToSend = new List<(Guid RecipientId, string Type, string Message)>();
 
             // 1. Notification for Buyer
-            var buyerMsg = $"Your refund request for \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.";
+            var buyerBankMsg = bank != null ? $" Tiền đã được chuyển vào tài khoản {bank.BankName} ({MaskAccountNumber(plainAccountNumber)})." : "";
+            var buyerMsg = $"Your refund request for \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{buyerBankMsg}";
             if (_notifications != null)
             {
                 await _notifications.AddAsync(new Notification
@@ -558,9 +873,12 @@ public class RefundRequestService : IRefundRequestService
             notificationsToSend.Add((item.RequestedBy, "REFUND_APPROVED", buyerMsg));
 
             // 2. Notification for Seller (Coach)
+            var coachEarningMsg = calc.CoachPayoutAmount > 0
+                ? $" Bạn được giải ngân {calc.CoachPayoutAmount:N0} VND cho các buổi tập/công sức giáo án đã hoàn thành."
+                : "";
             if (coachId.HasValue && coachId.Value != Guid.Empty && coachId.Value != item.RequestedBy)
             {
-                var coachMsg = $"A refund request for your training package \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.";
+                var coachMsg = $"A refund request for your training package \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{coachEarningMsg}";
                 if (_notifications != null)
                 {
                     await _notifications.AddAsync(new Notification
@@ -579,7 +897,7 @@ public class RefundRequestService : IRefundRequestService
             }
 
             // 3. Audit log for APPROVE_REFUND
-            var auditDesc = $"Refund request approved.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nRequested At: {(item.RequestedAt.HasValue ? item.RequestedAt.Value.ToString("dd/MM/yyyy HH:mm") : now.ToString("dd/MM/yyyy HH:mm"))}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nPrevious Status: PENDING\nNew Status: APPROVED\nProcessed By: {staffName}";
+            var auditDesc = $"Refund request approved & disbursed.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nCoach Payout Portion: {calc.CoachPayoutAmount:N0} VND\nPolicy Case: {calc.RefundCase} ({calc.CaseTitle})\nTarget Bank: {(bank != null ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})" : "None")}\nTx Ref: {txRef}\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nProcessed By: {staffName}";
             if (_auditLogService != null)
             {
                 await _auditLogService.LogAsync(
@@ -597,6 +915,9 @@ public class RefundRequestService : IRefundRequestService
                         order = orderRef,
                         originalPaidAmount = snapshotAmount,
                         refundAmount = approvedAmount,
+                        coachPayoutPortion = calc.CoachPayoutAmount,
+                        policyCase = calc.RefundCase,
+                        bankAccount = bank != null ? $"{bank.BankName} ({MaskAccountNumber(plainAccountNumber)})" : null,
                         status = "APPROVED",
                         approvedAmount,
                         refundTransactionRef = txRef,
@@ -625,6 +946,8 @@ public class RefundRequestService : IRefundRequestService
                         order = orderRef,
                         originalPaidAmount = snapshotAmount,
                         refundAmount = approvedAmount,
+                        coachPayoutPortion = calc.CoachPayoutAmount,
+                        policyCase = calc.RefundCase,
                         status = "APPROVED",
                         approvedAmount,
                         refundTransactionRef = txRef,
@@ -664,7 +987,9 @@ public class RefundRequestService : IRefundRequestService
                 }
             }
 
-            return ApiResponseDto<RefundRequestDto>.Ok(MapToDto(item), "Refund request approved and processed successfully.");
+            var resultDto = MapToDto(item);
+            await EnrichDtoWithPolicyAsync(item, resultDto, cancellationToken);
+            return ApiResponseDto<RefundRequestDto>.Ok(resultDto, "Refund request approved and processed successfully.");
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -894,6 +1219,7 @@ public class RefundRequestService : IRefundRequestService
             return await ApproveRefundRequestAsync(id, staffUserId, new ApproveRefundRequestDto
             {
                 ApprovedAmount = dto.ApprovedAmount,
+                BankAccountId = dto.BankAccountId,
                 StaffNote = dto.StaffNote,
                 RefundTransactionRef = dto.RefundTransactionRef
             }, null, cancellationToken);
@@ -908,6 +1234,75 @@ public class RefundRequestService : IRefundRequestService
         }
 
         throw new ValidationException("Status must be either 'APPROVED' or 'REJECTED'.");
+    }
+
+    public async Task<ApiResponseDto<RefundPolicyCalculationDto>> CalculatePolicyForOrderAsync(
+        Guid orderId,
+        string? reason = null,
+        Guid? preferredBankAccountId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var order = await _orderRepository.GetOrderByIdWithDetailsAsync(orderId, cancellationToken);
+        if (order == null)
+        {
+            throw new NotFoundException("Order not found.");
+        }
+
+        var calc = await EvaluateRefundPolicyCoreAsync(order, reason, preferredBankAccountId, cancellationToken);
+        return ApiResponseDto<RefundPolicyCalculationDto>.Ok(calc, "Refund policy calculation completed.");
+    }
+
+    public async Task<ApiResponseDto<RefundPolicyCalculationDto>> CalculatePolicyForRefundRequestAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var item = await _refundRequestRepository.GetByIdWithDetailsAsync(id, cancellationToken);
+        if (item == null)
+        {
+            throw new NotFoundException("Refund request not found.");
+        }
+
+        var order = item.Order ?? await _orderRepository.GetOrderByIdWithDetailsAsync(item.OrderId, cancellationToken);
+        if (order == null)
+        {
+            throw new NotFoundException("Associated order not found.");
+        }
+
+        var calc = await EvaluateRefundPolicyCoreAsync(order, item.Reason, null, cancellationToken);
+        return ApiResponseDto<RefundPolicyCalculationDto>.Ok(calc, "Refund policy calculation completed.");
+    }
+
+    private async Task EnrichDtoWithPolicyAsync(RefundRequest r, RefundRequestDto dto, CancellationToken ct)
+    {
+        try
+        {
+            var order = r.Order ?? await _orderRepository.GetOrderByIdWithDetailsAsync(r.OrderId, ct);
+            if (order != null)
+            {
+                var calc = await EvaluateRefundPolicyCoreAsync(order, r.Reason, null, ct);
+                dto.RefundCase = calc.RefundCase;
+                dto.RefundCaseTitle = calc.CaseTitle;
+                dto.RefundCaseDescription = calc.CaseDescription;
+                dto.TotalSessions = calc.TotalSessions;
+                dto.CompletedSessions = calc.CompletedSessions;
+                dto.UnperformedSessions = calc.UnperformedSessions;
+                dto.UnitPricePerSession = calc.UnitPricePerSession;
+                dto.TraineeRefundAmount = calc.TraineeRefundAmount;
+                dto.CoachPayoutAmount = calc.CoachPayoutAmount;
+                dto.IsPlanCreated = calc.IsPlanCreated;
+                dto.IsPlanSent = calc.IsPlanSent;
+                dto.IsWithin7Days = calc.IsWithin7Days;
+                dto.BankAccountId = calc.TargetBankAccountId;
+                dto.BankName = calc.TargetBankName;
+                dto.BankCode = calc.TargetBankCode;
+                dto.AccountName = calc.TargetAccountName;
+                dto.MaskedAccountNumber = calc.TargetAccountNumberMasked;
+            }
+        }
+        catch
+        {
+            // Non-fatal if calculation enrichment fails for display
+        }
     }
 
     private static RefundRequestDto MapToDto(RefundRequest r)

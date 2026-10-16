@@ -168,4 +168,32 @@ public class RefundRequestsController : ControllerBase
         var result = await _refundRequestService.ProcessRefundRequestAsync(id, staffUserId, request, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Calculates the refund policy breakdown for an order.
+    /// </summary>
+    [HttpGet("orders/{orderId:guid}/calculate-policy")]
+    [ProducesResponseType(typeof(ApiResponseDto<RefundPolicyCalculationDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CalculatePolicyForOrder(
+        Guid orderId,
+        [FromQuery] string? reason = null,
+        [FromQuery] Guid? preferredBankAccountId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _refundRequestService.CalculatePolicyForOrderAsync(orderId, reason, preferredBankAccountId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Calculates the refund policy breakdown for an existing refund request.
+    /// </summary>
+    [HttpGet("{id:guid}/policy-calculation")]
+    [ProducesResponseType(typeof(ApiResponseDto<RefundPolicyCalculationDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CalculatePolicyForRefundRequest(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _refundRequestService.CalculatePolicyForRefundRequestAsync(id, cancellationToken);
+        return Ok(result);
+    }
 }

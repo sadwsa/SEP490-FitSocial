@@ -404,7 +404,7 @@
                                     </div>
                                 </div>
                                 <small class="text-muted mt-2 d-block">
-                                    Tiền hoàn sẽ được hệ thống giải ngân tự động qua tài khoản này khi chấp nhận yêu cầu hoàn tiền.
+                                    The refund will be automatically disbursed to this bank account upon request approval.
                                 </small>
                             }
                             else
@@ -412,8 +412,8 @@
                                 <div class="bank-warning-box">
                                     <AppIcon Name="warning" />
                                     <div>
-                                        <strong>Chưa thiết lập tài khoản ngân hàng</strong>
-                                        <p>Học viên chưa liên kết tài khoản ngân hàng nhận tiền tại mục Payout Account. Vui lòng yêu cầu học viên cập nhật trước khi duyệt hoàn tiền.</p>
+                                        <strong>No Bank Account Configured</strong>
+                                        <p>The trainee has not linked a payout bank account under Payout Account. Please ask the trainee to set up a bank account before approving this refund.</p>
                                     </div>
                                 </div>
                             }
@@ -517,8 +517,8 @@
                         <div class="confirm-warning">
                             <AppIcon Name="warning" />
                             <div>
-                                <strong>Xác nhận duyệt hoàn tiền & tự động giải ngân?</strong>
-                                <p>Hệ thống sẽ tự động thực hiện lệnh chuyển khoản hoàn tiền trực tiếp vào tài khoản ngân hàng của học viên, hủy gói tập hiện tại và chuyển trạng thái đơn hàng sang <strong>REFUNDED</strong>.</p>
+                                <strong>Confirm refund approval & automatic disbursement?</strong>
+                                <p>The system will automatically disburse the refund directly into the trainee's bank account, cancel the active package enrollment, and update the order status to <strong>REFUNDED</strong>.</p>
                             </div>
                         </div>
 
@@ -539,17 +539,17 @@
                                     <strong>@(selectedRefund.PackageTitle ?? "Training Package")</strong>
                                 </div>
                                 <div class="summary-row">
-                                    <span>Tiến độ buổi tập:</span>
-                                    <span><strong>@(selectedRefund.CompletedSessions ?? 0)</strong> đã tập / <strong>@(selectedRefund.TotalSessions ?? 0)</strong> tổng buổi</span>
+                                    <span>Training Progress:</span>
+                                    <span><strong>@(selectedRefund.CompletedSessions ?? 0)</strong> completed / <strong>@(selectedRefund.TotalSessions ?? 0)</strong> total sessions</span>
                                 </div>
                                 <div class="summary-row highlight-refund">
-                                    <span>Tiền hoàn cho Trainee:</span>
+                                    <span>Trainee Refund Amount:</span>
                                     <strong class="text-emerald text-lg">
-                                        @FormatCurrency(selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount ?? 0)
+                                         @FormatCurrency(selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount ?? 0)
                                     </strong>
                                 </div>
                                 <div class="summary-row">
-                                    <span>Tiền giải ngân cho Coach:</span>
+                                    <span>Coach Payout Amount:</span>
                                     <strong class="text-indigo">
                                         @FormatCurrency(selectedRefund.CoachPayoutAmount ?? 0)
                                     </strong>
@@ -560,7 +560,7 @@
                         <!-- Payout bank target preview in modal -->
                         <div class="target-bank-modal-card mt-3">
                             <div class="target-bank-header">
-                                <span>Tài khoản ngân hàng nhận tiền (Payout Bank Account):</span>
+                                <span>Payout Bank Account (Target):</span>
                             </div>
                             @if (selectedRefund.BankAccountId.HasValue || !string.IsNullOrWhiteSpace(selectedRefund.MaskedAccountNumber))
                             {
@@ -570,13 +570,13 @@
                                     <span class="bank-mini-holder">@selectedRefund.AccountName</span>
                                 </div>
                                 <div class="bank-auto-transfer-notice">
-                                    ⚡ Số tiền trên sẽ được chuyển tự động tức thì qua Napas 24/7 vào tài khoản trên khi bấm "Xác nhận duyệt & Chuyển tiền".
+                                    ⚡ The above amount will be instantly and automatically disbursed via Napas 24/7 to this bank account upon clicking "Confirm & Disburse Refund".
                                 </div>
                             }
                             else
                             {
                                 <div class="bank-warning-alert">
-                                    ⚠️ <strong>Không thể giải ngân:</strong> Học viên chưa thiết lập tài khoản ngân hàng nhận tiền (Payout Bank Account). Cần yêu cầu học viên thêm tài khoản ngân hàng tại mục Payout Account trước khi duyệt hoàn tiền.
+                                    ⚠️ <strong>Cannot Disburse:</strong> Trainee has not set up a payout bank account. The trainee must add a bank account under Payout Account before approving the refund.
                                 </div>
                             }
                         </div>
@@ -594,11 +594,11 @@
                         <button type="button" class="modal-btn modal-btn-approve" @onclick="ExecuteApproveAsync" disabled="@(isProcessing || (!selectedRefund.BankAccountId.HasValue && string.IsNullOrWhiteSpace(selectedRefund.MaskedAccountNumber)))">
                             @if (isProcessing)
                             {
-                                <span>Đang xử lý & giải ngân...</span>
+                                <span>Processing & Disbursing...</span>
                             }
                             else
                             {
-                                <span>Xác nhận duyệt & Chuyển tiền</span>
+                                <span>Confirm & Disburse Refund</span>
                             }
                         </button>
                     </div>

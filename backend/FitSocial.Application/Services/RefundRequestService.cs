@@ -30,6 +30,7 @@ public class RefundRequestService : IRefundRequestService
     private readonly ICoachBankAccountRepository? _bankAccountRepository;
     private readonly IEncryptionService? _encryptionService;
     private readonly IBankTransferGateway? _bankTransferGateway;
+    private readonly IEmailService? _emailService;
 
     public RefundRequestService(
         IRefundRequestRepository refundRequestRepository,
@@ -44,7 +45,8 @@ public class RefundRequestService : IRefundRequestService
         IAuditLogService? auditLogService = null,
         ICoachBankAccountRepository? bankAccountRepository = null,
         IEncryptionService? encryptionService = null,
-        IBankTransferGateway? bankTransferGateway = null)
+        IBankTransferGateway? bankTransferGateway = null,
+        IEmailService? emailService = null)
     {
         _refundRequestRepository = refundRequestRepository;
         _orderRepository = orderRepository;
@@ -59,6 +61,7 @@ public class RefundRequestService : IRefundRequestService
         _bankAccountRepository = bankAccountRepository;
         _encryptionService = encryptionService;
         _bankTransferGateway = bankTransferGateway;
+        _emailService = emailService;
     }
 
     private async Task<string> GetStaffNameAsync(Guid staffUserId, CancellationToken cancellationToken)
@@ -196,19 +199,19 @@ public class RefundRequestService : IRefundRequestService
 
         if (isWithin7Days && completedSessions == 0 && !isPlanSent)
         {
-            // Case 1: Trong 7 ngày đầu, học viên chưa học buổi nào VÀ HLV chưa gửi lịch trình tập luyện
+            // Case 1: Within the first 7 days, no sessions attended AND no training plan sent
             refundCase = "CASE_1";
-            caseTitle = "Trường hợp 1: Trong 7 ngày đầu, chưa học buổi nào & HLV chưa gửi lịch tập";
-            caseDescription = "Hệ thống tự động tính hoàn 100% học phí cho học viên. HLV không nhận giải ngân vì chưa thực hiện buổi tập và chưa gửi lịch trình.";
+            caseTitle = "Case 1: Within first 7 days, no sessions attended & no training plan sent";
+            caseDescription = "The system automatically calculates a 100% tuition refund for the trainee. The coach receives no payout as no sessions were held and no training plan was submitted.";
             traineeRefund = totalAmount;
             coachPayout = 0;
         }
         else if (isWithin7Days && (completedSessions > 0 || isPlanCreated))
         {
-            // Case 2: Trong 7 ngày đó học viên đã tập 1-2 buổi hoặc HLV ĐÃ tốn công soạn Lịch tập
+            // Case 2: Within the first 7 days, 1-2 sessions attended OR coach drafted training plan
             refundCase = "CASE_2";
-            caseTitle = "Trường hợp 2: Trong 7 ngày đầu, đã tập buổi hoặc HLV đã soạn lịch tập";
-            caseDescription = "Khấu trừ chi phí công sức HLV đã bỏ ra (các buổi đã tập hoặc công sức thiết kế lịch tập). Phần còn lại được hoàn cho học viên.";
+            caseTitle = "Case 2: Within first 7 days, 1-2 sessions attended or coach drafted training plan";
+            caseDescription = "Deducts coach effort compensation (completed sessions or curriculum design effort). The remaining balance is refunded to the trainee.";
 
             if (completedSessions > 0)
             {
@@ -216,17 +219,17 @@ public class RefundRequestService : IRefundRequestService
             }
             else
             {
-                // HLV ĐÃ tốn công soạn Lịch tập nhưng học viên chưa tập buổi nào -> bồi hoàn công sức HLV tương đương 1 buổi
+                // Coach drafted training plan but trainee hasn't attended any session -> compensate 1 session effort
                 coachPayout = Math.Min(totalAmount, unitPrice * 1);
             }
             traineeRefund = Math.Max(0, totalAmount - coachPayout);
         }
         else
         {
-            // Case 3: Vi phạm xảy ra giữa kỳ đã tập một số buổi / HLV trễ lịch tập các buổi tiếp theo (trước 2 ngày tập phải có lịch)
+            // Case 3: Mid-term violation / Coach late with training schedule (2-day advance rule)
             refundCase = "CASE_3";
-            caseTitle = "Trường hợp 3: Vi phạm giữa kỳ / HLV trễ lịch tập (Quy tắc trước 2 ngày)";
-            caseDescription = "Áp dụng hoàn tiền theo tỷ lệ cho toàn bộ số buổi chưa học. HLV chỉ được thanh toán cho những buổi đã có trạng thái Completed.";
+            caseTitle = "Case 3: Mid-term violation / Coach late with training schedule (2-day advance rule)";
+            caseDescription = "Applies pro-rata refund for all unperformed sessions. The coach is only paid for sessions marked Completed.";
 
             traineeRefund = Math.Min(totalAmount, Math.Round(unitPrice * unperformedSessions, 0));
             coachPayout = Math.Min(totalAmount - traineeRefund, Math.Round(unitPrice * completedSessions, 0));
@@ -399,7 +402,7 @@ public class RefundRequestService : IRefundRequestService
         // Auto-calculated refund amount adhering strictly to policy cases
         var snapshotPaidAmount = calc.TraineeRefundAmount > 0 ? calc.TraineeRefundAmount : (order.TotalAmount ?? order.OrderDetails.FirstOrDefault()?.PackagePrice ?? 0);
 
-        var policySnapshotNote = $"[Policy: {calc.RefundCase} | Buổi: {calc.CompletedSessions}/{calc.TotalSessions} | Trainee hoàn: {calc.TraineeRefundAmount:N0} VND | Coach giải ngân: {calc.CoachPayoutAmount:N0} VND{(calc.TargetBankName != null ? $" | TK: {calc.TargetBankName} - {calc.TargetAccountName} ({calc.TargetAccountNumberMasked})" : "")}]";
+        var policySnapshotNote = $"[Policy: {calc.RefundCase} | Sessions: {calc.CompletedSessions}/{calc.TotalSessions} | Trainee Refund: {calc.TraineeRefundAmount:N0} VND | Coach Payout: {calc.CoachPayoutAmount:N0} VND{(calc.TargetBankName != null ? $" | Bank: {calc.TargetBankName} - {calc.TargetAccountName} ({calc.TargetAccountNumberMasked})" : "")}]";
 
         var refundRequest = new RefundRequest
         {
@@ -734,7 +737,7 @@ public class RefundRequestService : IRefundRequestService
 
                 if (bank == null)
                 {
-                    throw new BusinessException("Học viên chưa thiết lập tài khoản ngân hàng nhận tiền (Payout Bank Account). Vui lòng yêu cầu học viên thêm tài khoản ngân hàng tại mục Payout Account trước khi duyệt hoàn tiền.");
+                    throw new BusinessException("The trainee has not configured a payout bank account. Please ask the trainee to add a bank account under Payout Account before approving the refund.");
                 }
 
                 if (_encryptionService != null)
@@ -744,7 +747,7 @@ public class RefundRequestService : IRefundRequestService
 
                 if (string.IsNullOrWhiteSpace(plainAccountNumber))
                 {
-                    throw new BusinessException("Không thể giải mã số tài khoản ngân hàng của học viên.");
+                    throw new BusinessException("Unable to decrypt the trainee's bank account number.");
                 }
             }
 
@@ -774,12 +777,12 @@ public class RefundRequestService : IRefundRequestService
                 }
                 catch (Exception ex)
                 {
-                    throw new BusinessException($"Lỗi kết nối cổng thanh toán ngân hàng khi hoàn tiền: {ex.Message}. Yêu cầu hoàn tiền chưa được duyệt.");
+                    throw new BusinessException($"Banking gateway connection error during refund disbursement: {ex.Message}. The refund request was not approved.");
                 }
 
                 if (!transferResult.Created || (!transferResult.Succeeded && !string.IsNullOrWhiteSpace(transferResult.FailureReason)))
                 {
-                    throw new BusinessException($"Chuyển khoản hoàn tiền thất bại qua ngân hàng: {transferResult.FailureReason ?? "Giao dịch không thành công"}. Yêu cầu hoàn tiền vẫn được giữ ở trạng thái PENDING.");
+                    throw new BusinessException($"Bank transfer refund failed: {transferResult.FailureReason ?? "Transaction was not successful"}. The refund request remains in PENDING status.");
                 }
 
                 if (!string.IsNullOrWhiteSpace(transferResult.TransactionRef))
@@ -796,7 +799,7 @@ public class RefundRequestService : IRefundRequestService
 
             var staffNoteText = dto?.StaffNote?.Trim();
             var bankTransferSummary = bank != null
-                ? $"[Tự động chuyển khoản {approvedAmount:N0} VND đến {bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)}) - Ref: {txRef}]"
+                ? $"[Automatic bank transfer of {approvedAmount:N0} VND to {bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)}) - Ref: {txRef}]"
                 : null;
             var finalStaffNote = string.IsNullOrWhiteSpace(staffNoteText)
                 ? bankTransferSummary
@@ -854,7 +857,7 @@ public class RefundRequestService : IRefundRequestService
             var notificationsToSend = new List<(Guid RecipientId, string Type, string Message)>();
 
             // 1. Notification for Buyer
-            var buyerBankMsg = bank != null ? $" Tiền đã được chuyển vào tài khoản {bank.BankName} ({MaskAccountNumber(plainAccountNumber)})." : "";
+            var buyerBankMsg = bank != null ? $" The funds have been transferred to your {bank.BankName} account ({MaskAccountNumber(plainAccountNumber)})." : "";
             var buyerMsg = $"Your refund request for \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{buyerBankMsg}";
             if (_notifications != null)
             {
@@ -874,7 +877,7 @@ public class RefundRequestService : IRefundRequestService
 
             // 2. Notification for Seller (Coach)
             var coachEarningMsg = calc.CoachPayoutAmount > 0
-                ? $" Bạn được giải ngân {calc.CoachPayoutAmount:N0} VND cho các buổi tập/công sức giáo án đã hoàn thành."
+                ? $" You have been disbursed {calc.CoachPayoutAmount:N0} VND for completed sessions/curriculum design effort."
                 : "";
             if (coachId.HasValue && coachId.Value != Guid.Empty && coachId.Value != item.RequestedBy)
             {
@@ -986,6 +989,10 @@ public class RefundRequestService : IRefundRequestService
                     }
                 }
             }
+
+            // 5. Send email notification to user about refund disbursement (similar to coach payout email)
+            await SendRefundDisbursementEmailAsync(
+                item, order, approvedAmount, txRef, bank, plainAccountNumber, calc, staffName, cancellationToken);
 
             var resultDto = MapToDto(item);
             await EnrichDtoWithPolicyAsync(item, resultDto, cancellationToken);
@@ -1385,4 +1392,113 @@ public class RefundRequestService : IRefundRequestService
             .Where(s => !string.IsNullOrEmpty(s))
             .ToList();
     }
+
+    private async Task SendRefundDisbursementEmailAsync(
+        RefundRequest item,
+        Order order,
+        decimal amount,
+        string transactionRef,
+        CoachBankAccount? bank,
+        string plainAccountNumber,
+        RefundPolicyCalculationDto calc,
+        string staffName,
+        CancellationToken ct)
+    {
+        try
+        {
+            if (_emailService == null)
+            {
+                return;
+            }
+
+            var traineeEmail = item.RequestedByNavigation?.Email ?? order.Buyer?.Email;
+            if (string.IsNullOrWhiteSpace(traineeEmail) && _users != null)
+            {
+                var user = await _users.GetByIdAsync(item.RequestedBy, ct);
+                traineeEmail = user?.Email;
+            }
+
+            if (string.IsNullOrWhiteSpace(traineeEmail))
+            {
+                return;
+            }
+
+            var traineeName = item.RequestedByNavigation?.FullName ?? order.Buyer?.FullName ?? traineeEmail;
+            var firstDetail = order.OrderDetails?.FirstOrDefault();
+            var packageName = firstDetail?.PackageTitle ?? firstDetail?.Package?.Title ?? "Training Package";
+            var orderRef = $"#ORD-{order.OrderId.ToString("N")[..8].ToUpperInvariant()}";
+            var bankInfo = bank != null
+                ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})"
+                : "Linked Payout Bank Account";
+
+            var subject = $"[FitSocial] Refund Confirmation: {amount:N0} VND - {orderRef}";
+            var body = $@"
+            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;"">
+                <div style=""text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #FF5722;"">
+                    <h2 style=""color: #FF5722; margin: 0; font-size: 24px; font-weight: bold;"">FitSocial</h2>
+                    <p style=""color: #666; margin: 6px 0 0; font-size: 14px;"">Online Tuition Refund Notification (PayOS Napas 24/7)</p>
+                </div>
+
+                <p style=""color: #333; font-size: 16px; margin-bottom: 16px;"">Hello <strong>{System.Net.WebUtility.HtmlEncode(traineeName)}</strong>,</p>
+                <p style=""color: #555; line-height: 1.6; margin-bottom: 20px;"">
+                    Your refund request for order <strong>{System.Net.WebUtility.HtmlEncode(orderRef)}</strong> has been approved by customer support, and the system has processed a direct bank transfer payout.
+                </p>
+
+                <div style=""background: #fff8f5; border: 1px solid #ffccbc; border-radius: 6px; padding: 16px; margin-bottom: 20px;"">
+                    <h3 style=""color: #d84315; margin: 0 0 12px 0; font-size: 16px;"">Refund Transaction Breakdown</h3>
+                    <table style=""width: 100%; border-collapse: collapse; font-size: 14px;"">
+                        <tr>
+                            <td style=""padding: 6px 0; color: #777; width: 40%;"">Training Package:</td>
+                            <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(packageName)}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 6px 0; color: #777;"">Order Reference:</td>
+                            <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(orderRef)}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 6px 0; color: #777;"">Refund Amount:</td>
+                            <td style=""padding: 6px 0; color: #2e7d32; font-size: 18px; font-weight: bold;"">{amount:N0} VND</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 6px 0; color: #777;"">Receiving Bank Account:</td>
+                            <td style=""padding: 6px 0; color: #333; font-weight: 600;"">{System.Net.WebUtility.HtmlEncode(bankInfo)}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 6px 0; color: #777;"">Transaction Reference:</td>
+                            <td style=""padding: 6px 0; color: #333; font-family: monospace; font-size: 13px;"">{System.Net.WebUtility.HtmlEncode(transactionRef)}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 6px 0; color: #777;"">Policy Applied:</td>
+                            <td style=""padding: 6px 0; color: #333;"">{System.Net.WebUtility.HtmlEncode(calc.CaseTitle ?? "FitSocial Refund Policy")}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 6px 0; color: #777;"">Processed Time:</td>
+                            <td style=""padding: 6px 0; color: #333;"">{DateTime.UtcNow.AddHours(7):dd/MM/yyyy HH:mm:ss} (GMT+7)</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding: 6px 0; color: #777;"">Reviewed By:</td>
+                            <td style=""padding: 6px 0; color: #333;"">{System.Net.WebUtility.HtmlEncode(staffName)}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <p style=""color: #555; line-height: 1.6; margin-bottom: 16px;"">
+                    Funds have been transferred via the Napas 24/7 interbank payment gateway. Please check your account balance in your banking application.
+                </p>
+
+                <hr style=""border: none; border-top: 1px solid #eeeeee; margin: 24px 0;"" />
+                <p style=""color: #888; font-size: 12px; text-align: center; margin: 0; line-height: 1.5;"">
+                    If you have any questions or require further assistance, please contact FitSocial support via email or hotline.<br />
+                    © {DateTime.UtcNow.Year} FitSocial Platform. All rights reserved.
+                </p>
+            </div>";
+
+            await _emailService.SendEmailAsync(traineeEmail, subject, body);
+        }
+        catch
+        {
+            // Email notification failure must never interrupt refund transaction
+        }
+    }
 }
+

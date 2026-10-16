@@ -19,6 +19,7 @@ public class CoachBankAccountService : ICoachBankAccountService
 {
     private readonly ICoachBankAccountRepository _bankRepository;
     private readonly ICoachProfileRepository _coachRepository;
+    private readonly IUserRepository? _userRepository;
     private readonly IEncryptionService _encryptionService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -30,7 +31,8 @@ public class CoachBankAccountService : ICoachBankAccountService
         IEncryptionService encryptionService,
         IUnitOfWork unitOfWork,
         IHttpClientFactory httpClientFactory,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        IUserRepository? userRepository = null)
     {
         _bankRepository = bankRepository;
         _coachRepository = coachRepository;
@@ -38,6 +40,7 @@ public class CoachBankAccountService : ICoachBankAccountService
         _unitOfWork = unitOfWork;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        _userRepository = userRepository;
     }
 
     public async Task<ApiResponseDto<List<CoachBankAccountDto>>> GetAccountsAsync(Guid coachId, CancellationToken cancellationToken = default)
@@ -54,10 +57,21 @@ public class CoachBankAccountService : ICoachBankAccountService
             throw new ValidationException("Account number is required.");
         }
 
-        var coach = await _coachRepository.GetByIdAsync(coachId, cancellationToken);
-        if (coach == null)
+        if (_userRepository != null)
         {
-            throw new NotFoundException("Coach profile not found.");
+            var user = await _userRepository.GetByIdAsync(coachId, cancellationToken);
+            if (user == null)
+            {
+                throw new NotFoundException("User not found.");
+            }
+        }
+        else
+        {
+            var coach = await _coachRepository.GetByIdAsync(coachId, cancellationToken);
+            if (coach == null)
+            {
+                throw new NotFoundException("Coach profile not found.");
+            }
         }
 
         var existingAccounts = await _bankRepository.ListByCoachIdAsync(coachId, cancellationToken);

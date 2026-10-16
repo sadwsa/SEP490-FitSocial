@@ -290,6 +290,24 @@
                                                                 @pkg.SessionCount Sessions
                                                             </span>
                                                         }
+                                                        @if (pkg.PackageType == "WORKOUT")
+                                                        {
+                                                            <span class="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[11px] font-bold border border-indigo-100">
+                                                                🏋️‍♂️ Workout Only
+                                                            </span>
+                                                        }
+                                                        else if (pkg.PackageType == "MEAL")
+                                                        {
+                                                            <span class="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-bold border border-emerald-100">
+                                                                🥗 Meal Plan Only
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="px-2.5 py-0.5 bg-orange-50 text-[#FF5500] rounded-md text-[11px] font-bold border border-orange-100">
+                                                                🌟 Workout + Meal Plan
+                                                            </span>
+                                                        }
                                                         <span class="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-bold border border-emerald-100">
                                                             Paid (COMPLETED)
                                                         </span>
@@ -327,81 +345,139 @@
                                                 </a>
                                             }
                                         </div>
-                                        <!-- UC_14.1.3 & UC_14.1.4: Workout Plan Action -->
-                                        <div class="bg-gradient-to-r from-orange-50/60 to-amber-50/60 border border-orange-100/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                            <div class="flex items-center gap-3">
-                                                <svg class="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
-                                                    </path>
-                                                </svg>
-                                                <div>
-                                                    <div class="flex items-center gap-2">
-                                                         <p class="font-bold text-xs text-gray-900">Custom Training Plan</p>
-                                                         @if (pkg.TrainingPlanId.HasValue)
-                                                         {
-                                                             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex items-center gap-1">
-                                                                 <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                                 </svg>
-                                                                 <span>@(pkg.PlanStatus ?? "Active Plan")</span>
-                                                             </span>
-                                                         }
-                                                         else
-                                                         {
-                                                             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
-                                                                 <svg class="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                                 </svg>
-                                                                 <span>No Plan Created</span>
-                                                             </span>
-                                                         }
-                                                     </div>
-                                                     <p class="text-[11px] text-gray-500">Draft weekly workout schedules and attach video tutorials for your trainee.</p>
-                                                 </div>
-                                            </div>
 
-                                            @if (pkg.TrainingPlanId.HasValue)
-                                            {
-                                                <div class="flex items-center gap-2 flex-wrap">
+                                        <!-- Workout Plan Action (Only for WORKOUT or BOTH packages) -->
+                                        @if (pkg.PackageType != "MEAL")
+                                        {
+                                            <div class="bg-gradient-to-r from-orange-50/60 to-amber-50/60 border border-orange-100/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                <div class="flex items-center gap-3">
+                                                    <svg class="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
+                                                        </path>
+                                                    </svg>
+                                                    <div>
+                                                        <div class="flex items-center gap-2">
+                                                             <p class="font-bold text-xs text-gray-900">Custom Training Plan</p>
+                                                             @if (pkg.TrainingPlanId.HasValue)
+                                                             {
+                                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                                                                     <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                                     </svg>
+                                                                     <span>@(pkg.PlanStatus ?? "Active Plan")</span>
+                                                                 </span>
+                                                             }
+                                                             else
+                                                             {
+                                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
+                                                                     <svg class="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                                     </svg>
+                                                                     <span>No Plan Created</span>
+                                                                 </span>
+                                                             }
+                                                        </div>
+                                                        <p class="text-[11px] text-gray-500">Draft weekly workout schedules and attach video tutorials for your trainee.</p>
+                                                    </div>
+                                                </div>
+
+                                                @if (pkg.TrainingPlanId.HasValue)
+                                                {
+                                                    <div class="flex items-center gap-2 flex-wrap">
+                                                        <button type="button"
+                                                                @onclick="() => OpenMonitorProgressModal(pkg, SelectedTrainee?.FullName)"
+                                                                class="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                                            <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                            </svg>
+                                                            <span>Monitor Progress</span>
+                                                        </button>
+                                                        <button type="button"
+                                                                @onclick="() => OpenTrainingPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: true)"
+                                                                class="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                            </svg>
+                                                            <span>Update Plan</span>
+                                                        </button>
+                                                    </div>
+                                                }
+                                                else
+                                                {
                                                     <button type="button"
-                                                            @onclick="() => OpenMonitorProgressModal(pkg, SelectedTrainee?.FullName)"
-                                                            class="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
-                                                        <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                            @onclick="() => OpenTrainingPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: false)"
+                                                            class="px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                                         </svg>
-                                                        <span>Monitor Progress</span>
+                                                        <span>Create Plan</span>
                                                     </button>
+                                                }
+                                            </div>
+                                        }
+
+                                        <!-- Meal Plan Action (Only for MEAL or BOTH packages) -->
+                                        @if (pkg.PackageType != "WORKOUT")
+                                        {
+                                            <div class="bg-gradient-to-r from-emerald-50/60 to-teal-50/60 border border-emerald-100/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-9 h-9 rounded-xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                                                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <div class="flex items-center gap-2">
+                                                             <p class="font-bold text-xs text-gray-900">Custom Meal Plan</p>
+                                                             @if (pkg.MealPlanId.HasValue)
+                                                             {
+                                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                                                                     <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                                     </svg>
+                                                                     <span>@(pkg.MealPlanStatus ?? "Active Plan")</span>
+                                                                 </span>
+                                                             }
+                                                             else
+                                                             {
+                                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
+                                                                     <svg class="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                                     </svg>
+                                                                     <span>No Plan Created</span>
+                                                                 </span>
+                                                             }
+                                                        </div>
+                                                        <p class="text-[11px] text-gray-500">Draft weekly nutrition schedules, daily meals, calories & macros for your trainee.</p>
+                                                    </div>
+                                                </div>
+
+                                                @if (pkg.MealPlanId.HasValue)
+                                                {
                                                     <button type="button"
-                                                            @onclick="() => OpenTrainingPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: true)"
-                                                            class="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                                            @onclick="() => OpenMealPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: true)"
+                                                            class="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
                                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                         </svg>
-                                                        <span>Update Plan (UC_14.1.4)</span>
+                                                        <span>Update Meal Plan</span>
                                                     </button>
-                                                </div>
-                                                <button type="button"
-                                                        @onclick="() => OpenTrainingPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: true)"
-                                                        class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
-                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                    </svg>
-                                                    <span>Update Plan</span>
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <button type="button"
-                                                        @onclick="() => OpenTrainingPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: false)"
-                                                        class="px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
-                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                                    </svg>
-                                                    <span>Create Plan</span>
-                                                </button>
-                                            }
-                                        </div>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button"
+                                                            @onclick="() => OpenMealPlanModal(pkg, SelectedTrainee?.FullName, isUpdate: false)"
+                                                            class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                                        </svg>
+                                                        <span>Create Meal Plan</span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>
@@ -441,6 +517,19 @@
     TraineeName="@monitorTraineeName"
     OnClose="@CloseMonitorProgressModal" />
 
+<!-- Coach Meal Plan Form Modal -->
+<CoachMealPlanFormModal
+    IsOpen="@showMealPlanModal"
+    OrderDetailsId="@modalMealPlanOrderDetailsId"
+    PackageTitle="@modalMealPlanPackageTitle"
+    TraineeName="@modalMealPlanTraineeName"
+    Mode="@modalMealPlanMode"
+    ExistingPlanId="@modalMealPlanId"
+    PackageDurationDays="@modalMealPlanDurationDays"
+    PackagePurchasedAt="@modalMealPlanPurchasedAt"
+    OnClose="@CloseMealPlanModal"
+    OnSuccess="@HandleMealPlanSuccess" />
+
 @code {
     private List<CoachTraineeGroupDto>? trainees;
     private Guid? selectedTraineeId;
@@ -458,6 +547,16 @@
     private int? modalDurationDays;
     private int? modalSessionCount;
     private DateTime? modalPurchasedAt;
+
+    // Meal Plan Modal State
+    private bool showMealPlanModal = false;
+    private Guid modalMealPlanOrderDetailsId;
+    private string modalMealPlanPackageTitle = string.Empty;
+    private string modalMealPlanTraineeName = string.Empty;
+    private string modalMealPlanMode = "create";
+    private Guid? modalMealPlanId;
+    private int? modalMealPlanDurationDays;
+    private DateTime? modalMealPlanPurchasedAt;
 
     // Monitor Progress Modal State
     private bool showMonitorProgressModal = false;
@@ -564,6 +663,29 @@
     private async Task HandleTrainingPlanSuccess(TrainingPlanDetailDto plan)
     {
         showTrainingPlanModal = false;
+        await LoadTraineeOrdersAsync();
+    }
+
+    private void OpenMealPlanModal(CoachTraineePackageOrderDto pkg, string? traineeName, bool isUpdate)
+    {
+        modalMealPlanOrderDetailsId = pkg.OrderDetailsId;
+        modalMealPlanPackageTitle = pkg.PackageTitle;
+        modalMealPlanTraineeName = traineeName ?? "Học viên";
+        modalMealPlanMode = isUpdate ? "update" : "create";
+        modalMealPlanId = pkg.MealPlanId;
+        modalMealPlanDurationDays = pkg.DurationDays;
+        modalMealPlanPurchasedAt = pkg.PurchasedAt;
+        showMealPlanModal = true;
+    }
+
+    private void CloseMealPlanModal()
+    {
+        showMealPlanModal = false;
+    }
+
+    private async Task HandleMealPlanSuccess(TraineeMealPlanModel plan)
+    {
+        showMealPlanModal = false;
         await LoadTraineeOrdersAsync();
     }
 

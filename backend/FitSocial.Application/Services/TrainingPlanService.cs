@@ -59,6 +59,12 @@ public class TrainingPlanService : ITrainingPlanService
             throw new ForbiddenException("You do not have permission to manage training plans for this order.");
         }
 
+        var packageType = orderDetail.PackageType ?? orderDetail.Package?.PackageType ?? "BOTH";
+        if (string.Equals(packageType, "MEAL", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ValidationException("This package is MEAL only and does not include a workout/training plan.");
+        }
+
         // Validate plan constraints against order and package
         ValidatePlanConstraints(orderDetail, dto.StartDate, dto.EndDate, dto.Exercises);
 

@@ -23,6 +23,8 @@ public partial class TrainingPackage
 
     public string? TargetAudience { get; set; }
 
+    public string? PackageType { get; set; } = "BOTH";
+
     public bool? IsActive { get; set; } = true;
 
     public DateTime? CreatedAt { get; set; }

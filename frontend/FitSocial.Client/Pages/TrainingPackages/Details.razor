@@ -177,6 +177,22 @@
                             </div>
                         </div>
 
+                        <!-- Package Service Inclusions Banner -->
+                        <div class="mb-6 p-4 rounded-xl border flex items-center justify-between gap-3 @(package.PackageType == "WORKOUT" ? "bg-blue-50/70 border-blue-200 text-blue-900" : package.PackageType == "MEAL" ? "bg-emerald-50/70 border-emerald-200 text-emerald-900" : "bg-orange-50/70 border-orange-200 text-orange-900")">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">@(package.PackageType == "WORKOUT" ? "🏋️‍♂️" : package.PackageType == "MEAL" ? "🥗" : "🌟")</span>
+                                <div>
+                                    <p class="text-xs uppercase font-bold tracking-wider opacity-75">Service Inclusions</p>
+                                    <p class="text-sm font-black">
+                                        @(package.PackageType == "WORKOUT" ? "Workout Routine & Video Coaching Only" : package.PackageType == "MEAL" ? "Personalized Nutrition & Meal Plan Only" : "Full Coaching: Custom Workout + Meal Plan")
+                                    </p>
+                                </div>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold @(package.PackageType == "WORKOUT" ? "bg-blue-100 text-blue-800" : package.PackageType == "MEAL" ? "bg-emerald-100 text-emerald-800" : "bg-orange-100 text-[#FF5500]")">
+                                @(package.PackageType == "WORKOUT" ? "Workout Only" : package.PackageType == "MEAL" ? "Meal Plan Only" : "Complete Program")
+                            </span>
+                        </div>
+
                         @if (!string.IsNullOrWhiteSpace(package.TargetAudience))
                         {
                             <div class="mb-6 flex items-center gap-3 p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 text-blue-900 text-sm">

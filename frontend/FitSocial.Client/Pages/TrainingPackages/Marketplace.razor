@@ -273,15 +273,33 @@
                             <!-- Card Body -->
                             <div class="p-5 flex-1 flex flex-col justify-between gap-4">
                                 <div>
-                                    <!-- Target audience pill if available -->
-                                    @if (!string.IsNullOrWhiteSpace(pkg.TargetAudience))
-                                    {
-                                        <div class="mb-2">
-                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-semibold">
+                                    <div class="flex items-center gap-1.5 flex-wrap mb-2">
+                                        @if (pkg.PackageType == "WORKOUT")
+                                        {
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-100">
+                                                🏋️‍♂️ Workout
+                                            </span>
+                                        }
+                                        else if (pkg.PackageType == "MEAL")
+                                        {
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-100">
+                                                🥗 Meal Plan
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-50 text-[#FF5500] text-[11px] font-bold border border-orange-100">
+                                                🌟 Workout + Meal
+                                            </span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(pkg.TargetAudience))
+                                        {
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-[11px] font-semibold">
                                                 🎯 @pkg.TargetAudience
                                             </span>
-                                        </div>
-                                    }
+                                        }
+                                    </div>
 
                                     <!-- Title -->
                                     <a href="/training-packages/@pkg.PackageId" class="text-base font-bold text-gray-900 hover:text-[#FF5500] transition line-clamp-1 block mb-1">

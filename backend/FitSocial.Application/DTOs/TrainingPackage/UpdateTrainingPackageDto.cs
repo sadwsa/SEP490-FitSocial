@@ -11,6 +11,7 @@ namespace FitSocial.Application.DTOs.TrainingPackage
         public short? SessionCount { get; set; }
         public short? MinAge { get; set; }
         public string? TargetAudience { get; set; }
+        public string? PackageType { get; set; }
         public bool? IsActive { get; set; }
         public List<string>? ImageUrls { get; set; }
     }

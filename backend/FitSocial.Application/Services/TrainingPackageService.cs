@@ -61,6 +61,7 @@ namespace FitSocial.Application.Services
                 SessionCount = dto.SessionCount,
                 MinAge = dto.MinAge,
                 TargetAudience = dto.TargetAudience,
+                PackageType = string.IsNullOrWhiteSpace(dto.PackageType) ? "BOTH" : dto.PackageType.Trim().ToUpperInvariant(),
                 IsActive = dto.IsActive,
                 CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
             };
@@ -104,6 +105,7 @@ namespace FitSocial.Application.Services
             package.SessionCount = dto.SessionCount;
             if (dto.MinAge.HasValue) package.MinAge = dto.MinAge.Value;
             if (dto.TargetAudience != null) package.TargetAudience = dto.TargetAudience;
+            if (!string.IsNullOrWhiteSpace(dto.PackageType)) package.PackageType = dto.PackageType.Trim().ToUpperInvariant();
             if (dto.IsActive.HasValue) package.IsActive = dto.IsActive.Value;
 
             if (dto.ImageUrls != null)
@@ -165,11 +167,20 @@ namespace FitSocial.Application.Services
                 if (myOrderDetail != null)
                 {
                     dto.OrderDetailsId = myOrderDetail.OrderDetailsId;
+                    dto.PackageType = myOrderDetail.PackageType ?? pkg.PackageType ?? "BOTH";
+
                     var plan = myOrderDetail.TrainingPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
                     if (plan != null)
                     {
                         dto.TrainingPlanId = plan.TrainingPlanId;
                         dto.PlanStatus = plan.Status;
+                    }
+
+                    var mealPlan = myOrderDetail.MealPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+                    if (mealPlan != null)
+                    {
+                        dto.MealPlanId = mealPlan.MealPlanId;
+                        dto.MealPlanStatus = mealPlan.Status;
                     }
                 }
 
@@ -191,6 +202,7 @@ namespace FitSocial.Application.Services
                 SessionCount = entity.SessionCount,
                 MinAge = entity.MinAge,
                 TargetAudience = entity.TargetAudience,
+                PackageType = entity.PackageType ?? "BOTH",
                 IsActive = entity.IsActive,
                 CreatedAt = entity.CreatedAt,
                 Media = entity.Media?.OrderBy(m => m.SortOrder).Select(m => new TrainingPackageMediaDto

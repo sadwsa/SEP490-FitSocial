@@ -2,6 +2,7 @@
 @layout EmptyLayout
 @inject ITrainingPackageService PackageService
 @inject ICartService CartService
+@inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
@@ -249,7 +250,23 @@
 
                             <div class="flex flex-col gap-3">
                                 <div class="flex flex-col sm:flex-row gap-3">
-                                    @if (inCart)
+                                    @if (hasPurchased)
+                                    {
+                                        <!-- Already Purchased State: both buttons disabled -->
+                                        <button type="button"
+                                                disabled
+                                                class="flex-1 bg-gray-100 text-gray-400 py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 cursor-not-allowed">
+                                            <span>Add to Cart</span>
+                                        </button>
+
+                                        <button type="button"
+                                                disabled
+                                                class="flex-1 bg-gray-100 text-gray-400 py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 cursor-not-allowed">
+                                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                            <span>Purchased</span>
+                                        </button>
+                                    }
+                                    else if (inCart)
                                     {
                                         <!-- In Cart State -->
                                         <a href="cart"
@@ -299,6 +316,15 @@
                                         </button>
                                     }
                                 </div>
+
+                                @if (hasPurchased)
+                                {
+                                    <!-- Already owned: single notice line under the buttons -->
+                                    <div class="flex items-center justify-center gap-2 text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4">
+                                        <svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                        <span>You have already purchased this package. <a href="/training-packages/purchased" class="font-semibold text-[#FF5500] hover:underline">Review it anytime in My Packages.</a></span>
+                                    </div>
+                                }
 
                                 <a href="packages" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold text-center transition-colors">
                                     Browse All Packages
@@ -592,6 +618,7 @@
     private Guid? currentUserId;
     private bool isOwnPackage => currentUserId.HasValue && package != null && package.CoachId == currentUserId.Value;
     private bool inCart = false;
+    private bool hasPurchased = false;
     private const int quantity = 1; // Strict single quantity rule
     private bool isAddingToCart = false;
     private int cartCount = 0;
@@ -738,6 +765,7 @@
             package = response.Data;
             selectedImageUrl = package?.ImageUrls?.FirstOrDefault();
             await CheckCartStatusAsync();
+            await CheckPurchasedStatusAsync();
             // THÊM DÒNG NÀY ĐỂ TẢI REVIEWS:
             await LoadReviewsAsync();
         }
@@ -814,6 +842,25 @@
         catch { }
     }
 
+    private async Task CheckPurchasedStatusAsync()
+    {
+        if (!isAuthenticated || package == null || isOwnPackage) return;
+        try
+        {
+            var ordersRes = await CheckoutService.GetMyOrdersAsync();
+            if (ordersRes.Success && ordersRes.Data != null)
+            {
+                hasPurchased = ordersRes.Data.Any(o =>
+                    !string.IsNullOrWhiteSpace(o.OrderStatus) &&
+                    (string.Equals(o.OrderStatus, "PAID", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(o.OrderStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(o.OrderStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase)) &&
+                    o.Details.Any(d => d.PackageId == package.PackageId));
+            }
+        }
+        catch { }
+    }
+
     private async Task HandleAddToCart()
     {
         if (!isAuthenticated)
@@ -831,6 +878,12 @@
         if (isOwnPackage)
         {
             ShowErrorToast("You cannot add your own training package to the cart.");
+            return;
+        }
+
+        if (hasPurchased)
+        {
+            ShowErrorToast("You have already purchased this package.");
             return;
         }
 
@@ -961,6 +1014,12 @@
         if (isOwnPackage)
         {
             ShowErrorToast("You cannot purchase your own training package.");
+            return;
+        }
+
+        if (hasPurchased)
+        {
+            ShowErrorToast("You have already purchased this package.");
             return;
         }
 

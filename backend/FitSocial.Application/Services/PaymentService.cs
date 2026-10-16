@@ -353,6 +353,47 @@ public class PaymentService : IPaymentService
         return ApiResponseDto<bool>.Ok(true, "Payment order cancelled.");
     }
 
+    /// <summary>
+    /// PayOS webhook dispatch (backup for the return-url flow; requires a public URL in production).
+    /// Routes by OrderType: COACH_ACTIVATION unlocks the account, PACKAGE activates enrollment.
+    /// Moved here from PaymentsController so controllers stay thin (layered architecture).
+    /// Never throws: returns false instead so the webhook handshake never fails because of our errors.
+    /// </summary>
+    public async Task<bool> HandlePayOsWebhookAsync(string? code, long orderCode, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!string.Equals(code, "00", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (orderCode == 0)
+            {
+                return false;
+            }
+
+            // Route webhook to the correct fulfillment flow by order type
+            var payment = await _payments.FindByGatewayTransactionIdAsync(orderCode.ToString(), cancellationToken);
+            if (payment != null)
+            {
+                var order = await _orders.GetByIdAsync(payment.OrderId, cancellationToken);
+                if (order != null && string.Equals(order.OrderType, PaymentConstants.OrderTypePackage, StringComparison.OrdinalIgnoreCase))
+                {
+                    await CompletePackagePurchaseAsync(orderCode);
+                    return true;
+                }
+            }
+
+            await CompleteActivationAsync(orderCode);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     // =====================================================
     // UC-20: Purchase Training Package via PayOS VietQR
     // =====================================================
@@ -392,6 +433,19 @@ public class PaymentService : IPaymentService
         if (package.IsActive != true)
         {
             return (buyer, package, "This training package is no longer active or open for enrollment. Please refresh your cart.");
+        }
+
+        // 20.0.E4 Already Purchased: 1 trainee = 1 enrollment.
+        // History stays viewable in My Packages, so rebuying the same package would duplicate it.
+        var buyerOrders = await _orders.GetOrdersByBuyerIdAsync(buyerId, ct);
+        var paidStatuses = new[] { PaymentConstants.OrderStatusPaid, PaymentConstants.OrderStatusCompleted, "ACTIVE" };
+        var alreadyPurchased = buyerOrders.Any(o =>
+            o.OrderStatus != null &&
+            paidStatuses.Contains(o.OrderStatus, StringComparer.OrdinalIgnoreCase) &&
+            o.OrderDetails.Any(od => od.PackageId == packageId));
+        if (alreadyPurchased)
+        {
+            return (buyer, package, "You have already purchased this training package. You can review it anytime in My Packages.");
         }
 
         return (buyer, package, null);

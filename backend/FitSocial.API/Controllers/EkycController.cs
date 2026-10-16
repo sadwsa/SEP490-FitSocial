@@ -1,6 +1,5 @@
 using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.Interfaces;
-using FitSocial.Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,14 +10,10 @@ namespace FitSocial.API.Controllers;
 public class EkycController : ControllerBase
 {
     private readonly IEkycService _ekycService;
-    private readonly ICoachEkycVerificationRepository _ekycRepo;
-    private readonly IUserRepository _users;
 
-    public EkycController(IEkycService ekycService, ICoachEkycVerificationRepository ekycRepo, IUserRepository users)
+    public EkycController(IEkycService ekycService)
     {
         _ekycService = ekycService;
-        _ekycRepo = ekycRepo;
-        _users = users;
     }
 
     /// <summary>
@@ -45,20 +40,9 @@ public class EkycController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> CheckIdCard([FromBody] CheckIdCardRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.IdCardNumber))
-            return BadRequest(new { success = false, message = "IdCardNumber is required." });
-
-        var normalizedId = request.IdCardNumber.Trim();
-        Guid? excludeCoachId = null;
-        if (!string.IsNullOrWhiteSpace(request.Email))
-        {
-            var existingUser = await _users.FindByEmailAsync(request.Email.Trim().ToLower());
-            if (existingUser != null) excludeCoachId = existingUser.UserId;
-        }
-
-        var exists = await _ekycRepo.ExistsByIdCardNumberAsync(normalizedId, excludeCoachId);
-        if (exists)
-            return BadRequest(new { success = false, message = "This ID card has already been used for another coach." });
+        var (available, error) = await _ekycService.CheckIdCardAsync(request.IdCardNumber, request.Email);
+        if (!available)
+            return BadRequest(new { success = false, message = error ?? "IdCardNumber is required." });
 
         return Ok(new { success = true });
     }

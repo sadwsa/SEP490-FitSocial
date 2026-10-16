@@ -1,5 +1,6 @@
 using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
@@ -12,12 +13,45 @@ public class ViettelEkycService : IEkycService
     private readonly IConfiguration _configuration;
     private readonly ILogger<ViettelEkycService> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ICoachEkycVerificationRepository _ekycRepo;
+    private readonly IUserRepository _users;
 
-    public ViettelEkycService(IConfiguration configuration, ILogger<ViettelEkycService> logger, IHttpClientFactory httpClientFactory)
+    public ViettelEkycService(
+        IConfiguration configuration,
+        ILogger<ViettelEkycService> logger,
+        IHttpClientFactory httpClientFactory,
+        ICoachEkycVerificationRepository ekycRepo,
+        IUserRepository users)
     {
         _configuration = configuration;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
+        _ekycRepo = ekycRepo;
+        _users = users;
+    }
+
+    /// <summary>
+    /// Checks if an ID card number is still available (not used by another coach).
+    /// Moved here from EkycController so controllers stay thin (layered architecture).
+    /// </summary>
+    public async Task<(bool Available, string? Error)> CheckIdCardAsync(string idCardNumber, string? email, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(idCardNumber))
+            return (false, "IdCardNumber is required.");
+
+        var normalizedId = idCardNumber.Trim();
+        Guid? excludeCoachId = null;
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var existingUser = await _users.FindByEmailAsync(email.Trim().ToLower(), cancellationToken);
+            if (existingUser != null) excludeCoachId = existingUser.UserId;
+        }
+
+        var exists = await _ekycRepo.ExistsByIdCardNumberAsync(normalizedId, excludeCoachId, cancellationToken);
+        if (exists)
+            return (false, "This ID card has already been used for another coach.");
+
+        return (true, null);
     }
 
     public async Task<(bool Success, string? Error, EkycExtract Result)> VerifyAsync(EkycVerificationDto request, CancellationToken cancellationToken = default)

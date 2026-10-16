@@ -23,4 +23,11 @@ public interface IPaymentService
     Task<ApiResponseDto<OrderDto>> CompletePackagePurchaseAsync(long orderCode);
 
     Task<ApiResponseDto<bool>> CancelPackagePurchaseAsync(long orderCode, Guid? requesterId = null);
+
+    /// <summary>
+    /// PayOS webhook dispatch (backup for the return-url flow).
+    /// Routes by OrderType: COACH_ACTIVATION unlocks the account, PACKAGE activates enrollment.
+    /// Never throws: returns false instead so the webhook handshake never fails because of our errors.
+    /// </summary>
+    Task<bool> HandlePayOsWebhookAsync(string? code, long orderCode, CancellationToken cancellationToken = default);
 }

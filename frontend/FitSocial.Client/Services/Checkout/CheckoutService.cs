@@ -16,6 +16,7 @@ public interface ICheckoutService
     Task<ApiResponse<OrderDto>> CompleteAsync(long orderCode);
     Task<ApiResponse<bool>> CancelAsync(long orderCode);
     Task<ApiResponse<OrderDto>> GetOrderByIdAsync(Guid orderId);
+    Task<ApiResponse<List<OrderDto>>> GetMyOrdersAsync();
     Task<ApiResponse<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync();
 }
 
@@ -55,6 +56,11 @@ public class CheckoutService : ICheckoutService
     public Task<ApiResponse<OrderDto>> GetOrderByIdAsync(Guid orderId)
     {
         return _apiClient.GetAsync<OrderDto>($"orders/{orderId}");
+    }
+
+    public Task<ApiResponse<List<OrderDto>>> GetMyOrdersAsync()
+    {
+        return _apiClient.GetAsync<List<OrderDto>>("orders/my-orders");
     }
 
     public Task<ApiResponse<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync()

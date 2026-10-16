@@ -83,8 +83,6 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    public record CompleteActivationRequest(long OrderCode);
-
     /// <summary>
     /// Check the PayOS payment by order code; if paid, unlock the account and sign the coach in.
     /// Called by the frontend payment-result page after the gateway redirects back.
@@ -103,8 +101,6 @@ public class PaymentsController : ControllerBase
 
         return Ok(result);
     }
-
-    public record CancelActivationRequest(long OrderCode);
 
     /// <summary>
     /// Cancel a pending activation order (user gave up at the gateway).
@@ -177,8 +173,6 @@ public class PaymentsController : ControllerBase
     // UC-20: Purchase Training Package (Trainee, Coach)
     // =====================================================
 
-    public record PackagePurchaseRequest(Guid PackageId);
-
     /// <summary>
     /// UC-20 step 2: Order Summary preview (package title, duration, price VND).
     /// E1: package inactive -&gt; 400, E2: self-purchase -&gt; 400.
@@ -239,8 +233,6 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    public record CompletePackagePurchaseRequest(long OrderCode);
-
     /// <summary>
     /// UC-20 steps 6-7: verify PayOS payment; on success mark COMPLETED + activate TrainingPlan.
     /// Called by "I've Paid - Verify Now" and by the success page after gateway redirect.
@@ -264,8 +256,6 @@ public class PaymentsController : ControllerBase
 
         return Ok(result);
     }
-
-    public record CancelPackagePurchaseRequest(long OrderCode);
 
     /// <summary>
     /// UC-20 alternative flow 20.1: cancel pending checkout, keep item in cart.

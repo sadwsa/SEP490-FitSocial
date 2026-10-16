@@ -31,8 +31,6 @@ public class EkycController : ControllerBase
         return Ok(new { success = true, data = result.Result });
     }
 
-    public record CheckIdCardRequest(string IdCardNumber, string? Email);
-
     /// <summary>
     /// Check if CCCD has already been used by another coach. Called right after OCR on Step 2 so user sees duplicate immediately on CCCD page.
     /// </summary>

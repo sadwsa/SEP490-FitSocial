@@ -36,11 +36,17 @@
             <button type="button" class="side-item @(IsActive("/admin/reports") || IsActive("/reports") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/reports")'>
                 <AppIcon Name="flag" /><span>Reports</span>
             </button>
+            <button type="button" class="side-item @(IsActive("/admin/appeals") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/appeals")'>
+                <AppIcon Name="shield" /><span>Appeals</span>
+            </button>
             <button type="button" class="side-item @(IsActive("/admin/payouts") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payouts")'>
                 <AppIcon Name="chart" /><span>Coach Payouts</span>
             </button>
             <button type="button" class="side-item @(IsActive("/admin/refunds") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/refunds")'>
                 <AppIcon Name="shield" /><span>Refund Requests</span>
+            </button>
+            <button type="button" class="side-item @(IsActive("/admin/money-history") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/money-history")'>
+                <AppIcon Name="doc" /><span>Money Movements</span>
             </button>
 
             <AuthorizeView Roles="ADMIN">

@@ -17,4 +17,13 @@ public interface ITrainingPlanRepository : IRepository<TrainingPlan>
     Task<List<VideoTutorial>> GetCoachVideoTutorialsAsync(Guid coachId, CancellationToken cancellationToken = default);
     Task AddExerciseAsync(TrainingPlanExercise exercise, CancellationToken cancellationToken = default);
     void RemoveExercises(IEnumerable<TrainingPlanExercise> exercises);
+
+    // Workout Completion & Progress
+    Task<TrainingPlan?> GetTraineePlanWithLogsAsync(Guid orderDetailsId, Guid traineeId, CancellationToken cancellationToken = default);
+    Task<TrainingPlan?> GetTraineePlanByPackageIdWithLogsAsync(Guid packageId, Guid traineeId, CancellationToken cancellationToken = default);
+    Task<TrainingPlanExercise?> GetExerciseByIdAsync(Guid exerciseId, CancellationToken cancellationToken = default);
+    Task<WorkoutCompletionLog?> GetWorkoutLogAsync(Guid exerciseId, Guid traineeId, CancellationToken cancellationToken = default);
+    Task AddWorkoutLogAsync(WorkoutCompletionLog log, CancellationToken cancellationToken = default);
+    void RemoveWorkoutLog(WorkoutCompletionLog log);
+    Task<TrainingPlan?> GetCoachTraineePlanWithLogsAsync(Guid orderDetailsId, Guid coachId, CancellationToken cancellationToken = default);
 }

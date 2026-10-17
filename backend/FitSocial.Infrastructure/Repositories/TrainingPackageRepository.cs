@@ -75,7 +75,17 @@ namespace FitSocial.Infrastructure.Repositories
 
         public async Task<IEnumerable<TrainingPackage>> GetPurchasedPackagesAsync(Guid traineeId, CancellationToken cancellationToken = default)
         {
-            var paidStatuses = new[] { FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+            var paidStatuses = new[]
+            {
+                FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid,
+                "PAID",
+                "ACTIVE",
+                "COMPLETED",
+                FitSocial.Domain.Constants.PaymentConstants.OrderStatusRefundPending,
+                "REFUND_PENDING",
+                FitSocial.Domain.Constants.PaymentConstants.OrderStatusRefunded,
+                "REFUNDED"
+            };
 
             return await DbSet
                 .Include(x => x.Coach)
@@ -84,6 +94,7 @@ namespace FitSocial.Infrastructure.Repositories
                 .Include(x => x.Reviews.Where(r => r.TraineeId == traineeId))
                 .Include(x => x.OrderDetails.Where(od => od.Order.BuyerId == traineeId))
                     .ThenInclude(od => od.Order)
+                        .ThenInclude(o => o.RefundRequests)
                 .Include(x => x.OrderDetails.Where(od => od.Order.BuyerId == traineeId))
                     .ThenInclude(od => od.TrainingPlans)
                 .Include(x => x.OrderDetails.Where(od => od.Order.BuyerId == traineeId))

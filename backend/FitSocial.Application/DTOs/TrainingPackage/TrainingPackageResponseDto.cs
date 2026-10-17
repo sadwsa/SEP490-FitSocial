@@ -8,7 +8,7 @@ namespace FitSocial.Application.DTOs.TrainingPackage
     {
         public Guid PackageId { get; set; }
         public Guid CoachId { get; set; }
-        // Thêm tên của Coach để hiển thị lên UI cho đẹp
+        // Coach name for UI display
         public string? CoachName { get; set; }
         public string? Title { get; set; }
         public string? Description { get; set; }
@@ -33,6 +33,10 @@ namespace FitSocial.Application.DTOs.TrainingPackage
 
         // Training Plan, Meal Plan & Order Details state
         public Guid? OrderDetailsId { get; set; }
+        public Guid? OrderId { get; set; }
+        public DateTime? OrderCreatedAt { get; set; }
+        public string? OrderStatus { get; set; }
+        public string? RefundStatus { get; set; }
         public Guid? TrainingPlanId { get; set; }
         public string? PlanStatus { get; set; }
         public Guid? MealPlanId { get; set; }

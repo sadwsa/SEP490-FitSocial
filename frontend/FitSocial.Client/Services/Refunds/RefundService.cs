@@ -16,6 +16,8 @@ public interface IRefundService
     Task<ApiResponse<RefundRequestItem>> RejectRefundRequestAsync(Guid id, RejectRefundRequest request);
     Task<ApiResponse<RefundPolicyCalculation>> CalculatePolicyForOrderAsync(Guid orderId, string? reason = null, Guid? preferredBankAccountId = null);
     Task<ApiResponse<RefundPolicyCalculation>> CalculatePolicyForRefundRequestAsync(Guid id);
+    Task<ApiResponse<RefundRequestItem>> CreateRefundRequestAsync(CreateRefundRequestDto request);
+    Task<ApiResponse<List<RefundRequestItem>>> GetMyRefundRequestsAsync();
 }
 
 public class RefundApiService : IRefundService
@@ -93,5 +95,15 @@ public class RefundApiService : IRefundService
     public Task<ApiResponse<RefundPolicyCalculation>> CalculatePolicyForRefundRequestAsync(Guid id)
     {
         return _apiClient.GetAsync<RefundPolicyCalculation>($"RefundRequests/{id}/policy-calculation");
+    }
+
+    public Task<ApiResponse<RefundRequestItem>> CreateRefundRequestAsync(CreateRefundRequestDto request)
+    {
+        return _apiClient.PostAsync<CreateRefundRequestDto, RefundRequestItem>("RefundRequests", request);
+    }
+
+    public Task<ApiResponse<List<RefundRequestItem>>> GetMyRefundRequestsAsync()
+    {
+        return _apiClient.GetAsync<List<RefundRequestItem>>("RefundRequests/my-requests");
     }
 }

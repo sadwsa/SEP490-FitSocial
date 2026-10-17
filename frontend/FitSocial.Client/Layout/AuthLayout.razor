@@ -10,6 +10,7 @@
 @code {
     // Admin console pages go full-bleed (no outer box, full width + height)
     private bool isFullPage =>
-        Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin", StringComparison.OrdinalIgnoreCase)
-        && !Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/login", StringComparison.OrdinalIgnoreCase);
+        (Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin", StringComparison.OrdinalIgnoreCase)
+        && !Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/login", StringComparison.OrdinalIgnoreCase))
+        || Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("appeal", StringComparison.OrdinalIgnoreCase);
 }

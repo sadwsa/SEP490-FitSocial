@@ -8,7 +8,7 @@ namespace FitSocial.Application.DTOs.TrainingPackage
     {
         public Guid PackageId { get; set; }
         public Guid CoachId { get; set; }
-        // Thêm tên của Coach để hiển thị lên UI cho đẹp
+        // Coach name for UI display
         public string? CoachName { get; set; }
         public string? Title { get; set; }
         public string? Description { get; set; }
@@ -17,6 +17,7 @@ namespace FitSocial.Application.DTOs.TrainingPackage
         public short? SessionCount { get; set; }
         public short? MinAge { get; set; }
         public string? TargetAudience { get; set; }
+        public string? PackageType { get; set; } = "BOTH";
         public bool? IsActive { get; set; }
         public DateTime? CreatedAt { get; set; }
 
@@ -30,9 +31,15 @@ namespace FitSocial.Application.DTOs.TrainingPackage
         public int? UserRating { get; set; }
         public string? UserComment { get; set; }
 
-        // Training Plan & Order Details state
+        // Training Plan, Meal Plan & Order Details state
         public Guid? OrderDetailsId { get; set; }
+        public Guid? OrderId { get; set; }
+        public DateTime? OrderCreatedAt { get; set; }
+        public string? OrderStatus { get; set; }
+        public string? RefundStatus { get; set; }
         public Guid? TrainingPlanId { get; set; }
         public string? PlanStatus { get; set; }
+        public Guid? MealPlanId { get; set; }
+        public string? MealPlanStatus { get; set; }
     }
 }

@@ -6,11 +6,22 @@ public class NotificationDto
 {
     public Guid NotificationId { get; set; }
     public string Type { get; set; } = "NewMessage";
+
+    private string? _category;
+    public string Category
+    {
+        get => !string.IsNullOrEmpty(_category)
+            ? _category
+            : (string.Equals(Type, "NewMessage", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "NEW_MESSAGE", StringComparison.OrdinalIgnoreCase) ? "MESSAGE" : "NOTIFICATION");
+        set => _category = value;
+    }
+
     public Guid SenderId { get; set; }
     public string? SenderName { get; set; }
     public string? SenderAvatar { get; set; }
     public Guid ConversationId { get; set; }
     public Guid? MessageId { get; set; }
+    public Guid? ReferenceId { get; set; }
     public string? MessagePreview { get; set; }
     public DateTime? CreatedAt { get; set; }
     public bool IsRead { get; set; }

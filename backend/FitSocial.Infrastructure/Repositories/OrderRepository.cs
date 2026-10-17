@@ -78,6 +78,8 @@ public class OrderRepository : Repository<Order>, IOrderRepository
                     .ThenInclude(p => p!.Media)
             .Include(o => o.OrderDetails)
                 .ThenInclude(od => od.TrainingPlans)
+            .Include(o => o.OrderDetails)
+                .ThenInclude(od => od.MealPlans)
             .Include(o => o.Payments)
             .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
                 && o.OrderType == Domain.Constants.PaymentConstants.OrderTypePackage

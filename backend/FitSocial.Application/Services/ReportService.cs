@@ -23,6 +23,7 @@ public class ReportService : IReportService
     private readonly INotificationRepository? _notificationRepository;
     private readonly IPostRepository? _postRepository;
     private readonly IPostRealtimeNotifier? _postRealtimeNotifier;
+    private readonly IAuditLogService? _auditLogService;
 
     public ReportService(
         IReportRepository reportRepository,
@@ -32,7 +33,8 @@ public class ReportService : IReportService
         ICoachProfileRepository coachProfileRepository,
         INotificationRepository notificationRepository,
         IPostRepository postRepository,
-        IPostRealtimeNotifier? postRealtimeNotifier = null)
+        IPostRealtimeNotifier? postRealtimeNotifier = null,
+        IAuditLogService? auditLogService = null)
     {
         _reportRepository = reportRepository;
         _userRepository = userRepository;
@@ -42,6 +44,7 @@ public class ReportService : IReportService
         _notificationRepository = notificationRepository;
         _postRepository = postRepository;
         _postRealtimeNotifier = postRealtimeNotifier;
+        _auditLogService = auditLogService;
     }
 
     public ReportService(
@@ -188,6 +191,28 @@ public class ReportService : IReportService
                     reportedUser.TokenVersion += 1;
                 }
                 reportedUser.UpdatedAt = now;
+
+                if (_notificationRepository != null)
+                {
+                    var isLockedNow = reportedUser.IsLocked == true;
+                    var notifType = isLockedNow ? "ViolationLock" : "ViolationWarning";
+                    var desc = isLockedNow
+                        ? "Your account has been locked due to reaching 3 policy violation warnings."
+                        : $"You have received a policy violation warning (Warning count: {reportedUser.WarningCount}/3).";
+
+                    var notif = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = report.ReportedUserId.Value,
+                        ActorId = staffId,
+                        Type = notifType,
+                        Description = desc,
+                        ReferenceId = report.ReportId,
+                        IsRead = false,
+                        CreatedAt = now
+                    };
+                    await _notificationRepository.AddAsync(notif, cancellationToken);
+                }
             }
         }
 
@@ -283,6 +308,37 @@ public class ReportService : IReportService
         report.AppealReviewedBy = staffId;
         report.AppealReviewedAt = now;
         report.AppealReviewNote = request.AppealReviewNote?.Trim();
+
+        // Also update any active record in Appeals table
+        if (report.Appeals != null && report.Appeals.Any())
+        {
+            foreach (var appeal in report.Appeals.Where(a => a.Status == "PENDING"))
+            {
+                appeal.Status = normalizedStatus;
+                appeal.ReviewedBy = staffId;
+                appeal.ReviewedAt = now;
+                appeal.ReviewNote = request.AppealReviewNote?.Trim();
+                appeal.UpdatedAt = now;
+            }
+        }
+
+        if (_notificationRepository != null && report.ReportedUserId.HasValue)
+        {
+            var notif = new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = report.ReportedUserId.Value,
+                ActorId = staffId,
+                Type = "ProcessAppeal",
+                Description = normalizedStatus == "APPROVED"
+                    ? "Your report appeal has been approved by staff."
+                    : "Your report appeal has been reviewed and rejected.",
+                ReferenceId = report.ReportId,
+                IsRead = false,
+                CreatedAt = now
+            };
+            await _notificationRepository.AddAsync(notif, cancellationToken);
+        }
 
         // If appeal was approved, apply requested actions
         if (normalizedStatus == "APPROVED" && report.ReportedUserId.HasValue)
@@ -435,6 +491,19 @@ public class ReportService : IReportService
                 report.ResolvedBy = staffId;
                 report.ResolvedAt = now;
 
+                if (_auditLogService != null)
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: staffId,
+                        action: action == "REJECT" ? "REJECT_REPORT" : "DISMISS_REPORT",
+                        entityType: "Report",
+                        entityId: report.ReportId.ToString(),
+                        description: $"Violation report {report.ReportId} was {report.Status.ToLowerInvariant()} by staff.",
+                        oldValue: new { status = currentStatus },
+                        newValue: new { status = report.Status, resolvedBy = staffId },
+                        cancellationToken: cancellationToken);
+                }
+
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
             }
@@ -541,6 +610,19 @@ public class ReportService : IReportService
                 if (_notificationRepository != null)
                 {
                     await _notificationRepository.AddAsync(notification, cancellationToken);
+                }
+
+                if (_auditLogService != null)
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: staffId,
+                        action: "DELETE_POST",
+                        entityType: "Post",
+                        entityId: post.Id.ToString(),
+                        description: $"Reported post {post.Id} deleted by staff for violation. Reason: {deletionReason}",
+                        oldValue: new { isDeleted = false, warningCount = postAuthor.WarningCount - 1 },
+                        newValue: new { isDeleted = true, warningCount = postAuthor.WarningCount, reportId = report.ReportId, reason = deletionReason },
+                        cancellationToken: cancellationToken);
                 }
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -739,6 +821,19 @@ public class ReportService : IReportService
             if (_notificationRepository != null)
             {
                 await _notificationRepository.AddAsync(notification, cancellationToken);
+            }
+
+            if (_auditLogService != null)
+            {
+                await _auditLogService.LogAsync(
+                    actorAccountId: staffId,
+                    action: action,
+                    entityType: "User",
+                    entityId: reportedUser.UserId.ToString(),
+                    description: $"Reported user '{reportedUser.FullName ?? reportedUser.Email}' ({reportedUser.UserId}) processed with action {action}. Violation count: {nextViolationCount}.",
+                    oldValue: new { warningCount = currentViolationCount, isLocked = reportedUser.IsLocked },
+                    newValue: new { warningCount = reportedUser.WarningCount, isLocked = reportedUser.IsLocked, reportId = report.ReportId, action },
+                    cancellationToken: cancellationToken);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);

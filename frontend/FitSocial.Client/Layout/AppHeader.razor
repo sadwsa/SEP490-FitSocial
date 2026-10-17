@@ -5,6 +5,7 @@
 @inject ICartService CartService
 @inject INotificationService NotificationService
 @inject IChatHubClient ChatHubClient
+@inject INotificationHubClient NotificationHubClient
 @using System.Security.Claims
 @using FitSocial.Client.Models.Auth
 @using FitSocial.Client.Services.Notifications
@@ -207,20 +208,133 @@
                 }
             </div>
 
-            <!-- Notifications (System notifications only, messages belong in the message icon) -->
-            <button class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition cursor-pointer" title="Notifications">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
-                    </path>
-                </svg>
-                @if (NotificationCount > 0)
-                {
-                    <span class="absolute top-1 right-1 bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                        @NotificationCount
-                    </span>
-                }
-            </button>
+            <!-- Notifications Dropdown (Available to Trainee and Coach only) -->
+            <AuthorizeView Roles="TRAINEE,COACH">
+                <Authorized>
+                    <div class="relative">
+                        <button type="button"
+                                @onclick="ToggleNotificationMenu"
+                                class="relative p-2 text-gray-600 hover:bg-orange-50 rounded-full transition block cursor-pointer @(showNotificationMenu ? "bg-orange-50 text-[#FF5500]" : "")"
+                                title="Notifications">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
+                                </path>
+                            </svg>
+                            @if (EffectiveNotificationCount > 0)
+                            {
+                                <span class="absolute top-1 right-1 bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white text-[10px] font-bold min-w-4 h-4 px-1 flex items-center justify-center rounded-full shadow-xs">
+                                    @(EffectiveNotificationCount > 99 ? "99+" : EffectiveNotificationCount)
+                                </span>
+                            }
+                        </button>
+
+                        @if (showNotificationMenu)
+                        {
+                            <div class="fixed inset-0 z-40" @onclick="CloseNotificationMenu"></div>
+                            <div class="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-gray-100 py-3 z-50 animate-in fade-in slide-in-from-top-2">
+                                <!-- Dropdown Header -->
+                                <div class="px-4 pb-2.5 border-b border-gray-100 flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-gray-900 text-base">Notifications</span>
+                                        @if (EffectiveNotificationCount > 0)
+                                        {
+                                            <span class="bg-orange-100 text-[#FF5500] text-xs font-semibold px-2 py-0.5 rounded-full">
+                                                @EffectiveNotificationCount new
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (EffectiveNotificationCount > 0)
+                                    {
+                                        <button type="button" @onclick="HandleMarkAllAppNotificationsRead"
+                                                class="text-xs text-[#FF5500] hover:text-[#e04c00] font-medium transition cursor-pointer">
+                                            Mark all as read
+                                        </button>
+                                    }
+                                </div>
+
+                                <!-- Dropdown Notification List -->
+                                <div class="max-h-80 overflow-y-auto divide-y divide-gray-50">
+                                    @if (_isLoadingNotifications)
+                                    {
+                                        <div class="py-8 text-center text-gray-400 text-xs">
+                                            <div class="w-5 h-5 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                                            Loading notifications...
+                                        </div>
+                                    }
+                                    else if (_appNotifications == null || !_appNotifications.Any())
+                                    {
+                                        <div class="py-8 text-center text-gray-400">
+                                            <div class="w-12 h-12 rounded-full bg-orange-50 text-orange-400 flex items-center justify-center mx-auto mb-2">
+                                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
+                                                    </path>
+                                                </svg>
+                                            </div>
+                                            <p class="text-xs font-medium text-gray-600 mb-0.5">No notifications yet</p>
+                                            <p class="text-[11px] text-gray-400">Your notifications will appear here</p>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var item in _appNotifications)
+                                        {
+                                            <div @onclick="() => HandleAppNotificationClick(item)"
+                                                 class="flex items-start gap-3 px-4 py-3 hover:bg-orange-50/50 cursor-pointer transition @(!item.IsRead ? "bg-orange-50/30" : "")">
+                                                <!-- Icon / Avatar -->
+                                                <div class="relative flex-shrink-0 mt-0.5">
+                                                    @if (!string.IsNullOrEmpty(item.SenderAvatar))
+                                                    {
+                                                        <img src="@item.SenderAvatar" alt="@item.SenderName" class="w-9 h-9 rounded-full object-cover border border-gray-100" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="w-9 h-9 rounded-full bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
+                                                                </path>
+                                                            </svg>
+                                                        </div>
+                                                    }
+                                                    @if (!item.IsRead)
+                                                    {
+                                                        <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#FF5500] border-2 border-white rounded-full"></span>
+                                                    }
+                                                </div>
+                                                <!-- Content -->
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center justify-between gap-1 mb-0.5">
+                                                        <span class="text-xs font-semibold text-gray-900 truncate">
+                                                            @(item.SenderName ?? FormatAppNotificationType(item.Type))
+                                                        </span>
+                                                        <span class="text-[10px] text-gray-400 flex-shrink-0">@FormatNotificationTime(item.CreatedAt)</span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 line-clamp-2 @(!item.IsRead ? "font-semibold text-gray-800" : "")">
+                                                        @(item.MessagePreview ?? "Notification details")
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+
+                                <!-- Dropdown Footer -->
+                                <div class="pt-2 px-3 border-t border-gray-100 text-center">
+                                    <a href="notifications" @onclick="CloseNotificationMenu"
+                                       class="inline-flex items-center justify-center gap-1.5 w-full py-2 bg-gray-50 hover:bg-orange-50 text-[#FF5500] rounded-xl text-xs font-semibold transition">
+                                        <span>See all in Notifications</span>
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </Authorized>
+            </AuthorizeView>
         }
 
         <!-- Profile Avatar & Dropdown -->
@@ -299,7 +413,8 @@
                         </svg>
                         Change Password
                     </a>
-                    @if (EffectiveUserRole == "Coach")
+                    @if (string.Equals(EffectiveUserRole, "Coach", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(EffectiveUserRole, "Trainee", StringComparison.OrdinalIgnoreCase))
                     {
                         <a href="/coach/payout-account" @onclick="CloseProfileMenu"
                            class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
@@ -390,9 +505,12 @@
 
     private bool showProfileMenu = false;
     private bool showMessageMenu = false;
+    private bool showNotificationMenu = false;
     private bool _isLoadingMessages = false;
+    private bool _isLoadingNotifications = false;
     private int _unreadMessageCount = 0;
     private List<NotificationDto> _messageNotifications = new();
+    private List<NotificationDto> _appNotifications = new();
     private NotificationDto? _activeToast = null;
     private System.Threading.Timer? _toastTimer;
 
@@ -400,6 +518,7 @@
     private string loadedUserInitials = "U";
     private string loadedUserRole = "Athlete";
     private int dynamicCartCount = 0;
+    private int dynamicNotificationCount = 0;
     private string? loadedUserAvatarUrl;
 
     private int EffectiveCartCount => CartCount ?? dynamicCartCount;
@@ -408,6 +527,7 @@
     private string EffectiveUserRole => !string.IsNullOrWhiteSpace(UserRole) ? UserRole : loadedUserRole;
     private string? EffectiveUserAvatarUrl => !string.IsNullOrWhiteSpace(UserAvatarUrl) ? UserAvatarUrl : loadedUserAvatarUrl;
     private int EffectiveMessageCount => MessageCount.HasValue ? MessageCount.Value : _unreadMessageCount;
+    private int EffectiveNotificationCount => NotificationCount > 0 ? NotificationCount : dynamicNotificationCount;
 
     protected override void OnParametersSet()
     {
@@ -436,12 +556,15 @@
                     await LoadCartCountAsync();
                 }
 
-                // Tải danh sách thông báo tin nhắn và kết nối SignalR Hub
+                // Tải danh sách thông báo tin nhắn và kết nối SignalR Hubs
                 await LoadMessageNotificationsAsync();
 
                 NotificationService.OnConversationRead += HandleConversationReadLocally;
                 ChatHubClient.OnNotificationReceived += HandleRealtimeNotification;
                 await ChatHubClient.StartAsync();
+
+                NotificationHubClient.OnNotificationReceived += HandleRealtimeAppNotification;
+                await NotificationHubClient.StartAsync();
             }
         }
         catch { }
@@ -450,19 +573,32 @@
     private async Task LoadMessageNotificationsAsync()
     {
         _isLoadingMessages = true;
+        _isLoadingNotifications = true;
         try
         {
             var response = await NotificationService.GetNotificationsAsync();
             if (response.Success && response.Data != null)
             {
-                _messageNotifications = response.Data;
+                // Chỉ hiển thị tin nhắn chat (NewMessage) trong dropdown Messages
+                _messageNotifications = response.Data
+                    .Where(n => string.Equals(n.Type, "NewMessage", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(n.Type, "NEW_MESSAGE", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
                 _unreadMessageCount = _messageNotifications.Count(n => !n.IsRead);
+
+                // Các thông báo hệ thống / ứng dụng (không phải tin nhắn chat) hiển thị trong dropdown Notifications
+                _appNotifications = response.Data
+                    .Where(n => !string.Equals(n.Type, "NewMessage", StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(n.Type, "NEW_MESSAGE", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                dynamicNotificationCount = _appNotifications.Count(n => !n.IsRead);
             }
         }
         catch { }
         finally
         {
             _isLoadingMessages = false;
+            _isLoadingNotifications = false;
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -473,12 +609,72 @@
         if (showMessageMenu)
         {
             showProfileMenu = false;
+            showNotificationMenu = false;
         }
     }
 
     private void CloseMessageMenu()
     {
         showMessageMenu = false;
+    }
+
+    private void ToggleNotificationMenu()
+    {
+        showNotificationMenu = !showNotificationMenu;
+        if (showNotificationMenu)
+        {
+            showMessageMenu = false;
+            showProfileMenu = false;
+        }
+    }
+
+    private void CloseNotificationMenu()
+    {
+        showNotificationMenu = false;
+    }
+
+    private async Task HandleAppNotificationClick(NotificationDto item)
+    {
+        CloseNotificationMenu();
+
+        if (!item.IsRead)
+        {
+            item.IsRead = true;
+            dynamicNotificationCount = Math.Max(0, dynamicNotificationCount - 1);
+            StateHasChanged();
+            await NotificationService.MarkAsReadAsync(item.NotificationId);
+        }
+
+        Navigation.NavigateTo("notifications");
+    }
+
+    private async Task HandleMarkAllAppNotificationsRead()
+    {
+        foreach (var n in _appNotifications)
+        {
+            n.IsRead = true;
+        }
+        dynamicNotificationCount = 0;
+        StateHasChanged();
+
+        await NotificationService.MarkAllAsReadAsync();
+    }
+
+    private string FormatAppNotificationType(string? type)
+    {
+        if (string.IsNullOrWhiteSpace(type)) return "Notification";
+        return type.Trim().ToUpperInvariant() switch
+        {
+            "REFUND_APPROVED" => "Refund Approved",
+            "REFUND_REJECTED" => "Refund Rejected",
+            "CERTIFICATE_APPROVED" => "Certificate Approved",
+            "CERTIFICATE_REJECTED" => "Certificate Rejected",
+            "POST_VIOLATION_DELETED" => "Post Removed",
+            "USER_WARNED" => "Account Warning",
+            "USER_LOCKED" => "Account Locked",
+            "REPORT_PROCESSED" => "Report Processed",
+            _ => type.Replace("_", " ")
+        };
     }
 
     private async Task HandleMessageNotificationClick(NotificationDto item)
@@ -514,6 +710,23 @@
     {
         await InvokeAsync(async () =>
         {
+            var isChatMessage = string.Equals(notification.Type, "NewMessage", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(notification.Type, "NEW_MESSAGE", StringComparison.OrdinalIgnoreCase);
+
+            if (!isChatMessage)
+            {
+                // Thông báo ứng dụng thuộc về biểu tượng Notifications (chuông)
+                if (!_appNotifications.Any(n => n.NotificationId == notification.NotificationId))
+                {
+                    _appNotifications.Insert(0, notification);
+                    dynamicNotificationCount++;
+                }
+                _activeToast = notification;
+                ResetToastTimer();
+                StateHasChanged();
+                return;
+            }
+
             var currentUri = Navigation.Uri;
             bool isCurrentlyInConversation = currentUri.Contains(notification.ConversationId.ToString(), StringComparison.OrdinalIgnoreCase);
 
@@ -532,6 +745,26 @@
             _activeToast = notification;
             ResetToastTimer();
 
+            StateHasChanged();
+        });
+    }
+
+    private void HandleRealtimeAppNotification(string title, string message)
+    {
+        InvokeAsync(() =>
+        {
+            var notif = new NotificationDto
+            {
+                NotificationId = Guid.NewGuid(),
+                Type = title,
+                MessagePreview = message,
+                CreatedAt = DateTime.UtcNow,
+                IsRead = false
+            };
+            _appNotifications.Insert(0, notif);
+            dynamicNotificationCount++;
+            _activeToast = notif;
+            ResetToastTimer();
             StateHasChanged();
         });
     }
@@ -578,7 +811,16 @@
     private async Task HandleToastClick(NotificationDto toast)
     {
         DismissToast();
-        await HandleMessageNotificationClick(toast);
+        var isChatMessage = string.Equals(toast.Type, "NewMessage", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(toast.Type, "NEW_MESSAGE", StringComparison.OrdinalIgnoreCase);
+        if (isChatMessage)
+        {
+            await HandleMessageNotificationClick(toast);
+        }
+        else
+        {
+            await HandleAppNotificationClick(toast);
+        }
     }
 
     private string GetInitials(string? name)
@@ -592,12 +834,18 @@
     private string FormatNotificationTime(DateTime? dt)
     {
         if (!dt.HasValue) return "";
-        var span = DateTime.UtcNow - dt.Value.ToUniversalTime();
+        var utcTime = dt.Value.Kind switch
+        {
+            DateTimeKind.Utc => dt.Value,
+            DateTimeKind.Local => dt.Value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc)
+        };
+        var span = DateTime.UtcNow - utcTime;
         if (span.TotalMinutes < 1) return "Just now";
         if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
         if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
         if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
-        return dt.Value.ToString("dd/MM/yyyy");
+        return utcTime.ToLocalTime().ToString("dd/MM/yyyy");
     }
 
     private async Task LoadCurrentUserAsync()
@@ -646,6 +894,7 @@
         if (showProfileMenu)
         {
             showMessageMenu = false;
+            showNotificationMenu = false;
         }
     }
 
@@ -744,6 +993,7 @@
         CartService.OnCartChanged -= HandleCartChanged;
         NotificationService.OnConversationRead -= HandleConversationReadLocally;
         ChatHubClient.OnNotificationReceived -= HandleRealtimeNotification;
+        NotificationHubClient.OnNotificationReceived -= HandleRealtimeAppNotification;
         _toastTimer?.Dispose();
         return ValueTask.CompletedTask;
     }

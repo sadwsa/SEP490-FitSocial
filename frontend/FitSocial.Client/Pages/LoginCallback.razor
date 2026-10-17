@@ -38,6 +38,11 @@
         }
         else
         {
+            if (result.Data?.IsBlockedDueToReports == true && !string.IsNullOrWhiteSpace(result.Data.AppealToken))
+            {
+                Navigation.NavigateTo($"/appeal?token={Uri.EscapeDataString(result.Data.AppealToken)}");
+                return;
+            }
             GoLogin(result.Message ?? "Google sign-in failed. Please try again.");
         }
     }

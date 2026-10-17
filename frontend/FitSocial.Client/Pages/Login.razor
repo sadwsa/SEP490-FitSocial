@@ -82,6 +82,52 @@
     </div>
 </div>
 
+@if (_showBlockedModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div class="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-red-100 p-6 sm:p-8 text-center animate-in zoom-in-95 duration-200" style="color: #1e293b;">
+            <!-- Icon -->
+            <div class="w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-inner">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+
+            <!-- Title -->
+            <h3 class="text-xl font-bold text-gray-900 tracking-tight">Account Blocked</h3>
+
+            <!-- Message -->
+            <p class="text-sm text-gray-600 mt-2 leading-relaxed">
+                @_blockedMessage
+            </p>
+
+            <div class="mt-4 p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-800 text-left flex items-start gap-2">
+                <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>You may review the violation reports filed against your account and submit explanations/evidence for staff evaluation.</span>
+            </div>
+
+            <!-- Actions -->
+            <div class="grid grid-cols-2 gap-3 mt-6">
+                <button type="button"
+                        @onclick="() => _showBlockedModal = false"
+                        class="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm rounded-xl transition cursor-pointer">
+                    Close
+                </button>
+                <button type="button"
+                        @onclick="NavigateToAppeal"
+                        class="w-full py-2.5 px-4 bg-gradient-to-r from-[#FF5500] to-[#FF8C00] hover:from-[#e04c00] hover:to-[#e67e00] text-white font-semibold text-sm rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5">
+                    <span>Appeal Now</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private LoginRequest loginModel = new();
     private bool showPassword = false;
@@ -89,6 +135,9 @@
     private string? infoMessage;
     private string? errorMessage;
     private bool isLoading = false;
+    private bool _showBlockedModal = false;
+    private string? _blockedAppealToken;
+    private string? _blockedMessage;
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
@@ -181,10 +230,34 @@
         }
         else
         {
-            errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";
+            if (result.Data?.IsBlockedDueToReports == true)
+            {
+                _blockedAppealToken = result.Data.AppealToken;
+                _blockedMessage = !string.IsNullOrWhiteSpace(result.Data.BlockReasonMessage)
+                    ? result.Data.BlockReasonMessage
+                    : (result.Message ?? "Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.");
+                _showBlockedModal = true;
+            }
+            else
+            {
+                errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";
+            }
         }
 
         isLoading = false;
+    }
+
+    private void NavigateToAppeal()
+    {
+        _showBlockedModal = false;
+        if (!string.IsNullOrWhiteSpace(_blockedAppealToken))
+        {
+            Navigation.NavigateTo($"appeal?token={Uri.EscapeDataString(_blockedAppealToken)}");
+        }
+        else
+        {
+            Navigation.NavigateTo("appeal");
+        }
     }
 
     private async Task HandleGoogleButtonAsync()

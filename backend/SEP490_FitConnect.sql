@@ -87,7 +87,7 @@ CREATE TABLE CoachProfiles (
 
 CREATE TABLE CoachBankAccounts (
     BankID UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    CoachID UUID REFERENCES CoachProfiles(CoachID),
+    CoachID UUID REFERENCES Users(UserID),
     BankName VARCHAR(255),
     BankCode VARCHAR(50),
     AccountName VARCHAR(255),
@@ -336,6 +336,7 @@ CREATE TABLE TrainingPackages (
     SessionCount SMALLINT,
     MinAge SMALLINT,
     TargetAudience VARCHAR(100),
+    PackageType VARCHAR(30) DEFAULT 'BOTH',
     IsActive BOOLEAN DEFAULT TRUE,
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -368,6 +369,7 @@ CREATE TABLE OrderDetails (
     PackageTitle VARCHAR(255),
     PackageDurationDays INT,
     CoachName VARCHAR(100),
+    PackageType VARCHAR(30) DEFAULT 'BOTH',
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

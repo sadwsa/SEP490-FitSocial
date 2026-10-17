@@ -186,4 +186,173 @@ public class NotificationServiceTests
         var updated2 = await context.Notifications.FindAsync(notif2.Id);
         Assert.True(updated2?.IsRead);
     }
+
+    [Fact]
+    public async Task GetUserNotificationsAsync_ReturnsOnlyNotificationsBelongingToCurrentUserId()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var traineeId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+
+        var trainee = new User { UserId = traineeId, FullName = "Trainee User", Email = "trainee@test.com", RoleCode = "TRAINEE" };
+        var coach = new User { UserId = coachId, FullName = "Coach User", Email = "coach@test.com", RoleCode = "COACH" };
+        context.Users.AddRange(trainee, coach);
+
+        // Trainee notification
+        var traineeNotif = new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = traineeId,
+            Type = "System",
+            Description = "Notification for Trainee only",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // Coach notification
+        var coachNotif = new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = coachId,
+            Type = "System",
+            Description = "Notification for Coach only",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.Notifications.AddRange(traineeNotif, coachNotif);
+        await context.SaveChangesAsync();
+
+        var service = new NotificationService(context, _realtimeNotifierMock.Object, _loggerMock.Object);
+
+        // Act - Trainee queries
+        var traineeResult = await service.GetUserNotificationsAsync(traineeId);
+
+        // Act - Coach queries
+        var coachResult = await service.GetUserNotificationsAsync(coachId);
+
+        // Assert - Trainee only gets their own notifications
+        Assert.NotNull(traineeResult.Data);
+        Assert.Single(traineeResult.Data);
+        Assert.Equal(traineeNotif.Id, traineeResult.Data[0].NotificationId);
+        Assert.DoesNotContain(traineeResult.Data, n => n.NotificationId == coachNotif.Id);
+
+        // Assert - Coach only gets their own notifications
+        Assert.NotNull(coachResult.Data);
+        Assert.Single(coachResult.Data);
+        Assert.Equal(coachNotif.Id, coachResult.Data[0].NotificationId);
+        Assert.DoesNotContain(coachResult.Data, n => n.NotificationId == traineeNotif.Id);
+    }
+
+    [Fact]
+    public async Task GetUserNotificationsAsync_MapsNonMessageNotificationDescriptionAndActor()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var userId = Guid.NewGuid();
+        var actorId = Guid.NewGuid();
+
+        var actor = new User { UserId = actorId, FullName = "Admin Operator", Email = "admin@fitsocial.com", AvatarUrl = "https://example.com/admin.jpg" };
+        context.Users.Add(actor);
+
+        var systemNotif = new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            ActorId = actorId,
+            Actor = actor,
+            Type = "RefundApproved",
+            Description = "Your package refund has been approved.",
+            CreatedAt = DateTime.UtcNow,
+            IsRead = false
+        };
+        context.Notifications.Add(systemNotif);
+        await context.SaveChangesAsync();
+
+        var service = new NotificationService(context, _realtimeNotifierMock.Object, _loggerMock.Object);
+
+        // Act
+        var result = await service.GetUserNotificationsAsync(userId);
+
+        // Assert
+        Assert.NotNull(result.Data);
+        Assert.Single(result.Data);
+        var item = result.Data[0];
+        Assert.Equal(systemNotif.Id, item.NotificationId);
+        Assert.Equal("RefundApproved", item.Type);
+        Assert.Equal("Your package refund has been approved.", item.MessagePreview);
+        Assert.Equal(actorId, item.SenderId);
+        Assert.Equal("Admin Operator", item.SenderName);
+        Assert.Equal("https://example.com/admin.jpg", item.SenderAvatar);
+    }
+
+    [Fact]
+    public void NotificationsController_HasRoleAuthorizationForTraineeAndCoachOnly()
+    {
+        // Assert that NotificationsController has [Authorize] with Roles = "TRAINEE,COACH"
+        var controllerType = typeof(FitSocial.API.Controllers.NotificationsController);
+        var authorizeAttribute = Attribute.GetCustomAttribute(controllerType, typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute))
+            as Microsoft.AspNetCore.Authorization.AuthorizeAttribute;
+
+        Assert.NotNull(authorizeAttribute);
+        Assert.NotNull(authorizeAttribute.Roles);
+
+        var roles = authorizeAttribute.Roles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Assert.Contains("TRAINEE", roles);
+        Assert.Contains("COACH", roles);
+        Assert.DoesNotContain("STAFF", roles);
+        Assert.DoesNotContain("ADMIN", roles);
+        Assert.Equal(2, roles.Length);
+    }
+
+    [Fact]
+    public async Task NotificationsController_GetNotifications_DerivesUserIdFromClaims()
+    {
+        // Arrange
+        var mockService = new Mock<INotificationService>();
+        var targetUserId = Guid.NewGuid();
+
+        mockService.Setup(s => s.GetUserNotificationsAsync(targetUserId))
+            .ReturnsAsync(FitSocial.Application.DTOs.Common.ApiResponseDto<List<FitSocial.Application.DTOs.Notifications.NotificationDto>>.Ok(
+                new List<FitSocial.Application.DTOs.Notifications.NotificationDto>(), "OK"));
+
+        var controller = new FitSocial.API.Controllers.NotificationsController(mockService.Object);
+
+        // Setup claims principal for authenticated Trainee
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new(System.Security.Claims.ClaimTypes.NameIdentifier, targetUserId.ToString()),
+            new(System.Security.Claims.ClaimTypes.Role, "TRAINEE")
+        };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "TestAuth");
+        controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = new System.Security.Claims.ClaimsPrincipal(identity) }
+        };
+
+        // Act
+        var result = await controller.GetNotifications();
+
+        // Assert
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result);
+        mockService.Verify(s => s.GetUserNotificationsAsync(targetUserId), Times.Once);
+    }
+
+    [Fact]
+    public async Task NotificationsController_GetNotifications_ReturnsUnauthorizedWhenNoValidUserClaim()
+    {
+        // Arrange
+        var mockService = new Mock<INotificationService>();
+        var controller = new FitSocial.API.Controllers.NotificationsController(mockService.Object);
+        controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = new System.Security.Claims.ClaimsPrincipal() }
+        };
+
+        // Act
+        var result = await controller.GetNotifications();
+
+        // Assert
+        Assert.IsType<Microsoft.AspNetCore.Mvc.UnauthorizedObjectResult>(result);
+        mockService.Verify(s => s.GetUserNotificationsAsync(It.IsAny<Guid>()), Times.Never);
+    }
 }

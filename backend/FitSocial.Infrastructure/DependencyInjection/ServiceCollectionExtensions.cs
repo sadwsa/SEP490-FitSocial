@@ -46,9 +46,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISubscriptionPriceHistoryService, SubscriptionPriceHistoryService>();
         services.AddScoped<ITransactionService, TransactionService>();
         services.AddScoped<IRevenueAnalyticsService, RevenueAnalyticsService>();
+        services.AddScoped<ISystemLogService, SystemLogService>();
         services.AddScoped<ITrainingPlanService, TrainingPlanService>();
         services.AddScoped<IMealPlanService, MealPlanService>();
         services.AddScoped<ICoachCertificateService, CoachCertificateService>();
+        services.AddScoped<ICurrentUserContext, CurrentUserContext>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<IAppealService, AppealService>();
         return services;
     }
 
@@ -117,6 +121,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMealPlanRepository, MealPlanRepository>();
 
         services.AddScoped<IRevenueAnalyticsRepository, RevenueAnalyticsRepository>();
+        services.AddScoped<IAppealRepository, AppealRepository>();
 
         return services;
 

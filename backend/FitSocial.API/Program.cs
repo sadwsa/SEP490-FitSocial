@@ -64,9 +64,11 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
+builder.Services.AddScoped<INotificationRealtimeNotifier, NotificationRealtimeNotifier>();
 builder.Services.AddHostedService<FitSocial.API.Services.EkycRetentionService>();
 builder.Services.AddScoped<IPostRealtimeNotifier, PostRealtimeNotifier>();
 
@@ -226,5 +228,6 @@ app.UseRateLimiter();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapHub<PostHub>("/hubs/posts");
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();

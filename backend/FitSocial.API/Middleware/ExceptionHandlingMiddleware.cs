@@ -43,6 +43,40 @@ public class ExceptionHandlingMiddleware
         if (statusCode == StatusCodes.Status500InternalServerError)
         {
             _logger.LogError(ex, "An unhandled server error occurred on path {Path}: {Message}", context.Request.Path, ex.Message);
+            try
+            {
+                var auditLogs = context.RequestServices.GetService<FitSocial.Domain.Interfaces.IAuditLogRepository>();
+                var uow = context.RequestServices.GetService<FitSocial.Domain.Interfaces.IUnitOfWork>();
+                if (auditLogs != null && uow != null)
+                {
+                    var userIdClaim = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    Guid.TryParse(userIdClaim, out var actorId);
+
+                    var auditLog = new FitSocial.Domain.Entities.AuditLog
+                    {
+                        ActorAccountId = actorId != Guid.Empty ? actorId : null,
+                        Action = "SYSTEM_ERROR",
+                        EntityType = "System",
+                        EntityId = context.Request.Path.Value,
+                        Ipaddress = context.Connection.RemoteIpAddress?.ToString(),
+                        NewValue = JsonSerializer.Serialize(new
+                        {
+                            path = context.Request.Path.Value,
+                            method = context.Request.Method,
+                            statusCode = statusCode,
+                            errorMessage = ex.Message,
+                            exceptionType = ex.GetType().Name
+                        }),
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await auditLogs.AddAsync(auditLog);
+                    await uow.SaveChangesAsync();
+                }
+            }
+            catch
+            {
+                // Fail-safe: ensure exception handling never crashes if log writing fails
+            }
         }
         else
         {

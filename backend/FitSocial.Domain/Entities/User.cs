@@ -108,4 +108,6 @@ public partial class User
     public virtual ICollection<UserBlock> UserBlockBlockers { get; set; } = new List<UserBlock>();
 
     public virtual ICollection<WorkoutCompletionLog> WorkoutCompletionLogs { get; set; } = new List<WorkoutCompletionLog>();
+    public virtual ICollection<Appeal> AppealsSubmitted { get; set; } = new List<Appeal>();
+    public virtual ICollection<Appeal> AppealsReviewed { get; set; } = new List<Appeal>();
 }

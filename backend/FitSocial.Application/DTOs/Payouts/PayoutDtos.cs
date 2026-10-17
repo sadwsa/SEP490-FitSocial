@@ -50,6 +50,14 @@ public class GeneratePayoutsRequestDto
     public int Year { get; set; }
 }
 
+/// <summary>
+/// Pay selected payout lines only (one package).
+/// </summary>
+public class ProcessItemsRequestDto
+{
+    public List<Guid> PayoutItemIds { get; set; } = new();
+}
+
 public class GeneratePayoutsResultDto
 {
     public int Month { get; set; }

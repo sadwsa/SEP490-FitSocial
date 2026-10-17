@@ -46,3 +46,45 @@ public class TraineeMealPlanDto
 
     public int TotalItems => Weeks.SelectMany(w => w.Days).SelectMany(d => d.Items).Count();
 }
+
+public class CreateMealPlanDto
+{
+    public Guid OrderDetailsId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public string? Status { get; set; }
+    public List<CreateMealPlanItemDto> Items { get; set; } = new();
+}
+
+public class CreateMealPlanItemDto
+{
+    public short WeekNumber { get; set; }
+    public short DayNumber { get; set; }
+    public string MealType { get; set; } = string.Empty;
+    public string FoodDescription { get; set; } = string.Empty;
+    public int? Calories { get; set; }
+    public short? SortOrder { get; set; }
+}
+
+public class UpdateMealPlanDto
+{
+    public string? Title { get; set; }
+    public string? Description { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public string? Status { get; set; }
+    public List<UpdateMealPlanItemDto>? Items { get; set; }
+}
+
+public class UpdateMealPlanItemDto
+{
+    public Guid? MealPlanItemId { get; set; }
+    public short WeekNumber { get; set; }
+    public short DayNumber { get; set; }
+    public string MealType { get; set; } = string.Empty;
+    public string FoodDescription { get; set; } = string.Empty;
+    public int? Calories { get; set; }
+    public short? SortOrder { get; set; }
+}

@@ -204,6 +204,46 @@
                                     <ValidationMessage For="@(() => editModel.TargetAudience)" class="text-red-500 text-xs mt-1" />
                                 </div>
 
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                        Package Service Inclusions <span class="text-red-500">*</span>
+                                    </label>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(editModel.PackageType == "BOTH" ? "border-[#FF5500] bg-orange-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-lg">🌟</span>
+                                                <input type="radio" name="editPackageType" value="BOTH" checked="@(editModel.PackageType == "BOTH")" @onchange='() => editModel.PackageType = "BOTH"' class="text-[#FF5500] focus:ring-[#FF5500]" />
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-black text-gray-900">Workout + Meal Plan</p>
+                                                <p class="text-[11px] text-gray-500 mt-0.5">Full coaching: workout routines &amp; nutrition plan</p>
+                                            </div>
+                                        </label>
+
+                                        <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(editModel.PackageType == "WORKOUT" ? "border-blue-500 bg-blue-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-lg">🏋️‍♂️</span>
+                                                <input type="radio" name="editPackageType" value="WORKOUT" checked="@(editModel.PackageType == "WORKOUT")" @onchange='() => editModel.PackageType = "WORKOUT"' class="text-blue-600 focus:ring-blue-500" />
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-black text-gray-900">Workout Plan Only</p>
+                                                <p class="text-[11px] text-gray-500 mt-0.5">Custom exercises &amp; video tutorials</p>
+                                            </div>
+                                        </label>
+
+                                        <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(editModel.PackageType == "MEAL" ? "border-emerald-500 bg-emerald-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-lg">🥗</span>
+                                                <input type="radio" name="editPackageType" value="MEAL" checked="@(editModel.PackageType == "MEAL")" @onchange='() => editModel.PackageType = "MEAL"' class="text-emerald-600 focus:ring-emerald-500" />
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-black text-gray-900">Meal Plan Only</p>
+                                                <p class="text-[11px] text-gray-500 mt-0.5">Personalized meal schedule &amp; calories</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
                                 <div class="md:col-span-2 flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
                                     <div>
                                         <p class="text-sm font-bold text-gray-800">Public Marketplace Status</p>
@@ -370,6 +410,7 @@
                     SessionCount = pkg.SessionCount,
                     MinAge = pkg.MinAge,
                     TargetAudience = pkg.TargetAudience,
+                    PackageType = pkg.PackageType ?? "BOTH",
                     IsActive = pkg.IsActive
                 };
                 imageUrls = pkg.ImageUrls != null ? new List<string>(pkg.ImageUrls) : new List<string>();

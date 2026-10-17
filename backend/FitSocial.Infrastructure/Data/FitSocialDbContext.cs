@@ -799,6 +799,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.SessionCount);
             entity.Property(e => e.MinAge);
             entity.Property(e => e.TargetAudience).HasMaxLength(100);
+            entity.Property(e => e.PackageType).HasMaxLength(30).HasDefaultValue("BOTH");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
@@ -872,6 +873,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.PackageTitle).HasMaxLength(255);
             entity.Property(e => e.PackageDurationDays);
             entity.Property(e => e.CoachName).HasMaxLength(100);
+            entity.Property(e => e.PackageType).HasMaxLength(30).HasDefaultValue("BOTH");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");

@@ -20,6 +20,8 @@ public partial class OrderDetail
     public int? PackageDurationDays { get; set; }
 
     public string? CoachName { get; set; }
+ 
+    public string? PackageType { get; set; } = "BOTH";
 
     public DateTime? CreatedAt { get; set; }
 

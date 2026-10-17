@@ -329,10 +329,13 @@
         catch { }
     }
 
+    private static bool IsAlreadyPurchasedError(string? message) =>
+        !string.IsNullOrWhiteSpace(message) &&
+        message.Contains("already purchased", StringComparison.OrdinalIgnoreCase);
+
     private async Task LoadCheckoutData()
     {
-        isLoading = true;
-        errorMessage = null;
+        isLoading = true;        errorMessage = null;
         infoMessage = null;
         preview = null;
         paymentLink = null;
@@ -353,6 +356,12 @@
                 if (res.Success && res.Data != null)
                 {
                     preview = res.Data;
+                }
+                else if (IsAlreadyPurchasedError(res.Message))
+                {
+                    // Already owned: skip the error panel, go to My Packages instead.
+                    Navigation.NavigateTo("/training-packages/purchased");
+                    return;
                 }
                 else
                 {
@@ -383,6 +392,11 @@
                         {
                             preview = res.Data;
                         }
+                        else if (IsAlreadyPurchasedError(res.Message))
+                        {
+                            Navigation.NavigateTo("/training-packages/purchased");
+                            return;
+                        }
                         else
                         {
                             errorMessage = res.Message ?? "Could not prepare the order.";
@@ -410,6 +424,11 @@
             {
                 preview = res.Data;
             }
+            else if (IsAlreadyPurchasedError(res.Message))
+            {
+                Navigation.NavigateTo("/training-packages/purchased");
+                return;
+            }
             else
             {
                 errorMessage = res.Message ?? "Could not prepare the order.";
@@ -432,6 +451,11 @@
                 paymentLink = res.Data;
                 step = CheckoutStep.Qr;
                 StartAutoVerify();
+            }
+            else if (IsAlreadyPurchasedError(res.Message))
+            {
+                Navigation.NavigateTo("/training-packages/purchased");
+                return;
             }
             else
             {

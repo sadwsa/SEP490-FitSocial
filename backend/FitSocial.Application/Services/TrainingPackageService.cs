@@ -167,6 +167,26 @@ namespace FitSocial.Application.Services
                 if (myOrderDetail != null)
                 {
                     dto.OrderDetailsId = myOrderDetail.OrderDetailsId;
+                    dto.OrderId = myOrderDetail.OrderId;
+                    dto.OrderCreatedAt = myOrderDetail.Order?.CreatedAt;
+                    dto.OrderStatus = myOrderDetail.Order?.OrderStatus;
+
+                    var latestRefund = myOrderDetail.Order?.RefundRequests?
+                        .OrderByDescending(r => r.RequestedAt ?? r.CreatedAt)
+                        .FirstOrDefault();
+                    if (latestRefund != null)
+                    {
+                        dto.RefundStatus = latestRefund.Status;
+                    }
+                    else if (string.Equals(myOrderDetail.Order?.OrderStatus, "REFUND_PENDING", StringComparison.OrdinalIgnoreCase))
+                    {
+                        dto.RefundStatus = "PENDING";
+                    }
+                    else if (string.Equals(myOrderDetail.Order?.OrderStatus, "REFUNDED", StringComparison.OrdinalIgnoreCase))
+                    {
+                        dto.RefundStatus = "APPROVED";
+                    }
+
                     dto.PackageType = myOrderDetail.PackageType ?? pkg.PackageType ?? "BOTH";
 
                     var plan = myOrderDetail.TrainingPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();

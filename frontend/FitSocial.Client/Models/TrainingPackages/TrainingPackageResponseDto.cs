@@ -42,6 +42,10 @@ public class TrainingPackageResponseDto
 
     // Training Plan, Meal Plan & Order Details state
     public Guid? OrderDetailsId { get; set; }
+    public Guid? OrderId { get; set; }
+    public DateTime? OrderCreatedAt { get; set; }
+    public string? OrderStatus { get; set; }
+    public string? RefundStatus { get; set; }
     public Guid? TrainingPlanId { get; set; }
     public string? PlanStatus { get; set; }
     public Guid? MealPlanId { get; set; }

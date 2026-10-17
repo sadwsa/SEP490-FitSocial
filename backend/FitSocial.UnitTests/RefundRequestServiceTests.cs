@@ -94,6 +94,7 @@ public class RefundRequestServiceTests
         Assert.Equal(500000, result.Data.RequestedAmount);
         Assert.Equal("PENDING", result.Data.Status);
         Assert.Single(result.Data.EvidenceUrls);
+        Assert.Equal("REFUND_PENDING", order.OrderStatus);
     }
 
     [Fact]
@@ -237,6 +238,79 @@ public class RefundRequestServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<ValidationException>(() => _service.CreateRefundRequestAsync(userId, dto));
+    }
+
+    [Fact]
+    public async Task CreateRefundRequestAsync_WhenTraineeHasNoBankAccount_ThrowsBusinessException()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var order = new Order
+        {
+            OrderId = orderId,
+            BuyerId = userId,
+            OrderStatus = "PAID",
+            TotalAmount = 500000,
+            CreatedAt = DateTime.UtcNow.AddDays(-1)
+        };
+
+        var bankAccountRepoMock = new Mock<ICoachBankAccountRepository>();
+        bankAccountRepoMock.Setup(b => b.ListActiveByCoachIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CoachBankAccount>()); // No active bank account
+
+        var service = new RefundRequestService(
+            _refundRepoMock.Object,
+            _orderRepoMock.Object,
+            _unitOfWorkMock.Object,
+            _auditLogRepoMock.Object,
+            _notificationRepoMock.Object,
+            _trainingPlanRepoMock.Object,
+            _termsRepoMock.Object,
+            bankAccountRepository: bankAccountRepoMock.Object);
+
+        var dto = new CreateRefundRequestDto
+        {
+            OrderId = orderId,
+            Reason = "Không phù hợp gói tập"
+        };
+
+        _orderRepoMock.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(order);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() => service.CreateRefundRequestAsync(userId, dto));
+        Assert.Contains("tài khoản ngân hàng", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreateRefundRequestAsync_LateScheduleWithoutEvidence_ThrowsValidationException()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var order = new Order
+        {
+            OrderId = orderId,
+            BuyerId = userId,
+            OrderStatus = "PAID",
+            TotalAmount = 500000,
+            CreatedAt = DateTime.UtcNow.AddDays(-2)
+        };
+
+        var dto = new CreateRefundRequestDto
+        {
+            OrderId = orderId,
+            Reason = "Coach lên trễ lịch tập 3 ngày liên tục",
+            EvidenceUrls = new List<string>() // Empty evidence list!
+        };
+
+        _orderRepoMock.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(order);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _service.CreateRefundRequestAsync(userId, dto));
+        Assert.Contains("Bằng chứng hình ảnh", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

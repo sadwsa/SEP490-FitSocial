@@ -329,6 +329,16 @@ public class RefundRequestService : IRefundRequestService
             throw new ValidationException($"Cannot request refund for order with status '{order.OrderStatus}'.");
         }
 
+        // Trainee must have an active bank account before creating refund request
+        if (_bankAccountRepository != null)
+        {
+            var activeBanks = await _bankAccountRepository.ListActiveByCoachIdAsync(userId, cancellationToken);
+            if (activeBanks == null || !activeBanks.Any())
+            {
+                throw new BusinessException("Bạn chưa liên kết tài khoản ngân hàng để nhận tiền hoàn. Vui lòng thêm tài khoản ngân hàng trước khi tạo yêu cầu hoàn tiền.");
+            }
+        }
+
         // Evaluate 3-case policy breakdown
         var calc = await EvaluateRefundPolicyCoreAsync(order, dto.Reason, dto.BankAccountId, cancellationToken);
 
@@ -342,6 +352,15 @@ public class RefundRequestService : IRefundRequestService
             if (!calc.IsLateScheduleViolation)
             {
                 throw new BusinessException("The refund request period has expired (refunds are only permitted within 7 days of purchase or for mid-term coach schedule violations).");
+            }
+        }
+
+        // Coach late schedule violation requires proof (image evidence)
+        if (calc.IsLateScheduleViolation)
+        {
+            if (dto.EvidenceUrls == null || !dto.EvidenceUrls.Any(u => !string.IsNullOrWhiteSpace(u)))
+            {
+                throw new ValidationException("Bằng chứng hình ảnh là bắt buộc đối với trường hợp khiếu nại Coach lên trễ lịch.");
             }
         }
 
@@ -427,6 +446,9 @@ public class RefundRequestService : IRefundRequestService
         try
         {
             await _refundRequestRepository.AddAsync(refundRequest, cancellationToken);
+
+            // Snapshot into order: mark order as REFUND_PENDING
+            order.OrderStatus = PaymentConstants.OrderStatusRefundPending;
 
             var firstDetail = order.OrderDetails.FirstOrDefault();
             var packageName = firstDetail?.PackageTitle ?? firstDetail?.Package?.Title ?? "Training Package";
@@ -1076,6 +1098,10 @@ public class RefundRequestService : IRefundRequestService
             item.UpdatedAt = now;
 
             var order = item.Order ?? await _orderRepository.GetOrderByIdWithDetailsAsync(item.OrderId, cancellationToken);
+            if (order != null && string.Equals(order.OrderStatus, PaymentConstants.OrderStatusRefundPending, StringComparison.OrdinalIgnoreCase))
+            {
+                order.OrderStatus = PaymentConstants.OrderStatusCompleted;
+            }
             var firstDetail = order?.OrderDetails?.FirstOrDefault();
             var packageName = firstDetail?.PackageTitle ?? firstDetail?.Package?.Title ?? "Training Package";
             var buyerName = item.RequestedByNavigation?.FullName ?? order?.Buyer?.FullName ?? item.RequestedByNavigation?.Email ?? "Buyer";

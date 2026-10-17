@@ -1,0 +1,371 @@
+@page "/admin/money-history"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@implements IDisposable
+@using FitSocial.Client.Models.Common
+@using FitSocial.Client.Models.Finance
+@using FitSocial.Client.Services.Finance
+@inject IMoneyMovementService MoneyService
+
+<PageTitle>Money Movements - FitSocial Staff Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="auth-alert @toastType" role="alert">
+                <span class="flex-1">@toastMessage</span>
+                <button type="button" class="ml-2 font-bold cursor-pointer opacity-70 hover:opacity-100" @onclick="() => toastMessage = null">✕</button>
+            </div>
+        }
+
+        <h2 class="view-title">Money Movements History</h2>
+        <p class="view-sub">Every amount the system transferred out to a coach or a trainee</p>
+
+        <!-- Summary -->
+        <div class="summary-row">
+            <div class="summary-card coach">
+                <div class="summary-label"><AppIcon Name="chart" /><span>Total to Coaches</span></div>
+                <div class="summary-value coach">@Format(summary.TotalPayoutAmount)</div>
+            </div>
+            <div class="summary-card trainee">
+                <div class="summary-label"><AppIcon Name="shield" /><span>Total to Trainees</span></div>
+                <div class="summary-value trainee">@Format(summary.TotalRefundAmount)</div>
+            </div>
+            <div class="summary-card count">
+                <div class="summary-label"><AppIcon Name="doc" /><span>Records</span></div>
+                <div class="summary-value">@summary.TotalCount</div>
+            </div>
+        </div>
+
+        <!-- Type filter -->
+        <div class="cat-tabs">
+            <button type="button" class="cat-tab @(typeFilter == "" ? "active" : "")" @onclick='() => SetTypeAsync("")'>All</button>
+            <button type="button" class="cat-tab @(typeFilter == "PAYOUT" ? "active" : "")" @onclick='() => SetTypeAsync("PAYOUT")'>
+                <span class="status-dot" style="background:#16a34a;"></span> Payouts (Coach)
+            </button>
+            <button type="button" class="cat-tab @(typeFilter == "REFUND" ? "active" : "")" @onclick='() => SetTypeAsync("REFUND")'>
+                <span class="status-dot" style="background:#f59e0b;"></span> Refunds (Trainee)
+            </button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar wrap">
+            <div class="search-wrap grow">
+                <span class="search-icon"><AppIcon Name="search" /></span>
+                <input value="@searchTerm"
+                       @oninput="OnSearchInput"
+                       class="toolbar-input"
+                       placeholder="Search name, email or transaction ref..." />
+            </div>
+            <select value="@statusFilter" @onchange="OnStatusChangedAsync" class="toolbar-select">
+                <option value="">All statuses</option>
+                <option value="PROCESSED">PROCESSED</option>
+                <option value="PENDING">PENDING</option>
+                <option value="APPROVED">APPROVED</option>
+                <option value="REJECTED">REJECTED</option>
+            </select>
+            <select value="@roleFilter" @onchange="OnRoleChangedAsync" class="toolbar-select">
+                <option value="">All roles</option>
+                <option value="COACH">Coach</option>
+                <option value="TRAINEE">Trainee</option>
+            </select>
+            <button type="button" class="row-btn" @onclick="LoadAsync" disabled="@isLoading">
+                <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
+            </button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="py-4 text-center muted">Loading money movements...</div>
+        }
+        else if (items.Count == 0)
+        {
+            <div class="empty-box">
+                <p class="font-bold">No money movements found</p>
+                <p class="text-sm">Try clearing the filters.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Recipient</th>
+                            <th>Type</th>
+                            <th>Cycle / Reason</th>
+                            <th class="text-end">Amount</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Reference</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in items)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="user-cell">
+                                        <img src="@Avatar(m)" alt="avatar" class="user-avatar-sm" />
+                                        <div style="min-width:0;">
+                                            <strong>@(m.RecipientName ?? "Unknown")</strong><br />
+                                            <small class="muted">@(m.RecipientEmail ?? "")</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="role-badge @(m.RecipientRole.ToLowerInvariant())">@m.RecipientRole</span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(m.CycleLabel))
+                                    {
+                                        <span class="cycle-badge">@m.CycleLabel</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(m.Note))
+                                    {
+                                        <div class="muted-sm" title="@m.Note">@Truncate(m.Note, 34)</div>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <strong style="color:@(m.MovementType == "PAYOUT" ? "#15803d" : "#b45309");">@Format(m.Amount)</strong>
+                                    <div class="muted-sm">@(m.MovementType == "PAYOUT" ? "to coach" : "to trainee")</div>
+                                </td>
+                                <td>
+                                    <small class="muted">@((m.OccurredOn ?? m.RequestedOn)?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</small>
+                                    @if (m.RequestedOn.HasValue && !m.OccurredOn.HasValue)
+                                    {
+                                        <div class="muted-sm">requested @m.RequestedOn.Value.ToLocalTime().ToString("dd/MM")</div>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="status-pill @(StatusClass(m.Status))">@(m.Status ?? "—")</span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(m.TransactionRef))
+                                    {
+                                        <code class="muted-sm" title="@m.TransactionRef">@Truncate(m.TransactionRef, 20)</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    @if (summary.TotalCount > 0)
+                    {
+                        var start = (currentPage - 1) * pageSize + 1;
+                        var end = Math.Min(currentPage * pageSize, summary.TotalCount);
+                        <span>Showing <strong>@start–@end</strong> of <strong>@summary.TotalCount</strong> movements</span>
+                    }
+                    else
+                    {
+                        <span>0 movements</span>
+                    }
+                </div>
+                @if (TotalPages > 1)
+                {
+                    <div class="pagination-controls">
+                        <button type="button" class="page-btn" disabled="@(currentPage <= 1)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Prev</button>
+                        @foreach (var p in PageNumbers())
+                        {
+                            if (p == -1)
+                            {
+                                <span class="page-dots">…</span>
+                            }
+                            else
+                            {
+                                var pn = p;
+                                <button type="button" class="page-btn @(pn == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pn)">@pn</button>
+                            }
+                        }
+                        <button type="button" class="page-btn" disabled="@(currentPage >= TotalPages)" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
+                    </div>
+                }
+                <div class="page-size-selector">
+                    <span>Per page:</span>
+                    <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private List<MoneyMovementDto> items = new();
+    private MoneyMovementListDto summary = new();
+
+    private bool isLoading = false;
+    private string? toastMessage;
+    private string toastType = "info";
+
+    private string typeFilter = "";
+    private string statusFilter = "";
+    private string roleFilter = "";
+    private string searchTerm = "";
+
+    private int currentPage = 1;
+    private int pageSize = 20;
+    private System.Timers.Timer? searchDebounceTimer;
+
+    private int TotalPages => pageSize > 0 ? (int)Math.Ceiling((double)summary.TotalCount / pageSize) : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var res = await MoneyService.GetMoneyMovementsAsync(
+                movementType: string.IsNullOrWhiteSpace(typeFilter) ? null : typeFilter,
+                recipientRole: string.IsNullOrWhiteSpace(roleFilter) ? null : roleFilter,
+                status: string.IsNullOrWhiteSpace(statusFilter) ? null : statusFilter,
+                searchTerm: string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+                pageNumber: currentPage,
+                pageSize: pageSize);
+
+            if (res.Success && res.Data != null)
+            {
+                items = res.Data.Items;
+                summary = res.Data;
+            }
+            else if (!string.IsNullOrEmpty(res.Message))
+            {
+                toastMessage = res.Message;
+                toastType = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            toastMessage = $"Unable to load money movements: {ex.Message}";
+            toastType = "error";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SetTypeAsync(string type)
+    {
+        typeFilter = type;
+        currentPage = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnStatusChangedAsync(ChangeEventArgs e)
+    {
+        statusFilter = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnRoleChangedAsync(ChangeEventArgs e)
+    {
+        roleFilter = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await LoadAsync();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+        searchDebounceTimer = new System.Timers.Timer(400) { AutoReset = false };
+        searchDebounceTimer.Elapsed += async (_, _) =>
+        {
+            currentPage = 1;
+            await InvokeAsync(LoadAsync);
+        };
+        searchDebounceTimer.Start();
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        if (page < 1 || page > TotalPages || page == currentPage) return;
+        currentPage = page;
+        await LoadAsync();
+    }
+
+    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var s) && s > 0)
+        {
+            pageSize = s;
+            currentPage = 1;
+            await LoadAsync();
+        }
+    }
+
+    private IEnumerable<int> PageNumbers()
+    {
+        var total = TotalPages;
+        if (total <= 1) yield break;
+        const int d = 2;
+        var l = Math.Max(1, currentPage - d);
+        var r = Math.Min(total, currentPage + d);
+        if (l > 1)
+        {
+            yield return 1;
+            if (l > 2) yield return -1;
+        }
+        for (var i = l; i <= r; i++) yield return i;
+        if (r < total)
+        {
+            if (r < total - 1) yield return -1;
+            yield return total;
+        }
+    }
+
+    private static string Format(decimal value) => value.ToString("N0") + " đ";
+
+    private static string? Truncate(string? v, int max)
+    {
+        if (string.IsNullOrEmpty(v)) return v;
+        return v.Length <= max ? v : v[..max] + "…";
+    }
+
+    private static string StatusClass(string? status) => status switch
+    {
+        "PROCESSED" => "done",
+        "APPROVED" => "done",
+        "REJECTED" => "locked",
+        _ => "pending"
+    };
+
+    private static string Avatar(MoneyMovementDto m)
+    {
+        if (!string.IsNullOrWhiteSpace(m.RecipientAvatarUrl) &&
+            (m.RecipientAvatarUrl.StartsWith("http://") || m.RecipientAvatarUrl.StartsWith("https://")))
+        {
+            return m.RecipientAvatarUrl;
+        }
+
+        var label = !string.IsNullOrWhiteSpace(m.RecipientName) ? m.RecipientName : "User";
+        var bg = m.RecipientRole == "COACH" ? "1D4ED8" : "0F766E";
+        return $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(label)}&background={bg}&color=fff";
+    }
+
+    public void Dispose()
+    {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+    }
+}

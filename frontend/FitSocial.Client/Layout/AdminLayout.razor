@@ -45,6 +45,9 @@
             <button type="button" class="side-item @(IsActive("/admin/refunds") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/refunds")'>
                 <AppIcon Name="shield" /><span>Refund Requests</span>
             </button>
+            <button type="button" class="side-item @(IsActive("/admin/money-history") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/money-history")'>
+                <AppIcon Name="doc" /><span>Money Movements</span>
+            </button>
 
             <AuthorizeView Roles="ADMIN">
                 <Authorized>

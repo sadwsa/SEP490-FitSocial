@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPostCommentService, PostCommentService>();
         services.AddScoped<IPaymentGatewayConfigService, PaymentGatewayConfigService>();
         services.AddScoped<IPayoutService, PayoutService>();
+        services.AddScoped<IMoneyMovementService, MoneyMovementService>();
         services.AddScoped<ICoachDashboardService, CoachDashboardService>();
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<ISubscriptionPriceHistoryService, SubscriptionPriceHistoryService>();
@@ -102,6 +103,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<ITrainingPackageRepository, TrainingPackageRepository>();
         services.AddScoped<IPayoutRepository, PayoutRepository>();
+        services.AddScoped<IMoneyMovementRepository, MoneyMovementRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<ITrainingPlanRepository, TrainingPlanRepository>();

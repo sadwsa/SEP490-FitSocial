@@ -8,7 +8,7 @@ namespace FitSocial.Application.DTOs.TrainingPackage
     {
         public Guid PackageId { get; set; }
         public Guid CoachId { get; set; }
-        // Thêm tên của Coach để hiển thị lên UI cho đẹp
+        // Coach name for UI display
         public string? CoachName { get; set; }
         public string? Title { get; set; }
         public string? Description { get; set; }

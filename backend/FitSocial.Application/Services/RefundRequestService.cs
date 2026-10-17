@@ -186,6 +186,8 @@ public class RefundRequestService : IRefundRequestService
                                        reasonLower.Contains("late plan") ||
                                        reasonLower.Contains("late schedule") ||
                                        reasonLower.Contains("coach late") ||
+                                       reasonLower.Contains("delayed schedule") ||
+                                       reasonLower.Contains("delayed plan") ||
                                        reasonLower.Contains("chưa có lịch") ||
                                        reasonLower.Contains("không có lịch") ||
                                        reasonLower.Contains("vi phạm lịch");
@@ -335,7 +337,7 @@ public class RefundRequestService : IRefundRequestService
             var activeBanks = await _bankAccountRepository.ListActiveByCoachIdAsync(userId, cancellationToken);
             if (activeBanks == null || !activeBanks.Any())
             {
-                throw new BusinessException("Bạn chưa liên kết tài khoản ngân hàng để nhận tiền hoàn. Vui lòng thêm tài khoản ngân hàng trước khi tạo yêu cầu hoàn tiền.");
+                throw new BusinessException("You have not linked a bank account to receive refunds. Please add a bank account before creating a refund request.");
             }
         }
 
@@ -360,7 +362,7 @@ public class RefundRequestService : IRefundRequestService
         {
             if (dto.EvidenceUrls == null || !dto.EvidenceUrls.Any(u => !string.IsNullOrWhiteSpace(u)))
             {
-                throw new ValidationException("Bằng chứng hình ảnh là bắt buộc đối với trường hợp khiếu nại Coach lên trễ lịch.");
+                throw new ValidationException("Image evidence is required when filing a complaint about a coach's delayed schedule.");
             }
         }
 

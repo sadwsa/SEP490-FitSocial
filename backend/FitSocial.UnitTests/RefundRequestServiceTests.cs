@@ -280,7 +280,7 @@ public class RefundRequestServiceTests
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<BusinessException>(() => service.CreateRefundRequestAsync(userId, dto));
-        Assert.Contains("tài khoản ngân hàng", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("bank account", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -301,7 +301,7 @@ public class RefundRequestServiceTests
         var dto = new CreateRefundRequestDto
         {
             OrderId = orderId,
-            Reason = "Coach lên trễ lịch tập 3 ngày liên tục",
+            Reason = "Coach delayed schedule for 3 consecutive days",
             EvidenceUrls = new List<string>() // Empty evidence list!
         };
 
@@ -310,7 +310,7 @@ public class RefundRequestServiceTests
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ValidationException>(() => _service.CreateRefundRequestAsync(userId, dto));
-        Assert.Contains("Bằng chứng hình ảnh", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Image evidence", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

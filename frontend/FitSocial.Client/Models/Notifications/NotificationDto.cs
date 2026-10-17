@@ -11,6 +11,7 @@ public class NotificationDto
     public string? SenderAvatar { get; set; }
     public Guid ConversationId { get; set; }
     public Guid? MessageId { get; set; }
+    public Guid? ReferenceId { get; set; }
     public string? MessagePreview { get; set; }
     public DateTime? CreatedAt { get; set; }
     public bool IsRead { get; set; }

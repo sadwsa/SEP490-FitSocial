@@ -33,6 +33,28 @@ public class RefundRequestItem
     public List<string> EvidenceUrls { get; set; } = new();
     public string? Status { get; set; } // PENDING, APPROVED, REJECTED
 
+    // Policy Calculation Snapshot
+    public string? RefundCase { get; set; } // CASE_1, CASE_2, CASE_3
+    public string? RefundCaseTitle { get; set; }
+    public string? RefundCaseDescription { get; set; }
+    public int? TotalSessions { get; set; }
+    public int? CompletedSessions { get; set; }
+    public int? UnperformedSessions { get; set; }
+    public decimal? UnitPricePerSession { get; set; }
+    public decimal? CoachPayoutAmount { get; set; }
+    public decimal? TraineeRefundAmount { get; set; }
+    public bool? IsWithin7Days { get; set; }
+    public bool? IsPlanSent { get; set; }
+    public bool? IsPlanCreated { get; set; }
+    public bool? IsLateScheduleViolation { get; set; }
+
+    // Trainee Payout Bank Account Target
+    public Guid? BankAccountId { get; set; }
+    public string? BankName { get; set; }
+    public string? BankCode { get; set; }
+    public string? AccountName { get; set; }
+    public string? MaskedAccountNumber { get; set; }
+
     // Admin/Staff review information
     public Guid? ReviewedBy { get; set; }
     public string? ReviewedByName { get; set; }
@@ -52,6 +74,31 @@ public class RefundRequestItem
     public string? TermTitle { get; set; }
 }
 
+public class RefundPolicyCalculation
+{
+    public string RefundCase { get; set; } = string.Empty; // CASE_1, CASE_2, CASE_3
+    public string CaseTitle { get; set; } = string.Empty;
+    public string CaseDescription { get; set; } = string.Empty;
+    public bool IsWithin7Days { get; set; }
+    public int TotalSessions { get; set; }
+    public int CompletedSessions { get; set; }
+    public int UnperformedSessions { get; set; }
+    public decimal UnitPricePerSession { get; set; }
+    public decimal TotalPaidAmount { get; set; }
+    public decimal TraineeRefundAmount { get; set; }
+    public decimal CoachPayoutAmount { get; set; }
+    public bool IsPlanSent { get; set; }
+    public bool IsPlanCreated { get; set; }
+    public bool IsLateScheduleViolation { get; set; }
+
+    // Trainee Payout Bank Account Target
+    public Guid? TargetBankAccountId { get; set; }
+    public string? TargetBankName { get; set; }
+    public string? TargetBankCode { get; set; }
+    public string? TargetAccountName { get; set; }
+    public string? TargetAccountNumberMasked { get; set; }
+}
+
 public class GetRefundRequestsQuery
 {
     public int PageNumber { get; set; } = 1;
@@ -65,6 +112,7 @@ public class GetRefundRequestsQuery
 public class ApproveRefundRequest
 {
     public decimal? ApprovedAmount { get; set; }
+    public Guid? BankAccountId { get; set; }
     public string? StaffNote { get; set; }
     public string? RefundTransactionRef { get; set; }
 }
@@ -72,4 +120,12 @@ public class ApproveRefundRequest
 public class RejectRefundRequest
 {
     public string StaffNote { get; set; } = string.Empty;
+}
+
+public class CreateRefundRequestDto
+{
+    public Guid OrderId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public List<string>? EvidenceUrls { get; set; }
+    public Guid? BankAccountId { get; set; }
 }

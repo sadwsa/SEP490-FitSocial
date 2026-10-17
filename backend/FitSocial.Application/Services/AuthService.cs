@@ -29,6 +29,7 @@ public class AuthService : IAuthService
     private readonly ICoachProfileRepository _coachProfiles;
     private readonly IEkycService _ekycService;
     private readonly IEncryptionService _encryptionService;
+    private readonly IAppealService _appealService;
 
     public AuthService(
         IUserRepository users,
@@ -46,7 +47,8 @@ public class AuthService : IAuthService
         ICoachCertificateRepository certificates,
         ICoachProfileRepository coachProfiles,
         IEkycService ekycService,
-        IEncryptionService encryptionService)
+        IEncryptionService encryptionService,
+        IAppealService appealService)
     {
         _users = users;
         _unitOfWork = unitOfWork;
@@ -64,6 +66,7 @@ public class AuthService : IAuthService
         _coachProfiles = coachProfiles;
         _ekycService = ekycService;
         _encryptionService = encryptionService;
+        _appealService = appealService;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
@@ -162,6 +165,25 @@ public class AuthService : IAuthService
 
         if (user.IsLocked == true)
         {
+            // Blocked due to reports threshold
+            if (user.WarningCount >= 3)
+            {
+                var appealToken = _appealService.GenerateAppealToken(user);
+                var blockedData = new AuthResponseDto
+                {
+                    IsBlockedDueToReports = true,
+                    BlockReasonMessage = "Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.",
+                    AppealToken = appealToken,
+                    WarningCount = user.WarningCount
+                };
+                return new ApiResponseDto<AuthResponseDto>
+                {
+                    Success = false,
+                    Message = "Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.",
+                    Data = blockedData
+                };
+            }
+
             // Coach pending approval: specific message per spec Step 5 abnormal flow
             if (string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
             {
@@ -632,6 +654,23 @@ public class AuthService : IAuthService
         {
             if (user.IsLocked == true)
             {
+                if (user.WarningCount >= 3)
+                {
+                    var appealToken = _appealService.GenerateAppealToken(user);
+                    var blockedData = new AuthResponseDto
+                    {
+                        IsBlockedDueToReports = true,
+                        BlockReasonMessage = "Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.",
+                        AppealToken = appealToken,
+                        WarningCount = user.WarningCount
+                    };
+                    return new ApiResponseDto<AuthResponseDto>
+                    {
+                        Success = false,
+                        Message = "Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.",
+                        Data = blockedData
+                    };
+                }
                 return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
             }
 

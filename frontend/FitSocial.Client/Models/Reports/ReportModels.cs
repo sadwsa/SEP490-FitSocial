@@ -80,15 +80,6 @@ public class ProcessViolationReportRequest
     public string? Note { get; set; }
 }
 
-public class SubmitCoachComplaintRequest
-{
-    public Guid CoachId { get; set; }
-    public string Title { get; set; } = string.Empty;
-    public string Content { get; set; } = string.Empty;
-    public List<string> EvidenceUrls { get; set; } = new();
-}
-
-
 public class CreateUserReportRequest
 {
     public Guid ReportedUserId { get; set; }

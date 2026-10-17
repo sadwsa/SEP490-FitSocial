@@ -85,6 +85,10 @@ public class AuthResponse
     public string RefreshToken { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public UserInfo User { get; set; } = new();
+    public bool IsBlockedDueToReports { get; set; }
+    public string? BlockReasonMessage { get; set; }
+    public string? AppealToken { get; set; }
+    public int? WarningCount { get; set; }
 }
 
 public class UserInfo

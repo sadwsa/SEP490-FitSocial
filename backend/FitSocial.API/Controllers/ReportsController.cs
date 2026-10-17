@@ -162,32 +162,4 @@ public class ReportsController : ControllerBase
         var result = await _reportService.ReportUserAsync(currentUserId, request, cancellationToken);
         return Ok(result);
     }
-
-    /// <summary>
-    /// Submit a complaint against a Coach (Trainee or Coach only).
-    /// </summary>
-    [HttpPost("coach")]
-    [HttpPost("coach-complaint")]
-    [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
-    [ProducesResponseType(typeof(ApiResponseDto<ReportListItemDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> SubmitCoachComplaint([FromBody] SubmitCoachComplaintRequestDto request, CancellationToken cancellationToken = default)
-    {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
-        if (!Guid.TryParse(userIdStr, out var currentUserId))
-        {
-            return Unauthorized(ApiResponseDto<ReportListItemDto>.Fail("Unauthorized"));
-        }
-
-        var result = await _reportService.SubmitCoachComplaintAsync(currentUserId, request, cancellationToken);
-        if (!result.Success)
-        {
-            return BadRequest(result);
-        }
-
-        return Ok(result);
-    }
 }

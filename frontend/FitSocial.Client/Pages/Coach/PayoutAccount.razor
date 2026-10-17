@@ -1,6 +1,7 @@
 @page "/coach/payout-account"
+@page "/payout-account"
 @layout EmptyLayout
-@attribute [Authorize(Roles = "COACH")]
+@attribute [Authorize(Roles = "COACH,TRAINEE,Coach,Trainee,coach,trainee")]
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Coaches
 @using FitSocial.Client.Services.Coaches
@@ -11,7 +12,7 @@
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
 @inject NavigationManager Navigation
 
-<PageTitle>Payout Account - FitSocial Coach</PageTitle>
+<PageTitle>Payout Account - FitSocial</PageTitle>
 
 <div class="min-h-screen bg-gray-100 text-gray-800 font-sans">
     <AppHeader SearchTerm="@headerSearchTerm"
@@ -24,18 +25,18 @@
         @@media (min-width: 1024px) {
             .home-3col-layout {
                 display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 48rem) minmax(16rem, 1fr) !important;
+                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
                 align-items: start !important;
             }
         }
     </style>
 
-    <div class="home-3col-layout max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 gap-6">
-        <aside class="home-left-sidebar hidden lg:block w-72 flex-shrink-0 sticky top-24">
-            <AppSidebar ActiveItem="payout-account" />
-        </aside>
+    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
+        <!-- Sidebar -->
+        <AppSidebar ActiveItem="payout-account" />
 
-        <section class="home-main-feed min-w-0">
+        <!-- Main Content -->
+        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-10">
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
                 <div class="flex items-center justify-between pb-6 border-b border-gray-100 mb-6">
                     <div>
@@ -43,7 +44,7 @@
                             Payout Bank Account
                         </h1>
                         <p class="text-xs md:text-sm text-gray-500 mt-1">
-                            Connect your Vietnamese bank account to receive weekly earnings via NAPAS 24/7.
+                            Connect your Vietnamese bank account to receive earnings and refunds via NAPAS 24/7.
                         </p>
                     </div>
                     <div class="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-[#FF5500]">
@@ -176,20 +177,35 @@
                             </div>
                         </div>
 
-                        <!-- Submit Button -->
+                        <!-- Action Buttons -->
                         <div class="flex items-center justify-between pt-4 border-t border-gray-100">
                             <span class="text-xs text-gray-400">
                                 * Account details are secured with AES encryption.
                             </span>
-                            <button type="submit"
-                                    disabled="@isSubmitting"
-                                    class="px-6 py-2.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition duration-200 disabled:opacity-50 flex items-center gap-2">
-                                @if (isSubmitting)
+                            <div class="flex items-center gap-3">
+                                @if (hasExistingAccount)
                                 {
-                                    <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <button type="button"
+                                            disabled="@(isSubmitting || isDeleting)"
+                                            @onclick="HandleDeleteAccount"
+                                            class="px-4 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold border border-red-200 transition duration-200 disabled:opacity-50 flex items-center gap-2">
+                                        @if (isDeleting)
+                                        {
+                                            <div class="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                                        }
+                                        <span>Delete Account</span>
+                                    </button>
                                 }
-                                <span>@(hasExistingAccount ? "Save Changes" : "Save Account")</span>
-                            </button>
+                                <button type="submit"
+                                        disabled="@(isSubmitting || isDeleting)"
+                                        class="px-6 py-2.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition duration-200 disabled:opacity-50 flex items-center gap-2">
+                                    @if (isSubmitting)
+                                    {
+                                        <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    }
+                                    <span>@(hasExistingAccount ? "Save Changes" : "Save Account")</span>
+                                </button>
+                            </div>
                         </div>
                     </EditForm>
                 }
@@ -202,8 +218,10 @@
 
 @code {
     private CreateCoachBankAccountDto accountForm = new() { IsDefault = true };
+    private Guid? existingBankId = null;
     private bool isLoading = true;
     private bool isSubmitting = false;
+    private bool isDeleting = false;
     private bool hasExistingAccount = false;
 
     private string errorMessage = "";
@@ -272,6 +290,7 @@
         if (response.Success && response.Data != null && response.Data.Any())
         {
             var existing = response.Data.First();
+            existingBankId = existing.BankId;
             hasExistingAccount = true;
 
             accountForm = new CreateCoachBankAccountDto
@@ -296,6 +315,7 @@
         else
         {
             hasExistingAccount = false;
+            existingBankId = null;
             accountForm = new CreateCoachBankAccountDto { IsDefault = true };
         }
 
@@ -318,6 +338,10 @@
         {
             successMessage = hasExistingAccount ? "Bank account updated successfully!" : "Bank account added successfully!";
             hasExistingAccount = true;
+            if (response.Data != null)
+            {
+                existingBankId = response.Data.BankId;
+            }
         }
         else
         {
@@ -325,6 +349,31 @@
         }
 
         isSubmitting = false;
+    }
+
+    private async Task HandleDeleteAccount()
+    {
+        if (!existingBankId.HasValue) return;
+
+        isDeleting = true;
+        errorMessage = "";
+        successMessage = "";
+
+        var response = await CoachService.DeleteBankAccountAsync(existingBankId.Value);
+        if (response.Success)
+        {
+            successMessage = "Bank account deleted successfully.";
+            hasExistingAccount = false;
+            existingBankId = null;
+            accountForm = new CreateCoachBankAccountDto { IsDefault = true };
+            bankSearchTerm = "";
+        }
+        else
+        {
+            errorMessage = response.Message ?? "Failed to delete bank account.";
+        }
+
+        isDeleting = false;
     }
 
     private async Task LoadUserInfoAsync()
@@ -335,8 +384,9 @@
             var user = authState.User;
             if (user.Identity?.IsAuthenticated == true)
             {
-                userName = user.Identity.Name ?? "Coach";
-                userRole = "Coach";
+                userName = user.Identity.Name ?? "User";
+                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach");
+                userRole = isCoach ? "Coach" : "Trainee";
                 var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {

@@ -96,6 +96,7 @@ public class OrderService : IOrderService
             PackagePrice = package.Price,
             PackageTitle = package.Title ?? "Training Package",
             PackageDurationDays = package.DurationDays,
+            PackageType = package.PackageType ?? "BOTH",
             CoachName = coachName,
             CreatedAt = now
         };
@@ -174,6 +175,7 @@ public class OrderService : IOrderService
                         }
 
                         var plan = detail.TrainingPlans?.FirstOrDefault();
+                        var mealPlan = detail.MealPlans?.FirstOrDefault();
                         var thumbnailUrl = pkg?.Media?.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).FirstOrDefault();
 
                         packages.Add(new CoachTraineePackageOrderDto
@@ -183,6 +185,7 @@ public class OrderService : IOrderService
                             PackageId = detail.PackageId,
                             PackageTitle = detail.PackageTitle ?? pkg?.Title ?? "Training Package",
                             PackageDescription = pkg?.Description,
+                            PackageType = detail.PackageType ?? pkg?.PackageType ?? "BOTH",
                             DurationDays = detail.PackageDurationDays ?? pkg?.DurationDays,
                             SessionCount = pkg?.SessionCount,
                             PricePaid = detail.PackagePrice ?? order.TotalAmount,
@@ -191,7 +194,9 @@ public class OrderService : IOrderService
                             PurchasedAt = order.CreatedAt,
                             ThumbnailUrl = thumbnailUrl,
                             TrainingPlanId = plan?.TrainingPlanId,
-                            PlanStatus = plan?.Status ?? (order.OrderStatus == "COMPLETED" ? "ACTIVE" : order.OrderStatus)
+                            PlanStatus = plan?.Status,
+                            MealPlanId = mealPlan?.MealPlanId,
+                            MealPlanStatus = mealPlan?.Status
                         });
                     }
                 }
@@ -243,6 +248,7 @@ public class OrderService : IOrderService
                 PackageDurationDays = d.PackageDurationDays ?? d.Package?.DurationDays,
                 CoachName = d.CoachName,
                 PackagePrice = d.PackagePrice,
+                PackageType = d.PackageType,
                 CreatedAt = d.CreatedAt
             }).ToList()
         };

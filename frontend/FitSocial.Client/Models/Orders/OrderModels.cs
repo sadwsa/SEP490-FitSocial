@@ -48,6 +48,7 @@ public class CoachTraineePackageOrderDto
     public Guid? PackageId { get; set; }
     public string PackageTitle { get; set; } = string.Empty;
     public string? PackageDescription { get; set; }
+    public string? PackageType { get; set; } = "BOTH";
     public int? DurationDays { get; set; }
     public int? SessionCount { get; set; }
     public decimal? PricePaid { get; set; }
@@ -57,4 +58,6 @@ public class CoachTraineePackageOrderDto
     public string? ThumbnailUrl { get; set; }
     public Guid? TrainingPlanId { get; set; }
     public string? PlanStatus { get; set; }
+    public Guid? MealPlanId { get; set; }
+    public string? MealPlanStatus { get; set; }
 }

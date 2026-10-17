@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Notifications;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +14,7 @@ namespace FitSocial.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
 public class NotificationsController : ControllerBase
 {
     private readonly INotificationService _notificationService;
@@ -30,7 +31,7 @@ public class NotificationsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<List<NotificationDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<List<NotificationDto>>), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiResponseDto<List<NotificationDto>>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetNotifications()
+    public async Task<IActionResult> GetNotifications([FromQuery] string? category = null)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                      ?? User.FindFirst("sub")?.Value;
@@ -40,7 +41,10 @@ public class NotificationsController : ControllerBase
             return Unauthorized(ApiResponseDto<List<NotificationDto>>.Fail("Invalid authentication session. Please log in again."));
         }
 
-        var result = await _notificationService.GetUserNotificationsAsync(currentUserId);
+        var result = string.IsNullOrWhiteSpace(category)
+            ? await _notificationService.GetUserNotificationsAsync(currentUserId)
+            : await _notificationService.GetUserNotificationsAsync(currentUserId, category);
+
         if (!result.Success)
         {
             return BadRequest(result);

@@ -106,15 +106,13 @@ public class PayoutsController : ControllerBase
         return Ok(result);
     }
 
-    public sealed record ProcessItemsRequest(List<Guid> PayoutItemIds);
-
     /// <summary>
     /// Pay selected lines only (one package): transfers just their net amount.
     /// The payout stays PENDING until every line is paid.
     /// </summary>
     [HttpPost("{id:guid}/process-items")]
     [ProducesResponseType(typeof(ApiResponseDto<ProcessPayoutResultDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ProcessItems(Guid id, [FromBody] ProcessItemsRequest request, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ProcessItems(Guid id, [FromBody] ProcessItemsRequestDto request, CancellationToken cancellationToken = default)
     {
         if (!TryGetCurrentUserId(out var staffId))
         {

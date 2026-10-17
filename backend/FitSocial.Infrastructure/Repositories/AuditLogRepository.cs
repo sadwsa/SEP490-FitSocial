@@ -118,6 +118,78 @@ public class AuditLogRepository : Repository<AuditLog>, IAuditLogRepository
         return (items, totalCount);
     }
 
+    public async Task<(List<AuditLog> Items, int TotalCount)> GetPagedAuditLogsAsync(
+        string? search,
+        string? action,
+        string? entityType,
+        Guid? actorId,
+        DateTime? fromDate,
+        DateTime? toDate,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = DbContext.AuditLogs
+            .AsNoTracking()
+            .Include(a => a.ActorAccount)
+            .AsQueryable();
+
+        if (fromDate.HasValue)
+        {
+            query = query.Where(a => a.CreatedAt >= fromDate.Value);
+        }
+
+        if (toDate.HasValue)
+        {
+            query = query.Where(a => a.CreatedAt <= toDate.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(entityType))
+        {
+            var et = entityType.Trim().ToLower();
+            query = query.Where(a => a.EntityType != null && a.EntityType.ToLower() == et);
+        }
+
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            var act = action.Trim().ToLower();
+            query = query.Where(a => a.Action != null && a.Action.ToLower() == act);
+        }
+
+        if (actorId.HasValue && actorId.Value != Guid.Empty)
+        {
+            query = query.Where(a => a.ActorAccountId == actorId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var kw = search.Trim().ToLower();
+            query = query.Where(a =>
+                (a.Action != null && a.Action.ToLower().Contains(kw)) ||
+                (a.EntityType != null && a.EntityType.ToLower().Contains(kw)) ||
+                (a.EntityId != null && a.EntityId.ToLower().Contains(kw)) ||
+                (a.Ipaddress != null && a.Ipaddress.ToLower().Contains(kw)) ||
+                (a.ActorAccount != null && a.ActorAccount.FullName != null && a.ActorAccount.FullName.ToLower().Contains(kw)) ||
+                (a.ActorAccount != null && a.ActorAccount.Email != null && a.ActorAccount.Email.ToLower().Contains(kw)) ||
+                (a.OldValue != null && a.OldValue.ToLower().Contains(kw)) ||
+                (a.NewValue != null && a.NewValue.ToLower().Contains(kw)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var page = Math.Max(1, pageNumber);
+        var size = Math.Clamp(pageSize, 1, 100);
+
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .ThenByDescending(a => a.AuditLogId)
+            .Skip((page - 1) * size)
+            .Take(size)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
     public async Task<AuditLog?> GetByIdWithActorAsync(long logId, CancellationToken cancellationToken = default)
     {
         return await DbContext.AuditLogs

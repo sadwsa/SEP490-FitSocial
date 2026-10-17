@@ -12,6 +12,8 @@ public partial class FitSocialDbContext : DbContext
     {
     }
 
+    public virtual DbSet<Appeal> Appeals { get; set; }
+    public virtual DbSet<AppealMedium> AppealMedia { get; set; }
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
     public virtual DbSet<BodyMeasurementDetail> BodyMeasurementDetails { get; set; }
     public virtual DbSet<BodyMetricLog> BodyMetricLogs { get; set; }
@@ -695,6 +697,65 @@ public partial class FitSocialDbContext : DbContext
             entity.HasOne(d => d.Report).WithMany(p => p.ReportMedia)
                 .HasForeignKey(d => d.ReportId)
                 .HasConstraintName("ReportMedia_ReportID_fkey");
+        });
+
+        // 23.1. Appeals
+        modelBuilder.Entity<Appeal>(entity =>
+        {
+            entity.HasKey(e => e.AppealId).HasName("Appeals_pkey");
+            entity.ToTable("Appeals");
+            entity.Property(e => e.AppealId)
+                .HasDefaultValueSql("uuid_generate_v4()")
+                .HasColumnName("AppealID");
+            entity.Property(e => e.ReportId).HasColumnName("ReportID");
+            entity.Property(e => e.AppealerId).HasColumnName("AppealerID");
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.Content).HasColumnType("text");
+            entity.Property(e => e.Status).HasMaxLength(30).HasDefaultValue("PENDING");
+            entity.Property(e => e.ReviewedBy).HasColumnName("ReviewedBy");
+            entity.Property(e => e.ReviewedAt).HasColumnType("timestamp without time zone");
+            entity.Property(e => e.ReviewNote).HasColumnType("text");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone");
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp without time zone");
+
+            entity.HasOne(d => d.Report).WithMany(p => p.Appeals)
+                .HasForeignKey(d => d.ReportId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("Appeals_ReportID_fkey");
+
+            entity.HasOne(d => d.Appealer).WithMany(p => p.AppealsSubmitted)
+                .HasForeignKey(d => d.AppealerId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("Appeals_AppealerID_fkey");
+
+            entity.HasOne(d => d.ReviewedByNavigation).WithMany(p => p.AppealsReviewed)
+                .HasForeignKey(d => d.ReviewedBy)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("Appeals_ReviewedBy_fkey");
+        });
+
+        // 23.2. AppealMedia
+        modelBuilder.Entity<AppealMedium>(entity =>
+        {
+            entity.HasKey(e => e.MediaId).HasName("AppealMedia_pkey");
+            entity.ToTable("AppealMedia");
+            entity.Property(e => e.MediaId)
+                .HasDefaultValueSql("uuid_generate_v4()")
+                .HasColumnName("MediaID");
+            entity.Property(e => e.AppealId).HasColumnName("AppealID");
+            entity.Property(e => e.MediaUrl).HasMaxLength(2048);
+            entity.Property(e => e.MediaType).HasMaxLength(20);
+            entity.Property(e => e.SortOrder);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone");
+
+            entity.HasOne(d => d.Appeal).WithMany(p => p.AppealMedia)
+                .HasForeignKey(d => d.AppealId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("AppealMedia_AppealID_fkey");
         });
 
         // 24. CoachSubscriptionPlans

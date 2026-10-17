@@ -119,6 +119,7 @@ public class ReportRepository : Repository<Report>, IReportRepository
             .Include(r => r.ResolvedByNavigation)
             .Include(r => r.AppealReviewedByNavigation)
             .Include(r => r.ReportMedia)
+            .Include(r => r.Appeals)
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.ReportId == reportId, cancellationToken);
     }

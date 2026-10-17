@@ -191,6 +191,28 @@ public class ReportService : IReportService
                     reportedUser.TokenVersion += 1;
                 }
                 reportedUser.UpdatedAt = now;
+
+                if (_notificationRepository != null)
+                {
+                    var isLockedNow = reportedUser.IsLocked == true;
+                    var notifType = isLockedNow ? "ViolationLock" : "ViolationWarning";
+                    var desc = isLockedNow
+                        ? "Your account has been locked due to reaching 3 policy violation warnings."
+                        : $"You have received a policy violation warning (Warning count: {reportedUser.WarningCount}/3).";
+
+                    var notif = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = report.ReportedUserId.Value,
+                        ActorId = staffId,
+                        Type = notifType,
+                        Description = desc,
+                        ReferenceId = report.ReportId,
+                        IsRead = false,
+                        CreatedAt = now
+                    };
+                    await _notificationRepository.AddAsync(notif, cancellationToken);
+                }
             }
         }
 
@@ -286,6 +308,37 @@ public class ReportService : IReportService
         report.AppealReviewedBy = staffId;
         report.AppealReviewedAt = now;
         report.AppealReviewNote = request.AppealReviewNote?.Trim();
+
+        // Also update any active record in Appeals table
+        if (report.Appeals != null && report.Appeals.Any())
+        {
+            foreach (var appeal in report.Appeals.Where(a => a.Status == "PENDING"))
+            {
+                appeal.Status = normalizedStatus;
+                appeal.ReviewedBy = staffId;
+                appeal.ReviewedAt = now;
+                appeal.ReviewNote = request.AppealReviewNote?.Trim();
+                appeal.UpdatedAt = now;
+            }
+        }
+
+        if (_notificationRepository != null && report.ReportedUserId.HasValue)
+        {
+            var notif = new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = report.ReportedUserId.Value,
+                ActorId = staffId,
+                Type = "ProcessAppeal",
+                Description = normalizedStatus == "APPROVED"
+                    ? "Your report appeal has been approved by staff."
+                    : "Your report appeal has been reviewed and rejected.",
+                ReferenceId = report.ReportId,
+                IsRead = false,
+                CreatedAt = now
+            };
+            await _notificationRepository.AddAsync(notif, cancellationToken);
+        }
 
         // If appeal was approved, apply requested actions
         if (normalizedStatus == "APPROVED" && report.ReportedUserId.HasValue)
@@ -394,153 +447,6 @@ public class ReportService : IReportService
 
         var detailedReport = await _reportRepository.GetReportWithDetailsByIdAsync(report.ReportId, cancellationToken);
         return ApiResponseDto<ReportListItemDto>.Ok(MapToReportDto(detailedReport ?? report, null), "User reported successfully.");
-    }
-
-    public async Task<ApiResponseDto<ReportListItemDto>> SubmitCoachComplaintAsync(
-        Guid reporterId,
-        SubmitCoachComplaintRequestDto request,
-        CancellationToken cancellationToken = default)
-    {
-        if (reporterId == Guid.Empty)
-        {
-            throw new ValidationException("User is not authenticated.");
-        }
-
-        if (request == null)
-        {
-            throw new ValidationException("Complaint request is required.");
-        }
-
-        var coachId = request.EffectiveCoachId;
-        if (coachId == Guid.Empty)
-        {
-            throw new ValidationException("Coach is required.");
-        }
-
-        if (coachId == reporterId)
-        {
-            throw new BusinessException("You cannot submit a complaint against yourself.");
-        }
-
-        var reporter = await _userRepository.GetByIdAsync(reporterId, cancellationToken);
-        if (reporter == null)
-        {
-            throw new NotFoundException("Reporter account not found.");
-        }
-
-        if (reporter.IsLocked == true)
-        {
-            throw new BusinessException("Your account is locked.");
-        }
-
-        var reporterRole = reporter.RoleCode?.Trim().ToUpperInvariant();
-        if (reporterRole != RoleConstants.Trainee && reporterRole != RoleConstants.Coach)
-        {
-            throw new BusinessException("Only trainees and coaches can submit a coach complaint.");
-        }
-
-        var title = request.EffectiveTitle?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            throw new ValidationException("Complaint title is required.");
-        }
-
-        if (title.Length < 3 || title.Length > 500)
-        {
-            throw new ValidationException("Complaint title must be between 3 and 500 characters.");
-        }
-
-        var content = request.EffectiveContent?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            throw new ValidationException("Complaint content is required.");
-        }
-
-        if (content.Length < 10 || content.Length > 500)
-        {
-            throw new ValidationException("Complaint content must be between 10 and 500 characters.");
-        }
-
-        var coachUser = await _userRepository.GetByIdAsync(coachId, cancellationToken);
-        if (coachUser == null)
-        {
-            throw new NotFoundException("Coach not found.");
-        }
-
-        var coachRole = coachUser.RoleCode?.Trim().ToUpperInvariant();
-        if (coachRole != RoleConstants.Coach)
-        {
-            throw new ValidationException("The selected user is not a coach.");
-        }
-
-        if (coachUser.IsLocked == true)
-        {
-            throw new BusinessException("The selected coach account is currently inactive or locked.");
-        }
-
-        if (_coachProfileRepository != null)
-        {
-            var coachProfile = await _coachProfileRepository.GetByIdAsync(coachId, cancellationToken);
-            if (coachProfile == null)
-            {
-                throw new NotFoundException("Coach profile not found.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(coachProfile.ApprovalStatus) &&
-                string.Equals(coachProfile.ApprovalStatus.Trim(), "REJECTED", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new BusinessException("The selected coach is not active.");
-            }
-        }
-
-        var evidenceUrls = request.EvidenceUrls?
-            .Where(u => !string.IsNullOrWhiteSpace(u))
-            .Select(u => u.Trim())
-            .Distinct()
-            .ToList();
-
-        if (evidenceUrls != null && evidenceUrls.Count > 10)
-        {
-            throw new ValidationException("You can attach a maximum of 10 evidence files.");
-        }
-
-        var now = DateTime.UtcNow;
-        var report = new Report
-        {
-            ReportId = Guid.NewGuid(),
-            ReporterId = reporterId,
-            ReportedUserId = coachId,
-            ReportedPostId = null,
-            Reason = title,
-            Description = content,
-            Type = "COACH",
-            Status = "PENDING",
-            CreatedAt = now
-        };
-
-        if (evidenceUrls != null && evidenceUrls.Any())
-        {
-            short sortOrder = 0;
-            foreach (var url in evidenceUrls)
-            {
-                report.ReportMedia.Add(new ReportMedium
-                {
-                    MediaId = Guid.NewGuid(),
-                    ReportId = report.ReportId,
-                    MediaUrl = url,
-                    MediaType = url.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "PDF" : "IMAGE",
-                    MediaFor = "COMPLAINT",
-                    SortOrder = sortOrder++,
-                    CreatedAt = now
-                });
-            }
-        }
-
-        await _reportRepository.AddAsync(report, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var detailedReport = await _reportRepository.GetReportWithDetailsByIdAsync(report.ReportId, cancellationToken);
-        return ApiResponseDto<ReportListItemDto>.Ok(MapToReportDto(detailedReport ?? report, null), "Coach complaint submitted successfully.");
     }
 
     public async Task<ApiResponseDto<ReportListItemDto>> ProcessViolationReportAsync(

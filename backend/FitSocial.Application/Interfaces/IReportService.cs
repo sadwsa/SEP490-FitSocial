@@ -44,9 +44,4 @@ public interface IReportService
         Guid reporterId,
         CreateUserReportRequestDto request,
         CancellationToken cancellationToken = default);
-
-    Task<ApiResponseDto<ReportListItemDto>> SubmitCoachComplaintAsync(
-        Guid reporterId,
-        SubmitCoachComplaintRequestDto request,
-        CancellationToken cancellationToken = default);
 }

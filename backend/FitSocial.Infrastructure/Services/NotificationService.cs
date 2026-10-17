@@ -103,6 +103,7 @@ public class NotificationService : INotificationService
                     SenderAvatar = senderAvatar,
                     ConversationId = message.ConversationId,
                     MessageId = message.MessageId,
+                    ReferenceId = message.MessageId,
                     MessagePreview = preview,
                     CreatedAt = createdAt.Kind == DateTimeKind.Unspecified
                         ? DateTime.SpecifyKind(createdAt, DateTimeKind.Utc)
@@ -191,7 +192,8 @@ public class NotificationService : INotificationService
                             ? DateTime.SpecifyKind(n.CreatedAt.Value, DateTimeKind.Utc)
                             : n.CreatedAt.Value.ToUniversalTime())
                         : null,
-                    IsRead = n.IsRead == true
+                    IsRead = n.IsRead == true,
+                    ReferenceId = n.ReferenceId
                 };
 
                 if (n.ReferenceId.HasValue && messagesDict.TryGetValue(n.ReferenceId.Value, out var msg))

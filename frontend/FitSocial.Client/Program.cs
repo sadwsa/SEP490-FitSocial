@@ -73,5 +73,6 @@ builder.Services.AddScoped<FitSocial.Client.Services.SystemLogs.ISystemLogServic
 builder.Services.AddScoped<FitSocial.Client.Services.TrainingPlans.ITrainingPlanClientService, FitSocial.Client.Services.TrainingPlans.TrainingPlanClientService>();
 builder.Services.AddScoped<FitSocial.Client.Services.MealPlans.IMealPlanClientService, FitSocial.Client.Services.MealPlans.MealPlanClientService>();
 builder.Services.AddScoped<FitSocial.Client.Services.CoachCertificate.ICoachCertificateService, FitSocial.Client.Services.CoachCertificate.CoachCertificateService>();
+builder.Services.AddScoped<FitSocial.Client.Services.Appeals.IAppealService, FitSocial.Client.Services.Appeals.AppealService>();
 
 await builder.Build().RunAsync();

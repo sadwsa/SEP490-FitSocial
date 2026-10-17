@@ -395,6 +395,15 @@
             await HandleMarkSingleAsReadAsync(item);
         }
 
+        if (item.ReferenceId.HasValue && 
+            (item.Type?.Contains("Violation", StringComparison.OrdinalIgnoreCase) == true || 
+             item.Type?.Contains("Appeal", StringComparison.OrdinalIgnoreCase) == true || 
+             item.Type?.Contains("Report", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            Navigation.NavigateTo($"appeal?reportId={item.ReferenceId.Value}");
+            return;
+        }
+
         if (item.ConversationId != Guid.Empty)
         {
             Navigation.NavigateTo($"messages/{item.ConversationId}");
@@ -458,6 +467,8 @@
             "RefundApproved" => "Refund Approved",
             "RefundRejected" => "Refund Rejected",
             "RefundRequested" => "Refund",
+            "Violation" => "Policy Warning",
+            "ProcessAppeal" => "Appeal Decision",
             "System" => "System",
             _ => type
         };
@@ -469,7 +480,8 @@
         {
             "NewMessage" or "NEW_MESSAGE" => "bg-blue-50 text-blue-600",
             "RefundApproved" => "bg-emerald-50 text-emerald-600",
-            "RefundRejected" => "bg-red-50 text-red-600",
+            "RefundRejected" or "Violation" => "bg-red-50 text-red-600",
+            "ProcessAppeal" => "bg-indigo-50 text-indigo-600",
             _ => "bg-orange-50 text-[#FF5500]"
         };
     }

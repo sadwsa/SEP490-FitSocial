@@ -52,4 +52,5 @@ public partial class Report
     public virtual User? AppealReviewedByNavigation { get; set; }
 
     public virtual ICollection<ReportMedium> ReportMedia { get; set; } = new List<ReportMedium>();
+    public virtual ICollection<Appeal> Appeals { get; set; } = new List<Appeal>();
 }

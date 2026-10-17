@@ -51,6 +51,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICoachCertificateService, CoachCertificateService>();
         services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<IAppealService, AppealService>();
         return services;
     }
 
@@ -118,6 +119,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMealPlanRepository, MealPlanRepository>();
 
         services.AddScoped<IRevenueAnalyticsRepository, RevenueAnalyticsRepository>();
+        services.AddScoped<IAppealRepository, AppealRepository>();
 
         return services;
 

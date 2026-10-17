@@ -107,7 +107,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("ActorAccountId");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("AuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.BodyMeasurementDetail", b =>
@@ -210,7 +210,7 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasIndex(new[] { "UserId", "PackageId" }, "Carts_UserID_PackageID_key")
                         .IsUnique();
 
-                    b.ToTable("Carts");
+                    b.ToTable("Carts", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.CoachBankAccount", b =>
@@ -265,7 +265,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("CoachId");
 
-                    b.ToTable("CoachBankAccounts");
+                    b.ToTable("CoachBankAccounts", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.CoachProfile", b =>
@@ -305,7 +305,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("ApprovedBy");
 
-                    b.ToTable("CoachProfiles");
+                    b.ToTable("CoachProfiles", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.CoachUpgrade", b =>
@@ -347,7 +347,7 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasIndex(new[] { "OrderId" }, "CoachUpgrades_OrderID_key")
                         .IsUnique();
 
-                    b.ToTable("CoachUpgrades");
+                    b.ToTable("CoachUpgrades", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Comment", b =>
@@ -393,7 +393,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("PostId");
 
-                    b.ToTable("Comments");
+                    b.ToTable("Comments", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Conversation", b =>
@@ -432,7 +432,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("CreatorId");
 
-                    b.ToTable("Conversations");
+                    b.ToTable("Conversations", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Friendship", b =>
@@ -462,7 +462,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("AddresseeId");
 
-                    b.ToTable("Friendships");
+                    b.ToTable("Friendships", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Location", b =>
@@ -485,7 +485,7 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasKey("LocationId")
                         .HasName("Locations_pkey");
 
-                    b.ToTable("Locations");
+                    b.ToTable("Locations", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.MealPlan", b =>
@@ -621,7 +621,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("SenderId");
 
-                    b.ToTable("Messages");
+                    b.ToTable("Messages", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Notification", b =>
@@ -659,7 +659,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Notifications");
+                    b.ToTable("Notifications", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Order", b =>
@@ -702,7 +702,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("TraineeId");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.OrderDetail", b =>
@@ -731,7 +731,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("OrderDetails");
+                    b.ToTable("OrderDetails", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Otplog", b =>
@@ -815,7 +815,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Participants");
+                    b.ToTable("Participants", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Payment", b =>
@@ -881,7 +881,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.PaymentGatewayConfig", b =>
@@ -930,7 +930,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("UpdatedBy");
 
-                    b.ToTable("PaymentGatewayConfigs");
+                    b.ToTable("PaymentGatewayConfigs", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Payout", b =>
@@ -990,7 +990,7 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasIndex(new[] { "CoachId", "PayoutMonth", "PayoutYear" }, "Payouts_CoachID_PayoutMonth_PayoutYear_key")
                         .IsUnique();
 
-                    b.ToTable("Payouts");
+                    b.ToTable("Payouts", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.PayoutItem", b =>
@@ -1045,7 +1045,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("PayoutId");
 
-                    b.ToTable("PayoutItems");
+                    b.ToTable("PayoutItems", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Post", b =>
@@ -1099,7 +1099,9 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("LocationId");
 
-                    b.ToTable("Posts");
+                    b.HasIndex("SportId");
+
+                    b.ToTable("Posts", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.PostInteraction", b =>
@@ -1122,7 +1124,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("PostInteractions");
+                    b.ToTable("PostInteractions", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.PostMedium", b =>
@@ -1156,7 +1158,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("PostId");
 
-                    b.ToTable("PostMedia");
+                    b.ToTable("PostMedia", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Price", b =>
@@ -1179,14 +1181,6 @@ namespace FitSocial.Infrastructure.Migrations
                     b.Property<string>("Currency")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
-
-                    b.Property<string>("ImageUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<bool?>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -1239,7 +1233,7 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasIndex(new[] { "TokenHash" }, "RefreshTokens_TokenHash_key")
                         .IsUnique();
 
-                    b.ToTable("RefreshTokens");
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Report", b =>
@@ -1295,7 +1289,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex(new[] { "ReportedPostId", "ReporterId", "Status" }, "IX_Reports_ReportedPostId_ReporterId_Status");
 
-                    b.ToTable("Reports");
+                    b.ToTable("Reports", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Review", b =>
@@ -1340,7 +1334,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("TraineeId");
 
-                    b.ToTable("Reviews");
+                    b.ToTable("Reviews", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.Sport", b =>
@@ -1359,7 +1353,7 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasKey("SportId")
                         .HasName("Sports_pkey");
 
-                    b.ToTable("Sports");
+                    b.ToTable("Sports", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.TrainingPackage", b =>
@@ -1406,7 +1400,7 @@ namespace FitSocial.Infrastructure.Migrations
 
                     b.HasIndex("OrderDetailsId");
 
-                    b.ToTable("TrainingPackages");
+                    b.ToTable("TrainingPackages", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.TrainingPlan", b =>
@@ -1609,7 +1603,7 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasIndex(new[] { "PhoneNumber" }, "Users_PhoneNumber_key")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.UserBlock", b =>
@@ -1660,7 +1654,7 @@ namespace FitSocial.Infrastructure.Migrations
                     b.HasKey("MessageId")
                         .HasName("VideoCalls_pkey");
 
-                    b.ToTable("VideoCalls");
+                    b.ToTable("VideoCalls", (string)null);
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.VideoTutorial", b =>
@@ -2167,9 +2161,16 @@ namespace FitSocial.Infrastructure.Migrations
                         .HasForeignKey("LocationId")
                         .HasConstraintName("Posts_LocationID_fkey");
 
+                    b.HasOne("FitSocial.Domain.Entities.Sport", "Sport")
+                        .WithMany("Posts")
+                        .HasForeignKey("SportId")
+                        .HasConstraintName("Posts_SportID_fkey");
+
                     b.Navigation("Author");
 
                     b.Navigation("Location");
+
+                    b.Navigation("Sport");
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.PostInteraction", b =>
@@ -2506,6 +2507,11 @@ namespace FitSocial.Infrastructure.Migrations
             modelBuilder.Entity("FitSocial.Domain.Entities.Price", b =>
                 {
                     b.Navigation("CoachUpgrades");
+                });
+
+            modelBuilder.Entity("FitSocial.Domain.Entities.Sport", b =>
+                {
+                    b.Navigation("Posts");
                 });
 
             modelBuilder.Entity("FitSocial.Domain.Entities.TrainingPackage", b =>

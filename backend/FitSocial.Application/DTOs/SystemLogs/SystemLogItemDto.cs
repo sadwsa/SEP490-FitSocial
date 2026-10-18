@@ -14,6 +14,7 @@ public class SystemLogItemDto
     public Guid? ActorId { get; set; }
     public string? ActorName { get; set; }
     public string? ActorEmail { get; set; }
+    public string? ActorRole { get; set; }
     public string? IpAddress { get; set; }
     public string? EntityId { get; set; }
     public string? OldValue { get; set; }

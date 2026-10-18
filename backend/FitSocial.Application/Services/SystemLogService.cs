@@ -109,6 +109,7 @@ public class SystemLogService : ISystemLogService
             ActorId = log.ActorAccountId,
             ActorName = log.ActorAccount?.FullName ?? (log.ActorAccountId.HasValue ? $"User {log.ActorAccountId.Value.ToString()[..8]}" : "System"),
             ActorEmail = log.ActorAccount?.Email,
+            ActorRole = log.ActorAccount?.RoleCode ?? (log.ActorAccount?.IsInternal == true ? "STAFF" : null),
             IpAddress = log.Ipaddress,
             EntityId = log.EntityId,
             OldValue = Sanitize(log.OldValue),

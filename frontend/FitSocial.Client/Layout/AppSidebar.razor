@@ -153,12 +153,12 @@
         var root = segments.Length > 0 ? segments[0] : string.Empty;
 
         // /cart, /checkout... nằm trong luồng mua hàng -> về Package List
-        bool isBuyingFlow =
-            root == "cart" ||
-            root == "checkout" ||
-            (root == "training-packages" && segments.Contains("purchased"));
+        // LƯU Ý: /training-packages/purchased (My Purchased Packages) cố ý KHÔNG map
+        // vào Package List – sidebar không có mục tương ứng nên không tô cam gì cả.
+        bool isBuyingFlow = root == "cart" || root == "checkout";
 
         // /training-packages/... (không phải marketplace) -> về My Packages
+        // purchased bị loại có chủ đích, xem ghi chú ở trên.
         bool isCoachPackageFlow =
             root == "training-packages" &&
             !segments.Contains("marketplace") &&

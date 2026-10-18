@@ -18,7 +18,9 @@
 <div class="flex flex-col gap-4 min-w-0">
             @if (step == CheckoutStep.Qr && paymentLink != null && preview != null)
             {
-                <h2 class="text-xl font-bold text-gray-800">Scan QR Code with Banking App</h2>
+                <div class="bg-white rounded-xl shadow-sm p-5 flex justify-between items-center gap-4 border border-gray-100">
+                    <h1 class="text-xl font-bold text-gray-800">Scan QR Code with Banking App</h1>
+                </div>
                 <div class="bg-white rounded-xl shadow-sm p-5 sm:p-8 flex flex-col items-center">
                     <p class="font-bold text-gray-900 text-sm mb-4">Scan with your banking app to pay</p>
 
@@ -91,7 +93,9 @@
             }
             else
             {
-                <h2 class="text-xl font-bold text-gray-800">Checkout &amp; Package Activation</h2>
+                <div class="bg-white rounded-xl shadow-sm p-5 flex justify-between items-center gap-4 border border-gray-100">
+                    <h1 class="text-xl font-bold text-gray-800">Checkout &amp; Package Activation</h1>
+                </div>
                 <div class="bg-white rounded-xl shadow-sm p-5 sm:p-8">
                     @if (isLoading)
                     {

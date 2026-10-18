@@ -19,7 +19,7 @@ public interface IFileUploadService
 public class FileUploadService : IFileUploadService
 {
     private const long MaxFileBytes = 10 * 1024 * 1024; // 10MB
-    private const long MaxMediaBytes = 50 * 1024 * 1024; // 50MB for post videos/images
+    private const long MaxMediaBytes = 100 * 1024 * 1024; // 100MB for post/appeal videos/images
     private readonly HttpClient _httpClient;
     private readonly ITokenStorage _tokenStorage;
 
@@ -75,7 +75,30 @@ public class FileUploadService : IFileUploadService
     {
         try
         {
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            var isVideo = extension is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm";
+
+            if (isVideo)
+            {
+                return await UploadExerciseVideoAsync(file);
+            }
+
+            if (file.Size > MaxFileBytes)
+            {
+                return new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "File size must not exceed 10MB."
+                };
+            }
+
             using var content = new MultipartFormDataContent();
+            var token = await _tokenStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
             await using var stream = file.OpenReadStream(MaxFileBytes);
             content.Add(new StreamContent(stream), "file", file.Name);
 

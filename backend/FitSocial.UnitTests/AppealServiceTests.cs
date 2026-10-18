@@ -318,4 +318,90 @@ public class AppealServiceTests
         // Act & Assert
         await Assert.ThrowsAsync<ForbiddenException>(() => _service.GetAppealDetailAsync(appealId, callerUserId, null));
     }
+
+    [Fact]
+    public async Task SubmitAppealAsync_VideoAndImageEvidence_SetsCorrectMediaTypes()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var reportId = Guid.NewGuid();
+
+        var report = new Report
+        {
+            ReportId = reportId,
+            ReportedUserId = userId,
+            Reason = "Violation reason",
+            Status = "ACTIONTAKEN"
+        };
+
+        var user = new User
+        {
+            UserId = userId,
+            Email = "coach@example.com",
+            FullName = "Coach User",
+            RoleCode = RoleConstants.Coach
+        };
+
+        _mockUserRepo.Setup(u => u.GetByIdAsync(userId, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        _mockReportRepo.Setup(r => r.GetReportWithDetailsByIdAsync(reportId, It.IsAny<CancellationToken>())).ReturnsAsync(report);
+        _mockAppealRepo.Setup(a => a.HasActiveAppealForReportAsync(reportId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var request = new SubmitAppealRequestDto
+        {
+            ReportId = reportId,
+            Reason = "Misunderstanding of post",
+            Content = "Video evidence proving no rules were broken during workout session.",
+            EvidenceUrls = new List<string>
+            {
+                "https://res.cloudinary.com/fitsocial/posts/images/screenshot.png",
+                "https://res.cloudinary.com/fitsocial/posts/videos/proof.mp4"
+            }
+        };
+
+        // Act
+        var result = await _service.SubmitAppealAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Media.Count);
+
+        var imageMedia = result.Data.Media.Find(m => m.MediaUrl.EndsWith(".png"));
+        var videoMedia = result.Data.Media.Find(m => m.MediaUrl.EndsWith(".mp4"));
+
+        Assert.NotNull(imageMedia);
+        Assert.Equal("IMAGE", imageMedia.MediaType);
+
+        Assert.NotNull(videoMedia);
+        Assert.Equal("VIDEO", videoMedia.MediaType);
+
+        _mockAppealRepo.Verify(a => a.AddAsync(It.Is<Appeal>(ap =>
+            ap.AppealMedia.Count == 2 &&
+            ap.AppealMedia.Any(m => m.MediaType == "VIDEO" && m.MediaUrl == "https://res.cloudinary.com/fitsocial/posts/videos/proof.mp4") &&
+            ap.AppealMedia.Any(m => m.MediaType == "IMAGE" && m.MediaUrl == "https://res.cloudinary.com/fitsocial/posts/images/screenshot.png")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetReportForAppealAsync_OtherUserAccess_ThrowsForbiddenException()
+    {
+        // Arrange
+        var callerUserId = Guid.NewGuid();
+        var anotherUserId = Guid.NewGuid();
+        var reportId = Guid.NewGuid();
+
+        var report = new Report
+        {
+            ReportId = reportId,
+            ReportedUserId = anotherUserId, // Not the caller
+            Status = "ACTIONTAKEN"
+        };
+
+        _mockReportRepo.Setup(r => r.GetReportWithDetailsByIdAsync(reportId, It.IsAny<CancellationToken>())).ReturnsAsync(report);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ForbiddenException>(() => _service.GetReportForAppealAsync(reportId, callerUserId, null));
+    }
 }

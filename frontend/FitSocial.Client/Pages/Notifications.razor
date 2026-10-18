@@ -229,6 +229,20 @@
                                         </svg>
                                     </button>
                                 }
+
+                                @if (IsViolationOrReportNotification(item))
+                                {
+                                    <button type="button"
+                                            @onclick:stopPropagation="true"
+                                            @onclick="() => HandleAppealClick(item)"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#FF5500] hover:bg-[#e04c00] rounded-xl shadow-xs transition cursor-pointer"
+                                            title="Appeal this report/violation">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                                        </svg>
+                                        <span>Appeal</span>
+                                    </button>
+                                }
                             </div>
 
                             @if (!item.IsRead)
@@ -388,6 +402,48 @@
         }
     }
 
+    private bool IsViolationOrReportNotification(NotificationDto item)
+    {
+        var type = item.Type ?? string.Empty;
+        if (type.Contains("Violation", StringComparison.OrdinalIgnoreCase) ||
+            type.Contains("Report", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var preview = item.MessagePreview ?? string.Empty;
+        if (item.ReferenceId.HasValue && item.ReferenceId.Value != Guid.Empty)
+        {
+            if (preview.Contains("violation", StringComparison.OrdinalIgnoreCase) ||
+                preview.Contains("tố cáo", StringComparison.OrdinalIgnoreCase) ||
+                preview.Contains("báo cáo", StringComparison.OrdinalIgnoreCase) ||
+                preview.Contains("locked", StringComparison.OrdinalIgnoreCase) ||
+                preview.Contains("warning", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task HandleAppealClick(NotificationDto item)
+    {
+        if (!item.IsRead)
+        {
+            await HandleMarkSingleAsReadAsync(item);
+        }
+
+        if (item.ReferenceId.HasValue && item.ReferenceId.Value != Guid.Empty)
+        {
+            Navigation.NavigateTo($"appeal?reportId={item.ReferenceId.Value}");
+        }
+        else
+        {
+            Navigation.NavigateTo("appeal");
+        }
+    }
+
     private async Task HandleNotificationClick(NotificationDto item)
     {
         if (!item.IsRead)
@@ -395,12 +451,20 @@
             await HandleMarkSingleAsReadAsync(item);
         }
 
-        if (item.ReferenceId.HasValue && 
+        if (IsViolationOrReportNotification(item) ||
+            (item.ReferenceId.HasValue && 
             (item.Type?.Contains("Violation", StringComparison.OrdinalIgnoreCase) == true || 
              item.Type?.Contains("Appeal", StringComparison.OrdinalIgnoreCase) == true || 
-             item.Type?.Contains("Report", StringComparison.OrdinalIgnoreCase) == true))
+             item.Type?.Contains("Report", StringComparison.OrdinalIgnoreCase) == true)))
         {
-            Navigation.NavigateTo($"appeal?reportId={item.ReferenceId.Value}");
+            if (item.ReferenceId.HasValue && item.ReferenceId.Value != Guid.Empty)
+            {
+                Navigation.NavigateTo($"appeal?reportId={item.ReferenceId.Value}");
+            }
+            else
+            {
+                Navigation.NavigateTo("appeal");
+            }
             return;
         }
 
@@ -467,9 +531,15 @@
             "RefundApproved" => "Refund Approved",
             "RefundRejected" => "Refund Rejected",
             "RefundRequested" => "Refund",
+            "ViolationWarning" => "Policy Warning",
+            "ViolationLock" => "Account Locked",
+            "ViolationBlock" => "Profile Blocked",
+            "ViolationPostDeleted" => "Post Deleted",
             "Violation" => "Policy Warning",
             "ProcessAppeal" => "Appeal Decision",
             "System" => "System",
+            _ when type.Contains("Violation", StringComparison.OrdinalIgnoreCase) => "Policy Violation",
+            _ when type.Contains("Report", StringComparison.OrdinalIgnoreCase) => "Report",
             _ => type
         };
     }
@@ -480,8 +550,10 @@
         {
             "NewMessage" or "NEW_MESSAGE" => "bg-blue-50 text-blue-600",
             "RefundApproved" => "bg-emerald-50 text-emerald-600",
-            "RefundRejected" or "Violation" => "bg-red-50 text-red-600",
+            "RefundRejected" => "bg-red-50 text-red-600",
             "ProcessAppeal" => "bg-indigo-50 text-indigo-600",
+            _ when type?.Contains("Violation", StringComparison.OrdinalIgnoreCase) == true => "bg-red-50 text-red-600",
+            _ when type?.Contains("Report", StringComparison.OrdinalIgnoreCase) == true => "bg-red-50 text-red-600",
             _ => "bg-orange-50 text-[#FF5500]"
         };
     }

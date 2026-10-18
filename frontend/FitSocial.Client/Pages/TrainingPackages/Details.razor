@@ -1,18 +1,18 @@
 @page "/training-packages/{Id:guid}"
-@layout EmptyLayout
+@implements IDisposable
 @inject ITrainingPackageService PackageService
 @inject ICartService CartService
 @inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Cart
 @using System.Security.Claims
 
 <PageTitle>Package Details - FitSocial</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
     <!-- Floating Success Toast Notification -->
     @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
     {
@@ -45,36 +45,7 @@
         </div>
     }
 
-    <AppHeader SearchTerm="@headerSearchTerm"
-               OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp"
-               OnSearch="ExecuteHeaderSearch"
-               OnClearSearch="ClearHeaderSearch"
-               UserName="@userName"
-               UserInitials="@userInitials"
-               UserRole="@userRole"
-               CartCount="@cartCount"
-               OnLogout="HandleLogout" />
-
-    <style>
-        @@media (min-width: 1024px) {
-            .home-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
-                align-items: start !important;
-            }
-            .home-left-sidebar { justify-self: start !important; }
-            .home-center-feed { justify-self: center !important; width: 100% !important; max-width: 42rem !important; min-width: 0 !important; }
-            .home-right-sidebar { justify-self: center !important; }
-        }
-    </style>
-
-    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
-        <!-- Left Sidebar -->
-        <AppSidebar ActiveItem="@(isOwnPackage ? "my-packages" : "package-list")" />
-
-        <!-- Center Column -->
-        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-10">
+    <div class="flex flex-col gap-4 min-w-0">
             @if (isLoading)
             {
                 <div class="flex flex-col items-center justify-center py-20">
@@ -535,11 +506,8 @@
             }
           
 
-        </section>
-
-        <!-- Right Sidebar (Empty) -->
-        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
-    </div>
+        </div>
+  
 
     <!-- Package Already In Cart Modal Notification -->
     <PackageAlreadyInCartModal IsOpen="@showAlreadyInCartModal"
@@ -547,7 +515,6 @@
                                OnClose="() => showAlreadyInCartModal = false"
                                OnViewCart="NavigateToCart" />
 
-</div>
 <!-- EDIT REVIEW MODAL (EDITABLE ONCE ONLY) -->
 @if (isEditModalOpen)
 {
@@ -758,6 +725,21 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadUserInfoAsync();
         var response = await PackageService.GetPackageByIdAsync(Id);
         if (response.Success)
@@ -774,6 +756,11 @@
             errorMessage = response.Message ?? errorMessage;
         }
         isLoading = false;
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadUserInfoAsync()

@@ -1,45 +1,19 @@
 @page "/cart"
-@layout EmptyLayout
+@implements IDisposable
 @inject ICartService CartService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
 @inject IJSRuntime JS
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Cart
 @using System.Security.Claims
 
 <PageTitle>Your Cart - FitSocial</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
-    <AppHeader SearchTerm="@headerSearchTerm"
-               OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp"
-               OnSearch="ExecuteHeaderSearch"
-               OnClearSearch="ClearHeaderSearch"
-               UserName="@userName"
-               UserInitials="@userInitials"
-               UserRole="@userRole"
-               OnLogout="HandleLogout" />
-
-    <style>
-        @@media (min-width: 1024px) {
-            .cart-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 68rem) minmax(0, 1fr) !important;
-                align-items: start !important;
-            }
-            .cart-left-sidebar { justify-self: start !important; }
-            .cart-main-content { justify-self: center !important; width: 100% !important; max-width: 68rem !important; }
-        }
-    </style>
-
-    <div class="cart-3col-layout w-full pt-6 px-4 lg:px-8 flex flex-col items-start pb-16">
-        <!-- Left Sidebar -->
-        <AppSidebar ActiveItem="cart" Class="cart-left-sidebar" />
-
-        <!-- Main Cart Section -->
-        <main class="cart-main-content w-full flex flex-col gap-6 min-w-0">
+<!-- Main Cart Section -->
+<div class="flex flex-col gap-6 min-w-0">
             @if (isLoading)
             {
                 <div class="bg-white rounded-2xl p-16 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
@@ -490,8 +464,7 @@
                     </aside>
                 </div>
             }
-        </main>
-    </div>
+</div>
 
     <!-- Confirmation Modal: Remove Single Item -->
     @if (showRemoveModal && itemToRemove != null)
@@ -547,9 +520,6 @@
         </div>
     }
 
-    }
-</div>
-
 @code {
     private CartSummaryDto summary = new();
     private bool isLoading = true;
@@ -583,8 +553,28 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadUserInfoAsync();
         await LoadCartData();
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadCartData()

@@ -256,3 +256,18 @@ main {
     word-wrap: break-word;
     white-space: pre-line;
 }
+
+/* ==================================================================
+   AppShell – ô trắng trong 2 sidebar luôn full chiều dọc
+   Đặt ở global (không phải .razor.css) vì phần tử nằm ở component
+   khác (AppSidebar / RightSidebar) nên sẽ không khớp CSS scope của
+   AppShellLayout.razor.css.
+   ================================================================== */
+.app-shell-side-inner > * {
+    height: 100%;
+    min-height: 0;
+}
+
+.app-shell-side-inner .app-shell-card {
+    height: 100%;
+}

@@ -56,6 +56,21 @@ public partial class Profile : ComponentBase
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true && (user.IsInRole("STAFF") || user.IsInRole("ADMIN")))
@@ -526,5 +541,11 @@ public partial class Profile : ComponentBase
             "PENDING" => "Pending Verification",
             _ => status
         };
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
+        GC.SuppressFinalize(this);
     }
 }

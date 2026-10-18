@@ -18,6 +18,17 @@
     
     <!-- Left Section: Brand Logo & Search -->
     <div class="flex items-center gap-4 w-1/3">
+        <!-- Nut mo menu (chi hien tren mobile/tablet) -->
+        @if (ShowMenuButton)
+        {
+            <button type="button" @onclick="HandleToggleMenu" title="Menu"
+                    class="lg:hidden p-2 -ml-1 text-gray-600 hover:text-[#FF5500] hover:bg-orange-50 rounded-lg transition flex-shrink-0 cursor-pointer">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+            </button>
+        }
+
         <!-- Brand Logo -->
         <a href="home" class="flex-shrink-0 flex items-center hover:opacity-95 transition" title="FitSocial Home">
             <img src="logo.jpg" alt="FitSocial"
@@ -482,6 +493,8 @@
 
 @code {
     [Parameter] public string? Class { get; set; }
+    [Parameter] public bool ShowMenuButton { get; set; }
+    [Parameter] public EventCallback OnToggleMenu { get; set; }
     [Parameter] public bool ShowSearch { get; set; } = true;
     [Parameter] public string SearchPlaceholder { get; set; } = "Search posts, coaches, friends...";
     [Parameter] public string SearchTerm { get; set; } = string.Empty;
@@ -948,6 +961,14 @@
         if (OnClearSearch.HasDelegate)
         {
             await OnClearSearch.InvokeAsync();
+        }
+    }
+
+    private async Task HandleToggleMenu()
+    {
+        if (OnToggleMenu.HasDelegate)
+        {
+            await OnToggleMenu.InvokeAsync();
         }
     }
 

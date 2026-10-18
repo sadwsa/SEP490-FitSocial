@@ -1,49 +1,13 @@
 @page "/profile"
 @namespace FitSocial.Client.Pages
-@layout EmptyLayout
+@implements IDisposable
+@inject AppShellContext Shell
 @attribute [Authorize]
 
 <PageTitle>@(isEditing ? "Edit Profile - FitSocial" : "My Profile - FitSocial")</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
-    <!-- Header / Navigation Bar -->
-    <AppHeader SearchTerm="@headerSearchTerm" OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp" OnSearch="ExecuteHeaderSearch" OnClearSearch="ClearHeaderSearch"
-               UserName="@headerUserName" UserInitials="@headerUserInitials" UserRole="@headerUserRole"
-               UserAvatarUrl="@headerUserAvatarUrl" OnLogout="HandleLogout" />
-
-    <style>
-        @@media (min-width: 1024px) {
-            .home-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
-                align-items: start !important;
-            }
-
-            .home-left-sidebar {
-                justify-self: start !important;
-            }
-
-            .home-center-feed {
-                justify-self: end !important;
-                width: 100% !important;
-                max-width: 42rem !important;
-                min-width: 0 !important;
-            }
-
-            .home-right-sidebar {
-                justify-self: center !important;
-            }
-        }
-    </style>
-
-    <!-- Main Content Layout -->
-    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
-        <!-- Left Sidebar -->
-        <AppSidebar ActiveItem="profile" />
-
-        <!-- Center Column -->
-        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-6 min-w-0 pb-12">
+<!-- Center Column -->
+<div class="flex flex-col gap-6 min-w-0">
 
             @if (isLoading)
             {
@@ -646,9 +610,4 @@
                 }
             }
 
-        </section>
-
-        <!-- Right Spacer (Empty to maintain 3-column balance on desktop) -->
-        <div class="home-right-sidebar hidden lg:block w-72 flex-shrink-0"></div>
-    </div>
 </div>

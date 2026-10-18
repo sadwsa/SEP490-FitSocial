@@ -1,46 +1,20 @@
 @page "/coach/trainee-orders"
 @page "/trainee-orders"
-@layout EmptyLayout
+@implements IDisposable
 @attribute [Authorize(Roles = "COACH")]
 @inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Orders
 @using System.Security.Claims
 
 <PageTitle>Trainee Purchase Orders - FitSocial</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
-    <AppHeader SearchTerm="@headerSearchTerm"
-               OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp"
-               OnSearch="ExecuteHeaderSearch"
-               OnClearSearch="ClearHeaderSearch"
-               UserName="@userName"
-               UserInitials="@userInitials"
-               UserRole="@userRole"
-               OnLogout="HandleLogout" />
-
-    <style>
-        @@media (min-width: 1024px) {
-            .orders-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 68rem) minmax(0, 1fr) !important;
-                align-items: start !important;
-            }
-            .orders-left-sidebar { justify-self: start !important; }
-            .orders-main-content { justify-self: center !important; width: 100% !important; max-width: 68rem !important; }
-        }
-    </style>
-
-    <div class="orders-3col-layout w-full pt-6 px-4 lg:px-8 flex flex-col items-start pb-16">
-        <!-- Left Sidebar -->
-        <AppSidebar ActiveItem="trainee-orders" Class="orders-left-sidebar" />
-
-        <!-- Main Content Section -->
-        <main class="orders-main-content w-full flex flex-col gap-6 min-w-0">
+<!-- Main Content Section -->
+<div class="flex flex-col gap-6 min-w-0">
             <!-- Header Banner -->
             <div class="bg-white rounded-2xl shadow-sm p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-gray-100">
                 <div>
@@ -491,9 +465,7 @@
                     </div>
                 </div>
             }
-        </main>
-    </div>
-</div>
+        </div>
 
 <!-- Coach Training Plan Form Modal -->
 <CoachTrainingPlanFormModal
@@ -581,7 +553,6 @@
     private string? headerSearchTerm = "";
     private string userName = "Coach";
     private string userInitials = "C";
-    private string userRole = "Coach";
 
     private List<CoachTraineeGroupDto> FilteredTrainees
     {
@@ -604,8 +575,28 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadUserInfoAsync();
         await LoadTraineeOrdersAsync();
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadTraineeOrdersAsync()
@@ -698,7 +689,6 @@
             if (user.Identity?.IsAuthenticated == true)
             {
                 userName = user.Identity.Name ?? "Coach";
-                userRole = "Coach";
                 var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {

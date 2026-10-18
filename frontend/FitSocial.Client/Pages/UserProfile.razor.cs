@@ -86,6 +86,21 @@ public partial class UserProfile : ComponentBase, IDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadHeaderUserInfoAsync();
     }
 
@@ -486,6 +501,7 @@ public partial class UserProfile : ComponentBase, IDisposable
 
     public void Dispose()
     {
+        Shell.Reset();
         toastCts?.Cancel();
         toastCts?.Dispose();
     }

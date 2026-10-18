@@ -28,9 +28,7 @@ public partial class Home : ComponentBase, IDisposable
     private string userRole = "Athlete";
     private string? currentUserAvatarUrl;
 
-    // Top coaches state
-    private List<TopCoachDto> topCoaches = new();
-    private bool isLoadingTopCoaches = true;
+    // Top coaches state -> chuyển sang widget mặc định của cột phải (Layout/RightSidebar.razor)
 
     // Edit post state
     private bool showEditPostModal = false;
@@ -79,8 +77,19 @@ public partial class Home : ComponentBase, IDisposable
         PostHubClient.OnPostDeleted -= HandlePostDeletedRealtime;
         PostHubClient.OnPostDeleted += HandlePostDeletedRealtime;
 
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchInputHandler = e =>
+        {
+            HandleSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = HandleSearchKeyUp;
+        Shell.SearchExecuteHandler = ExecuteSearch;
+        Shell.SearchClearHandler = ClearSearch;
+        Shell.SearchTerm = searchTerm;
+
         await LoadUserInfoAsync();
-        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), LoadTopCoachesAsync(), PostHubClient.StartAsync());
+        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), PostHubClient.StartAsync());
     }
 
     private async Task LoadUserInfoAsync()
@@ -131,27 +140,6 @@ public partial class Home : ComponentBase, IDisposable
         finally
         {
             StateHasChanged();
-        }
-    }
-
-    private async Task LoadTopCoachesAsync()
-    {
-        try
-        {
-            isLoadingTopCoaches = true;
-            var response = await CoachService.GetTopCoachesAsync(5);
-            if (response.Success && response.Data != null)
-            {
-                topCoaches = response.Data;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading top coaches: {ex.Message}");
-        }
-        finally
-        {
-            isLoadingTopCoaches = false;
         }
     }
 
@@ -606,6 +594,7 @@ public partial class Home : ComponentBase, IDisposable
     public void Dispose()
     {
         PostHubClient.OnPostDeleted -= HandlePostDeletedRealtime;
+        Shell.Reset();
         searchCts?.Cancel();
         searchCts?.Dispose();
         toastCts?.Cancel();

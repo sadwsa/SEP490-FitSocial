@@ -1,8 +1,11 @@
 @namespace FitSocial.Client.Layout
 @inject NavigationManager Navigation
+@implements IDisposable
 
-<aside class="home-left-sidebar hidden lg:block w-72 flex-shrink-0 sticky top-24 @Class">
-    <nav class="flex flex-col gap-1">
+@* Sidebar trái. Chiều cao / vị trí dán mép do AppShellLayout.razor.css đảm nhiệm. *@
+<aside class="app-shell-nav w-full">
+    <div class="app-shell-card bg-white rounded-2xl shadow-sm p-3 @Class">
+        <nav class="flex flex-col gap-1">
         <!-- News Feed -->
         <a href="home" class="@GetItemClass("home")">
             <svg class="w-5 h-5 @GetIconClass("home")" fill="currentColor" viewBox="0 0 20 20">
@@ -11,16 +14,6 @@
                 </path>
             </svg>
             News Feed
-        </a>
-
-        <!-- Friends / Community -->
-        <a href="community" class="@GetItemClass("community")">
-            <svg class="w-5 h-5 @GetIconClass("community")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
-                </path>
-            </svg>
-            Friends
         </a>
 
         <!-- Package List (Available to all users: Trainees, Coaches, Guests) -->
@@ -51,7 +44,7 @@
         <a href="coaches" class="@GetItemClass("coaches")">
             <svg class="w-5 h-5 @GetIconClass("coaches")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 3 0 11-4 0 2 3 0 014 0zM7 10a2 3 0 11-4 0 2 3 0 014 0z">
                 </path>
             </svg>
             Coaches List
@@ -116,13 +109,29 @@
                 @ChildContent
             </div>
         }
-    </nav>
+        </nav>
+    </div>
 </aside>
 
 @code {
     [Parameter] public string? ActiveItem { get; set; }
     [Parameter] public string? Class { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // Bảo đảm ô màu cam luôn cập nhật ngay khi đổi trang.
+        // Nếu chỉ dựa vào vòng render của layout thì đôi lúc sidebar bị
+        // render lại trước khi NavigationManager cập nhật Uri -> tô sai chỗ.
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        InvokeAsync(StateHasChanged);
+    }
 
     private bool IsActive(string name)
     {
@@ -134,32 +143,56 @@
             if (name == "package-list" && string.Equals(ActiveItem, "packages", StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            if (name == "my-packages" && string.Equals(ActiveItem, "my-packages", StringComparison.OrdinalIgnoreCase))
-                return true;
-
             return false;
         }
 
+        // Đường dẫn hiện tại, bỏ query + hash, tách thành các đoạn
         var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri).ToLowerInvariant();
-        var pathWithoutQuery = relativePath.Split('?')[0].Trim('/');
-        var segments = pathWithoutQuery.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var rootSegment = segments.Length > 0 ? segments[0] : string.Empty;
+        var path = relativePath.Split('?')[0].Split('#')[0].Trim('/');
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var root = segments.Length > 0 ? segments[0] : string.Empty;
+
+        // /cart, /checkout... nằm trong luồng mua hàng -> về Package List
+        bool isBuyingFlow =
+            root == "cart" ||
+            root == "checkout" ||
+            (root == "training-packages" && segments.Contains("purchased"));
+
+        // /training-packages/... (không phải marketplace) -> về My Packages
+        bool isCoachPackageFlow =
+            root == "training-packages" &&
+            !segments.Contains("marketplace") &&
+            !segments.Contains("purchased");
+
+        // /workout-plan/... và /meal-plan/... là kế hoạch thuộc gói -> My Packages
+        bool isPlanFlow = root == "workout-plan" || root == "meal-plan";
 
         return name switch
         {
-            "home" => string.IsNullOrEmpty(rootSegment) || rootSegment == "home",
-            "community" => rootSegment == "community",
-            "package-list" => rootSegment == "packages" || (rootSegment == "training-packages" && segments.Contains("marketplace")),
-            "my-packages" => rootSegment == "training-packages" && !segments.Contains("marketplace") && (segments.Length == 1 || segments.Contains("edit")),
-            "coaches" => rootSegment == "coaches",
-            "notifications" => rootSegment == "notifications",
-            "coach-dashboard" => rootSegment == "coach" && (segments.Length == 1 || segments.Contains("dashboard")),
-            "trainee-orders" => (rootSegment == "coach" && segments.Contains("trainee-orders")) || rootSegment == "trainee-orders",
-            "messages" => rootSegment == "messages",
-            "cart" => rootSegment == "cart",
-            "profile" => rootSegment == "profile" && segments.Length == 1,
-            "reports" => rootSegment == "reports" || (rootSegment == "admin" && relativePath.Contains("reports")),
-           
+            "home" => string.IsNullOrEmpty(root) || root == "home",
+
+            "package-list" =>
+                root == "packages" ||
+                (root == "training-packages" && segments.Contains("marketplace")) ||
+                isBuyingFlow,
+
+            "my-packages" => isCoachPackageFlow || isPlanFlow,
+
+            "coaches" => root == "coaches",
+
+            "notifications" => root == "notifications",
+
+            "coach-dashboard" =>
+                root == "coach" && (segments.Length == 1 || segments.Contains("dashboard")),
+
+            "trainee-orders" =>
+                (root == "coach" && segments.Contains("trainee-orders")) ||
+                root == "trainee-orders",
+
+            "reports" =>
+                root == "reports" ||
+                (root == "admin" && path.Contains("reports")),
+
             _ => false
         };
     }
@@ -167,8 +200,8 @@
     private string GetItemClass(string name)
     {
         return IsActive(name)
-            ? "p-3 bg-white rounded-xl shadow-sm font-semibold bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] bg-clip-text text-transparent flex items-center gap-3 border-l-4 border-[#FF5500] transition"
-            : "p-3 hover:bg-orange-50/60 rounded-xl font-medium text-gray-700 flex items-center gap-3 transition";
+            ? "p-3 bg-orange-50 rounded-xl font-semibold bg-gradient-to-r from-[#FF8C00] to-[#FF3B00] bg-clip-text text-transparent flex items-center gap-3 border-l-4 border-[#FF5500] transition"
+            : "p-3 hover:bg-orange-50/60 rounded-xl font-medium text-gray-700 border-l-4 border-transparent flex items-center gap-3 transition";
     }
 
     private string GetIconClass(string name)

@@ -1,10 +1,11 @@
 @page "/notifications"
 @namespace FitSocial.Client.Pages
-@layout HomeLayout
+@implements IDisposable
 @attribute [Authorize(Roles = "TRAINEE,COACH")]
 @inject INotificationService NotificationService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
+@inject AppShellContext Shell
 @using FitSocial.Client.Models.Notifications
 @using FitSocial.Client.Models.Auth
 @using System.Security.Claims
@@ -270,6 +271,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Trang này dùng bộ lọc riêng, không dùng ô tìm kiếm của topbar
+        Shell.ShowSearch = false;
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
@@ -484,5 +488,10 @@
             "ProcessAppeal" => "bg-indigo-50 text-indigo-600",
             _ => "bg-orange-50 text-[#FF5500]"
         };
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 }

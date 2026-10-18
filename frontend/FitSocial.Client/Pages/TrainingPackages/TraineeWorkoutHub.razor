@@ -1,17 +1,15 @@
 @page "/training-packages/workout/{OrderDetailsId:guid}"
 @page "/workout-plan/{OrderDetailsId:guid}"
-@layout EmptyLayout
+@implements IDisposable
 @attribute [Authorize]
 @inject FitSocial.Client.Services.TrainingPlans.ITrainingPlanClientService TrainingPlanService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.TrainingPlans
 
 <PageTitle>@(workoutPlan?.PackageTitle ?? "Workout Hub") - FitSocial</PageTitle>
-
-<div class="min-h-screen bg-gray-100 text-gray-800">
-    <AppHeader />
 
     <!-- Toast Notification -->
     @if (!string.IsNullOrWhiteSpace(toastMessage))
@@ -24,24 +22,7 @@
         </div>
     }
 
-    <style>
-        @@media (min-width: 1024px) {
-            .workout-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 68rem) minmax(0, 1fr) !important;
-                align-items: start !important;
-            }
-            .workout-left-sidebar { justify-self: start !important; }
-            .workout-main-content { justify-self: center !important; width: 100% !important; max-width: 68rem !important; }
-        }
-    </style>
-
-    <div class="workout-3col-layout w-full pt-6 px-4 lg:px-8 flex flex-col items-start pb-20">
-        <!-- Sidebar -->
-        <AppSidebar ActiveItem="purchased-packages" Class="workout-left-sidebar" />
-
-        <!-- Main Content -->
-        <main class="workout-main-content w-full flex flex-col gap-6 min-w-0">
+    <main class="flex flex-col gap-6 min-w-0">
             <!-- Breadcrumb & Top Navigation -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <nav class="flex items-center gap-2 text-xs text-gray-500 font-medium">
@@ -396,7 +377,6 @@
                 </div>
             }
         </main>
-    </div>
 
     @if (showReportCoachModal && workoutPlan != null && workoutPlan.CoachId != Guid.Empty)
     {
@@ -408,7 +388,6 @@
                          OnClose="() => showReportCoachModal = false"
                          OnReportSubmitted="HandleCoachReportSubmitted" />
     }
-</div>
 
 @code {
     [Parameter]
@@ -460,7 +439,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Trang này không có ô tìm kiếm riêng -> tắt ô tìm kiếm ở topbar dùng chung
+        Shell.ShowSearch = false;
+
         await LoadWorkoutPlanAsync();
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadWorkoutPlanAsync()

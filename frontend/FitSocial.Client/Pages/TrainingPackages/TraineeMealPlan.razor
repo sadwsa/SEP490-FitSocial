@@ -1,35 +1,16 @@
 @page "/training-packages/meal-plan/{OrderDetailsId:guid}"
 @page "/meal-plan/{OrderDetailsId:guid}"
-@layout EmptyLayout
+@implements IDisposable
 @attribute [Authorize]
 @inject FitSocial.Client.Services.MealPlans.IMealPlanClientService MealPlanService
 @inject NavigationManager Navigation
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.MealPlans
 
 <PageTitle>@(mealPlan?.PackageTitle != null ? $"{mealPlan.PackageTitle} - Meal Plan" : "Meal Plan") - FitSocial</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
-    <AppHeader />
-
-    <style>
-        @@media (min-width: 1024px) {
-            .meal-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 68rem) minmax(0, 1fr) !important;
-                align-items: start !important;
-            }
-            .meal-left-sidebar { justify-self: start !important; }
-            .meal-main-content { justify-self: center !important; width: 100% !important; max-width: 68rem !important; }
-        }
-    </style>
-
-    <div class="meal-3col-layout w-full pt-6 px-4 lg:px-8 flex flex-col items-start pb-20">
-        <!-- Sidebar -->
-        <AppSidebar ActiveItem="purchased-packages" Class="meal-left-sidebar" />
-
-        <!-- Main Content -->
-        <main class="meal-main-content w-full flex flex-col gap-6 min-w-0">
+<main class="flex flex-col gap-6 min-w-0">
             <!-- Breadcrumb & Nav -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <nav class="flex items-center gap-2 text-xs text-gray-500 font-medium">
@@ -315,10 +296,6 @@
             }
         </main>
 
-        <!-- Right Spacing Sidebar -->
-        <aside class="hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
-    </div>
-
     @if (!string.IsNullOrWhiteSpace(toastMessage))
     {
         <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl transition-all duration-300 animate-in fade-in slide-in-from-top-4">
@@ -339,7 +316,6 @@
                          OnClose="() => showReportCoachModal = false"
                          OnReportSubmitted="HandleCoachReportSubmitted" />
     }
-</div>
 
 @code {
     [Parameter]
@@ -359,7 +335,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Trang này không có ô tìm kiếm riêng -> tắt ô tìm kiếm ở topbar dùng chung
+        Shell.ShowSearch = false;
+
         await LoadMealPlanAsync();
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadMealPlanAsync()

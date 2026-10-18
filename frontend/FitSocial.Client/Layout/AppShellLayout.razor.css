@@ -1,0 +1,205 @@
+/* ==================================================================
+   AppShellLayout – bố cục 3 cột dùng chung cho mọi chức năng
+   Desktop ≥ lg (1024px) : 3 cột đầy đủ
+   Tablet / Mobile < lg  : cột giữa + drawer sidebar trái
+   ================================================================== */
+
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    width: 100%;
+    background-color: #eef2f7; /* nền xám xanh nhạt */
+    color: #1f2937;            /* gray-800 */
+}
+
+/* Khu vực bên dưới topbar.
+
+   - gap CỐ ĐỊNH 1.5rem: khoảng cách giữa 3 cột luôn giữ nguyên ở mọi mức zoom.
+   - max-width 1920px + margin auto: không bao giờ kéo giãn quá 1 màn hình lớn.
+   - justify-content: center: phần dư dồn vào hai mép ngoài, không chèn vào giữa cột. */
+.app-shell-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 1920px;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+    min-height: calc(100vh - 4rem);
+}
+
+/* ---- Hai sidebar ----
+/* ---- Hai sidebar ----
+   Cot trai 29.5rem (472px = 26rem cu + 1,5cm). Cot phai 34.6rem (554px).
+   flex-grow 6:7 giu dung ti le 472:554 o MOI kich thuoc man hinh.
+   Truoc day dung 1:1 nen o man ~1600px ca hai bi kep boi max-width va van bang nhau. */
+.app-shell-side {
+    flex-basis: 0%;
+    align-self: stretch;
+    position: sticky;
+    top: 4rem;                                  /* bang chieu cao topbar (h-16) */
+    height: calc(100vh - 4rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-block: 1.5rem 2.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-shell-side::-webkit-scrollbar {
+    width: 6px;
+}
+
+.app-shell-side::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 9999px;
+}
+
+/* Cột trái: 3 phần / Cột phải: 4 phần  =>  cột phải luôn rộng gấp 4/3 cột trái */
+.app-shell-side-left {
+    order: 1;
+    flex-grow: 6;
+    max-width: 29.5rem;      /* 472px = 26rem + 1,5cm */
+    min-width: 15rem;         /* 240px - san */
+}
+
+.app-shell-side-right {
+    order: 3;
+    flex-grow: 7;
+    max-width: 34.6rem;      /* 554px */
+    min-width: 17.5rem;       /* 280px - san */
+}
+
+.app-shell-side-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;      /* chiếm hết chiều cao cột */
+    width: 100%;
+}
+
+/* Lưu ý: quy tắc "ô trắng full chiều dọc" (.app-shell-card, .app-shell-side-inner > *)
+   nằm trong wwwroot/css/app.css, KHÔNG đặt ở đây.
+   Lý do: Blazor CSS Isolation gắn attribute [b-xxxx] vào phần tử của chính file .razor,
+   nên selector từ file khác sẽ không match được phần tử của AppSidebar/RightSidebar. */
+
+/* ---- Cột giữa: nội dung tuỳ chức năng ----
+   49.9rem (798px): co lại bù cho cột trái được nới thêm 1,5cm.
+   Tổng: 24(pad) + 24(gap) + 472(trái) + 554(phải) + 798 ≈ 1896px, vừa khít 1920px. */
+.app-shell-center {
+    order: 2;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 49.9rem;
+    width: 100%;
+    padding: 1.5rem 0 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* ---- Đầu drawer: chỉ hiện ở chế độ mobile/tablet ---- */
+.app-shell-drawer-head {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 0.25rem 0.75rem;
+}
+
+/* ---- Widget cột phải nằm trong drawer: chỉ hiện ở mobile/tablet ---- */
+.app-shell-drawer-only {
+    display: none;
+}
+
+/* ---- Lớp nền mờ khi mở drawer ---- */
+.app-shell-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.45);
+    z-index: 40;
+}
+
+/* ==================================================================
+   TABLET & MOBILE (< 1024px)
+   ================================================================== */
+@media (max-width: 1023px) {
+
+    /* Cột giữa chiếm toàn bộ */
+    .app-shell-body {
+        padding-inline: 0.75rem;
+        gap: 0;
+    }
+
+    .app-shell-center {
+        max-width: 100%;
+        padding-inline: 0;
+    }
+
+    /* Cột phải ẩn hẳn – widget của nó chuyển vào drawer */
+    .app-shell-side-right {
+        display: none;
+    }
+
+    /* Cột trái thành drawer trượt từ mép trái */
+    .app-shell-side-left {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 50;
+        width: min(20rem, 85vw);
+        max-width: min(20rem, 85vw);
+        min-width: 0;
+        height: 100vh;
+        height: 100dvh;
+        padding: 1rem 0.85rem 2rem;
+        background-color: #eef2f7;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25);
+        transform: translateX(-105%);
+        transition: transform 0.25s ease;
+        overscroll-behavior: contain;
+    }
+
+    .drawer-open .app-shell-side-left {
+        transform: translateX(0);
+    }
+
+    .app-shell-drawer-head {
+        display: flex;
+    }
+
+    .app-shell-drawer-only {
+        display: block;
+    }
+
+    .app-shell-backdrop {
+        display: block;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+    }
+
+    .drawer-open .app-shell-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Màn rất hẹp (điện thoại) */
+@media (max-width: 480px) {
+    .app-shell-body {
+        padding-inline: 0.5rem;
+    }
+
+    .app-shell-center {
+        padding-top: 1rem;
+    }
+}

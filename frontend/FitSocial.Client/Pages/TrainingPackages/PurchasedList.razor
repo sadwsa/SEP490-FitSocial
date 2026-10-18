@@ -1,10 +1,11 @@
 @page "/training-packages/purchased"
-@layout EmptyLayout
+@implements IDisposable
 @inject ITrainingPackageService PackageService
 @inject NavigationManager Navigation
 @inject FitSocial.Client.Services.Refunds.IRefundService RefundService
 @inject FitSocial.Client.Services.Coaches.ICoachService CoachService
 @inject FitSocial.Client.Services.Files.IFileUploadService FileUploadService
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.TrainingPackages
 @using FitSocial.Client.Services.TrainingPackages
@@ -13,9 +14,6 @@
 @using FitSocial.Client.Services.Refunds
 
 <PageTitle>Purchased Packages - FitSocial</PageTitle>
-
-<div class="min-h-screen bg-gray-100 text-gray-800">
-    <AppHeader />
 
     <!-- Toast Notification -->
     @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
@@ -26,37 +24,7 @@
         </div>
     }
 
-    <style>
-        @@media (min-width: 1024px) {
-            .home-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
-                align-items: start !important;
-            }
-
-            .home-left-sidebar {
-                justify-self: start !important;
-            }
-
-            .home-center-feed {
-                justify-self: end !important;
-                width: 100% !important;
-                max-width: 42rem !important;
-                min-width: 0 !important;
-            }
-
-            .home-right-sidebar {
-                justify-self: center !important;
-            }
-        }
-    </style>
-
-    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
-        <!-- Sidebar -->
-        <AppSidebar ActiveItem="purchased-packages" />
-
-        <!-- Main Content -->
-        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-10">
+    <div class="flex flex-col gap-4 min-w-0">
             <div class="bg-white rounded-xl shadow-sm p-5 flex justify-between items-center gap-4 border border-gray-100">
                 <h1 class="text-xl font-bold text-gray-800">My Purchased Packages</h1>
             </div>
@@ -227,11 +195,7 @@
                     </ul>
                 </div>
             }
-        </section>
-
-        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
-    </div>
-</div>
+        </div>
 
 <!-- MODAL VIEW PURCHASED PACKAGE DETAILS -->
 @if (isDetailModalOpen && selectedDetailPackage != null)
@@ -762,7 +726,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Trang này không có ô tìm kiếm riêng -> tắt ô tìm kiếm ở topbar dùng chung
+        Shell.ShowSearch = false;
+
         await LoadPurchasedPackagesAsync();
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadPurchasedPackagesAsync()

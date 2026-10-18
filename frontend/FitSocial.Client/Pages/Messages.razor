@@ -1,6 +1,5 @@
 @page "/messages"
 @page "/messages/{conversationId:guid}"
-@layout EmptyLayout
 @attribute [Authorize]
 @inject IConversationService ConversationService
 @inject IChatHubClient ChatHubClient
@@ -10,6 +9,7 @@
 @inject IAuthService AuthService
 @inject IJSRuntime JSRuntime
 @inject FitSocial.Client.Services.Files.IFileUploadService FileUploadService
+@inject AppShellContext Shell
 @using System.IO
 @using System.Security.Claims
 @using FitSocial.Client.Layout
@@ -22,23 +22,8 @@
 
 <PageTitle>Messages - FitSocial</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800 flex flex-col">
-    <!-- Header matching Home -->
-    <AppHeader SearchTerm="@headerSearchTerm"
-               OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp"
-               OnSearch="ExecuteHeaderSearch"
-               OnClearSearch="ClearHeaderSearch"
-               UserName="@userName"
-               UserInitials="@userInitials"
-               UserRole="@userRole"
-               OnLogout="HandleLogout" />
-
     <!-- Main Content Layout (Sidebar + Messages Container) matching Home -->
-    <div class="w-full pt-4 lg:pt-6 px-3 sm:px-4 lg:px-6 flex items-start gap-6 max-w-[1600px] mx-auto flex-1 pb-4">
-        <!-- Left Sidebar: Menu Navigation -->
-        <AppSidebar ActiveItem="messages" />
-
+    <div class="flex flex-col gap-4 w-full min-w-0">
         <!-- Messages Workspace Card -->
         <div class="flex-1 min-w-0 bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden flex flex-col md:flex-row h-[calc(100vh-5.5rem)]">
 
@@ -600,7 +585,6 @@
             </div>
         </div>
     </div>
-</div>
 
 <!-- Delete Conversation Modal Dialog -->
 @if (_showDeleteModal)
@@ -748,6 +732,21 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadUserInfoAsync();
 
         try
@@ -1557,6 +1556,7 @@
 
     public ValueTask DisposeAsync()
     {
+        Shell.Reset();
         ChatHubClient.OnMessageReceived -= HandleReceiveMessage;
         return ValueTask.CompletedTask;
     }

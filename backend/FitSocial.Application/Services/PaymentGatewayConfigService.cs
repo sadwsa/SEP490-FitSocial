@@ -17,15 +17,18 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
     private readonly IPaymentGatewayConfigRepository _configRepository;
     private readonly IEncryptionService _encryptionService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IAuditLogService _auditLogService;
 
     public PaymentGatewayConfigService(
         IPaymentGatewayConfigRepository configRepository,
         IEncryptionService encryptionService,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IAuditLogService auditLogService)
     {
         _configRepository = configRepository;
         _encryptionService = encryptionService;
         _unitOfWork = unitOfWork;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDto<List<PaymentGatewayConfigDto>>> GetAllConfigsAsync(CancellationToken cancellationToken = default)
@@ -81,6 +84,23 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         await _configRepository.AddAsync(config, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        await WriteAuditAsync(
+            action: "ADD_PAYMENT_ACCOUNT",
+            entityId: config.GatewayId,
+            description: $"Payment account '{config.GatewayName}' was added ({(config.IsPayout == true ? "payout" : "collection")}, {(config.IsActive == true ? "active" : "inactive")}).",
+            oldValue: null,
+            newValue: new
+            {
+                gatewayName = config.GatewayName,
+                clientId = config.ClientId,
+                webhookUrl = config.WebhookUrl,
+                isActive = config.IsActive,
+                isPayout = config.IsPayout,
+                apiKeyProvided = true,
+                checksumKeyProvided = true
+            },
+            cancellationToken);
+
         return ApiResponseDto<PaymentGatewayConfigDto>.Ok(MapToDto(config), "Payment gateway config created successfully.");
     }
 
@@ -95,6 +115,8 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         {
             throw new NotFoundException("Payment gateway config not found.");
         }
+
+        var oldValues = Snapshot(config);
 
         if (!string.IsNullOrWhiteSpace(dto.GatewayName)) config.GatewayName = dto.GatewayName.Trim();
         if (!string.IsNullOrWhiteSpace(dto.ClientId)) config.ClientId = dto.ClientId.Trim();
@@ -117,6 +139,14 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        await WriteAuditAsync(
+            action: "EDIT_PAYMENT_ACCOUNT",
+            entityId: config.GatewayId,
+            description: $"Payment account '{config.GatewayName}' was edited.",
+            oldValue: oldValues,
+            newValue: Snapshot(config, dto),
+            cancellationToken);
+
         return ApiResponseDto<PaymentGatewayConfigDto>.Ok(MapToDto(config), "Payment gateway config updated successfully.");
     }
 
@@ -128,11 +158,22 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             throw new NotFoundException("Payment gateway config not found.");
         }
 
+        var oldValues = Snapshot(config);
+        var gatewayName = config.GatewayName;
+
         // Soft-delete / deactivate
         config.IsActive = false;
         config.UpdatedAt = DateTime.UtcNow;
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await WriteAuditAsync(
+            action: "DELETE_PAYMENT_ACCOUNT",
+            entityId: config.GatewayId,
+            description: $"Payment account '{gatewayName}' was deleted (deactivated).",
+            oldValue: oldValues,
+            newValue: Snapshot(config),
+            cancellationToken);
 
         return ApiResponseDto<bool>.Ok(true, "Payment gateway config deactivated successfully.");
     }
@@ -147,10 +188,20 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
 
         await EnsureNoOtherActiveAsync(id, IsPayoutOf(config), cancellationToken);
 
+        var oldValues = Snapshot(config);
+
         config.IsActive = true;
         config.UpdatedAt = DateTime.UtcNow;
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await WriteAuditAsync(
+            action: "ACTIVATE_PAYMENT_ACCOUNT",
+            entityId: config.GatewayId,
+            description: $"Payment account '{config.GatewayName}' was activated for {(IsPayoutOf(config) ? "payout" : "collection")}.",
+            oldValue: oldValues,
+            newValue: Snapshot(config),
+            cancellationToken);
 
         return ApiResponseDto<bool>.Ok(true, "Payment gateway config activated successfully.");
     }
@@ -163,12 +214,74 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             throw new NotFoundException("Payment gateway config not found.");
         }
 
+        var oldValues = Snapshot(config);
+
         config.IsActive = false;
         config.UpdatedAt = DateTime.UtcNow;
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        await WriteAuditAsync(
+            action: "DEACTIVATE_PAYMENT_ACCOUNT",
+            entityId: config.GatewayId,
+            description: $"Payment account '{config.GatewayName}' was deactivated.",
+            oldValue: oldValues,
+            newValue: Snapshot(config),
+            cancellationToken);
+
         return ApiResponseDto<bool>.Ok(true, "Payment gateway config deactivated successfully.");
+    }
+
+    /// <summary>
+    /// Non-sensitive projection of a gateway config used for audit trails.
+    /// API key / checksum key are NEVER included - only whether they were supplied,
+    /// so secrets never reach the "AuditLogs" table.
+    /// </summary>
+    private static object Snapshot(PaymentGatewayConfig c, UpdatePaymentGatewayConfigDto? dto = null)
+    {
+        return new
+        {
+            gatewayName = c.GatewayName,
+            clientId = c.ClientId,
+            webhookUrl = c.WebhookUrl,
+            isActive = c.IsActive,
+            isPayout = c.IsPayout,
+            apiKeyPresent = c.EncryptedApiKey != null,
+            checksumKeyPresent = c.EncryptedChecksumKey != null,
+            apiKeyRotated = dto != null && !string.IsNullOrWhiteSpace(dto.ApiKey),
+            checksumKeyRotated = dto != null && !string.IsNullOrWhiteSpace(dto.ChecksumKey)
+        };
+    }
+
+    /// <summary>
+    /// UC-36.x: every Admin action on a payment account (add / edit / activate /
+    /// deactivate / delete) is traced in the shared "AuditLogs" table. Actor,
+    /// role and IP are auto-resolved from the current request by IAuditLogService.
+    /// </summary>
+    private async Task WriteAuditAsync(
+        string action,
+        Guid entityId,
+        string description,
+        object? oldValue,
+        object? newValue,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _auditLogService.LogAsync(
+                actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                action: action,
+                entityType: "PaymentGatewayConfig",
+                entityId: entityId.ToString(),
+                description: description,
+                oldValue: oldValue,
+                newValue: newValue,
+                cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            // Audit log failure is non-fatal - the business operation already succeeded.
+        }
     }
 
     private PaymentGatewayConfigDto MapToDto(PaymentGatewayConfig c)

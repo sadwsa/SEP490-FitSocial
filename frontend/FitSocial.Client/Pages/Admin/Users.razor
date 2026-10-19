@@ -8,7 +8,7 @@
 @inject IUserService UserService
 @inject NavigationManager Navigation
 
-<PageTitle>User Accounts - FitSocial Admin Console</PageTitle>
+<PageTitle>User Accounts - FitConnect Admin Console</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
@@ -22,7 +22,7 @@
         }
 
         <h2 class="view-title">User Accounts</h2>
-        <p class="view-sub">Manage and monitor user accounts across the FitSocial platform.</p>
+        <p class="view-sub">Manage and monitor user accounts across the FitConnect platform.</p>
 
         <div class="cat-tabs mb-3">
             <button type="button" class="cat-tab @(userStatusFilter == "active" ? "active" : "")" @onclick='() => SetUserStatusFilterAsync("active")'>

@@ -448,6 +448,13 @@ public partial class Profile : ComponentBase
                 isEditing = false;
                 saveSuccessMessage = "Your profile has been updated successfully!";
 
+                // Reissue the session token so the new name/avatar propagate to the
+                // JWT claims (user.Identity.Name) and the global header (AppHeader)
+                // without requiring a logout/login. The refresh rotates the token
+                // from the freshly updated DB row, then notifies the auth state
+                // provider, which triggers AppHeader to reload the current user.
+                try { await AuthService.RefreshTokenAsync(); } catch { }
+
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(4000);

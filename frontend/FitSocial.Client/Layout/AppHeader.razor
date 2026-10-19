@@ -31,8 +31,8 @@
 
         <!-- Brand Logo -->
         <a href="home" @onclick="HandleLogoClick" @onclick:preventDefault="true"
-           class="flex-shrink-0 flex items-center hover:opacity-95 transition cursor-pointer" title="FitSocial Home">
-            <img src="logo.jpg" alt="FitSocial"
+           class="flex-shrink-0 flex items-center hover:opacity-95 transition cursor-pointer" title="FitConnect Home">
+            <img src="img/fitconnect-logo.png" alt="FitConnect"
                  class="h-11 w-11 object-cover rounded-xl shadow-sm hover:scale-105 transition-transform duration-200" />
         </a>
 
@@ -207,7 +207,7 @@
                                         <!-- Content -->
                                         <div class="flex-1 min-w-0">
                                             <div class="flex items-center justify-between gap-1 mb-0.5">
-                                                <p class="text-xs font-semibold text-gray-900 truncate">@(item.SenderName ?? "FitSocial User")</p>
+                                                <p class="text-xs font-semibold text-gray-900 truncate">@(item.SenderName ?? "FitConnect User")</p>
                                                 <span class="text-[10px] text-gray-400 flex-shrink-0">@FormatNotificationTime(item.CreatedAt)</span>
                                             </div>
                                             <p class="text-xs text-gray-500 truncate @(!item.IsRead ? "font-semibold text-gray-800" : "")">
@@ -487,7 +487,7 @@
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between">
-                        <p class="text-xs font-bold text-gray-900 truncate">@(_activeToast.SenderName ?? "FitSocial User")</p>
+                        <p class="text-xs font-bold text-gray-900 truncate">@(_activeToast.SenderName ?? "FitConnect User")</p>
                         <span class="text-[10px] text-gray-400">Just now</span>
                     </div>
                     <p class="text-xs text-gray-600 line-clamp-2 mt-0.5">
@@ -566,6 +566,7 @@
     protected override async Task OnInitializedAsync()
     {
         CartService.OnCartChanged += HandleCartChanged;
+        AuthStateProvider.AuthenticationStateChanged += HandleAuthenticationStateChanged;
 
         try
         {
@@ -860,6 +861,26 @@
         return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
     }
 
+    private async void HandleAuthenticationStateChanged(Task<AuthenticationState> stateTask)
+    {
+        try
+        {
+            var state = await stateTask;
+            if (state.User.Identity?.IsAuthenticated == true)
+            {
+                await LoadCurrentUserAsync();
+            }
+            else
+            {
+                loadedUserName = "User";
+                loadedUserInitials = "U";
+                loadedUserAvatarUrl = null;
+            }
+            StateHasChanged();
+        }
+        catch { }
+    }
+
     private string FormatNotificationTime(DateTime? dt)
     {
         if (!dt.HasValue) return "";
@@ -1039,6 +1060,7 @@
 
     public ValueTask DisposeAsync()
     {
+        AuthStateProvider.AuthenticationStateChanged -= HandleAuthenticationStateChanged;
         CartService.OnCartChanged -= HandleCartChanged;
         NotificationService.OnConversationRead -= HandleConversationReadLocally;
         ChatHubClient.OnNotificationReceived -= HandleRealtimeNotification;

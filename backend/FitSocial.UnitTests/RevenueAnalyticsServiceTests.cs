@@ -34,7 +34,7 @@ public class RevenueAnalyticsServiceTests
         // Arrange
         // Scenario:
         // Trainee packages GMV = 100,000,000 VND (100% belongs to Coaches)
-        // Coach subscription plans = 20,000,000 VND (100% belongs to FitSocial Platform)
+        // Coach subscription plans = 20,000,000 VND (100% belongs to FitConnect Platform)
         // Coach subscription refund = 2,000,000 VND
         // Total approved refunds = 5,000,000 VND (including trainee + coach)
         // Processed coach payouts = 80,000,000 VND
@@ -219,7 +219,7 @@ public class RevenueAnalyticsServiceTests
         Assert.Equal(0xBF, csvBytes[2]);
 
         var csvText = Encoding.UTF8.GetString(csvBytes);
-        Assert.Contains("BÁO CÁO DOANH THU HỆ THỐNG FITSOCIAL", csvText);
+        Assert.Contains("BÁO CÁO DOANH THU HỆ THỐNG FITCONNECT", csvText);
         Assert.Contains("Coach John", csvText);
         Assert.Contains("50.000.000", csvText);
     }

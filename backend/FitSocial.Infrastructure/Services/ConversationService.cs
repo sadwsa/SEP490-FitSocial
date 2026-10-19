@@ -86,7 +86,7 @@ public class ConversationService : IConversationService
                     continue;
                 }
 
-                var otherUserName = otherUser.FullName ?? otherUser.Email ?? "FitSocial User";
+                var otherUserName = otherUser.FullName ?? otherUser.Email ?? "FitConnect User";
 
                 string? displayLastMessage = conv.LastMessageContent;
                 DateTime? displayLastMessageAt = conv.LastMessageAt ?? conv.UpdatedAt ?? conv.CreatedAt;
@@ -190,7 +190,7 @@ public class ConversationService : IConversationService
             var otherUser = isUser1 ? conv.User2 : conv.User1;
             var deletedHistoryAt = isUser1 ? conv.User1DeletedHistoryAt : conv.User2DeletedHistoryAt;
 
-            var otherUserName = otherUser?.FullName ?? otherUser?.Email ?? "FitSocial User";
+            var otherUserName = otherUser?.FullName ?? otherUser?.Email ?? "FitConnect User";
 
             var dto = new ConversationDetailDto
             {
@@ -224,7 +224,7 @@ public class ConversationService : IConversationService
                 Id = m.MessageId,
                 ConversationId = m.ConversationId,
                 SenderId = m.SenderId,
-                SenderName = m.Sender?.FullName ?? m.Sender?.Email ?? "FitSocial User",
+                SenderName = m.Sender?.FullName ?? m.Sender?.Email ?? "FitConnect User",
                 SenderAvatar = m.Sender?.AvatarUrl,
                 Content = m.Content,
                 MessageType = m.MessageType,
@@ -414,7 +414,7 @@ public class ConversationService : IConversationService
                     Id = autoReplyMessage.MessageId,
                     ConversationId = conversationId,
                     SenderId = otherUserId,
-                    SenderName = recipientUser?.FullName ?? recipientUser?.Email ?? "FitSocial User",
+                    SenderName = recipientUser?.FullName ?? recipientUser?.Email ?? "FitConnect User",
                     SenderAvatar = recipientUser?.AvatarUrl,
                     Content = autoReplyMessage.Content,
                     MessageType = autoReplyMessage.MessageType,
@@ -427,7 +427,7 @@ public class ConversationService : IConversationService
                     Id = blockedMessage.MessageId,
                     ConversationId = conversationId,
                     SenderId = currentUserId,
-                    SenderName = senderUser?.FullName ?? senderUser?.Email ?? "FitSocial User",
+                    SenderName = senderUser?.FullName ?? senderUser?.Email ?? "FitConnect User",
                     SenderAvatar = senderUser?.AvatarUrl,
                     Content = blockedMessage.Content,
                     MessageType = blockedMessage.MessageType,
@@ -524,7 +524,7 @@ public class ConversationService : IConversationService
                 Id = message.MessageId,
                 ConversationId = message.ConversationId,
                 SenderId = message.SenderId,
-                SenderName = sender?.FullName ?? sender?.Email ?? "FitSocial User",
+                SenderName = sender?.FullName ?? sender?.Email ?? "FitConnect User",
                 SenderAvatar = sender?.AvatarUrl,
                 Content = message.Content,
                 MessageType = message.MessageType,

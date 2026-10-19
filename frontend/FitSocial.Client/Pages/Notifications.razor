@@ -10,7 +10,7 @@
 @using FitSocial.Client.Models.Auth
 @using System.Security.Claims
 
-<PageTitle>Notifications - FitSocial</PageTitle>
+<PageTitle>Notifications - FitConnect</PageTitle>
 
 <!-- Toast Notification -->
 @if (!string.IsNullOrWhiteSpace(_toastMessage))
@@ -199,7 +199,7 @@
                         <div class="flex items-center justify-between gap-2 mb-1">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-sm font-bold text-gray-900 truncate">
-                                    @(item.SenderName ?? (item.Type == "NewMessage" ? "New Message" : "FitSocial Notification"))
+                                    @(item.SenderName ?? (item.Type == "NewMessage" ? "New Message" : "FitConnect Notification"))
                                 </span>
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold @GetTypeBadgeClass(item.Type)">
                                     @FormatType(item.Type)

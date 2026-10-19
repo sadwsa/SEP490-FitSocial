@@ -23,7 +23,7 @@ public class EmailService : IEmailService
         var smtpHost = _configuration["MailSettings:Host"];
         var smtpPortStr = _configuration["MailSettings:Port"];
         var senderEmail = _configuration["MailSettings:SenderEmail"];
-        var senderName = _configuration["MailSettings:SenderName"] ?? "FitSocial Support";
+        var senderName = _configuration["MailSettings:SenderName"] ?? "FitConnect Support";
         var password = _configuration["MailSettings:Password"];
 
         try

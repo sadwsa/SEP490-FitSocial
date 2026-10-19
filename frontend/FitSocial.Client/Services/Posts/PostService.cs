@@ -231,7 +231,7 @@ public class PostService : IPostService
                 AuthorAvatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop",
                 Content = "Completed the high-volume calisthenics routine today! Mastered strict muscle-ups and human flag progression. Discipline over motivation any day. 🔥",
                 PostType = "FindCoach",
-                LocationName = "FitSocial Training Hub, District 7",
+                LocationName = "FitConnect Training Hub, District 7",
                 LikeCount = 67,
                 CommentCount = 8,
                 IsLikedByCurrentUser = false,

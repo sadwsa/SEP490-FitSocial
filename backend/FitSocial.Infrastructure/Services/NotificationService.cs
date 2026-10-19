@@ -49,7 +49,7 @@ public class NotificationService : INotificationService
                 preview = preview.Substring(0, 97) + "...";
             }
 
-            var senderName = sender?.FullName ?? sender?.Email ?? "FitSocial User";
+            var senderName = sender?.FullName ?? sender?.Email ?? "FitConnect User";
             var senderAvatar = sender?.AvatarUrl;
 
             foreach (var recipientId in recipientUserIds)
@@ -199,7 +199,7 @@ public class NotificationService : INotificationService
                 if (n.ReferenceId.HasValue && messagesDict.TryGetValue(n.ReferenceId.Value, out var msg))
                 {
                     dto.SenderId = msg.SenderId;
-                    dto.SenderName = msg.Sender?.FullName ?? msg.Sender?.Email ?? "FitSocial User";
+                    dto.SenderName = msg.Sender?.FullName ?? msg.Sender?.Email ?? "FitConnect User";
                     dto.SenderAvatar = msg.Sender?.AvatarUrl;
                     dto.ConversationId = msg.ConversationId;
                     dto.MessageId = msg.MessageId;
@@ -222,7 +222,7 @@ public class NotificationService : INotificationService
                     if (n.Actor != null)
                     {
                         dto.SenderId = n.Actor.UserId;
-                        dto.SenderName = n.Actor.FullName ?? n.Actor.Email ?? "FitSocial User";
+                        dto.SenderName = n.Actor.FullName ?? n.Actor.Email ?? "FitConnect User";
                         dto.SenderAvatar = n.Actor.AvatarUrl;
                     }
                     else if (n.ActorId.HasValue)

@@ -59,7 +59,7 @@ public class PostCommentService : IPostCommentService
                 AuthorId = c.AuthorId,
                 AuthorName = !string.IsNullOrWhiteSpace(c.Author?.FullName)
                     ? c.Author.FullName
-                    : (!string.IsNullOrWhiteSpace(c.Author?.Email) ? c.Author.Email : "FitSocial Member"),
+                    : (!string.IsNullOrWhiteSpace(c.Author?.Email) ? c.Author.Email : "FitConnect Member"),
                 AuthorAvatarUrl = c.Author?.AvatarUrl,
                 Content = c.Content ?? string.Empty,
                 ParentCommentId = c.ParentCommentId,
@@ -183,7 +183,7 @@ public class PostCommentService : IPostCommentService
             AuthorId = authorId,
             AuthorName = !string.IsNullOrWhiteSpace(user.FullName)
                 ? user.FullName
-                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitSocial Member"),
+                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitConnect Member"),
             AuthorAvatarUrl = user.AvatarUrl,
             Content = comment.Content,
             ParentCommentId = comment.ParentCommentId,
@@ -273,7 +273,7 @@ public class PostCommentService : IPostCommentService
             AuthorId = authorId,
             AuthorName = !string.IsNullOrWhiteSpace(user.FullName)
                 ? user.FullName
-                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitSocial Member"),
+                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitConnect Member"),
             AuthorAvatarUrl = user.AvatarUrl,
             Content = reply.Content,
             ParentCommentId = commentId,

@@ -16,7 +16,7 @@
 <PageTitle>Join the FitConnect Community</PageTitle>
 
 <div class="reg-hero">
-    <img src="Logo_FitSocial.jpg" alt="FitConnect" class="hero-logo" />
+    <img src="img/fitconnect-logo.png" alt="FitConnect" class="hero-logo" />
     <div class="hero-text">
         <h1 class="hero-title">Join the <span>FitConnect</span> Community</h1>
         <p class="hero-sub">Unlock your unlimited physical potential, sync your smart training journey and connect with thousands of athletes and top coaches.</p>
@@ -50,7 +50,7 @@
             <span class="coach-banner-icon"><AppIcon Name="shield" /></span>
             <div>
                 <strong>For Certified Professional Coaches</strong>
-                <p>Join the official FitSocial coaching network to offer 1-on-1 classes, publish lesson plans and earn from your sports expertise.</p>
+                <p>Join the official FitConnect coaching network to offer 1-on-1 classes, publish lesson plans and earn from your sports expertise.</p>
             </div>
         </div>
         <!-- Step indicator for Coach 5-step -->
@@ -156,7 +156,7 @@
 
             <label class="terms">
                 <input type="checkbox" @bind="agreedTerms" />
-                <span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> of the FitSocial sports platform. @(latestTerm != null ? $"({latestTerm.Version})" : "")</span>
+                <span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> of the FitConnect sports platform. @(latestTerm != null ? $"({latestTerm.Version})" : "")</span>
             </label>
             @if (latestTerm != null) { <details class="terms-box"><summary>@latestTerm.Title</summary><div class="terms-content">@latestTerm.Content</div></details> }
             @if (showTermsError && !agreedTerms) { <div class="field-error">Please agree to the terms of service to continue.</div> }

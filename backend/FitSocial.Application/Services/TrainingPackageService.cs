@@ -261,7 +261,7 @@ namespace FitSocial.Application.Services
                     ReviewId = r.ReviewId,
                     PackageId = packageId,
                     TraineeId = r.TraineeId,
-                    TraineeName = r.Trainee?.FullName ?? "FitSocial Member",
+                    TraineeName = r.Trainee?.FullName ?? "FitConnect Member",
                     TraineeAvatarUrl = r.Trainee?.AvatarUrl,
                     Rating = r.Rating ?? 5,
                     Comment = r.Comment,

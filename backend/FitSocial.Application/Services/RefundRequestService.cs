@@ -1469,11 +1469,11 @@ public class RefundRequestService : IRefundRequestService
             ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})"
             : "Linked Payout Bank Account";
 
-        var subject = $"[FitSocial] Refund Confirmation: {amount:N0} VND - {orderRef}";
+        var subject = $"[FitConnect] Refund Confirmation: {amount:N0} VND - {orderRef}";
         var body = $@"
         <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;"">
             <div style=""text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #FF5722;"">
-                <h2 style=""color: #FF5722; margin: 0; font-size: 24px; font-weight: bold;"">FitSocial</h2>
+                <h2 style=""color: #FF5722; margin: 0; font-size: 24px; font-weight: bold;"">FitConnect</h2>
                 <p style=""color: #666; margin: 6px 0 0; font-size: 14px;"">Online Tuition Refund Notification (PayOS Napas 24/7)</p>
             </div>
 
@@ -1507,7 +1507,7 @@ public class RefundRequestService : IRefundRequestService
                     </tr>
                     <tr>
                         <td style=""padding: 6px 0; color: #777;"">Policy Applied:</td>
-                        <td style=""padding: 6px 0; color: #333;"">{System.Net.WebUtility.HtmlEncode(calc.CaseTitle ?? "FitSocial Refund Policy")}</td>
+                        <td style=""padding: 6px 0; color: #333;"">{System.Net.WebUtility.HtmlEncode(calc.CaseTitle ?? "FitConnect Refund Policy")}</td>
                     </tr>
                     <tr>
                         <td style=""padding: 6px 0; color: #777;"">Processed Time:</td>
@@ -1526,8 +1526,8 @@ public class RefundRequestService : IRefundRequestService
 
             <hr style=""border: none; border-top: 1px solid #eeeeee; margin: 24px 0;"" />
             <p style=""color: #888; font-size: 12px; text-align: center; margin: 0; line-height: 1.5;"">
-                If you have any questions or require further assistance, please contact FitSocial support via email or hotline.<br />
-                © {DateTime.UtcNow.Year} FitSocial Platform. All rights reserved.
+                If you have any questions or require further assistance, please contact FitConnect support via email or hotline.<br />
+                © {DateTime.UtcNow.Year} FitConnect Platform. All rights reserved.
             </p>
         </div>";
 

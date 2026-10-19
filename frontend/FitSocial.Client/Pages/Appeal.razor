@@ -10,16 +10,16 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
-<PageTitle>Appeal Violation Report - FitSocial</PageTitle>
+<PageTitle>Appeal Violation Report - FitConnect</PageTitle>
 
 <div class="min-h-screen bg-slate-50/80 py-8 px-4 sm:px-6 lg:px-8 flex justify-center items-start text-slate-800">
     <div class="w-full max-w-4xl">
         <!-- Top Navbar / Brand Header -->
         <div class="flex items-center justify-between mb-8 pb-4 border-b border-slate-200">
             <div class="flex items-center gap-3">
-                <img src="Logo_FitSocial.jpg" alt="FitSocial" class="w-10 h-10 rounded-xl shadow-xs object-cover" />
+                <img src="img/fitconnect-logo.png" alt="FitConnect" class="w-10 h-10 rounded-xl shadow-xs object-cover" />
                 <div>
-                    <h1 class="text-xl font-bold tracking-tight text-slate-900 leading-none">FitSocial Appeals</h1>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900 leading-none">FitConnect Appeals</h1>
                     <p class="text-xs text-slate-500 mt-1">Report Review & Account Verification</p>
                 </div>
             </div>
@@ -693,7 +693,7 @@
         if (trimmed.Contains("lịch", StringComparison.OrdinalIgnoreCase) || trimmed.Contains("buổi", StringComparison.OrdinalIgnoreCase))
             return "Did not attend scheduled session and failed to respond to messages.";
         if (trimmed.Contains("tiêu chuẩn", StringComparison.OrdinalIgnoreCase) || trimmed.Contains("quy định", StringComparison.OrdinalIgnoreCase))
-            return "Reported for violating FitSocial community terms.";
+            return "Reported for violating FitConnect community terms.";
 
         return trimmed;
     }

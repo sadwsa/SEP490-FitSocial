@@ -8,7 +8,7 @@
 @inject ILocationService LocationService
 @inject NavigationManager Navigation
 
-<PageTitle>Location List Management - FitSocial Admin Portal</PageTitle>
+<PageTitle>Location List Management - FitConnect Admin Portal</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
@@ -274,7 +274,7 @@
                             <input id="locNameInput"
                                    type="text"
                                    class="form-control @(!string.IsNullOrEmpty(nameValidationError) ? "is-invalid" : "")"
-                                   placeholder="E.g., FitSocial Flagship Hub - District 1"
+                                   placeholder="E.g., FitConnect Flagship Hub - District 1"
                                    value="@newLocationModel.LocationName"
                                    @oninput="OnLocationNameInput"
                                    maxlength="200"
@@ -370,7 +370,7 @@
                             <input id="editLocNameInput"
                                    type="text"
                                    class="form-control @(!string.IsNullOrEmpty(editNameValidationError) ? "is-invalid" : "")"
-                                   placeholder="E.g., FitSocial Flagship Hub - District 1"
+                                   placeholder="E.g., FitConnect Flagship Hub - District 1"
                                    value="@editLocationModel.LocationName"
                                    @oninput="OnEditLocationNameInput"
                                    maxlength="200"

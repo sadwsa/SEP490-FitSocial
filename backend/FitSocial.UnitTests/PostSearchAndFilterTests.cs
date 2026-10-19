@@ -50,7 +50,7 @@ public class PostSearchAndFilterTests
 
         var posts = new List<Post>
         {
-            new() { Id = Guid.NewGuid(), Content = "Hello FitSocial", PostType = "Normal", CreatedAt = DateTime.UtcNow }
+            new() { Id = Guid.NewGuid(), Content = "Hello FitConnect", PostType = "Normal", CreatedAt = DateTime.UtcNow }
         };
 
         _mockPostRepo.Setup(r => r.GetPagedPostsAsync(

@@ -1,4 +1,4 @@
-# Hướng dẫn Tái sử dụng Hệ thống Audit Log (Dành cho Thành viên SEP490-FitSocial)
+# Hướng dẫn Tái sử dụng Hệ thống Audit Log (Dành cho Thành viên SEP490-FitConnect)
 
 Tài liệu này hướng dẫn các thành viên trong nhóm phát triển cách sử dụng hệ thống **Audit Log dùng chung** ở Backend khi xây dựng các chức năng quản trị dành cho **Staff** và **Admin**.
 

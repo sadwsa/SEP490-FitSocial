@@ -8,7 +8,7 @@
             {
                 <button type="button" @onclick="HandleAuthorClick"
                         class="relative w-10 h-10 flex-shrink-0 cursor-pointer p-0 bg-transparent border-0 rounded-full focus:outline-none focus:ring-2 focus:ring-[#FF5500] hover:opacity-90 transition-opacity"
-                        title="@(Post.AuthorName ?? "FitSocial Athlete")">
+                        title="@(Post.AuthorName ?? "FitConnect Athlete")">
                     @if (HasValidAvatarUrl(Post.AuthorAvatarUrl))
                     {
                         <img src="@Post.AuthorAvatarUrl" alt=""
@@ -57,12 +57,12 @@
                     {
                         <button type="button" @onclick="HandleAuthorClick"
                                 class="font-bold text-gray-900 text-sm hover:text-[#FF5500] hover:underline transition-colors cursor-pointer text-left p-0 bg-transparent border-0 inline">
-                            @(Post.AuthorName ?? "FitSocial Athlete")
+                            @(Post.AuthorName ?? "FitConnect Athlete")
                         </button>
                     }
                     else
                     {
-                        <span>@(Post.AuthorName ?? "FitSocial Athlete")</span>
+                        <span>@(Post.AuthorName ?? "FitConnect Athlete")</span>
                     }
                 </h3>
                 <!-- Post Metadata -->

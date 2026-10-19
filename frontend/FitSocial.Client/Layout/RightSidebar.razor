@@ -9,11 +9,9 @@
 <div class="app-shell-card bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col gap-5">
 
     @* ---------------- Top 5 Coaches ---------------- *@
+    @* Không đặt icon trước tiêu đề: khi phóng to (zoom trình duyệt) icon + chữ bị vỡ hàng. *@
     <div>
-        <h3 class="font-bold text-gray-800 mb-3 text-[11px] uppercase tracking-wide flex items-center gap-2">
-            <svg class="w-4 h-4 text-[#FF8C00]" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
+        <h3 class="font-bold text-gray-800 mb-3 text-[11px] uppercase tracking-wide">
             Top 5 Coaches
         </h3>
 
@@ -71,9 +69,7 @@
                                    class="text-sm font-semibold text-gray-900 truncate block hover:text-[#FF5500] transition"
                                    title="@coach.FullName">@coach.FullName</a>
                                 <div class="flex items-center gap-1 text-xs text-[#FF8C00]">
-                                    <svg class="w-3.5 h-3.5 flex-shrink-0 fill-current" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
+                                    <AppIcon Name="star" Size="13" Filled Class="flex-shrink-0" />
                                     <span class="font-medium">@(coach.Rating > 0 ? coach.Rating.ToString("0.0") : "5.0")</span>
                                     @if (coach.TotalReviews > 0)
                                     {
@@ -92,11 +88,7 @@
 
     @* ---------------- Latest Workout Packages ---------------- *@
     <div>
-        <h3 class="font-bold text-gray-800 mb-3 text-[11px] uppercase tracking-wide flex items-center gap-2">
-            <svg class="w-4 h-4 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-            </svg>
+        <h3 class="font-bold text-gray-800 mb-3 text-[11px] uppercase tracking-wide">
             Latest Workout Packages
         </h3>
 

@@ -1,0 +1,543 @@
+@page "/coach/trainee-orders/{TraineeId:guid}"
+@page "/trainee-orders/{TraineeId:guid}"
+@implements IDisposable
+@attribute [Authorize(Roles = "COACH")]
+@inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
+@inject NavigationManager Navigation
+@inject AppShellContext Shell
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Orders
+
+<PageTitle>@(trainee?.FullName ?? "Trainee Details") - FitSocial</PageTitle>
+
+<div class="flex flex-col gap-6 min-w-0">
+    <!-- Header Banner -->
+    <div class="bg-white rounded-2xl shadow-sm p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-gray-100">
+        <div class="min-w-0">
+            <h1 class="text-2xl font-black text-gray-900 tracking-tight truncate">@(trainee?.FullName ?? "Trainee Details")</h1>
+            <p class="text-sm text-gray-500 mt-0.5">Full purchase history and custom training / meal plan management for this trainee.</p>
+        </div>
+
+        <div class="flex items-center gap-2.5 flex-shrink-0">
+            <a href="coach/trainee-orders"
+               class="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold text-sm rounded-xl border border-gray-200 transition flex items-center gap-2 shadow-xs">
+                <AppIcon Name="arrow-left" Size="16" Class="text-gray-500" />
+                <span>Back to List</span>
+            </a>
+            <button type="button" @onclick="LoadTraineeDetailAsync"
+                    disabled="@isLoading"
+                    class="px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white font-semibold text-sm rounded-xl shadow-xs hover:shadow-md hover:-translate-y-0.5 transition flex items-center gap-2 disabled:opacity-50 cursor-pointer">
+                <AppIcon Name="refresh" Size="16" Class="@(isLoading ? "animate-spin" : "")" />
+                <span>Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Error Banner -->
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between text-red-700 text-sm">
+            <div class="flex items-center gap-3">
+                <AppIcon Name="warning" Size="20" Class="flex-shrink-0 text-red-500" />
+                <span>@errorMessage</span>
+            </div>
+            <button type="button" @onclick="LoadTraineeDetailAsync" class="font-semibold underline hover:text-red-800 cursor-pointer">Try Again</button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="bg-white rounded-2xl p-16 shadow-xs border border-gray-100 flex flex-col items-center justify-center">
+            <div class="w-12 h-12 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-gray-500 font-medium text-base">Loading trainee details...</p>
+        </div>
+    }
+    else if (trainee == null)
+    {
+        <div class="bg-white rounded-2xl shadow-xs border border-gray-100 p-12 text-center flex flex-col items-center">
+            <div class="w-20 h-20 mb-4 rounded-full bg-orange-50 text-[#EA580C] flex items-center justify-center">
+                <AppIcon Name="person" Size="40" />
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">Trainee Not Found</h3>
+            <p class="text-gray-500 max-w-md text-sm mb-6 leading-relaxed">
+                This trainee has no purchase orders on your packages, or the trainee no longer exists.
+            </p>
+            <a href="coach/trainee-orders" class="bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-xs hover:shadow-md transition">
+                Back to Enrolled Trainees
+            </a>
+        </div>
+    }
+    else
+    {
+        <!-- Trainee Profile Info Box (full width) -->
+        <div class="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div class="flex items-center gap-4 min-w-0">
+                <div class="relative flex-shrink-0">
+                    @if (!string.IsNullOrWhiteSpace(trainee.AvatarUrl))
+                    {
+                        <img src="@trainee.AvatarUrl" alt="@trainee.FullName" class="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm" referrerpolicy="no-referrer" />
+                    }
+                    else
+                    {
+                        <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-[#FF8C00] to-[#FF5500] text-white flex items-center justify-center font-bold text-2xl shadow-sm">
+                            @(trainee.FullName.Length >= 2 ? trainee.FullName.Substring(0, 2).ToUpper() : "TR")
+                        </div>
+                    }
+                </div>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 class="text-2xl font-black text-gray-900 break-words">@trainee.FullName</h2>
+                        <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <AppIcon Name="check" Size="12" Class="text-emerald-600" />
+                            <span>Enrolled Trainee</span>
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span>Email: <strong>@trainee.Email</strong></span>
+                        @if (!string.IsNullOrWhiteSpace(trainee.PhoneNumber))
+                        {
+                            <span>•</span>
+                            <span>Phone: <strong>@trainee.PhoneNumber</strong></span>
+                        }
+                    </p>
+                    <p class="text-xs text-gray-400 mt-1">
+                        Last order: @(trainee.LatestPurchasedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "N/A")
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 flex-shrink-0 flex-wrap">
+                <div class="bg-orange-50 border border-orange-100 rounded-xl px-4 py-2.5 text-center">
+                    <div class="text-lg font-black text-[#EA580C]">@trainee.TotalOrdersCount</div>
+                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Packages</div>
+                </div>
+                <div class="bg-orange-50 border border-orange-100 rounded-xl px-4 py-2.5 text-center">
+                    <div class="text-lg font-black text-[#EA580C]">@trainee.TotalSpent.ToString("N0")</div>
+                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">VND Spent</div>
+                </div>
+                <a href="messages" class="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                    <AppIcon Name="chat" Size="16" Class="text-blue-600" />
+                    <span>Message Trainee</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Purchased Packages List Header -->
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <h3 class="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+                <span>Purchased Training Packages</span>
+                <span class="bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                    @trainee.PurchasedPackages.Count
+                </span>
+            </h3>
+            <span class="text-xs text-gray-400">Review details &amp; build curriculum for each package</span>
+        </div>
+
+        <!-- Packages Cards -->
+        @if (FilteredPackages.Count == 0)
+        {
+            <div class="bg-white rounded-2xl shadow-xs border border-gray-100 p-12 text-center text-sm text-gray-400">
+                No purchased packages match your search keyword.
+            </div>
+        }
+        else
+        {
+            <div class="space-y-4">
+                @foreach (var pkg in FilteredPackages)
+                {
+                    <div class="bg-white rounded-2xl shadow-xs border border-gray-100 p-5 hover:border-orange-200 transition flex flex-col gap-4">
+                        <div class="flex flex-col sm:flex-row items-start justify-between gap-4">
+                            <div class="flex items-start gap-3.5 flex-1 min-w-0">
+                                @if (!string.IsNullOrWhiteSpace(pkg.ThumbnailUrl))
+                                {
+                                    <img src="@pkg.ThumbnailUrl" alt="@pkg.PackageTitle" class="w-16 h-16 rounded-xl object-cover border border-gray-100 flex-shrink-0" referrerpolicy="no-referrer" />
+                                }
+                                else
+                                {
+                                    <div class="w-16 h-16 rounded-xl bg-orange-50 text-[#EA580C] flex items-center justify-center flex-shrink-0 font-bold text-xl border border-orange-100">
+                                        FIT
+                                    </div>
+                                }
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                                        <span class="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-md text-[11px] font-bold border border-blue-100">
+                                            @pkg.DurationDays Days @(pkg.DurationDays.HasValue && pkg.DurationDays.Value >= 7 ? $"({pkg.DurationDays.Value / 7} Weeks)" : "")
+                                        </span>
+                                        @if (pkg.SessionCount.HasValue)
+                                        {
+                                            <span class="px-2.5 py-0.5 bg-orange-50 text-[#EA580C] rounded-md text-[11px] font-bold border border-orange-100">
+                                                @pkg.SessionCount Sessions
+                                            </span>
+                                        }
+                                        @if (pkg.PackageType == "WORKOUT")
+                                        {
+                                            <span class="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[11px] font-bold border border-indigo-100 flex items-center gap-1">
+                                                <AppIcon Name="dumbbell" Size="13" Class="text-indigo-600" />
+                                                Workout Only
+                                            </span>
+                                        }
+                                        else if (pkg.PackageType == "MEAL")
+                                        {
+                                            <span class="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-bold border border-emerald-100 flex items-center gap-1">
+                                                <AppIcon Name="meal" Size="13" Class="text-emerald-600" />
+                                                Meal Plan Only
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="px-2.5 py-0.5 bg-orange-50 text-[#FF5500] rounded-md text-[11px] font-bold border border-orange-100 flex items-center gap-1">
+                                                <AppIcon Name="fire" Size="13" Filled Class="text-[#FF5500]" />
+                                                Workout + Meal Plan
+                                            </span>
+                                        }
+                                        <span class="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-bold border border-emerald-100">
+                                            Paid (COMPLETED)
+                                        </span>
+                                    </div>
+
+                                    <h4 class="text-base font-black text-gray-900 leading-snug break-words">@pkg.PackageTitle</h4>
+                                    @if (!string.IsNullOrWhiteSpace(pkg.PackageDescription))
+                                    {
+                                        <p class="text-xs text-gray-500 line-clamp-2 mt-1">@pkg.PackageDescription</p>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="text-right flex-shrink-0 sm:self-start">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">AMOUNT PAID</span>
+                                <div class="text-xl font-black text-[#EA580C]">
+                                    @((pkg.PricePaid ?? 0).ToString("N0")) <span class="text-xs font-bold">VND</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border-t border-gray-100 pt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+                            <div class="flex items-center gap-4 flex-wrap">
+                                <span>Order Code: <strong class="text-gray-800">@(string.IsNullOrWhiteSpace(pkg.OrderCode) ? pkg.OrderId.ToString().Substring(0, 8).ToUpper() : pkg.OrderCode)</strong></span>
+                                <span>Purchased Date: <strong class="text-gray-800">@(pkg.PurchasedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "N/A")</strong></span>
+                            </div>
+
+                            @if (pkg.PackageId.HasValue)
+                            {
+                                <a href="/training-packages/@pkg.PackageId.Value" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                                    <span>View Original Syllabus</span>
+                                    <AppIcon Name="external" Size="13" />
+                                </a>
+                            }
+                        </div>
+
+                        <!-- Workout Plan Action (Only for WORKOUT or BOTH packages) -->
+                        @if (pkg.PackageType != "MEAL")
+                        {
+                            <div class="bg-gradient-to-r from-orange-50/60 to-amber-50/60 border border-orange-100/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <AppIcon Name="doc" Size="20" Class="text-gray-500 flex-shrink-0" />
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <p class="font-bold text-xs text-gray-900">Custom Training Plan</p>
+                                            @if (pkg.TrainingPlanId.HasValue)
+                                            {
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                                                    <AppIcon Name="check" Size="12" Class="text-emerald-600" />
+                                                    <span>@(pkg.PlanStatus ?? "Active Plan")</span>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
+                                                    <AppIcon Name="warning" Size="12" Class="text-amber-600" />
+                                                    <span>No Plan Created</span>
+                                                </span>
+                                            }
+                                        </div>
+                                        <p class="text-[11px] text-gray-500">Draft weekly workout schedules and attach video tutorials for your trainee.</p>
+                                    </div>
+                                </div>
+
+                                @if (pkg.TrainingPlanId.HasValue)
+                                {
+                                    <div class="flex items-center gap-2 flex-wrap sm:ml-auto sm:flex-nowrap sm:flex-shrink-0">
+                                        <button type="button"
+                                                @onclick="() => OpenMonitorProgressModal(pkg, trainee?.FullName)"
+                                                class="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                            <AppIcon Name="chart" Size="14" Class="text-blue-600" />
+                                            <span>Monitor Progress</span>
+                                        </button>
+                                        <button type="button"
+                                                @onclick="() => OpenTrainingPlanModal(pkg, trainee?.FullName, isUpdate: true)"
+                                                class="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                            <AppIcon Name="pencil" Size="14" />
+                                            <span>Update Plan</span>
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            @onclick="() => OpenTrainingPlanModal(pkg, trainee?.FullName, isUpdate: false)"
+                                            class="w-full sm:w-auto sm:ml-auto px-4 py-2 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0">
+                                        <AppIcon Name="plus" Size="14" />
+                                        <span>Create Plan</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        <!-- Meal Plan Action (Only for MEAL or BOTH packages) -->
+                        @if (pkg.PackageType != "WORKOUT")
+                        {
+                            <div class="bg-gradient-to-r from-emerald-50/60 to-teal-50/60 border border-emerald-100/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <div class="w-9 h-9 rounded-xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                                        <AppIcon Name="meal" Size="20" Class="text-emerald-600" />
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <p class="font-bold text-xs text-gray-900">Custom Meal Plan</p>
+                                            @if (pkg.MealPlanId.HasValue)
+                                            {
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                                                    <AppIcon Name="check" Size="12" Class="text-emerald-600" />
+                                                    <span>@(pkg.MealPlanStatus ?? "Active Plan")</span>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
+                                                    <AppIcon Name="warning" Size="12" Class="text-amber-600" />
+                                                    <span>No Plan Created</span>
+                                                </span>
+                                            }
+                                        </div>
+                                        <p class="text-[11px] text-gray-500">Draft weekly nutrition schedules, daily meals, calories &amp; macros for your trainee.</p>
+                                    </div>
+                                </div>
+
+                                @if (pkg.MealPlanId.HasValue)
+                                {
+                                    <button type="button"
+                                            @onclick="() => OpenMealPlanModal(pkg, trainee?.FullName, isUpdate: true)"
+                                            class="w-full sm:w-auto sm:ml-auto px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0">
+                                        <AppIcon Name="pencil" Size="14" />
+                                        <span>Update Meal Plan</span>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            @onclick="() => OpenMealPlanModal(pkg, trainee?.FullName, isUpdate: false)"
+                                            class="w-full sm:w-auto sm:ml-auto px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0">
+                                        <AppIcon Name="plus" Size="14" />
+                                        <span>Create Meal Plan</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+<!-- Coach Training Plan Form Modal -->
+<CoachTrainingPlanFormModal
+    IsOpen="@showTrainingPlanModal"
+    OrderDetailsId="@modalOrderDetailsId"
+    PackageTitle="@modalPackageTitle"
+    TraineeName="@modalTraineeName"
+    Mode="@modalMode"
+    ExistingPlanId="@modalPlanId"
+    PackageDurationDays="@modalDurationDays"
+    PackageSessionCount="@modalSessionCount"
+    PackagePurchasedAt="@modalPurchasedAt"
+    OnClose="@CloseTrainingPlanModal"
+    OnSuccess="@HandleTrainingPlanSuccess" />
+
+<!-- Coach Monitor Trainee Progress Modal -->
+<CoachMonitorProgressModal
+    IsOpen="@showMonitorProgressModal"
+    OrderDetailsId="@monitorOrderDetailsId"
+    PackageTitle="@monitorPackageTitle"
+    TraineeName="@monitorTraineeName"
+    OnClose="@CloseMonitorProgressModal" />
+
+<!-- Coach Meal Plan Form Modal -->
+<CoachMealPlanFormModal
+    IsOpen="@showMealPlanModal"
+    OrderDetailsId="@modalMealPlanOrderDetailsId"
+    PackageTitle="@modalMealPlanPackageTitle"
+    TraineeName="@modalMealPlanTraineeName"
+    Mode="@modalMealPlanMode"
+    ExistingPlanId="@modalMealPlanId"
+    PackageDurationDays="@modalMealPlanDurationDays"
+    PackagePurchasedAt="@modalMealPlanPurchasedAt"
+    OnClose="@CloseMealPlanModal"
+    OnSuccess="@HandleMealPlanSuccess" />
+
+@code {
+    [Parameter]
+    public Guid TraineeId { get; set; }
+
+    private CoachTraineeGroupDto? trainee;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    // Topbar search dùng để lọc nhanh các package của trainee này
+    private string searchKeyword = string.Empty;
+
+    private List<CoachTraineePackageOrderDto> FilteredPackages
+    {
+        get
+        {
+            if (trainee == null) return new();
+            if (string.IsNullOrWhiteSpace(searchKeyword)) return trainee.PurchasedPackages;
+
+            var kw = searchKeyword.Trim().ToLowerInvariant();
+            return trainee.PurchasedPackages
+                .Where(p => p.PackageTitle != null && p.PackageTitle.ToLowerInvariant().Contains(kw))
+                .ToList();
+        }
+    }
+
+    // Training Plan Modal State
+    private bool showTrainingPlanModal = false;
+    private Guid modalOrderDetailsId;
+    private string modalPackageTitle = string.Empty;
+    private string modalTraineeName = string.Empty;
+    private string modalMode = "create";
+    private Guid? modalPlanId;
+    private int? modalDurationDays;
+    private int? modalSessionCount;
+    private DateTime? modalPurchasedAt;
+
+    // Meal Plan Modal State
+    private bool showMealPlanModal = false;
+    private Guid modalMealPlanOrderDetailsId;
+    private string modalMealPlanPackageTitle = string.Empty;
+    private string modalMealPlanTraineeName = string.Empty;
+    private string modalMealPlanMode = "create";
+    private Guid? modalMealPlanId;
+    private int? modalMealPlanDurationDays;
+    private DateTime? modalMealPlanPurchasedAt;
+
+    // Monitor Progress Modal State
+    private bool showMonitorProgressModal = false;
+    private Guid monitorOrderDetailsId;
+    private string monitorPackageTitle = string.Empty;
+    private string monitorTraineeName = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        Shell.SearchTerm = string.Empty;
+        Shell.SearchPlaceholder = "Search purchased packages...";
+        Shell.SearchInputHandler = e =>
+        {
+            searchKeyword = e.Value?.ToString() ?? string.Empty;
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => Task.CompletedTask;
+        Shell.SearchClearHandler = () =>
+        {
+            searchKeyword = string.Empty;
+            return Task.CompletedTask;
+        };
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadTraineeDetailAsync();
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
+    }
+
+    private async Task LoadTraineeDetailAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var res = await CheckoutService.GetCoachTraineeOrderDetailAsync(TraineeId);
+            if (res.Success && res.Data != null)
+            {
+                trainee = res.Data;
+            }
+            else
+            {
+                trainee = null;
+                errorMessage = res.Message ?? "Failed to load trainee purchase orders.";
+            }
+        }
+        catch (Exception ex)
+        {
+            trainee = null;
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+
+        isLoading = false;
+    }
+
+    private void OpenMonitorProgressModal(CoachTraineePackageOrderDto pkg, string? name)
+    {
+        monitorOrderDetailsId = pkg.OrderDetailsId;
+        monitorPackageTitle = pkg.PackageTitle;
+        monitorTraineeName = name ?? "Trainee";
+        showMonitorProgressModal = true;
+    }
+
+    private void CloseMonitorProgressModal()
+    {
+        showMonitorProgressModal = false;
+    }
+
+    private void OpenTrainingPlanModal(CoachTraineePackageOrderDto pkg, string? name, bool isUpdate)
+    {
+        modalOrderDetailsId = pkg.OrderDetailsId;
+        modalPackageTitle = pkg.PackageTitle;
+        modalTraineeName = name ?? "Học viên";
+        modalMode = isUpdate ? "update" : "create";
+        modalPlanId = pkg.TrainingPlanId;
+        modalDurationDays = pkg.DurationDays;
+        modalSessionCount = pkg.SessionCount;
+        modalPurchasedAt = pkg.PurchasedAt;
+        showTrainingPlanModal = true;
+    }
+
+    private void CloseTrainingPlanModal()
+    {
+        showTrainingPlanModal = false;
+    }
+
+    private async Task HandleTrainingPlanSuccess(TrainingPlanDetailDto plan)
+    {
+        showTrainingPlanModal = false;
+        await LoadTraineeDetailAsync();
+    }
+
+    private void OpenMealPlanModal(CoachTraineePackageOrderDto pkg, string? name, bool isUpdate)
+    {
+        modalMealPlanOrderDetailsId = pkg.OrderDetailsId;
+        modalMealPlanPackageTitle = pkg.PackageTitle;
+        modalMealPlanTraineeName = name ?? "Học viên";
+        modalMealPlanMode = isUpdate ? "update" : "create";
+        modalMealPlanId = pkg.MealPlanId;
+        modalMealPlanDurationDays = pkg.DurationDays;
+        modalMealPlanPurchasedAt = pkg.PurchasedAt;
+        showMealPlanModal = true;
+    }
+
+    private void CloseMealPlanModal()
+    {
+        showMealPlanModal = false;
+    }
+
+    private async Task HandleMealPlanSuccess(TraineeMealPlanModel plan)
+    {
+        showMealPlanModal = false;
+        await LoadTraineeDetailAsync();
+    }
+}

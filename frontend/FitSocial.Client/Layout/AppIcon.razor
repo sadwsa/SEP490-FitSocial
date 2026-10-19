@@ -1,6 +1,6 @@
 @* Icon SVG nội bộ (thay cho bootstrap-icons / emoji để luôn căn giữa, không phụ thuộc CDN) *@
-<svg class="app-icon @Class" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<svg class="app-icon @Class" viewBox="0 0 16 16" fill="@FillValue" stroke="currentColor"
+     style="@SizeStyle" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     @switch (Name)
     {
         case "person":
@@ -122,6 +122,31 @@
         case "flag":
             <path d="M2.5 14.5V2h9l-2 4 2 4H2.5" />
             break;
+        case "star":
+            <path d="M8 1.8 9.8 5.9l4.4.5-3.3 3.1.9 4.4L8 11.8l-3.8 2.1.9-4.4L1.8 6.4l4.4-.5Z" />
+            break;
+        case "chat":
+            <path d="M3.5 2.5h9A1.5 1.5 0 0 1 14 4v6a1.5 1.5 0 0 1-1.5 1.5H6.8L3.2 13.8v-2.3H3.5A1.5 1.5 0 0 1 2 10V4a1.5 1.5 0 0 1 1.5-1.5Z" />
+            break;
+        case "cash":
+            <rect x="1.8" y="4" width="12.4" height="8" rx="1.5" />
+            <circle cx="8" cy="8" r="2" />
+            break;
+        case "arrow-left":
+            <path d="M13 8H3.5" />
+            <path d="M6.5 4.5 3 8l3.5 3.5" />
+            break;
+        case "external":
+            <path d="M9.2 2.5h4.3v4.3" />
+            <path d="M13.5 2.5 7.5 8.5" />
+            <path d="M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3" />
+            break;
+        case "meal":
+            <path d="M2 8.5h12a6 6 0 0 1-6 5.5 6 6 0 0 1-6-5.5Z" />
+            <path d="M8 1.5V4" />
+            <path d="M5.2 2.2V4" />
+            <path d="M10.8 2.2V4" />
+            break;
         case "google":
             <g stroke="none" transform="scale(0.3333)">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
@@ -136,4 +161,15 @@
 @code {
     [Parameter] public string Name { get; set; } = "";
     [Parameter] public string? Class { get; set; }
+
+    /// <summary>Kích thước icon (px). Dùng inline style để thắng class .app-icon mặc định.</summary>
+    [Parameter] public string? Size { get; set; }
+
+    /// <summary>Tô đặc icon (star, fire...) thay vì chỉ viền.</summary>
+    [Parameter] public bool Filled { get; set; }
+
+    private string? SizeStyle =>
+        string.IsNullOrWhiteSpace(Size) ? null : $"width:{Size}px;height:{Size}px";
+
+    private string FillValue => Filled ? "currentColor" : "none";
 }

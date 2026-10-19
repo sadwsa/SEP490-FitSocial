@@ -24,6 +24,8 @@
                OnSearchKeyUp="@OnShellSearchKeyUp"
                OnSearch="@OnShellSearch"
                OnClearSearch="@OnShellClearSearch"
+               SearchExtra="@Shell.HeaderSearchExtra"
+               OnLogoClick="OnShellLogoClick"
                OnLogout="HandleLogout" />
 
     <CascadingValue Value="@Shell" Name="@AppShellContextName" IsFixed="true">
@@ -143,6 +145,18 @@
         if (Shell.SearchClearHandler != null)
         {
             await Shell.SearchClearHandler();
+        }
+    }
+
+    private async Task OnShellLogoClick()
+    {
+        if (Shell.LogoClickHandler != null)
+        {
+            await Shell.LogoClickHandler();
+        }
+        else
+        {
+            Navigation.NavigateTo("home");
         }
     }
 

@@ -54,9 +54,15 @@ public sealed class AppShellContext
     /// <summary>Gọi khi bấm nút X xoá nhanh.</summary>
     public Func<Task>? SearchClearHandler { get; set; }
 
+    /// <summary>Gọi khi người dùng bấm vào Logo ở AppHeader.</summary>
+    public Func<Task>? LogoClickHandler { get; set; }
+
     // ------------------------------------------------------------------
     // Các vùng (slot) của layout
     // ------------------------------------------------------------------
+
+    /// <summary>Nội dung bổ sung ngay bên cạnh ô tìm kiếm ở AppHeader (ví dụ: nút Filter bài viết).</summary>
+    public RenderFragment? HeaderSearchExtra { get; set; }
 
     /// <summary>Nội dung page tự đặt cho sidebar phải. Bỏ trống => dùng widget mặc định.</summary>
     public RenderFragment? RightSidebar { get; set; }
@@ -84,6 +90,8 @@ public sealed class AppShellContext
         SearchKeyUpHandler = null;
         SearchExecuteHandler = null;
         SearchClearHandler = null;
+        LogoClickHandler = null;
+        HeaderSearchExtra = null;
         RightSidebar = null;
         LeftSidebarExtra = null;
         NotifyChanged();

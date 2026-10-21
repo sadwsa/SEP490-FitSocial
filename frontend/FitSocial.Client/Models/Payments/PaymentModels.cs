@@ -35,6 +35,16 @@ public class PackagePurchasePreview
     public string OrderType { get; set; } = string.Empty;
 }
 
+public class CoachSubscriptionStatus
+{
+    public string Status { get; set; } = "NONE";
+    public DateTime? EndDay { get; set; }
+    public Guid? PlanId { get; set; }
+    public string? PlanDescription { get; set; }
+    public decimal? Amount { get; set; }
+    public int? SubscriptionDurationMonths { get; set; }
+}
+
 public class PackagePaymentLink
 {
     public string CheckoutUrl { get; set; } = string.Empty;

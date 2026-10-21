@@ -54,27 +54,14 @@
                     <button type="button" class="side-item @(IsActive("/admin/payment-gateways") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/payment-gateways")'>
                         <AppIcon Name="shield" /><span>Payment Gateways</span>
                     </button>
-                    <button type="button" class="side-item @(IsActive("/admin/revenue") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/revenue")'>
-                        <AppIcon Name="chart" /><span>Revenue Analytics</span>
-                    </button>
                     <button type="button" class="side-item @(IsActive("/admin/staff") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/staff")'>
                         <AppIcon Name="person" /><span>Staff Accounts</span>
-                    </button>
-                    <button type="button" class="side-item @(IsActive("/admin/content") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/content")'>
-                        <AppIcon Name="shield" /><span>Content Moderation</span>
                     </button>
                     <button type="button" class="side-item @(IsActive("/admin/system-logs") || IsActive("/admin/logs") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/system-logs")'>
                         <AppIcon Name="doc" /><span>System Logs</span>
                     </button>
-                    <button type="button" class="side-item @(IsActive("/admin/settings") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/settings")'>
-                        <AppIcon Name="gear" /><span>System Settings</span>
-                    </button>
                 </Authorized>
             </AuthorizeView>
-
-            <button type="button" class="side-item @(IsActive("/admin/profile") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/profile")'>
-                <AppIcon Name="person" /><span>Profile</span>
-            </button>
 
             <AuthorizeView Roles="STAFF">
                 <Authorized>

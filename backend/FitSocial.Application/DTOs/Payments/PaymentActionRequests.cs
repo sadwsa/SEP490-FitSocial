@@ -5,6 +5,8 @@ namespace FitSocial.Application.DTOs.Payments;
 /// </summary>
 public record CompleteActivationRequest(long OrderCode);
 
+public record RenewCoachSubscriptionRequest(Guid PlanId);
+
 /// <summary>
 /// Coach activation (UC): cancel a pending activation order.
 /// </summary>

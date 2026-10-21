@@ -11,6 +11,14 @@ public interface IPaymentService
 
     Task<ApiResponseDto<ActivationLinkDto>> CreateActivationLinkAsync(RegisterCoachRequestDto request, string originUrl, string? ipAddress = null);
 
+    /// <summary>
+    /// Renew/re-activate a coach subscription for an existing coach account.
+    /// Creates a new pending order + CoachUpgrade and returns a PayOS payment link.
+    /// </summary>
+    Task<ApiResponseDto<ActivationLinkDto>> RenewCoachSubscriptionAsync(Guid coachId, Guid planId, string originUrl, string? ipAddress = null);
+
+    Task<ApiResponseDto<CoachSubscriptionStatusDto>> GetCurrentCoachSubscriptionAsync(Guid coachId);
+
     Task<ApiResponseDto<AuthResponseDto>> CompleteActivationAsync(long orderCode);
 
     Task<ApiResponseDto<bool>> CancelActivationAsync(long orderCode);

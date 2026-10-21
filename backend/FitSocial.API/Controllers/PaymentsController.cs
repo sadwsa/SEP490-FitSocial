@@ -105,6 +105,43 @@ public class PaymentsController : ControllerBase
     /// <summary>
     /// Cancel a pending activation order (user gave up at the gateway).
     /// </summary>
+    /// <summary>
+    /// Renew/re-activate a coach subscription for an existing coach account.
+    /// </summary>
+    [HttpGet("coach-subscription/current")]
+    [Authorize(Roles = $"{RoleConstants.Coach}")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachSubscriptionStatusDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCurrentCoachSubscription()
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized(ApiResponseDto<CoachSubscriptionStatusDto>.Fail("Unauthorized"));
+
+        var result = await _paymentService.GetCurrentCoachSubscriptionAsync(userId);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    [HttpPost("coach-subscription/renew")]
+    [Authorize(Roles = $"{RoleConstants.Coach}")]
+    [ProducesResponseType(typeof(ApiResponseDto<ActivationLinkDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RenewCoachSubscription([FromBody] RenewCoachSubscriptionRequest request, [FromQuery] string? originUrl = null)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized(ApiResponseDto<ActivationLinkDto>.Fail("Unauthorized"));
+
+        if (request == null || request.PlanId == Guid.Empty)
+            return BadRequest(ApiResponseDto<ActivationLinkDto>.Fail("Plan ID is required."));
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _paymentService.RenewCoachSubscriptionAsync(userId, request.PlanId, originUrl ?? string.Empty, ipAddress);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
     [HttpPost("coach-activation/cancel")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]

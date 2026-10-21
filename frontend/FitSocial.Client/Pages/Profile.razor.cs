@@ -9,6 +9,8 @@ using FitSocial.Client.Models.Users;
 using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Files;
 using FitSocial.Client.Services.Users;
+using FitSocial.Client.Services.Payment;
+using FitSocial.Client.Models.Payments;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Forms;
@@ -23,6 +25,8 @@ public partial class Profile : ComponentBase
     [Inject] private IFileUploadService FileUploadService { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private IPaymentService PaymentService { get; set; } = default!;
+    [Inject] private FitSocial.Client.Services.SystemOperations.ISystemOperationsService SystemOps { get; set; } = default!;
 
     private UserProfileModel? profile;
     private bool isLoading = true;
@@ -37,6 +41,12 @@ public partial class Profile : ComponentBase
     private string? saveSuccessMessage;
     private string? saveErrorMessage;
     private string? avatarUploadError;
+
+    // Coach subscription
+    private bool isCoachUser = false;
+    private CoachSubscriptionStatus? currentSubscription;
+    private List<FitSocial.Client.Models.SystemOperations.CoachSubscriptionPlanDto> availablePlans = new();
+    private bool isLoadingSubscription = false;
     private UpdateOwnProfileRequest editModel = new();
     private string? editDobString;
 
@@ -81,6 +91,11 @@ public partial class Profile : ComponentBase
 
         await LoadHeaderUserInfoAsync();
         await LoadProfileAsync();
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        isCoachUser = state.User.IsInRole("COACH");
+        if (isCoachUser)
+            await LoadSubscriptionAsync();
     }
 
     private async Task LoadHeaderUserInfoAsync()
@@ -154,6 +169,50 @@ public partial class Profile : ComponentBase
         finally
         {
             isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadSubscriptionAsync()
+    {
+        isLoadingSubscription = true;
+        StateHasChanged();
+        try
+        {
+            var res = await PaymentService.GetCurrentCoachSubscriptionAsync();
+            if (res.Success && res.Data != null)
+                currentSubscription = res.Data;
+
+            var plansRes = await SystemOps.GetActivePlansAsync();
+            if (plansRes.Success && plansRes.Data != null)
+                availablePlans = plansRes.Data;
+        }
+        catch { }
+        finally
+        {
+            isLoadingSubscription = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RenewPlan(Guid planId)
+    {
+        try
+        {
+            var res = await PaymentService.RenewCoachSubscriptionAsync(planId);
+            if (res.Success && res.Data != null)
+            {
+                Navigation.NavigateTo(res.Data.CheckoutUrl);
+            }
+            else
+            {
+                saveErrorMessage = res.Message ?? "Could not create renewal link.";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            saveErrorMessage = ex.Message;
             StateHasChanged();
         }
     }

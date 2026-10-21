@@ -138,11 +138,8 @@
                         <div class="flex flex-col gap-3 mb-10">
                             <label class="border-2 @(paymentMethod == "vietqr" ? "border-[#FF5500] bg-orange-50/50" : "border-gray-200") rounded-xl px-4 py-3.5 flex items-center gap-2.5 cursor-pointer transition">
                                 <input type="radio" name="paymethod" checked="@(paymentMethod == "vietqr")" @onchange='() => paymentMethod = "vietqr"' class="accent-[#FF5500]" />
+                                <img src="https://img.vietqr.io/image/vietqr-logo.png" alt="VietQR" class="w-8 h-8 object-contain" onerror="this.style.display='none'" />
                                 <span class="font-bold text-sm text-gray-900">VietQR (PayOS - Instant Bank Transfer)</span>
-                            </label>
-                            <label class="border border-gray-100 bg-gray-50 rounded-xl px-4 py-3.5 flex items-center gap-2.5 opacity-60 cursor-not-allowed">
-                                <input type="radio" disabled class="accent-gray-300" />
-                                <span class="text-sm text-gray-400">Credit / Debit Card (Visa/Mastercard) - Coming soon</span>
                             </label>
                         </div>
 

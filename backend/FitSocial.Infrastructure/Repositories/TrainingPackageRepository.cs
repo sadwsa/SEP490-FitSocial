@@ -32,6 +32,8 @@ namespace FitSocial.Infrastructure.Repositories
             return await DbSet
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.Coach)
+                .Include(x => x.Coach)
+                    .ThenInclude(c => c.CoachCertificates)
                 .Include(x => x.Media)
                 .FirstOrDefaultAsync(x => x.PackageId == (Guid)id, cancellationToken);
         }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Locations;
 
 namespace FitSocial.Application.DTOs.Users;
@@ -33,12 +34,16 @@ public class TraineeProfileResponseDto : UserProfileResponseDto
 
 /// <summary>
 /// Public profile representation for Coaches.
-/// Contains coach biography, experience years, rating, and location.
-/// Certificate data and sport/sports information are strictly omitted.
+/// Contains coach biography, experience years, rating, location, and valid approved certificates.
+/// Expired and unapproved certificates are excluded from the public valid certificate list.
 /// </summary>
 public class CoachProfileResponseDto : UserProfileResponseDto
 {
     public int? ExperienceYears { get; set; }
     public double Rating { get; set; }
     public int TotalReviews { get; set; }
+    public bool HasExpiredCertificates { get; set; }
+    public bool HasValidCertificates { get; set; }
+    public List<CoachCertificateDetailDto> Certificates { get; set; } = new();
 }
+

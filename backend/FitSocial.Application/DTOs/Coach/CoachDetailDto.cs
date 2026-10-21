@@ -24,6 +24,8 @@ public class CoachDetailDto
     public int TotalReviews { get; set; }
 
     public List<CoachLocationDetailDto> Locations { get; set; } = new();
+    public bool HasExpiredCertificates { get; set; }
+    public bool HasValidCertificates { get; set; }
     public List<CoachCertificateDetailDto> Certificates { get; set; } = new();
     public List<TrainingPackageResponseDto> Packages { get; set; } = new();
 }

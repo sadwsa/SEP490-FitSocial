@@ -4,6 +4,7 @@ using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using FitSocial.Domain.Policies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -210,11 +211,17 @@ namespace FitSocial.Application.Services
 
         private static TrainingPackageResponseDto MapToDto(TrainingPackage entity)
         {
+            var coachCerts = entity.Coach?.CoachCertificates;
+            bool coachHasExpired = CoachCertificatePolicy.HasExpiredCertificates(coachCerts);
+            bool coachHasValid = CoachCertificatePolicy.HasValidCertificates(coachCerts);
+
             return new TrainingPackageResponseDto
             {
                 PackageId = entity.PackageId,
                 CoachId = entity.CoachId,
                 CoachName = entity.Coach?.Coach?.FullName ?? "Unknown Coach",
+                CoachHasExpiredCertificates = coachHasExpired,
+                CoachHasValidCertificates = coachHasValid,
                 Title = entity.Title,
                 Description = entity.Description,
                 Price = entity.Price,

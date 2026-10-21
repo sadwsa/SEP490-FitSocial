@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using FitSocial.Client.Models.CoachCertificate;
 
 namespace FitSocial.Client.Models.Users;
 
@@ -67,6 +69,9 @@ public class UserProfileModel
     public string? Bio { get; set; }
     public int? ExperienceYears { get; set; }
     public string? ApprovalStatus { get; set; }
+    public bool HasExpiredCertificates { get; set; }
+    public bool HasValidCertificates { get; set; }
+    public List<CoachCertificateItemModel> Certificates { get; set; } = new();
 
     public bool IsCoach => string.Equals(Role, "COACH", StringComparison.OrdinalIgnoreCase);
     public bool IsTrainee => string.Equals(Role, "TRAINEE", StringComparison.OrdinalIgnoreCase);
@@ -74,7 +79,7 @@ public class UserProfileModel
 
 /// <summary>
 /// Public profile model for viewing another user's profile (Trainee or Coach).
-/// Strictly excludes sensitive credentials, emails, phone numbers, certificates, and sport data.
+/// Strictly excludes sensitive credentials, emails, phone numbers, and unverified/expired certificate URLs.
 /// </summary>
 public class OtherUserProfileModel
 {
@@ -92,6 +97,9 @@ public class OtherUserProfileModel
     public int? ExperienceYears { get; set; }
     public double? Rating { get; set; }
     public int? TotalReviews { get; set; }
+    public bool HasExpiredCertificates { get; set; }
+    public bool HasValidCertificates { get; set; }
+    public List<CoachCertificateItemModel> Certificates { get; set; } = new();
 
     public bool IsCoach => string.Equals(Role, "COACH", StringComparison.OrdinalIgnoreCase);
     public bool IsTrainee => string.Equals(Role, "TRAINEE", StringComparison.OrdinalIgnoreCase);

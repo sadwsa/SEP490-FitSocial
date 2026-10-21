@@ -105,6 +105,7 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return DbSet.AsNoTracking()
             .Include(u => u.CoachProfileCoach)
+                .ThenInclude(cp => cp!.CoachCertificates)
             .FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
     }
 
@@ -115,6 +116,8 @@ public class UserRepository : Repository<User>, IUserRepository
                 .ThenInclude(cp => cp!.Locations)
             .Include(u => u.CoachProfileCoach)
                 .ThenInclude(cp => cp!.Reviews)
+            .Include(u => u.CoachProfileCoach)
+                .ThenInclude(cp => cp!.CoachCertificates)
             .FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
     }
 

@@ -19,6 +19,8 @@ public class TrainingPackageResponseDto
     public Guid PackageId { get; set; }
     public Guid CoachId { get; set; }
     public string? CoachName { get; set; }
+    public bool CoachHasExpiredCertificates { get; set; }
+    public bool CoachHasValidCertificates { get; set; }
     public string? Title { get; set; }
     public string? Description { get; set; }
     public decimal Price { get; set; }

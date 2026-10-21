@@ -230,4 +230,169 @@ public class PostCommentServiceTests
         Assert.NotNull(result.Data);
         Assert.Empty(result.Data);
     }
+
+    [Fact]
+    public async Task GetCommentsByPostId_ReturnsDeeplyNestedRepliesHierarchically()
+    {
+        // Arrange: 3 levels (Root -> Level 1 Reply -> Level 2 Reply)
+        var postId = Guid.NewGuid();
+        var userRoot = new User { UserId = Guid.NewGuid(), FullName = "Root Author" };
+        var userL1 = new User { UserId = Guid.NewGuid(), FullName = "L1 Author" };
+        var userL2 = new User { UserId = Guid.NewGuid(), FullName = "L2 Author" };
+
+        var rootComment = new Comment
+        {
+            Id = Guid.NewGuid(),
+            PostId = postId,
+            AuthorId = userRoot.UserId,
+            Author = userRoot,
+            Content = "Root comment",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-30),
+            ParentCommentId = null
+        };
+
+        var l1Reply = new Comment
+        {
+            Id = Guid.NewGuid(),
+            PostId = postId,
+            AuthorId = userL1.UserId,
+            Author = userL1,
+            Content = "Level 1 reply",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-20),
+            ParentCommentId = rootComment.Id
+        };
+
+        var l2Reply = new Comment
+        {
+            Id = Guid.NewGuid(),
+            PostId = postId,
+            AuthorId = userL2.UserId,
+            Author = userL2,
+            Content = "Level 2 reply (replying to L1)",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-10),
+            ParentCommentId = l1Reply.Id
+        };
+
+        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Post { Id = postId, IsDeleted = false });
+        _commentRepoMock.Setup(r => r.GetCommentsByPostIdAsync(postId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Comment> { rootComment, l1Reply, l2Reply });
+
+        // Act
+        var result = await _service.GetCommentsByPostIdAsync(postId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Single(result.Data); // 1 root comment
+
+        var root = result.Data[0];
+        Assert.Equal(rootComment.Id, root.Id);
+        Assert.Single(root.Replies); // 1 L1 reply
+
+        var l1 = root.Replies[0];
+        Assert.Equal(l1Reply.Id, l1.Id);
+        Assert.Equal("Root Author", l1.ReplyToAuthorName);
+        Assert.Single(l1.Replies); // 1 L2 reply under L1
+
+        var l2 = l1.Replies[0];
+        Assert.Equal(l2Reply.Id, l2.Id);
+        Assert.Equal("L1 Author", l2.ReplyToAuthorName);
+        Assert.Empty(l2.Replies);
+    }
+
+    [Fact]
+    public async Task GetCommentsByPostId_HandlesCycleGracefully()
+    {
+        // Arrange: comment1 and comment2 form a cycle
+        var postId = Guid.NewGuid();
+        var comment1Id = Guid.NewGuid();
+        var comment2Id = Guid.NewGuid();
+
+        var user = new User { UserId = Guid.NewGuid(), FullName = "User Cycle" };
+        var comment1 = new Comment
+        {
+            Id = comment1Id,
+            PostId = postId,
+            AuthorId = user.UserId,
+            Author = user,
+            Content = "Comment 1",
+            ParentCommentId = comment2Id
+        };
+        var comment2 = new Comment
+        {
+            Id = comment2Id,
+            PostId = postId,
+            AuthorId = user.UserId,
+            Author = user,
+            Content = "Comment 2",
+            ParentCommentId = comment1Id
+        };
+
+        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Post { Id = postId, IsDeleted = false });
+        _commentRepoMock.Setup(r => r.GetCommentsByPostIdAsync(postId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Comment> { comment1, comment2 });
+
+        // Act
+        var result = await _service.GetCommentsByPostIdAsync(postId);
+
+        // Assert: Should not crash with StackOverflow or infinite loop
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.NotEmpty(result.Data);
+    }
+
+    [Fact]
+    public async Task CreateReply_WhenParentCommentNotFound_ThrowsNotFoundException()
+    {
+        // Arrange
+        var nonExistentCommentId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        var user = new User { UserId = authorId, FullName = "User", IsLocked = false };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+        _commentRepoMock.Setup(r => r.GetByIdWithAuthorAsync(nonExistentCommentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Comment?)null);
+
+        var request = new CreateReplyRequestDto { Content = "Reply to nowhere" };
+
+        // Act & Assert
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.CreateReplyAsync(nonExistentCommentId, authorId, request));
+    }
+
+    [Fact]
+    public async Task CreateReply_WhenPostIsDeleted_ThrowsNotFoundException()
+    {
+        // Arrange
+        var postId = Guid.NewGuid();
+        var parentCommentId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+
+        var user = new User { UserId = authorId, FullName = "User", IsLocked = false };
+        var parentComment = new Comment
+        {
+            Id = parentCommentId,
+            PostId = postId,
+            AuthorId = Guid.NewGuid()
+        };
+        var post = new Post { Id = postId, IsDeleted = true };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+        _commentRepoMock.Setup(r => r.GetByIdWithAuthorAsync(parentCommentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(parentComment);
+        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(post);
+
+        var request = new CreateReplyRequestDto { Content = "Reply to deleted post" };
+
+        // Act & Assert
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.CreateReplyAsync(parentCommentId, authorId, request));
+    }
 }

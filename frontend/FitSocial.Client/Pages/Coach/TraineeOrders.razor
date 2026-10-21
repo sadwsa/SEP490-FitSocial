@@ -3,6 +3,7 @@
 @implements IDisposable
 @attribute [Authorize(Roles = "COACH")]
 @inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
+@inject FitSocial.Client.Services.Conversations.IConversationService ConversationService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
@@ -145,11 +146,27 @@
                             </div>
 
                             <!-- Nút -->
-                            <button type="button"
-                                    @onclick="@(() => Navigation.NavigateTo($"/coach/trainee-orders/{t.TraineeId}"))"
-                                    class="w-full block px-4 py-2 bg-[#FF5500] hover:bg-[#E64A00] text-white rounded-xl text-sm font-bold hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
-                                View Details
-                            </button>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button"
+                                        @onclick="@(() => Navigation.NavigateTo($"/coach/trainee-orders/{t.TraineeId}"))"
+                                        class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-sm font-bold hover:shadow-xs transition-all duration-200 cursor-pointer text-center truncate">
+                                    View Details
+                                </button>
+                                <button type="button"
+                                        @onclick="@(() => HandleMessageTraineeAsync(t.TraineeId))"
+                                        disabled="@(openingChatTraineeId == t.TraineeId)"
+                                        class="px-3 py-2 bg-[#FF5500] hover:bg-[#E64A00] text-white rounded-xl text-sm font-bold hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50">
+                                    @if (openingChatTraineeId == t.TraineeId)
+                                    {
+                                        <span class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                    }
+                                    else
+                                    {
+                                        <AppIcon Name="chat" Size="15" />
+                                    }
+                                    <span>Message</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 }
@@ -163,6 +180,7 @@
     private string searchTraineeKeyword = string.Empty;
     private bool isLoading = true;
     private string? errorMessage;
+    private Guid? openingChatTraineeId;
 
     // Header State
     private string? headerSearchTerm = "";
@@ -273,4 +291,34 @@
     private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
     private void ExecuteHeaderSearch() { }
     private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
+
+    private async Task HandleMessageTraineeAsync(Guid traineeId)
+    {
+        if (openingChatTraineeId.HasValue) return;
+
+        try
+        {
+            openingChatTraineeId = traineeId;
+            StateHasChanged();
+
+            var res = await ConversationService.GetOrCreateDirectConversationAsync(traineeId);
+            if (res.Success && res.Data != null)
+            {
+                Navigation.NavigateTo($"messages/{res.Data.ConversationId}");
+            }
+            else
+            {
+                errorMessage = res.Message ?? "Could not open conversation with this trainee.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error opening chat: {ex.Message}";
+        }
+        finally
+        {
+            openingChatTraineeId = null;
+            StateHasChanged();
+        }
+    }
 }

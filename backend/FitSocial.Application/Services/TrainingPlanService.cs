@@ -970,6 +970,12 @@ public class TrainingPlanService : ITrainingPlanService
         DateTime? asOfDate = null)
     {
         var exerciseList = exercises?.ToList() ?? new List<TrainingPlanExerciseDto>();
+        var sessionCount = orderDetail?.Package?.SessionCount;
+        var scheduledSessionsCount = exerciseList
+            .Where(e => !string.IsNullOrWhiteSpace(e.ExerciseName))
+            .Select(e => new { e.WeekNumber, e.DayNumber })
+            .Distinct()
+            .Count();
 
         if (startDate.HasValue && endDate.HasValue)
         {
@@ -1034,7 +1040,10 @@ public class TrainingPlanService : ITrainingPlanService
                 upcomingWeek = (short)(currentWeek + 1);
             }
 
-            if (upcomingWeek <= maxWeeks)
+            bool allSessionsAlreadyUsed = sessionCount.HasValue && sessionCount.Value > 0 &&
+                                          scheduledSessionsCount >= sessionCount.Value;
+
+            if (upcomingWeek <= maxWeeks && (!allSessionsAlreadyUsed || upcomingWeek == 1))
             {
                 var hasUpcomingWeekSession = exerciseList.Any(e =>
                     e.WeekNumber == upcomingWeek && !string.IsNullOrWhiteSpace(e.ExerciseName));
@@ -1053,18 +1062,11 @@ public class TrainingPlanService : ITrainingPlanService
 
         // Session count constraint:
         // "đối với các training package có số lượng ngày quá lớn cho những chương trình dài hạn thì cho phép họ để null sessions như là flexible"
-        var sessionCount = orderDetail?.Package?.SessionCount;
         if (sessionCount.HasValue && sessionCount.Value > 0 && exerciseList.Count > 0)
         {
-            var scheduledSessions = exerciseList
-                .Where(e => !string.IsNullOrWhiteSpace(e.ExerciseName))
-                .Select(e => new { e.WeekNumber, e.DayNumber })
-                .Distinct()
-                .Count();
-
-            if (scheduledSessions != sessionCount.Value)
+            if (scheduledSessionsCount != sessionCount.Value)
             {
-                throw new ValidationException($"The number of scheduled workout sessions ({scheduledSessions}) must match the package session count ({sessionCount.Value} sessions).");
+                throw new ValidationException($"The number of scheduled workout sessions ({scheduledSessionsCount}) must match the package session count ({sessionCount.Value} sessions).");
             }
         }
     }

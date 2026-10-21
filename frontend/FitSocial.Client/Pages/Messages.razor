@@ -22,16 +22,26 @@
 
 <PageTitle>Messages - FitConnect</PageTitle>
 
-    <!-- Main Content Layout (Sidebar + Messages Container) matching Home -->
-    <div class="flex flex-col gap-4 w-full min-w-0">
-        <!-- Messages Workspace Card -->
-        <div class="flex-1 min-w-0 bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden flex flex-col md:flex-row h-[calc(100vh-5.5rem)]">
+<style>
+    html, body {
+        overflow: hidden !important;
+        height: 100% !important;
+    }
+    .app-shell-center {
+        padding-bottom: 2.5rem !important;
+    }
+</style>
 
-            <!-- 1. Left Column: Conversation List -->
-            <div class="w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-gray-100 flex flex-col bg-white h-full @(ConversationId.HasValue ? "hidden md:flex" : "flex")">
+    <!-- Main Content Layout (Sidebar + Messages Container) matching Home -->
+    <div class="flex flex-col w-full min-w-0 h-[calc(100vh-8rem)] max-h-[calc(100vh-8rem)] overflow-hidden">
+        <!-- Messages Workspace Card -->
+        <div class="w-full h-full min-h-0 max-h-full bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden flex flex-col">
+
+            <!-- 1. Conversation List View -->
+            <div class="w-full flex-1 min-h-0 flex flex-col bg-white h-full min-w-0 overflow-hidden @(ConversationId.HasValue ? "hidden" : "flex")">
                 
                 <!-- Conversation List Header -->
-                <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                     <div class="flex items-center gap-2">
                         <h1 class="text-xl font-bold text-gray-900 tracking-tight">Messages</h1>
                         @if (_conversations != null && _conversations.Any(c => c.UnreadCount > 0))
@@ -54,7 +64,7 @@
                 </div>
 
                 <!-- Search Bar -->
-                <div class="p-3 border-b border-gray-100">
+                <div class="p-3 border-b border-gray-100 flex-shrink-0">
                     <div class="relative">
                         <input type="text"
                                class="w-full bg-gray-100 rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:bg-white text-sm text-gray-800 placeholder-gray-400 transition"
@@ -69,7 +79,7 @@
                 </div>
 
                 <!-- Conversation Items List Area -->
-                <div class="flex-1 overflow-y-auto divide-y divide-gray-50">
+                <div class="flex-1 min-h-0 overflow-y-auto divide-y divide-gray-50">
                     @if (_isLoading)
                     {
                         <!-- Loading Skeletons -->
@@ -187,35 +197,10 @@
                 </div>
             </div>
 
-            <!-- 2. Right Column: Conversation Detail or Empty State -->
-            <div class="flex-1 flex flex-col bg-white h-full min-w-0 @(ConversationId.HasValue ? "flex" : "hidden md:flex")">
-                @if (!ConversationId.HasValue)
+            <!-- 2. Conversation Detail View -->
+            <div class="w-full flex-1 min-h-0 flex flex-col bg-white h-full min-w-0 overflow-hidden @(ConversationId.HasValue ? "flex" : "hidden")">
+                @if (ConversationId.HasValue)
                 {
-                    <!-- Placeholder when no conversation is selected -->
-                    <div class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-50/30">
-                        <div class="w-20 h-20 rounded-2xl bg-orange-50 text-[#FF5500] flex items-center justify-center mb-4 shadow-xs">
-                            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                            </svg>
-                        </div>
-                        <h2 class="text-xl font-bold text-gray-900 mb-2">Your Messages</h2>
-                        <p class="text-sm text-gray-500 max-w-sm mb-6">
-                            Send private messages, schedule workouts, or ask questions to your sports coach.
-                        </p>
-                        <a href="coaches"
-                           class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white font-semibold text-sm shadow-sm hover:shadow hover:opacity-95 transition">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                            </svg>
-                            <span>Find Coaches</span>
-                        </a>
-                    </div>
-                }
-                else
-                {
-                    <!-- Conversation Detail View -->
                     @if (_isDetailLoading)
                     {
                         <!-- Detail Loading Skeleton -->
@@ -243,23 +228,31 @@
                             </div>
                             <h3 class="text-base font-bold text-gray-900 mb-1">Cannot load conversation</h3>
                             <p class="text-xs text-red-500 mb-4">@_detailErrorMessage</p>
-                            <button class="px-4 py-2 bg-orange-50 text-[#FF5500] hover:bg-orange-100 rounded-xl text-xs font-semibold transition cursor-pointer"
-                                    @onclick="() => LoadConversationDetailAsync(ConversationId.Value)">
-                                Try again
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button type="button" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                        @onclick="BackToConversationList">
+                                    Back to conversations
+                                </button>
+                                <button type="button" class="px-4 py-2 bg-orange-50 text-[#FF5500] hover:bg-orange-100 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                        @onclick="() => LoadConversationDetailAsync(ConversationId.Value)">
+                                    Try again
+                                </button>
+                            </div>
                         </div>
                     }
                     else if (_conversationDetail != null)
                     {
                         <!-- Detail Header -->
-                        <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white z-10">
+                        <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white z-10 flex-shrink-0">
                             <div class="flex items-center gap-3">
-                                <button class="md:hidden p-2 -ml-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                                <button type="button"
+                                        class="p-2 -ml-2 text-gray-600 hover:text-[#FF5500] hover:bg-orange-50 rounded-xl transition cursor-pointer flex items-center gap-1.5 font-semibold text-sm"
                                         title="Back to conversations"
                                         @onclick="BackToConversationList">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                                     </svg>
+                                    <span class="text-xs sm:text-sm">Back</span>
                                 </button>
                                 <div class="relative flex-shrink-0">
                                     @if (!string.IsNullOrWhiteSpace(_conversationDetail.DisplayAvatar))
@@ -337,7 +330,7 @@
                         <!-- Blocked Status Warning Banner -->
                         @if (_conversationDetail.IsBlockedByMe)
                         {
-                            <div class="px-5 py-2.5 bg-red-50/90 border-b border-red-100 flex items-center justify-between text-xs text-red-700">
+                            <div class="px-5 py-2.5 bg-red-50/90 border-b border-red-100 flex items-center justify-between text-xs text-red-700 flex-shrink-0">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
@@ -354,7 +347,7 @@
                         }
 
                         <!-- Message History Area -->
-                        <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 bg-gray-50/40 messages-history-scroll">
+                        <div id="messagesHistoryContainer" class="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-3 bg-gray-50/40 messages-history-scroll">
                             @if (_conversationDetail.Messages == null || !_conversationDetail.Messages.Any())
                             {
                                 <div class="h-full flex flex-col items-center justify-center text-center text-gray-400 my-auto">
@@ -456,7 +449,7 @@
                         </div>
 
                         <!-- Message Composer Area -->
-                        <div class="p-4 bg-white border-t border-gray-100">
+                        <div class="p-4 bg-white border-t border-gray-100 flex-shrink-0">
                             @if (_conversationDetail.IsBlockedByMe)
                             {
                                 <div class="flex items-center justify-between bg-gray-50 rounded-xl p-3 text-xs text-gray-600 border border-gray-200">
@@ -701,6 +694,9 @@
     [Parameter]
     public Guid? ConversationId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "userId")]
+    public Guid? TargetUserId { get; set; }
+
     private List<ConversationDto>? _conversations;
     private bool _isLoading = true;
     private string? _errorMessage;
@@ -827,6 +823,35 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        if (!ConversationId.HasValue && TargetUserId.HasValue)
+        {
+            try
+            {
+                var targetId = TargetUserId.Value;
+                _isLoading = true;
+                StateHasChanged();
+                var res = await ConversationService.GetOrCreateDirectConversationAsync(targetId);
+                if (res.Success && res.Data != null)
+                {
+                    Navigation.NavigateTo($"messages/{res.Data.ConversationId}");
+                    return;
+                }
+                else
+                {
+                    _errorMessage = res.Message ?? "Could not open conversation with this user.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Connection error: {ex.Message}";
+            }
+            finally
+            {
+                _isLoading = false;
+                StateHasChanged();
+            }
+        }
+
         if (ConversationId.HasValue && ConversationId.Value != _loadedConversationId)
         {
             _selectedConversationId = ConversationId.Value;
@@ -852,12 +877,28 @@
         if (_shouldScrollToBottom)
         {
             _shouldScrollToBottom = false;
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("eval", "var el = document.querySelector('.messages-history-scroll'); if (el) el.scrollTop = el.scrollHeight;");
-            }
-            catch { }
+            await ScrollToBottomAsync();
         }
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                (function() {
+                    var el = document.getElementById('messagesHistoryContainer') || document.querySelector('.messages-history-scroll');
+                    if (el) {
+                        el.scrollTop = el.scrollHeight;
+                        requestAnimationFrame(function() { if (el) el.scrollTop = el.scrollHeight; });
+                        setTimeout(function() { if (el) el.scrollTop = el.scrollHeight; }, 50);
+                        setTimeout(function() { if (el) el.scrollTop = el.scrollHeight; }, 150);
+                        setTimeout(function() { if (el) el.scrollTop = el.scrollHeight; }, 350);
+                    }
+                })();
+            ");
+        }
+        catch { }
     }
 
     private async Task LoadConversationsAsync(bool showLoading = true)
@@ -929,9 +970,19 @@
                 {
                     convItem.UnreadCount = 0;
                 }
+                else
+                {
+                    _ = LoadConversationsAsync(showLoading: false);
+                }
 
                 // Mark notifications for this conversation as read so AppHeader badge updates immediately
                 _ = NotificationService.MarkConversationNotificationsAsReadAsync(convId);
+
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(80);
+                    await InvokeAsync(async () => await ScrollToBottomAsync());
+                });
             }
             else
             {
@@ -973,6 +1024,7 @@
         {
             conv.UnreadCount = 0;
         }
+        _ = NotificationService.MarkConversationNotificationsAsReadAsync(id);
         _selectedMedia.Clear();
         _mediaErrorMessage = null;
         _ = ResetChatFileInputAsync();
@@ -1337,12 +1389,27 @@
     {
         await InvokeAsync(async () =>
         {
+            var type = msg.MessageType?.ToUpperInvariant();
+            bool isBlockType = type == "BLOCK" || type == "BLOCKED";
+            bool isAutoType = type == "AUTO" || type == "AUTO_REPLY";
+
+            // Người nhận không bao giờ nhận tin nhắn gửi trong lúc người gửi bị chặn
+            if (isBlockType && msg.SenderId != _currentUserId)
+            {
+                return;
+            }
+            // Người chặn không nhận tin nhắn auto-reply hệ thống gửi hộ
+            if (isAutoType && msg.SenderId == _currentUserId)
+            {
+                return;
+            }
+
             if (_selectedConversationId.HasValue && _selectedConversationId.Value == msg.ConversationId)
             {
                 if (_conversationDetail != null)
                 {
-                    // If current user is blocking this conversation, ignore blocked messages and auto-replies
-                    if (_conversationDetail.IsBlockedByMe && (string.Equals(msg.MessageType, "BLOCK", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "BLOCKED", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO_REPLY", StringComparison.OrdinalIgnoreCase)))
+                    // Nếu đang chặn thì không hiển thị tin nhắn block hay auto
+                    if (_conversationDetail.IsBlockedByMe && (isBlockType || isAutoType))
                     {
                         return;
                     }
@@ -1355,6 +1422,11 @@
                             .OrderBy(m => m.CreatedAt ?? DateTime.MinValue)
                             .ToList();
                         _shouldScrollToBottom = true;
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(50);
+                            await InvokeAsync(async () => await ScrollToBottomAsync());
+                        });
                     }
                 }
 
@@ -1362,7 +1434,7 @@
             }
 
             var conv = _conversations?.FirstOrDefault(c => c.ConversationId == msg.ConversationId);
-            if (_conversationDetail != null && _conversationDetail.IsBlockedByMe && (string.Equals(msg.MessageType, "BLOCK", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "BLOCKED", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.MessageType, "AUTO_REPLY", StringComparison.OrdinalIgnoreCase)))
+            if (_conversationDetail != null && _conversationDetail.IsBlockedByMe && (isBlockType || isAutoType))
             {
                 // Ignore updating preview for blocker
             }

@@ -4,6 +4,7 @@
 @attribute [Authorize(Roles = "COACH")]
 @inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
 @inject NavigationManager Navigation
+@inject FitSocial.Client.Services.Conversations.IConversationService ConversationService
 @inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Orders
@@ -115,10 +116,19 @@
                     <div class="text-lg font-black text-[#EA580C]">@trainee.TotalSpent.ToString("N0")</div>
                     <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">VND Spent</div>
                 </div>
-                <a href="messages" class="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
-                    <AppIcon Name="chat" Size="16" Class="text-blue-600" />
-                    <span>Message Trainee</span>
-                </a>
+                <button type="button" @onclick="HandleMessageTraineeAsync" disabled="@isOpeningChat"
+                        class="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
+                    @if (isOpeningChat)
+                    {
+                        <div class="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Opening...</span>
+                    }
+                    else
+                    {
+                        <AppIcon Name="chat" Size="16" Class="text-blue-600" />
+                        <span>Message Trainee</span>
+                    }
+                </button>
             </div>
         </div>
 
@@ -479,6 +489,38 @@
         }
 
         isLoading = false;
+    }
+
+    private bool isOpeningChat = false;
+
+    private async Task HandleMessageTraineeAsync()
+    {
+        if (trainee == null || trainee.TraineeId == Guid.Empty || isOpeningChat) return;
+
+        isOpeningChat = true;
+        StateHasChanged();
+
+        try
+        {
+            var res = await ConversationService.GetOrCreateDirectConversationAsync(trainee.TraineeId);
+            if (res.Success && res.Data != null)
+            {
+                Navigation.NavigateTo($"messages/{res.Data.ConversationId}");
+            }
+            else
+            {
+                errorMessage = res.Message ?? "Could not open conversation with this trainee.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error opening conversation: {ex.Message}";
+        }
+        finally
+        {
+            isOpeningChat = false;
+            StateHasChanged();
+        }
     }
 
     private void OpenMonitorProgressModal(CoachTraineePackageOrderDto pkg, string? name)

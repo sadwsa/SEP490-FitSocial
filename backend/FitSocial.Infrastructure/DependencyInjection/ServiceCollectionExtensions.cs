@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IAppealService, AppealService>();
+        services.AddScoped<IConversationService, ConversationService>();
         return services;
     }
 
@@ -79,11 +80,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentGateway, PayOSGateway>();
         services.AddScoped<IBankTransferGateway, PayOSPayoutGateway>();
         services.AddScoped<IPaymentGatewayCredentialProvider, DbPaymentGatewayCredentialProvider>();
-        services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<INotificationService, NotificationService>();
 
         // Unit of Work + Repositories (data access layer for application services)
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IConversationRepository, ConversationRepository>();
+        services.AddScoped<IMessageRepository, MessageRepository>();
+        services.AddScoped<IUserBlockRepository, UserBlockRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IOtpLogRepository, OtpLogRepository>();
         services.AddScoped<IPriceRepository, PriceRepository>();

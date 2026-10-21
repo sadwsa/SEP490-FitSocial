@@ -58,6 +58,7 @@ public class CreateMealPlanDto
 
 public class CreateMealPlanItemDto
 {
+    public Guid? MealPlanItemId { get; set; }
     public short WeekNumber { get; set; }
     public short DayNumber { get; set; }
     public string MealType { get; set; } = "Breakfast";

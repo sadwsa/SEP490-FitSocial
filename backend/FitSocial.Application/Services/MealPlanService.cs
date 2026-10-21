@@ -241,6 +241,31 @@ public class MealPlanService : IMealPlanService
 
                     if (matchedIncoming == null)
                     {
+                        // Fallback matching: If client omitted MealPlanItemId, match unlinked item on the same week, day and meal type
+                        matchedIncoming = dto.Items.FirstOrDefault(i =>
+                            !i.MealPlanItemId.HasValue &&
+                            i.WeekNumber == (existingItem.WeekNumber ?? 1) &&
+                            i.DayNumber == (existingItem.DayNumber ?? 1) &&
+                            string.Equals(i.MealType?.Trim(), existingItem.MealType?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(i.FoodDescription?.Trim(), existingItem.FoodDescription?.Trim(), StringComparison.Ordinal));
+
+                        if (matchedIncoming == null)
+                        {
+                            matchedIncoming = dto.Items.FirstOrDefault(i =>
+                                !i.MealPlanItemId.HasValue &&
+                                i.WeekNumber == (existingItem.WeekNumber ?? 1) &&
+                                i.DayNumber == (existingItem.DayNumber ?? 1) &&
+                                string.Equals(i.MealType?.Trim(), existingItem.MealType?.Trim(), StringComparison.OrdinalIgnoreCase));
+                        }
+
+                        if (matchedIncoming != null)
+                        {
+                            matchedIncoming.MealPlanItemId = existingItem.MealPlanItemId;
+                        }
+                    }
+
+                    if (matchedIncoming == null)
+                    {
                         throw new ValidationException(
                             $"Cannot delete meal item on {itemDate:dd/MM/yyyy} ({existingItem.MealType}: {existingItem.FoodDescription}) as it is scheduled for today or has already occurred.");
                     }

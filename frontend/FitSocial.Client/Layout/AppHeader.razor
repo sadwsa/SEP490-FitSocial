@@ -600,6 +600,7 @@
                 await LoadMessageNotificationsAsync();
 
                 NotificationService.OnConversationRead += HandleConversationReadLocally;
+                NotificationService.OnNotificationsChanged += HandleNotificationsChanged;
                 ChatHubClient.OnNotificationReceived += HandleRealtimeNotification;
                 await ChatHubClient.StartAsync();
 
@@ -809,9 +810,17 @@
         });
     }
 
+    private async void HandleNotificationsChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadMessageNotificationsAsync();
+        });
+    }
+
     private async void HandleConversationReadLocally(Guid conversationId)
     {
-        await InvokeAsync(() =>
+        await InvokeAsync(async () =>
         {
             var matched = _messageNotifications
                 .Where(n => n.ConversationId == conversationId && !n.IsRead)
@@ -822,10 +831,12 @@
                 foreach (var m in matched)
                 {
                     m.IsRead = true;
-                    _unreadMessageCount = Math.Max(0, _unreadMessageCount - 1);
                 }
+                _unreadMessageCount = _messageNotifications.Count(n => !n.IsRead);
                 StateHasChanged();
             }
+
+            await LoadMessageNotificationsAsync();
         });
     }
 
@@ -1073,6 +1084,7 @@
         AuthStateProvider.AuthenticationStateChanged -= HandleAuthenticationStateChanged;
         CartService.OnCartChanged -= HandleCartChanged;
         NotificationService.OnConversationRead -= HandleConversationReadLocally;
+        NotificationService.OnNotificationsChanged -= HandleNotificationsChanged;
         ChatHubClient.OnNotificationReceived -= HandleRealtimeNotification;
         NotificationHubClient.OnNotificationReceived -= HandleRealtimeAppNotification;
         _toastTimer?.Dispose();

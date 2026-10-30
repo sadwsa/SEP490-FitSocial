@@ -1339,7 +1339,10 @@
 
         // Validate upcoming week requirement: "không được để trống lịch tập trong tuần tiếp theo"
         var upcomingRequiredWeek = GetUpcomingRequiredWeek();
-        if (upcomingRequiredWeek <= maxAllowedWeeks)
+        bool allSessionsAlreadyUsed = PackageSessionCount.HasValue && PackageSessionCount.Value > 0 &&
+                                      ScheduledSessionsCount >= PackageSessionCount.Value;
+
+        if (upcomingRequiredWeek <= maxAllowedWeeks && (!allSessionsAlreadyUsed || upcomingRequiredWeek == 1))
         {
             var hasUpcomingExercises = exercises.Any(e => e.WeekNumber == upcomingRequiredWeek && !string.IsNullOrWhiteSpace(e.ExerciseName));
             if (!hasUpcomingExercises)

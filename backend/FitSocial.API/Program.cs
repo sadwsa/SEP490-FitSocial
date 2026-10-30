@@ -70,6 +70,7 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
 builder.Services.AddScoped<INotificationRealtimeNotifier, NotificationRealtimeNotifier>();
 builder.Services.AddHostedService<FitSocial.API.Services.EkycRetentionService>();
+builder.Services.AddHostedService<FitSocial.API.Services.CoachSubscriptionExpiryService>();
 builder.Services.AddScoped<IPostRealtimeNotifier, PostRealtimeNotifier>();
 
 // Cloudinary Singleton service registration (reuse HttpClient / SocketsHttpHandler connection pool)

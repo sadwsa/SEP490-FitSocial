@@ -9,6 +9,7 @@ using FitSocial.Client.Models.Posts;
 using FitSocial.Client.Models.TrainingPackages;
 using FitSocial.Client.Models.Users;
 using FitSocial.Client.Services.Auth;
+using FitSocial.Client.Services.Conversations;
 using FitSocial.Client.Services.Posts;
 using FitSocial.Client.Services.TrainingPackages;
 using FitSocial.Client.Services.Users;
@@ -36,11 +37,13 @@ public partial class UserProfile : ComponentBase, IDisposable
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
     [Inject] private FitSocial.Client.Services.Cart.ICartService CartService { get; set; } = default!;
+    [Inject] private IConversationService ConversationService { get; set; } = default!;
 
     private OtherUserProfileModel? profile;
     private bool isLoading = true;
     private string? errorMessage;
     private bool isUnauthorized;
+    private bool isOpeningChat = false;
 
     // Active tab (Default: PersonalInfo)
     private ProfileTab activeTab = ProfileTab.PersonalInfo;
@@ -86,6 +89,21 @@ public partial class UserProfile : ComponentBase, IDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadHeaderUserInfoAsync();
     }
 
@@ -418,12 +436,38 @@ public partial class UserProfile : ComponentBase, IDisposable
     }
 
     /// <summary>
-    /// Placeholder handler for Message button (UI only at this stage).
-    /// Does not navigate, create conversations, or call messaging APIs.
+    /// Opens or creates direct conversation with the profile owner and navigates to the messages page.
     /// </summary>
-    private void HandleMessageClick()
+    private async Task HandleMessageClick()
     {
-        // UI only: Chat integration to be connected later
+        if (profile == null || profile.UserId == Guid.Empty) return;
+        if (currentUserId.HasValue && profile.UserId == currentUserId.Value) return;
+        if (isOpeningChat) return;
+
+        isOpeningChat = true;
+        StateHasChanged();
+
+        try
+        {
+            var res = await ConversationService.GetOrCreateDirectConversationAsync(profile.UserId);
+            if (res.Success && res.Data != null)
+            {
+                Navigation.NavigateTo($"messages/{res.Data.ConversationId}");
+            }
+            else
+            {
+                ShowToast(res.Message ?? "Could not open conversation with this user.", isWarning: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Error opening chat: {ex.Message}", isWarning: true);
+        }
+        finally
+        {
+            isOpeningChat = false;
+            StateHasChanged();
+        }
     }
 
     private void GoToHome()
@@ -486,6 +530,7 @@ public partial class UserProfile : ComponentBase, IDisposable
 
     public void Dispose()
     {
+        Shell.Reset();
         toastCts?.Cancel();
         toastCts?.Dispose();
     }

@@ -40,4 +40,9 @@ public class CoachUpgradeRepository : Repository<CoachUpgrade>, ICoachUpgradeRep
 
     public Task<CoachUpgrade?> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default)
         => DbSet.FirstOrDefaultAsync(cu => cu.OrderId == orderId, cancellationToken);
+
+    public Task<CoachUpgrade?> GetLatestByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
+        => DbSet.Where(cu => cu.CoachId == coachId)
+               .OrderByDescending(cu => cu.CreatedAt)
+               .FirstOrDefaultAsync(cancellationToken);
 }

@@ -1,4 +1,4 @@
-# 🏋️ FitSocial Frontend (Blazor WebAssembly .NET 8)
+# 🏋️ FitConnect Frontend (Blazor WebAssembly .NET 8)
 
 Xem chi tiết tại file [FRONTEND_GUIDE.md](../../backend/FRONTEND_GUIDE.md).
 

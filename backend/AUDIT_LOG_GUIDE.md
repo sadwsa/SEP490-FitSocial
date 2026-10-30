@@ -1,4 +1,4 @@
-# Hướng dẫn Tái sử dụng Hệ thống Audit Log (Dành cho Thành viên SEP490-FitSocial)
+# Hướng dẫn Tái sử dụng Hệ thống Audit Log (Dành cho Thành viên SEP490-FitConnect)
 
 Tài liệu này hướng dẫn các thành viên trong nhóm phát triển cách sử dụng hệ thống **Audit Log dùng chung** ở Backend khi xây dựng các chức năng quản trị dành cho **Staff** và **Admin**.
 
@@ -183,10 +183,42 @@ Luôn viết theo chuẩn PascalCase của tên thực thể:
 - `Staff`
 - `CoachProfile`
 - `CoachCertificate`
+- `CoachSubscriptionPlan`
+- `PaymentGatewayConfig`
 - `RefundRequest`
 - `TrainingPackage`
 - `Post`
 - `Payout`
+
+---
+
+## 3.1. Các Action đã được ghi cho chức năng quản trị (Staff/Admin)
+
+Những chức năng dưới đây **đã được tích hợp sẵn** — mỗi lần thao tác thành công đều ghi 1 dòng
+vào bảng `"AuditLogs"`:
+
+| Chức năng (Use Case)                | `Action`                            | `EntityType`              | Service chịu trách nhiệm          |
+| ----------------------------------- | ----------------------------------- | ------------------------- | --------------------------------- |
+| Log In to Management Portal         | `LOGIN_MANAGEMENT_PORTAL`           | `User`                    | `AuthService.AdminLoginAsync`     |
+| Staff/Admin đổi mật khẩu            | `CHANGE_PASSWORD`                   | `User`                    | `AuthService.ChangePasswordAsync` |
+| Tạo Coach Subscription Plan         | `CREATE_COACH_SUBSCRIPTION_PLAN`    | `CoachSubscriptionPlan`   | `CoachSubscriptionPlanService`    |
+| Sửa Coach Subscription Plan         | `UPDATE_COACH_SUBSCRIPTION_PLAN`    | `CoachSubscriptionPlan`   | `CoachSubscriptionPlanService`    |
+| Xóa Coach Subscription Plan         | `DELETE_COACH_SUBSCRIPTION_PLAN`    | `CoachSubscriptionPlan`   | `CoachSubscriptionPlanService`    |
+| Thêm Payment Account                | `ADD_PAYMENT_ACCOUNT`               | `PaymentGatewayConfig`    | `PaymentGatewayConfigService`     |
+| Sửa Payment Account                 | `EDIT_PAYMENT_ACCOUNT`              | `PaymentGatewayConfig`    | `PaymentGatewayConfigService`     |
+| Bật Payment Account                 | `ACTIVATE_PAYMENT_ACCOUNT`          | `PaymentGatewayConfig`    | `PaymentGatewayConfigService`     |
+| Tắt Payment Account                 | `DEACTIVATE_PAYMENT_ACCOUNT`        | `PaymentGatewayConfig`    | `PaymentGatewayConfigService`     |
+| Xóa Payment Account                 | `DELETE_PAYMENT_ACCOUNT`            | `PaymentGatewayConfig`    | `PaymentGatewayConfigService`     |
+| Generate chu kỳ chi trả            | `GENERATE_COACH_PAYOUT`             | `Payout`                  | `PayoutService`                   |
+| Process Coach Payout (UC-23.1)      | `PAYOUT_PROCESSED` / `PAYOUT_PARTIAL`| `Payout`                 | `PayoutService`                   |
+| Payout bị chặn / lỗi gateway       | `PAYOUT_BLOCKED` / `PAYOUT_FAILED` / `PAYOUT_SUBMITTED` / `PAYOUT_NOOP` | `Payout` | `PayoutService` |
+
+> **Lưu ý bảo mật:**
+> - `CHANGE_PASSWORD` chỉ ghi `tokenVersion` (số phiên bị vô hiệu), **không bao giờ ghi mật khẩu**.
+> - Payment Account chỉ ghi cờ `apiKeyPresent` / `apiKeyRotated`, **không ghi giá trị key**.
+>
+> Bạn viết chức năng mới thì chọn `Action` theo bảng trên và đặt `actorAccountId: null` để hệ thống
+> tự lấy Staff/Admin đang đăng nhập.
 
 ---
 

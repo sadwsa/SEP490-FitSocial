@@ -4,9 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Conversations;
 using FitSocial.Application.Interfaces;
+using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
 using FitSocial.Infrastructure.Data;
-using FitSocial.Infrastructure.Services;
+using FitSocial.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
@@ -31,6 +32,26 @@ public class ConversationServiceTests
             .Options;
 
         return new FitSocialDbContext(options);
+    }
+
+    private ConversationService CreateService(FitSocialDbContext context)
+    {
+        var convRepo = new ConversationRepository(context);
+        var msgRepo = new MessageRepository(context);
+        var blockRepo = new UserBlockRepository(context);
+        var userRepo = new UserRepository(context);
+        var notifRepo = new NotificationRepository(context);
+        var uow = new UnitOfWork(context);
+
+        return new ConversationService(
+            convRepo,
+            msgRepo,
+            blockRepo,
+            userRepo,
+            notifRepo,
+            uow,
+            _realtimeNotifierMock.Object,
+            _notificationServiceMock.Object);
     }
 
     [Fact]
@@ -95,7 +116,7 @@ public class ConversationServiceTests
         context.Conversations.AddRange(conv1, conv2);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         // Act
         var result = await service.GetUserConversationsAsync(user1Id);
@@ -169,7 +190,7 @@ public class ConversationServiceTests
         context.Conversations.Add(conv);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         // Act
         var result = await service.GetUserConversationsAsync(blockerId);
@@ -231,7 +252,7 @@ public class ConversationServiceTests
         context.Notifications.Add(notif);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         // Act
         var result = await service.GetConversationDetailAsync(conv.ConversationId, user1Id);
@@ -271,7 +292,7 @@ public class ConversationServiceTests
         context.Conversations.Add(conv);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         // Act
         var result = await service.GetConversationDetailAsync(conv.ConversationId, strangerId);
@@ -304,7 +325,7 @@ public class ConversationServiceTests
         context.Conversations.Add(conv);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         var request = new SendMessageRequestDto
         {
@@ -379,7 +400,7 @@ public class ConversationServiceTests
         context.Conversations.Add(conv);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         var request = new SendMessageRequestDto
         {
@@ -436,7 +457,7 @@ public class ConversationServiceTests
         context.Conversations.Add(conv);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         // Act
         var result = await service.SendMessageAsync(conv.ConversationId, senderId, new SendMessageRequestDto { Content = "Test" });
@@ -465,7 +486,7 @@ public class ConversationServiceTests
         context.Conversations.Add(conv);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         // Act
         var result = await service.DeleteConversationAsync(conv.ConversationId, user1Id);
@@ -496,7 +517,7 @@ public class ConversationServiceTests
         context.Conversations.Add(conv);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         // Act 1: Block user
         var blockResult = await service.BlockUserAsync(conv.ConversationId, blockerId);
@@ -530,7 +551,7 @@ public class ConversationServiceTests
         context.Users.AddRange(user1, user2);
         await context.SaveChangesAsync();
 
-        var service = new ConversationService(context, _realtimeNotifierMock.Object, _notificationServiceMock.Object);
+        var service = CreateService(context);
 
         // Act 1: First call creates new conversation
         var createResult = await service.GetOrCreateDirectConversationAsync(user1Id, user2Id);
@@ -551,5 +572,68 @@ public class ConversationServiceTests
 
         var totalConvs = await context.Conversations.CountAsync();
         Assert.Equal(1, totalConvs);
+    }
+
+    [Fact]
+    public async Task UnblockUser_DoesNotExposeBlockedMessagesOrAutoRepliesToBlocker()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var blockerId = Guid.NewGuid();
+        var blockedId = Guid.NewGuid();
+
+        var user1 = new User { UserId = blockerId, FullName = "Blocker User", Email = "blocker@test.com" };
+        var user2 = new User { UserId = blockedId, FullName = "Blocked User", Email = "blocked@test.com" };
+        context.Users.AddRange(user1, user2);
+
+        var conv = new Conversation
+        {
+            ConversationId = Guid.NewGuid(),
+            User1Id = blockerId,
+            User2Id = blockedId,
+            CreatedAt = DateTime.UtcNow.AddHours(-1)
+        };
+        context.Conversations.Add(conv);
+
+        // Blocker blocks blockedId
+        context.UserBlocks.Add(new UserBlock
+        {
+            Id = Guid.NewGuid(),
+            BlockerId = blockerId,
+            BlockedId = blockedId,
+            CreatedAt = DateTime.UtcNow.AddMinutes(-30)
+        });
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        // Blocked user tries to send message while blocked
+        var sendBlockedResult = await service.SendMessageAsync(conv.ConversationId, blockedId, new SendMessageRequestDto
+        {
+            Content = "Hello while blocked!"
+        });
+        Assert.True(sendBlockedResult.Success);
+
+        // Act 1: Blocker unblocks the blocked user
+        var unblockResult = await service.UnblockUserAsync(conv.ConversationId, blockerId);
+        Assert.True(unblockResult.Success);
+
+        // Act 2: Blocker views conversation detail after unblocking
+        var detailResult = await service.GetConversationDetailAsync(conv.ConversationId, blockerId);
+
+        // Assert: Blocker MUST NOT see the message sent by blockedId or the auto-reply message
+        Assert.NotNull(detailResult);
+        Assert.True(detailResult.Success);
+        Assert.NotNull(detailResult.Data);
+        Assert.False(detailResult.Data.IsBlockedByMe);
+        Assert.Empty(detailResult.Data.Messages);
+
+        // Act 3: Blocker views conversation list after unblocking
+        var listResult = await service.GetUserConversationsAsync(blockerId);
+        Assert.True(listResult.Success);
+        var blockerConvDto = listResult.Data?.FirstOrDefault(c => c.ConversationId == conv.ConversationId);
+        Assert.NotNull(blockerConvDto);
+        // Display last message must NOT be the auto-reply or blocked message
+        Assert.Null(blockerConvDto.LastMessage);
     }
 }

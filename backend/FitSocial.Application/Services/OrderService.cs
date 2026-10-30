@@ -150,7 +150,46 @@ public class OrderService : IOrderService
 
         var orders = await _orderRepository.GetOrdersByCoachIdAsync(coachId, cancellationToken);
 
-        var grouped = orders
+        var grouped = BuildTraineeGroups(orders, coachId);
+
+        return ApiResponseDto<List<CoachTraineeGroupDto>>.Ok(grouped, "Trainee orders retrieved successfully.");
+    }
+
+    public async Task<ApiResponseDto<CoachTraineeGroupDto>> GetCoachTraineeOrderDetailAsync(
+        Guid coachId,
+        Guid traineeId,
+        CancellationToken cancellationToken = default)
+    {
+        if (coachId == Guid.Empty)
+        {
+            throw new ValidationException("Invalid coach identity.");
+        }
+
+        if (traineeId == Guid.Empty)
+        {
+            throw new ValidationException("Invalid trainee identity.");
+        }
+
+        var orders = await _orderRepository.GetOrdersByCoachIdAsync(coachId, cancellationToken);
+
+        var group = BuildTraineeGroups(orders, coachId)
+            .FirstOrDefault(g => g.TraineeId == traineeId);
+
+        if (group == null)
+        {
+            throw new NotFoundException("No trainee orders found for this trainee.");
+        }
+
+        return ApiResponseDto<CoachTraineeGroupDto>.Ok(group, "Trainee order details retrieved successfully.");
+    }
+
+    /// <summary>
+    /// Gom đơn hàng của coach theo từng trainee và dựng DTO cho mỗi nhóm.
+    /// Dùng chung cho API danh sách và API chi tiết một trainee để không lặp logic map.
+    /// </summary>
+    private static List<CoachTraineeGroupDto> BuildTraineeGroups(IEnumerable<Order> orders, Guid coachId)
+    {
+        return orders
             .GroupBy(o => o.BuyerId)
             .Select(group =>
             {
@@ -220,8 +259,6 @@ public class OrderService : IOrderService
             .Where(g => g.PurchasedPackages.Count > 0)
             .OrderByDescending(g => g.LatestPurchasedAt)
             .ToList();
-
-        return ApiResponseDto<List<CoachTraineeGroupDto>>.Ok(grouped, "Trainee orders retrieved successfully.");
     }
 
     private static OrderDto MapToOrderDto(Order o)

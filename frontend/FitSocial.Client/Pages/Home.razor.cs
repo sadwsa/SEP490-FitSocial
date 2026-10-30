@@ -6,6 +6,7 @@ using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Posts;
 using FitSocial.Client.Models.Locations;
 using FitSocial.Client.Models.Coaches;
+using FitSocial.Client.Components.Posts;
 
 namespace FitSocial.Client.Pages;
 
@@ -28,9 +29,7 @@ public partial class Home : ComponentBase, IDisposable
     private string userRole = "Athlete";
     private string? currentUserAvatarUrl;
 
-    // Top coaches state
-    private List<TopCoachDto> topCoaches = new();
-    private bool isLoadingTopCoaches = true;
+    // Top coaches state -> chuyển sang widget mặc định của cột phải (Layout/RightSidebar.razor)
 
     // Edit post state
     private bool showEditPostModal = false;
@@ -50,16 +49,39 @@ public partial class Home : ComponentBase, IDisposable
     // Dropdowns data
     private List<LocationDto> availableLocations = new();
 
+    // URL Query Parameters
+    [SupplyParameterFromQuery(Name = "search")]
+    public string? UrlSearch { get; set; }
+
+    [SupplyParameterFromQuery(Name = "searchTerm")]
+    public string? UrlSearchTerm { get; set; }
+
+    [SupplyParameterFromQuery(Name = "postType")]
+    public string? UrlPostType { get; set; }
+
+    [SupplyParameterFromQuery(Name = "locationId")]
+    public Guid? UrlLocationId { get; set; }
+
+    private string? _lastAppliedUrlSearch;
+    private string? _lastAppliedUrlPostType;
+    private Guid? _lastAppliedUrlLocationId;
+    private bool _hasInitialized;
+    private long _loadPostsRequestId = 0;
+
     // Query & Filter state
-    private string searchTerm = string.Empty;
-    private CancellationTokenSource? searchCts;
+    private string searchInput = string.Empty;
+    private string? appliedSearchTerm;
 
-    private string? selectedPostType;
-    private Guid? selectedFilterLocationId;
+    private string? draftPostType;
+    private string? appliedPostType;
 
-    private bool HasActiveFilters =>
-        !string.IsNullOrWhiteSpace(selectedPostType) ||
-        (selectedFilterLocationId.HasValue && selectedFilterLocationId != Guid.Empty);
+    private Guid? draftLocationId;
+    private Guid? appliedLocationId;
+
+    private bool HasSearchInput => !string.IsNullOrWhiteSpace(searchInput);
+    private bool HasDraftFilter => !string.IsNullOrWhiteSpace(draftPostType) || (draftLocationId.HasValue && draftLocationId != Guid.Empty);
+    private bool HasAppliedFilter => !string.IsNullOrWhiteSpace(appliedPostType) || (appliedLocationId.HasValue && appliedLocationId != Guid.Empty);
+    private bool HasAppliedSearch => !string.IsNullOrWhiteSpace(appliedSearchTerm);
 
     private int currentPage = 1;
     private int pageSize = 10;
@@ -79,8 +101,80 @@ public partial class Home : ComponentBase, IDisposable
         PostHubClient.OnPostDeleted -= HandlePostDeletedRealtime;
         PostHubClient.OnPostDeleted += HandlePostDeletedRealtime;
 
+        ApplyUrlQueryParameters();
+
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchInputHandler = e =>
+        {
+            HandleSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = HandleSearchKeyUp;
+        Shell.SearchExecuteHandler = ExecuteSearch;
+        Shell.SearchClearHandler = ClearSearch;
+        Shell.LogoClickHandler = HandleLogoClick;
+        Shell.SearchTerm = searchInput;
+        UpdateHeaderSearchExtra();
+
         await LoadUserInfoAsync();
-        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), LoadTopCoachesAsync(), PostHubClient.StartAsync());
+        await Task.WhenAll(LoadPostsAsync(), LoadLocationsAsync(), PostHubClient.StartAsync());
+        _hasInitialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_hasInitialized) return;
+
+        var effectiveUrlSearch = !string.IsNullOrWhiteSpace(UrlSearch) ? UrlSearch : UrlSearchTerm;
+        if (effectiveUrlSearch != _lastAppliedUrlSearch ||
+            UrlPostType != _lastAppliedUrlPostType ||
+            UrlLocationId != _lastAppliedUrlLocationId)
+        {
+            ApplyUrlQueryParameters();
+            Shell.SearchTerm = searchInput;
+            UpdateHeaderSearchExtra();
+            currentPage = 1;
+            await LoadPostsAsync();
+        }
+    }
+
+    private void ApplyUrlQueryParameters()
+    {
+        var effectiveUrlSearch = !string.IsNullOrWhiteSpace(UrlSearch) ? UrlSearch : UrlSearchTerm;
+        if (!string.IsNullOrWhiteSpace(effectiveUrlSearch))
+        {
+            searchInput = effectiveUrlSearch.Trim();
+            appliedSearchTerm = searchInput;
+        }
+
+        if (!string.IsNullOrWhiteSpace(UrlPostType))
+        {
+            appliedPostType = NormalizePostType(UrlPostType);
+            draftPostType = appliedPostType;
+        }
+
+        if (UrlLocationId.HasValue && UrlLocationId.Value != Guid.Empty)
+        {
+            appliedLocationId = UrlLocationId.Value;
+            draftLocationId = appliedLocationId;
+        }
+
+        _lastAppliedUrlSearch = effectiveUrlSearch;
+        _lastAppliedUrlPostType = UrlPostType;
+        _lastAppliedUrlLocationId = UrlLocationId;
+    }
+
+    private static string? NormalizePostType(string? postType)
+    {
+        if (string.IsNullOrWhiteSpace(postType)) return null;
+        var clean = postType.Trim().Replace(" ", "").ToLowerInvariant();
+        return clean switch
+        {
+            "findcoach" => "Find Coach",
+            "findtrainee" => "Find Trainee",
+            "normal" => "Normal",
+            _ => postType.Trim()
+        };
     }
 
     private async Task LoadUserInfoAsync()
@@ -134,27 +228,6 @@ public partial class Home : ComponentBase, IDisposable
         }
     }
 
-    private async Task LoadTopCoachesAsync()
-    {
-        try
-        {
-            isLoadingTopCoaches = true;
-            var response = await CoachService.GetTopCoachesAsync(5);
-            if (response.Success && response.Data != null)
-            {
-                topCoaches = response.Data;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading top coaches: {ex.Message}");
-        }
-        finally
-        {
-            isLoadingTopCoaches = false;
-        }
-    }
-
     private async Task LoadLocationsAsync()
     {
         try
@@ -163,6 +236,7 @@ public partial class Home : ComponentBase, IDisposable
             if (locationsResponse.Success && locationsResponse.Data != null)
             {
                 availableLocations = locationsResponse.Data;
+                UpdateHeaderSearchExtra();
             }
         }
         catch
@@ -172,6 +246,8 @@ public partial class Home : ComponentBase, IDisposable
     }
     private async Task LoadPostsAsync(bool append = false)
     {
+        var requestId = Interlocked.Increment(ref _loadPostsRequestId);
+
         if (!append)
         {
             isLoading = true;
@@ -184,13 +260,19 @@ public partial class Home : ComponentBase, IDisposable
 
         currentQuery.PageNumber = currentPage;
         currentQuery.PageSize = pageSize;
-        currentQuery.SearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim();
-        currentQuery.PostType = string.IsNullOrWhiteSpace(selectedPostType) ? null : selectedPostType;
-        currentQuery.LocationId = selectedFilterLocationId.HasValue && selectedFilterLocationId != Guid.Empty ? selectedFilterLocationId : null;
+        currentQuery.SearchTerm = string.IsNullOrWhiteSpace(appliedSearchTerm) ? null : appliedSearchTerm.Trim();
+        currentQuery.PostType = string.IsNullOrWhiteSpace(appliedPostType) ? null : appliedPostType;
+        currentQuery.LocationId = appliedLocationId.HasValue && appliedLocationId != Guid.Empty ? appliedLocationId : null;
 
         try
         {
             var response = await PostService.GetPostsAsync(currentQuery);
+            if (requestId != _loadPostsRequestId)
+            {
+                // Discard stale response from superseded request
+                return;
+            }
+
             if (response.Success && response.Data != null)
             {
                 var incoming = response.Data.Items ?? new List<PostDto>();
@@ -219,6 +301,11 @@ public partial class Home : ComponentBase, IDisposable
         }
         catch (Exception ex)
         {
+            if (requestId != _loadPostsRequestId)
+            {
+                return;
+            }
+
             Console.WriteLine($"[Home] Error loading posts: {ex.Message}");
             if (!append)
             {
@@ -228,9 +315,12 @@ public partial class Home : ComponentBase, IDisposable
         }
         finally
         {
-            isLoading = false;
-            isLoadingMore = false;
-            StateHasChanged();
+            if (requestId == _loadPostsRequestId)
+            {
+                isLoading = false;
+                isLoadingMore = false;
+                StateHasChanged();
+            }
         }
     }
 
@@ -271,73 +361,195 @@ public partial class Home : ComponentBase, IDisposable
     // Search Handlers
     private void HandleSearchInput(ChangeEventArgs e)
     {
-        searchTerm = e.Value?.ToString() ?? string.Empty;
-        searchCts?.Cancel();
-        searchCts?.Dispose();
-        searchCts = new CancellationTokenSource();
-        var token = searchCts.Token;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(400, token);
-                if (!token.IsCancellationRequested)
-                {
-                    await InvokeAsync(async () =>
-                    {
-                        currentPage = 1;
-                        await LoadPostsAsync();
-                    });
-                }
-            }
-            catch (TaskCanceledException)
-            {
-                // Debounce cancelled by new keystroke
-            }
-        });
+        searchInput = e.Value?.ToString() ?? string.Empty;
+        Shell.SearchTerm = searchInput;
+        // Do NOT trigger any search/API call when user types or edits!
     }
 
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
-            searchCts?.Cancel();
             await ExecuteSearch();
         }
     }
 
     private async Task ExecuteSearch()
     {
-        searchCts?.Cancel();
+        if (HasSearchInput)
+        {
+            appliedSearchTerm = searchInput.Trim();
+            // Case 3: HasSearchInput = true, HasFilter = true -> Search + Filter
+            if (HasDraftFilter)
+            {
+                appliedPostType = draftPostType;
+                appliedLocationId = draftLocationId;
+            }
+            else if (!HasAppliedFilter)
+            {
+                appliedPostType = null;
+                appliedLocationId = null;
+            }
+        }
+        else
+        {
+            // Case 2 & 10: HasSearchInput = false
+            appliedSearchTerm = null;
+            // Rule: "Không được vô tình áp dụng filter chưa xác nhận"
+            if (!HasAppliedFilter)
+            {
+                appliedPostType = null;
+                appliedLocationId = null;
+                draftPostType = null;
+                draftLocationId = null;
+            }
+        }
+
         currentPage = 1;
+        UpdateHeaderSearchExtra();
         await LoadPostsAsync();
     }
 
     private async Task ClearSearch()
     {
-        searchCts?.Cancel();
-        searchTerm = string.Empty;
-        currentPage = 1;
-        await LoadPostsAsync();
+        searchInput = string.Empty;
+        Shell.SearchTerm = string.Empty;
+        if (appliedSearchTerm != null)
+        {
+            appliedSearchTerm = null;
+            currentPage = 1;
+            UpdateHeaderSearchExtra();
+            await LoadPostsAsync();
+        }
+        else
+        {
+            UpdateHeaderSearchExtra();
+        }
     }
 
     // Filter Handlers
+    private void HandleDraftFilterChanged((string? postType, Guid? locationId) draft)
+    {
+        draftPostType = draft.postType;
+        draftLocationId = draft.locationId;
+        // Do NOT reload posts when user only changes selection in filter dropdown!
+    }
+
     private async Task HandleApplyFilters((string? postType, Guid? locationId) filters)
     {
-        selectedPostType = filters.postType;
-        selectedFilterLocationId = filters.locationId;
+        draftPostType = filters.postType;
+        draftLocationId = filters.locationId;
+        appliedPostType = filters.postType;
+        appliedLocationId = filters.locationId;
+
+        if (HasSearchInput)
+        {
+            // Case 3 & 7: Both Search Input and Filter: Apply executes Search + Filter
+            appliedSearchTerm = searchInput.Trim();
+        }
+        else
+        {
+            // Case 2 & 8: Filter only, Search Input was cleared or empty
+            appliedSearchTerm = null;
+        }
+
         currentPage = 1;
+        UpdateHeaderSearchExtra();
         await LoadPostsAsync();
     }
+
+    private async Task HandleLogoClick()
+    {
+        searchInput = string.Empty;
+        Shell.SearchTerm = string.Empty;
+        appliedSearchTerm = null;
+        draftPostType = null;
+        appliedPostType = null;
+        draftLocationId = null;
+        appliedLocationId = null;
+        _lastAppliedUrlSearch = null;
+        _lastAppliedUrlPostType = null;
+        _lastAppliedUrlLocationId = null;
+        currentPage = 1;
+        Navigation.NavigateTo("home", replace: true);
+        UpdateHeaderSearchExtra();
+        await LoadPostsAsync();
+    }
+
+    private void UpdateHeaderSearchExtra()
+    {
+        Shell.HeaderSearchExtra = builder =>
+        {
+            builder.OpenComponent<PostFilterBar>(0);
+            builder.AddAttribute(1, nameof(PostFilterBar.SelectedPostType), appliedPostType);
+            builder.AddAttribute(2, nameof(PostFilterBar.SelectedLocationId), appliedLocationId);
+            builder.AddAttribute(3, nameof(PostFilterBar.AvailableLocations), availableLocations);
+            builder.AddAttribute(4, nameof(PostFilterBar.OnDraftFilterChanged), EventCallback.Factory.Create<(string? PostType, Guid? LocationId)>(this, HandleDraftFilterChanged));
+            builder.AddAttribute(5, nameof(PostFilterBar.OnApplyFilters), EventCallback.Factory.Create<(string? PostType, Guid? LocationId)>(this, HandleApplyFilters));
+            builder.CloseComponent();
+        };
+        Shell.NotifyChanged();
+    }
+
+    private async Task RemoveAppliedSearch()
+    {
+        searchInput = string.Empty;
+        Shell.SearchTerm = string.Empty;
+        appliedSearchTerm = null;
+        currentPage = 1;
+        UpdateHeaderSearchExtra();
+        await LoadPostsAsync();
+    }
+
+    private async Task RemoveFilterPostType()
+    {
+        appliedPostType = null;
+        draftPostType = null;
+        currentPage = 1;
+        UpdateHeaderSearchExtra();
+        await LoadPostsAsync();
+    }
+
+    private async Task RemoveFilterLocation()
+    {
+        appliedLocationId = null;
+        draftLocationId = null;
+        currentPage = 1;
+        UpdateHeaderSearchExtra();
+        await LoadPostsAsync();
+    }
+
     private async Task ResetAllSearchAndFilters()
     {
-        searchCts?.Cancel();
-        searchTerm = string.Empty;
-        selectedPostType = null;
-        selectedFilterLocationId = null;
+        searchInput = string.Empty;
+        Shell.SearchTerm = string.Empty;
+        appliedSearchTerm = null;
+        appliedPostType = null;
+        draftPostType = null;
+        appliedLocationId = null;
+        draftLocationId = null;
         currentPage = 1;
+        UpdateHeaderSearchExtra();
         await LoadPostsAsync();
+    }
+
+    private string FormatPostType(string? type)
+    {
+        if (string.IsNullOrWhiteSpace(type)) return string.Empty;
+        var clean = type.Trim().Replace(" ", "").ToLowerInvariant();
+        return clean switch
+        {
+            "normal" => "Normal",
+            "findcoach" => "Find Coach",
+            "findtrainee" => "Find Trainee",
+            _ => type.Trim()
+        };
+    }
+
+    private string GetLocationName(Guid locationId)
+    {
+        var loc = availableLocations.FirstOrDefault(l => l.LocationId == locationId);
+        return loc?.LocationName ?? "Selected Location";
     }
 
     // Post Interactions
@@ -606,8 +818,7 @@ public partial class Home : ComponentBase, IDisposable
     public void Dispose()
     {
         PostHubClient.OnPostDeleted -= HandlePostDeletedRealtime;
-        searchCts?.Cancel();
-        searchCts?.Dispose();
+        Shell.Reset();
         toastCts?.Cancel();
         toastCts?.Dispose();
         warningToastCts?.Cancel();

@@ -34,6 +34,8 @@ public interface IPaymentService
     Task<ApiResponse<ActivationLink>> CreateActivationLinkAsync(RegisterRequest draft);
     Task<ApiResponse<AuthResponse>> CompleteActivationAsync(long orderCode);
     Task<ApiResponse<bool>> CancelActivationAsync(long orderCode);
+    Task<ApiResponse<CoachSubscriptionStatus>> GetCurrentCoachSubscriptionAsync();
+    Task<ApiResponse<ActivationLink>> RenewCoachSubscriptionAsync(Guid planId);
 }
 
 public class PaymentApiService : IPaymentService
@@ -149,6 +151,36 @@ public class PaymentApiService : IPaymentService
                 Success = false,
                 Message = $"Connection error: {ex.Message}"
             };
+        }
+    }
+
+    public async Task<ApiResponse<CoachSubscriptionStatus>> GetCurrentCoachSubscriptionAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("payments/coach-subscription/current");
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<CoachSubscriptionStatus>>();
+            if (result != null) return result;
+            return new ApiResponse<CoachSubscriptionStatus> { Success = false, Message = "Could not load subscription." };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<CoachSubscriptionStatus> { Success = false, Message = $"Connection error: {ex.Message}" };
+        }
+    }
+
+    public async Task<ApiResponse<ActivationLink>> RenewCoachSubscriptionAsync(Guid planId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("payments/coach-subscription/renew", new { planId });
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<ActivationLink>>();
+            if (result != null) return result;
+            return new ApiResponse<ActivationLink> { Success = false, Message = "Could not create renewal link." };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ActivationLink> { Success = false, Message = $"Connection error: {ex.Message}" };
         }
     }
 }

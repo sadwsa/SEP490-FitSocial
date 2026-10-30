@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Infrastructure.Data;
@@ -30,6 +31,15 @@ public class AuditLogRepository : Repository<AuditLog>, IAuditLogRepository
             .AsNoTracking()
             .Include(a => a.ActorAccount)
             .AsQueryable();
+
+        // 0. Only read operations performed by STAFF or ADMIN
+        query = query.Where(a => a.ActorAccount != null &&
+            (a.ActorAccount.RoleCode == RoleConstants.Admin ||
+             a.ActorAccount.RoleCode == RoleConstants.Staff ||
+             a.ActorAccount.RoleCode == "admin" ||
+             a.ActorAccount.RoleCode == "staff" ||
+             (a.ActorAccount.RoleCode != null && (a.ActorAccount.RoleCode.ToUpper() == "ADMIN" || a.ActorAccount.RoleCode.ToUpper() == "STAFF")) ||
+             a.ActorAccount.IsInternal == true));
 
         // 1. Filter by Date range
         if (fromDate.HasValue)
@@ -99,6 +109,7 @@ public class AuditLogRepository : Repository<AuditLog>, IAuditLogRepository
                 (a.Ipaddress != null && a.Ipaddress.ToLower().Contains(kw)) ||
                 (a.ActorAccount != null && a.ActorAccount.FullName != null && a.ActorAccount.FullName.ToLower().Contains(kw)) ||
                 (a.ActorAccount != null && a.ActorAccount.Email != null && a.ActorAccount.Email.ToLower().Contains(kw)) ||
+                (a.ActorAccount != null && a.ActorAccount.RoleCode != null && a.ActorAccount.RoleCode.ToLower().Contains(kw)) ||
                 (a.OldValue != null && a.OldValue.ToLower().Contains(kw)) ||
                 (a.NewValue != null && a.NewValue.ToLower().Contains(kw)));
         }

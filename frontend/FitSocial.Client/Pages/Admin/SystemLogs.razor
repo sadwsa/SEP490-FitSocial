@@ -7,8 +7,9 @@
 @using FitSocial.Client.Services.SystemLogs
 @inject ISystemLogService LogService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 
-<PageTitle>System Logs - FitSocial Admin Console</PageTitle>
+<PageTitle>System Logs - FitConnect Admin Console</PageTitle>
 
 <style>
     .view-title {
@@ -318,6 +319,11 @@
         color: #b45309 !important;
         background: #fffbeb !important;
         border: 1px solid #fde68a !important;
+    }
+    .role-badge.admin {
+        color: #b91c1c !important;
+        background: #fef2f2 !important;
+        border: 1px solid #fecaca !important;
     }
     .role-badge.trainee {
         color: #1d4ed8 !important;
@@ -667,6 +673,260 @@
     .modal-body::-webkit-scrollbar-thumb:hover, .json-content::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
     }
+
+    /* Structured Use Case Card */
+    .uc-card {
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        padding: 16px !important;
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace !important;
+        font-size: 0.8rem !important;
+        color: #1e293b !important;
+        flex-shrink: 0 !important;
+    }
+    .uc-header-row {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+    }
+    .uc-group-title {
+        font-weight: 800 !important;
+        color: #0f172a !important;
+        font-size: 0.84rem !important;
+        letter-spacing: 0.2px !important;
+    }
+    .uc-copy-btn {
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        padding: 4px 10px !important;
+        font-size: 0.72rem !important;
+        font-weight: 600 !important;
+        color: #475569 !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+        font-family: system-ui, -apple-system, sans-serif !important;
+    }
+    .uc-copy-btn:hover {
+        border-color: #FF5500 !important;
+        color: #FF5500 !important;
+        background: #fff7f3 !important;
+    }
+    .uc-divider {
+        border-top: 1px dashed #cbd5e1 !important;
+        margin: 10px 0 12px 0 !important;
+    }
+    .uc-title {
+        font-weight: 700 !important;
+        color: #ea580c !important;
+        font-size: 0.82rem !important;
+        margin-bottom: 10px !important;
+    }
+    .uc-attr-list {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .uc-attr-item {
+        display: flex !important;
+        align-items: flex-start !important;
+        gap: 6px !important;
+        line-height: 1.5 !important;
+        margin-left: 12px !important;
+    }
+    .uc-attr-item-block {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 4px !important;
+        margin-left: 12px !important;
+    }
+    .uc-bullet {
+        color: #64748b !important;
+        font-weight: 700 !important;
+    }
+    .uc-attr-label {
+        color: #475569 !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+    }
+    .uc-attr-val {
+        color: #0f172a !important;
+        word-break: break-all !important;
+    }
+    .uc-desc-quote {
+        background: #ffffff !important;
+        border-left: 3px solid #f97316 !important;
+        padding: 8px 12px !important;
+        margin: 4px 0 4px 14px !important;
+        border-radius: 0 6px 6px 0 !important;
+        color: #334155 !important;
+        font-style: italic !important;
+        line-height: 1.5 !important;
+    }
+    .uc-payload-section {
+        margin-left: 14px !important;
+        margin-top: 4px !important;
+    }
+    .uc-sub-label {
+        font-weight: 700 !important;
+        color: #334155 !important;
+        margin-bottom: 4px !important;
+        font-size: 0.76rem !important;
+    }
+
+    /* Admin Management Changes Table */
+    .uc-changes-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        margin-bottom: 6px !important;
+        flex-wrap: wrap !important;
+    }
+    .uc-mode-switcher {
+        display: inline-flex !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        overflow: hidden !important;
+        background: #f1f5f9 !important;
+    }
+    .uc-mode-btn {
+        background: transparent !important;
+        border: none !important;
+        padding: 3px 8px !important;
+        font-size: 0.7rem !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+        font-family: system-ui, -apple-system, sans-serif !important;
+    }
+    .uc-mode-btn.active {
+        background: #ffffff !important;
+        color: #FF5500 !important;
+        font-weight: 700 !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.06) !important;
+    }
+    .uc-table-wrapper {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        overflow-x: auto !important;
+        margin-top: 6px !important;
+        margin-left: 12px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03) !important;
+    }
+    .uc-admin-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 0.77rem !important;
+    }
+    .uc-admin-table th {
+        background: #f8fafc !important;
+        color: #475569 !important;
+        font-size: 0.7rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.4px !important;
+        padding: 8px 12px !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        text-align: left !important;
+        white-space: nowrap !important;
+    }
+    .uc-admin-table td {
+        padding: 9px 12px !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+        vertical-align: top !important;
+        line-height: 1.45 !important;
+    }
+    .uc-admin-table tr:last-child td {
+        border-bottom: none !important;
+    }
+    .uc-admin-table tr.tr-changed {
+        background: #fefce8 !important;
+    }
+    .prop-name {
+        font-weight: 700 !important;
+        color: #1e293b !important;
+        font-family: system-ui, -apple-system, sans-serif !important;
+        font-size: 0.78rem !important;
+    }
+    .prop-code {
+        font-size: 0.67rem !important;
+        color: #94a3b8 !important;
+        display: block !important;
+    }
+    .status-pill {
+        display: inline-block !important;
+        font-weight: 700 !important;
+        font-size: 0.7rem !important;
+        padding: 2px 7px !important;
+        border-radius: 4px !important;
+        letter-spacing: 0.3px !important;
+        line-height: 1.2 !important;
+    }
+    .status-pill.status-success {
+        background: #ecfdf5 !important;
+        color: #047857 !important;
+        border: 1px solid #a7f3d0 !important;
+    }
+    .status-pill.status-warning {
+        background: #fffbeb !important;
+        color: #b45309 !important;
+        border: 1px solid #fde68a !important;
+    }
+    .status-pill.status-danger {
+        background: #fef2f2 !important;
+        color: #b91c1c !important;
+        border: 1px solid #fecaca !important;
+    }
+    .status-pill.status-default {
+        background: #f1f5f9 !important;
+        color: #475569 !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+    .change-tag {
+        display: inline-block !important;
+        margin-left: 6px !important;
+        background: #ecfdf5 !important;
+        color: #059669 !important;
+        border: 1px solid #6ee7b7 !important;
+        font-size: 0.65rem !important;
+        font-weight: 700 !important;
+        padding: 1px 5px !important;
+        border-radius: 3px !important;
+        font-family: system-ui, -apple-system, sans-serif !important;
+    }
+    .val-strikethrough {
+        text-decoration: line-through !important;
+        opacity: 0.6 !important;
+    }
+    .long-text-block {
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 6px !important;
+        padding: 6px 10px !important;
+        font-size: 0.74rem !important;
+        color: #334155 !important;
+        max-height: 130px !important;
+        overflow-y: auto !important;
+        white-space: pre-wrap !important;
+        word-break: break-word !important;
+        line-height: 1.45 !important;
+    }
+    .long-text-block.highlight-long-text {
+        border-left: 3px solid #10b981 !important;
+        background: #f0fdf4 !important;
+        color: #065f46 !important;
+    }
+    .long-text-block.error-long-text {
+        border-left: 3px solid #ef4444 !important;
+        background: #fef2f2 !important;
+        color: #991b1b !important;
+    }
 </style>
 
 <AuthorizeView Roles="ADMIN">
@@ -681,7 +941,7 @@
         }
 
         <h2 class="view-title">System Logs</h2>
-        <p class="view-sub">Audit trail, operational events, and system activity records</p>
+        <p class="view-sub">Audit trail of Staff and Admin operations</p>
 
         <!-- Quick Level Filter Tabs -->
         <div class="cat-tabs mb-3">
@@ -707,7 +967,7 @@
                        @oninput="OnSearchInput"
                        @onkeydown="HandleSearchKeyDown"
                        class="toolbar-input"
-                       placeholder="Search logs by keyword, action, user, module or IP..." />
+                       placeholder="Search logs by keyword, action, user, or module..." />
                 @if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
                     <button type="button" class="clear-input-btn" @onclick="ClearSearchAsync">✕</button>
@@ -775,7 +1035,6 @@
                             <th class="col-action">Action</th>
                             <th class="col-message">Description</th>
                             <th class="col-actor">Actor</th>
-                            <th class="col-ip">IP Address</th>
                             <th class="col-view text-end">Actions</th>
                         </tr>
                     </thead>
@@ -805,14 +1064,17 @@
                                     <div class="message-truncate">@log.Message</div>
                                 </td>
                                 <td class="col-actor">
-                                    <div class="actor-name truncate" title="@(log.ActorName ?? "System")"><strong>@(log.ActorName ?? "System")</strong></div>
+                                    <div class="actor-name truncate" title="@(log.ActorName ?? "Staff/Admin")">
+                                        <strong>@(log.ActorName ?? "Staff/Admin")</strong>
+                                        @if (!string.IsNullOrEmpty(log.ActorRole))
+                                        {
+                                            <span class="role-badge @GetRoleBadgeClass(log.ActorRole)" style="margin-left: 4px; font-size: 0.65rem;">@log.ActorRole</span>
+                                        }
+                                    </div>
                                     @if (!string.IsNullOrEmpty(log.ActorEmail))
                                     {
                                         <div class="actor-email truncate muted" title="@log.ActorEmail"><small>@log.ActorEmail</small></div>
                                     }
-                                </td>
-                                <td class="col-ip font-mono muted">
-                                    @(string.IsNullOrWhiteSpace(log.IpAddress) ? "—" : log.IpAddress)
                                 </td>
                                 <td class="col-view text-end" @onclick:stopPropagation="true">
                                     <button type="button" class="row-btn" @onclick="() => OpenDetailModal(log)" title="View Details">
@@ -896,11 +1158,14 @@
                             </div>
                             <div class="detail-item">
                                 <label>Actor</label>
-                                <div>@(selectedLog.ActorName ?? "System") @(!string.IsNullOrEmpty(selectedLog.ActorEmail) ? $"({selectedLog.ActorEmail})" : "")</div>
-                            </div>
-                            <div class="detail-item">
-                                <label>Client IP</label>
-                                <div class="font-mono">@(string.IsNullOrWhiteSpace(selectedLog.IpAddress) ? "N/A" : selectedLog.IpAddress)</div>
+                                <div>
+                                    @(selectedLog.ActorName ?? "Staff/Admin")
+                                    @if (!string.IsNullOrEmpty(selectedLog.ActorRole))
+                                    {
+                                        <span class="role-badge @GetRoleBadgeClass(selectedLog.ActorRole)" style="margin-left: 4px; font-size: 0.65rem;">@selectedLog.ActorRole</span>
+                                    }
+                                    @(!string.IsNullOrEmpty(selectedLog.ActorEmail) ? $" ({selectedLog.ActorEmail})" : "")
+                                </div>
                             </div>
                         </div>
 
@@ -910,33 +1175,222 @@
                             <p>@selectedLog.Message</p>
                         </div>
 
-                        <!-- Changes & Values -->
-                        @if (!string.IsNullOrWhiteSpace(selectedLog.OldValue))
-                        {
-                            <div class="json-block">
-                                <div class="json-header">
-                                    <span>Previous Value (Old Value)</span>
-                                </div>
-                                <pre class="json-content">@FormatJson(selectedLog.OldValue)</pre>
-                            </div>
+                        @{
+                            var ucInfo = SystemLogUseCaseHelper.Resolve(selectedLog);
                         }
 
-                        @if (!string.IsNullOrWhiteSpace(selectedLog.NewValue))
-                        {
-                            <div class="json-block">
-                                <div class="json-header">
-                                    <span>Current Value / Payload (New Value)</span>
-                                </div>
-                                <pre class="json-content">@FormatJson(selectedLog.NewValue)</pre>
+                        <!-- Structured Use Case Presentation Card -->
+                        <div class="uc-card">
+                            <div class="uc-header-row">
+                                <div class="uc-group-title">@ucInfo.GroupName</div>
+                                <button type="button" class="uc-copy-btn" @onclick="() => CopyLogTextAsync(selectedLog, ucInfo)" title="Copy entry details in plain text">
+                                    @if (_copiedLogId == selectedLog.LogId)
+                                    {
+                                        <span style="color: #059669; font-weight: 700;">✓ Copied</span>
+                                    }
+                                    else
+                                    {
+                                        <span>📋 Copy Format</span>
+                                    }
+                                </button>
                             </div>
-                        }
+                            <div class="uc-divider"></div>
 
-                        @if (string.IsNullOrWhiteSpace(selectedLog.OldValue) && string.IsNullOrWhiteSpace(selectedLog.NewValue))
-                        {
-                            <div class="no-payload-notice">
-                                <span>No additional payload data stored for this event.</span>
+                            <div class="uc-body">
+                                <div class="uc-title">@ucInfo.UseCaseTitle</div>
+
+                                <div class="uc-attr-list">
+                                    <div class="uc-attr-item">
+                                        <span class="uc-bullet">-</span>
+                                        <span class="uc-attr-label">Related Table:</span>
+                                        <span class="uc-attr-val">@ucInfo.RelatedTable</span>
+                                    </div>
+
+                                    <div class="uc-attr-item">
+                                        <span class="uc-bullet">-</span>
+                                        <span class="uc-attr-label">Action Code:</span>
+                                        <span class="uc-attr-val font-mono font-bold" style="color: #ea580c;">@ucInfo.ActionCode</span>
+                                    </div>
+
+                                    <div class="uc-attr-item">
+                                        <span class="uc-bullet">-</span>
+                                        <span class="uc-attr-label">Entity Type:</span>
+                                        <span class="uc-attr-val font-mono">@ucInfo.EntityType</span>
+                                    </div>
+
+                                    <div class="uc-attr-item">
+                                        <span class="uc-bullet">-</span>
+                                        <span class="uc-attr-label">Entity ID:</span>
+                                        <span class="uc-attr-val font-mono">@(string.IsNullOrWhiteSpace(ucInfo.EntityId) ? "N/A" : ucInfo.EntityId)</span>
+                                    </div>
+
+                                    <div class="uc-attr-item-block">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <span class="uc-bullet">-</span>
+                                            <span class="uc-attr-label">Event Description:</span>
+                                        </div>
+                                        <div class="uc-desc-quote">
+                                            "@ucInfo.Description"
+                                        </div>
+                                    </div>
+
+                                    <div class="uc-attr-item-block">
+                                        <div class="uc-changes-header">
+                                            <div style="display: flex; align-items: center; gap: 6px;">
+                                                <span class="uc-bullet">-</span>
+                                                <span class="uc-attr-label font-bold">@(ucInfo.DetailType == LogDetailType.Initial || ucInfo.DetailType == LogDetailType.BeforeDelete ? "Event Details:" : "Changes Summary:")</span>
+                                            </div>
+                                            <div class="uc-mode-switcher">
+                                                <button type="button" class="uc-mode-btn @(!_showRawJson ? "active" : "")" @onclick="() => _showRawJson = false">
+                                                    <span>📋 Overview Table</span>
+                                                </button>
+                                                <button type="button" class="uc-mode-btn @(_showRawJson ? "active" : "")" @onclick="() => _showRawJson = true">
+                                                    <span>{ } Raw JSON</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        @if (!_showRawJson)
+                                        {
+                                            @if (ucInfo.FieldChanges.Any())
+                                            {
+                                                @if (ucInfo.DetailType == LogDetailType.Change)
+                                                {
+                                                    <div class="uc-table-wrapper">
+                                                        <table class="uc-admin-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th style="width: 28%;">Attribute</th>
+                                                                    <th style="width: 36%;">Previous Value</th>
+                                                                    <th style="width: 36%;">Current Value</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var f in ucInfo.FieldChanges)
+                                                                {
+                                                                    <tr class="@(f.IsChanged ? "tr-changed" : "")">
+                                                                        <td class="td-prop">
+                                                                            <div class="prop-name">@f.DisplayName</div>
+                                                                            <span class="prop-code font-mono">@f.Key</span>
+                                                                        </td>
+                                                                        <td class="td-val td-old">
+                                                                            @if (f.IsStatus && !string.IsNullOrWhiteSpace(f.RawOldValue))
+                                                                            {
+                                                                                <span class="status-pill @f.OldStatusBadgeClass">@f.FormattedOldValue</span>
+                                                                            }
+                                                                            else if (f.IsLongText && f.FormattedOldValue != "—")
+                                                                            {
+                                                                                <div class="long-text-block @(IsErrorText(f.FormattedOldValue) ? "error-long-text" : "")">@f.FormattedOldValue</div>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="@(f.IsChanged ? "val-strikethrough text-slate-400" : "text-slate-600")">@f.FormattedOldValue</span>
+                                                                            }
+                                                                        </td>
+                                                                        <td class="td-val td-new">
+                                                                            @if (f.IsStatus && !string.IsNullOrWhiteSpace(f.RawNewValue))
+                                                                            {
+                                                                                <span class="status-pill @f.NewStatusBadgeClass">@f.FormattedNewValue</span>
+                                                                                @if (f.IsChanged)
+                                                                                {
+                                                                                    <span class="change-tag">Changed</span>
+                                                                                }
+                                                                            }
+                                                                            else if (f.IsLongText && f.FormattedNewValue != "—")
+                                                                            {
+                                                                                <div class="long-text-block @(IsErrorText(f.FormattedNewValue) ? "error-long-text" : (f.IsChanged ? "highlight-long-text" : ""))">@f.FormattedNewValue</div>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="@(f.IsChanged ? "font-bold text-emerald-800" : "text-slate-800")">@f.FormattedNewValue</span>
+                                                                                @if (f.IsChanged)
+                                                                                {
+                                                                                    <span class="change-tag">Changed</span>
+                                                                                }
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="uc-table-wrapper">
+                                                        <table class="uc-admin-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th style="width: 32%;">Attribute</th>
+                                                                    <th style="width: 68%;">@(ucInfo.DetailType == LogDetailType.Initial ? "Initial Value" : "Value Before Deletion")</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var f in ucInfo.FieldChanges)
+                                                                {
+                                                                    var val = ucInfo.DetailType == LogDetailType.Initial ? f.FormattedNewValue : f.FormattedOldValue;
+                                                                    var raw = ucInfo.DetailType == LogDetailType.Initial ? f.RawNewValue : f.RawOldValue;
+                                                                    var badge = ucInfo.DetailType == LogDetailType.Initial ? f.NewStatusBadgeClass : f.OldStatusBadgeClass;
+                                                                    <tr>
+                                                                        <td class="td-prop">
+                                                                            <div class="prop-name">@f.DisplayName</div>
+                                                                            <span class="prop-code font-mono">@f.Key</span>
+                                                                        </td>
+                                                                        <td class="td-val">
+                                                                            @if (f.IsStatus && !string.IsNullOrWhiteSpace(raw))
+                                                                            {
+                                                                                <span class="status-pill @badge">@val</span>
+                                                                            }
+                                                                            else if (f.IsLongText && val != "—")
+                                                                            {
+                                                                                <div class="long-text-block @(IsErrorText(val) ? "error-long-text" : "")">@val</div>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="font-medium text-slate-800">@val</span>
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div class="no-payload-notice mt-2">
+                                                    <span>No change payload recorded for this event.</span>
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            @if (!string.IsNullOrWhiteSpace(selectedLog.OldValue))
+                                            {
+                                                <div class="uc-payload-section" style="margin-bottom: 10px;">
+                                                    <div class="uc-sub-label">+ Previous Value (Raw JSON):</div>
+                                                    <pre class="json-content">@FormatJson(selectedLog.OldValue)</pre>
+                                                </div>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(selectedLog.NewValue))
+                                            {
+                                                <div class="uc-payload-section">
+                                                    <div class="uc-sub-label">+ Current Value (Raw JSON):</div>
+                                                    <pre class="json-content">@FormatJson(selectedLog.NewValue)</pre>
+                                                </div>
+                                            }
+                                            @if (string.IsNullOrWhiteSpace(selectedLog.OldValue) && string.IsNullOrWhiteSpace(selectedLog.NewValue))
+                                            {
+                                                <div class="no-payload-notice mt-2">
+                                                    <span>No JSON payload available for this event.</span>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
                             </div>
-                        }
+                        </div>
                     </div>
 
                     <div class="modal-footer">
@@ -1106,6 +1560,7 @@
     private void OpenDetailModal(SystemLogItemModel log)
     {
         selectedLog = log;
+        _showRawJson = false;
     }
 
     private void CloseDetailModal()
@@ -1121,6 +1576,22 @@
             "warning" => "warning",
             _ => "active"
         };
+    }
+
+    private bool IsErrorText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var lower = text.ToLowerInvariant();
+        return lower.Contains("error") || lower.Contains("reject") || lower.Contains("fail") || lower.Contains("exception");
+    }
+
+    private string GetRoleBadgeClass(string? role)
+    {
+        if (string.IsNullOrWhiteSpace(role)) return "default";
+        var r = role.ToUpperInvariant();
+        if (r == "ADMIN") return "admin";
+        if (r == "STAFF") return "staff";
+        return "default";
     }
 
     private string GetSourceClass(string? source)
@@ -1188,5 +1659,26 @@
     private int GetEndIndex()
     {
         return Math.Min(currentPage * pageSize, pagedLogs.TotalCount);
+    }
+
+    private bool _showRawJson = false;
+    private long? _copiedLogId;
+
+    private async Task CopyLogTextAsync(SystemLogItemModel log, SystemLogUseCaseInfo ucInfo)
+    {
+        var text = SystemLogUseCaseHelper.GeneratePlainText(ucInfo, log.OldValue, log.NewValue, FormatJson);
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            _copiedLogId = log.LogId;
+            StateHasChanged();
+            await Task.Delay(2500);
+            _copiedLogId = null;
+            StateHasChanged();
+        }
+        catch
+        {
+            // Ignore clipboard errors if unsupported
+        }
     }
 }

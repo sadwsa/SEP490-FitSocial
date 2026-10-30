@@ -1,6 +1,6 @@
-# 🏋️ FitSocial - Hướng Dẫn Phát Triển Frontend Blazor (.NET 8)
+# 🏋️ FitConnect - Hướng Dẫn Phát Triển Frontend Blazor (.NET 8)
 
-Tài liệu này hướng dẫn các thành viên trong nhóm cách thiết lập, phát triển và mở rộng khung sườn dự án Frontend **FitSocial** sử dụng **Blazor WebAssembly (.NET 8)**.
+Tài liệu này hướng dẫn các thành viên trong nhóm cách thiết lập, phát triển và mở rộng khung sườn dự án Frontend **FitConnect** sử dụng **Blazor WebAssembly (.NET 8)**.
 
 ---
 
@@ -51,7 +51,7 @@ FitSocial.Client/
 ├── wwwroot/                           # Static assets
 │   ├── appsettings.json               # Cấu hình ApiBaseUrl & SignalR URLs
 │   ├── css/
-│   │   └── app.css                    # Toàn bộ Style giao diện, màu sắc FitSocial
+│   │   └── app.css                    # Toàn bộ Style giao diện, màu sắc FitConnect
 │   └── index.html                     # HTML Entry point
 │
 ├── Models/                            # DTOs & Request/Response models
@@ -81,7 +81,7 @@ FitSocial.Client/
 │   └── NavMenu.razor.css
 │
 ├── Pages/                             # Các trang chức năng chính (Routes)
-│   ├── Home.razor                     # Route "/" - Bảng tin bài tập FitSocial
+│   ├── Home.razor                     # Route "/" - Bảng tin bài tập FitConnect
 │   ├── Workouts.razor                 # Route "/workouts" - Danh mục bài tập & lịch tập
 │   ├── Community.razor                # Route "/community" - Hội nhóm & thử thách
 │   ├── Profile.razor                  # Route "/profile" - Trang cá nhân (yêu cầu [Authorize])

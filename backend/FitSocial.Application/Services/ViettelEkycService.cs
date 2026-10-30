@@ -76,8 +76,13 @@ public class ViettelEkycService : IEkycService
         if (!double.TryParse(refScoreStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var refScore))
             refScore = 0.65;
 
+        // Viettel eKYC can take longer than the default 30s, especially for
+        // high-resolution ID card images. Allow a generous, configurable timeout.
+        var timeoutSecondsStr = _configuration["ViettelEkyc:TimeoutSeconds"] ?? "120";
+        if (!int.TryParse(timeoutSecondsStr, out var timeoutSeconds) || timeoutSeconds <= 0)
+            timeoutSeconds = 120;
         var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(30);
+        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
 
         async Task<byte[]> DownloadAsync(string url)
         {

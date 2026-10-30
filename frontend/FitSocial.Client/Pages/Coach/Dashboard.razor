@@ -1,10 +1,11 @@
 @page "/coach/dashboard"
-@layout EmptyLayout
+@implements IDisposable
 @attribute [Authorize(Roles = "COACH")]
 @inject ICoachDashboardService DashboardService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Coaches
 @using FitSocial.Client.Models.Common
@@ -13,81 +14,54 @@
 @using System.Globalization
 @using Microsoft.AspNetCore.Components.Web
 
-<PageTitle>Coach Dashboard - FitSocial</PageTitle>
+<PageTitle>Coach Dashboard - FitConnect</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
-    <AppHeader SearchTerm="@headerSearchTerm"
-               OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp"
-               OnSearch="ExecuteHeaderSearch"
-               OnClearSearch="ClearHeaderSearch"
-               UserName="@userName"
-               UserInitials="@userInitials"
-               UserRole="@userRole"
-               OnLogout="HandleLogout" />
-
-    <style>
-        @@media (min-width: 1024px) {
-            .home-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 52rem) minmax(14rem, 1fr) !important;
-                align-items: start !important;
-            }
-
-            .home-left-sidebar { justify-self: start !important; }
-            .home-center-feed { justify-self: center !important; width: 100% !important; max-width: 52rem !important; min-width: 0 !important; }
-            .home-right-sidebar { justify-self: center !important; }
+<style>
+    /* Smooth Entrance Animations & Glassmorphism */
+    @@keyframes slideUpFade {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
         }
 
-        /* Smooth Entrance Animations & Glassmorphism */
-        @@keyframes slideUpFade {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        to {
+            opacity: 1;
+            transform: translateY(0);
         }
+    }
 
-        .animate-fade-in {
-            animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    .animate-fade-in {
+        animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .delay-100 {
+        animation-delay: 100ms;
+    }
+
+    .delay-200 {
+        animation-delay: 200ms;
+    }
+
+    .glass-card {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+    }
+
+    /* Dynamic Chart Bar Hover */
+    .chart-bar {
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+        .chart-bar:hover {
+            transform: scaleY(1.05);
+            filter: brightness(1.15);
         }
+</style>
 
-        .delay-100 {
-            animation-delay: 100ms;
-        }
-
-        .delay-200 {
-            animation-delay: 200ms;
-        }
-
-        .glass-card {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
-        }
-
-        /* Dynamic Chart Bar Hover */
-        .chart-bar {
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-            .chart-bar:hover {
-                transform: scaleY(1.05);
-                filter: brightness(1.15);
-            }
-    </style>
-
-    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
-        <!-- Left Sidebar -->
-        <AppSidebar ActiveItem="coach-dashboard" />
-
-        <!-- Center Column -->
-        <section class="home-center-feed w-full max-w-4xl flex flex-col gap-5 min-w-0 pb-12">
+<!-- Center Column -->
+<div class="flex flex-col gap-5 min-w-0">
             <!-- Header Section -->
             <div class="bg-white rounded-2xl shadow-sm p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-gray-100">
                 <div>
@@ -476,12 +450,7 @@
                     </div>
                 </div>
             }
-        </section>
-
-        <!-- Right Sidebar (Empty Spacer to maintain 3-column balance) -->
-        <aside class="home-right-sidebar hidden lg:flex w-56 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
-    </div>
-</div>
+        </div>
 
 @code {
     private CoachDashboardMetricsDto? metrics;
@@ -502,9 +471,29 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadUserInfoAsync();
         await LoadMetricsAsync();
         await LoadAnalyticsAsync();
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadMetricsAsync()

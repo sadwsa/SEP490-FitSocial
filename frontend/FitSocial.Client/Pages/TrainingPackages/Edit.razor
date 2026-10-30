@@ -1,18 +1,18 @@
 @page "/training-packages/edit/{Id:guid}"
-@layout EmptyLayout
+@implements IDisposable
 @inject ITrainingPackageService PackageService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
 @inject FitSocial.Client.Services.Cart.ICartService CartService
 @inject IJSRuntime JS
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.TrainingPackages
 @using System.Security.Claims
 
-<PageTitle>Edit Training Package - FitSocial</PageTitle>
+<PageTitle>Edit Training Package - FitConnect</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
     <!-- Floating Success Toast Notification -->
     @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
     {
@@ -30,37 +30,7 @@
         </div>
     }
 
-    <AppHeader SearchTerm="@headerSearchTerm"
-               OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp"
-               OnSearch="ExecuteHeaderSearch"
-               OnClearSearch="ClearHeaderSearch"
-               UserName="@userName"
-               UserInitials="@userInitials"
-               UserRole="@userRole"
-               CartCount="@headerCartCount"
-               OnLogout="HandleLogout" />
-
-    <style>
-        @@media (min-width: 1024px) {
-            .home-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 46rem) minmax(18rem, 1fr) !important;
-                align-items: start !important;
-            }
-
-            .home-left-sidebar { justify-self: start !important; }
-            .home-center-feed { justify-self: end !important; width: 100% !important; max-width: 46rem !important; min-width: 0 !important; }
-            .home-right-sidebar { justify-self: center !important; }
-        }
-    </style>
-
-    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
-        <!-- Left Sidebar -->
-        <AppSidebar ActiveItem="packages" />
-
-        <!-- Center Column -->
-        <section class="home-center-feed w-full max-w-3xl flex flex-col gap-4 min-w-0 pb-12">
+    <div class="flex flex-col gap-4 min-w-0">
             <!-- Header Card -->
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -355,11 +325,6 @@
                     </EditForm>
                 </div>
             }
-        </section>
-
-        <!-- Right Sidebar (Empty) -->
-        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
-    </div>
 </div>
 
 @code {
@@ -386,9 +351,29 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadUserInfoAsync();
         await LoadPackageDataAsync();
         await LoadCartCountAsync();
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadPackageDataAsync()

@@ -30,6 +30,7 @@ public class AuthService : IAuthService
     private readonly IEkycService _ekycService;
     private readonly IEncryptionService _encryptionService;
     private readonly IAppealService _appealService;
+    private readonly IAuditLogService _auditLogService;
 
     public AuthService(
         IUserRepository users,
@@ -48,7 +49,8 @@ public class AuthService : IAuthService
         ICoachProfileRepository coachProfiles,
         IEkycService ekycService,
         IEncryptionService encryptionService,
-        IAppealService appealService)
+        IAppealService appealService,
+        IAuditLogService auditLogService)
     {
         _users = users;
         _unitOfWork = unitOfWork;
@@ -67,6 +69,7 @@ public class AuthService : IAuthService
         _ekycService = ekycService;
         _encryptionService = encryptionService;
         _appealService = appealService;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
@@ -248,6 +251,18 @@ public class AuthService : IAuthService
         user.UpdatedAt = DateTime.UtcNow;
         var adminResponse = await _tokenService.CreateSessionAsync(user, null, request.RememberMe);
         await _unitOfWork.SaveChangesAsync();
+
+        await WriteAuditAsync(
+            action: "LOGIN_MANAGEMENT_PORTAL",
+            entityId: user.UserId,
+            description: $"{user.FullName ?? user.Email} ({user.RoleCode}) signed in to the Management Portal.",
+            newValue: new
+            {
+                email = user.Email,
+                roleCode = user.RoleCode,
+                rememberMe = request.RememberMe,
+                lastActiveAt = user.LastActiveAt
+            });
 
         return ApiResponseDto<AuthResponseDto>.Ok(adminResponse, "Welcome to the Management Portal!");
     }
@@ -735,17 +750,17 @@ public class AuthService : IAuthService
 
         var otpCode = await _otpService.GenerateOtpAsync(normalizedEmail, OtpConstants.PurposeResetPassword);
 
-        var subject = "[FitSocial] Password reset verification code";
+        var subject = "[FitConnect] Password reset verification code";
         var body = $@"
             <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;"">
                 <div style=""text-align: center; margin-bottom: 20px;"">
-                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitSocial"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
-                    <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitSocial</h2>
+                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitConnect"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
+                    <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitConnect</h2>
                     <p style=""color: #666; margin: 5px 0 0;"">Sports & Fitness Community</p>
                 </div>
                 <div style=""background: #fff3e0; border-left: 4px solid #FF5722; padding: 15px; margin-bottom: 20px;"">
                     <p style=""margin: 0; color: #333; font-size: 16px;"">Hello,</p>
-                    <p style=""margin: 10px 0 0; color: #555;"">You requested a password reset for your FitSocial account. Your OTP verification code is:</p>
+                    <p style=""margin: 10px 0 0; color: #555;"">You requested a password reset for your FitConnect account. Your OTP verification code is:</p>
                 </div>
                 <div style=""text-align: center; margin: 30px 0;"">
                     <span style=""font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #FF5722; background: #fbe9e7; padding: 10px 24px; border-radius: 8px; border: 1px dashed #FF5722;"">
@@ -858,7 +873,50 @@ public class AuthService : IAuthService
             return ApiResponseDto<bool>.Fail("Could not change the password. Please try again.");
         }
 
+        // Staff/Admin (and any other signed-in account) changing its own password
+        // is a sensitive action and is always traced. Password values are never
+        // logged - only the resulting token version that invalidates old sessions.
+        await WriteAuditAsync(
+            action: "CHANGE_PASSWORD",
+            entityId: user.UserId,
+            description: $"{user.FullName ?? user.Email} ({user.RoleCode}) changed their own password. All sessions were signed out.",
+            oldValue: new { tokenVersion = user.TokenVersion - 1 },
+            newValue: new
+            {
+                tokenVersion = user.TokenVersion,
+                roleCode = user.RoleCode,
+                updatedAt = user.UpdatedAt
+            });
+
         return ApiResponseDto<bool>.Ok(true, "Password changed successfully. Please sign in again.");
+    }
+
+    /// <summary>
+    /// Writes to the shared "AuditLogs" table. Actor (Staff/Admin), role and IP are
+    /// auto-resolved from the current request by IAuditLogService.
+    /// </summary>
+    private async Task WriteAuditAsync(
+        string action,
+        Guid entityId,
+        string description,
+        object? oldValue = null,
+        object? newValue = null)
+    {
+        try
+        {
+            await _auditLogService.LogAsync(
+                actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                action: action,
+                entityType: "User",
+                entityId: entityId.ToString(),
+                description: description,
+                oldValue: oldValue,
+                newValue: newValue);
+        }
+        catch
+        {
+            // Audit log failure is non-fatal - the business operation already succeeded.
+        }
     }
 
     public async Task<ApiResponseDto<UserDto>> GetCurrentUserAsync(Guid userId)

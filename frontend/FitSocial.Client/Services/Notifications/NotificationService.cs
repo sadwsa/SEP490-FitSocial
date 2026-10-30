@@ -13,6 +13,7 @@ public class NotificationService : INotificationService
     private readonly ApiClient _apiClient;
 
     public event Action<Guid>? OnConversationRead;
+    public event Action? OnNotificationsChanged;
 
     public NotificationService(ApiClient apiClient)
     {
@@ -26,17 +27,33 @@ public class NotificationService : INotificationService
 
     public async Task<ApiResponse<bool>> MarkAsReadAsync(Guid notificationId)
     {
-        return await _apiClient.PutAsync<bool>($"notifications/{notificationId}/read");
+        var res = await _apiClient.PutAsync<bool>($"notifications/{notificationId}/read");
+        if (res.Success)
+        {
+            NotifyNotificationsChanged();
+        }
+        return res;
     }
 
     public async Task<ApiResponse<bool>> MarkAllAsReadAsync()
     {
-        return await _apiClient.PutAsync<bool>("notifications/read-all");
+        var res = await _apiClient.PutAsync<bool>("notifications/read-all");
+        if (res.Success)
+        {
+            NotifyNotificationsChanged();
+        }
+        return res;
     }
 
     public void NotifyConversationRead(Guid conversationId)
     {
         OnConversationRead?.Invoke(conversationId);
+        NotifyNotificationsChanged();
+    }
+
+    public void NotifyNotificationsChanged()
+    {
+        OnNotificationsChanged?.Invoke();
     }
 
     public async Task MarkConversationNotificationsAsReadAsync(Guid conversationId)
@@ -53,10 +70,14 @@ public class NotificationService : INotificationService
 
                 foreach (var notif in unreadForConv)
                 {
-                    await MarkAsReadAsync(notif.NotificationId);
+                    await _apiClient.PutAsync<bool>($"notifications/{notif.NotificationId}/read");
                 }
             }
         }
         catch { }
+        finally
+        {
+            NotifyNotificationsChanged();
+        }
     }
 }

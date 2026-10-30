@@ -29,6 +29,14 @@ public interface IOrderService
         Guid coachId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Gets purchase orders of a single trainee for the authenticated coach.
+    /// </summary>
+    Task<ApiResponseDto<CoachTraineeGroupDto>> GetCoachTraineeOrderDetailAsync(
+        Guid coachId,
+        Guid traineeId,
+        CancellationToken cancellationToken = default);
+
   
 
 }

@@ -147,7 +147,7 @@ public class RevenueAnalyticsService : IRevenueAnalyticsService
         sb.Append('\uFEFF');
 
         // Header: Overview
-        sb.AppendLine("=== BÁO CÁO DOANH THU HỆ THỐNG FITSOCIAL ===");
+        sb.AppendLine("=== BÁO CÁO DOANH THU HỆ THỐNG FITCONNECT ===");
         sb.AppendLine($"Khoảng thời gian:;{data.Overview.FromDate:yyyy-MM-dd HH:mm} đến {data.Overview.ToDate:yyyy-MM-dd HH:mm}");
         sb.AppendLine($"Ngày xuất báo cáo:;{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
         sb.AppendLine();
@@ -155,7 +155,7 @@ public class RevenueAnalyticsService : IRevenueAnalyticsService
         sb.AppendLine("--- 1. CÁC CHỈ SỐ TÀI CHÍNH TỔNG QUAN ---");
         sb.AppendLine($"Tổng GMV Giao dịch Sàn (VND);{data.Overview.TotalGMV.ToString("N0", viCulture)}");
         sb.AppendLine($"GMV Gói tập Trainee (100% Coach, 0% Hoa hồng) (VND);{data.Overview.TraineePackagesGMV.ToString("N0", viCulture)}");
-        sb.AppendLine($"Doanh thu Thuần Sàn FitSocial (100% Gói Coach) (VND);{data.Overview.PlatformDirectRevenue.ToString("N0", viCulture)}");
+        sb.AppendLine($"Doanh thu Thuần Sàn FitConnect (100% Gói Coach) (VND);{data.Overview.PlatformDirectRevenue.ToString("N0", viCulture)}");
         sb.AppendLine($"Tổng tiền Hoàn trả đã duyệt (Approved Refunds) (VND);{data.Overview.TotalApprovedRefunds.ToString("N0", viCulture)}");
         sb.AppendLine($"Tổng tiền đã Giải ngân cho Coach (Payouts) (VND);{data.Overview.TotalCoachPayouts.ToString("N0", viCulture)}");
         sb.AppendLine($"Dòng tiền ròng Sàn giữ lại (Net Cash Holding) (VND);{data.Overview.PlatformNetCashHolding.ToString("N0", viCulture)}");

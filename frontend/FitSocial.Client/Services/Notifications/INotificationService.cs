@@ -14,6 +14,8 @@ public interface INotificationService
 
     event Action<Guid>? OnConversationRead;
     void NotifyConversationRead(Guid conversationId);
+    event Action? OnNotificationsChanged;
+    void NotifyNotificationsChanged();
     Task MarkConversationNotificationsAsReadAsync(Guid conversationId);
 }
 

@@ -589,7 +589,7 @@ public class ReportService : IReportService
                 report.NotifiedReportedUserAt = now;
 
                 // 4. Create Notification
-                var notifDescription = $"Your post has been removed because it violated FitSocial's community guidelines.\n\nReason:\n{deletionReason}\n\nPlease make sure your future posts comply with FitSocial's policies.";
+                var notifDescription = $"Your post has been removed because it violated FitConnect's community guidelines.\n\nReason:\n{deletionReason}\n\nPlease make sure your future posts comply with FitConnect's policies.";
                 if (notifDescription.Length > 500)
                 {
                     notifDescription = notifDescription.Substring(0, 497) + "...";
@@ -779,7 +779,7 @@ public class ReportService : IReportService
             {
                 if (nextViolationCount == 1)
                 {
-                    notifDescription = "Your account has received a warning due to a reported violation.\nCurrent violation count: 1.\nPlease make sure your future activities comply with FitSocial's policies.";
+                    notifDescription = "Your account has received a warning due to a reported violation.\nCurrent violation count: 1.\nPlease make sure your future activities comply with FitConnect's policies.";
                 }
                 else if (nextViolationCount == 2)
                 {

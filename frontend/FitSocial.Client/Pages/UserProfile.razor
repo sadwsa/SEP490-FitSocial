@@ -1,50 +1,13 @@
 @page "/profile/{UserId}"
 @page "/users/{UserId}"
 @namespace FitSocial.Client.Pages
-@layout EmptyLayout
+@inject AppShellContext Shell
 @attribute [Authorize]
 
-<PageTitle>@(profile?.FullName != null ? $"{profile.FullName} - FitSocial" : "User Profile - FitSocial")</PageTitle>
+<PageTitle>@(profile?.FullName != null ? $"{profile.FullName} - FitConnect" : "User Profile - FitConnect")</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
-    <!-- Header / Navigation Bar -->
-    <AppHeader SearchTerm="@headerSearchTerm" OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp" OnSearch="ExecuteHeaderSearch" OnClearSearch="ClearHeaderSearch"
-               UserName="@headerUserName" UserInitials="@headerUserInitials" UserRole="@headerUserRole"
-               UserAvatarUrl="@headerUserAvatarUrl" CartCount="@headerCartCount" OnLogout="HandleLogout" />
-
-    <style>
-            @@media (min-width: 1024px) {
-                .home-3col-layout {
-                    display: grid !important;
-                    grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
-                    align-items: start !important;
-                }
-
-                .home-left-sidebar {
-                    justify-self: start !important;
-                }
-
-                .home-center-feed {
-                    justify-self: end !important;
-                    width: 100% !important;
-                    max-width: 42rem !important;
-                    min-width: 0 !important;
-                }
-
-                .home-right-sidebar {
-                    justify-self: center !important;
-                }
-            }
-    </style>
-
-    <!-- Main Content Layout -->
-    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
-        <!-- Left Sidebar -->
-        <AppSidebar ActiveItem="" />
-
-        <!-- Center Column -->
-        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-6 min-w-0 pb-12">
+<!-- Center Column -->
+<div class="flex flex-col gap-6 min-w-0">
 
             @if (isLoading)
             {
@@ -184,13 +147,21 @@
                             <div class="sm:self-end pt-2 sm:pt-0 flex items-center gap-2">
                                 @if (ShouldShowMessageButton)
                                 {
-                                    <button type="button" @onclick="HandleMessageClick"
-                                            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#e07b00] hover:to-[#e04b00] text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                        </svg>
-                                        Message
+                                    <button type="button" @onclick="HandleMessageClick" disabled="@isOpeningChat"
+                                            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:from-[#e07b00] hover:to-[#e04b00] text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer disabled:opacity-60">
+                                        @if (isOpeningChat)
+                                        {
+                                            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Opening...</span>
+                                        }
+                                        else
+                                        {
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                            </svg>
+                                            <span>Message</span>
+                                        }
                                     </button>
                                 }
                                 <button type="button" @onclick="OpenReportUserModal"
@@ -205,7 +176,26 @@
                             </div>
                         }
                     </div>
+                <!-- Profile Header Card End -->
                 </div>
+
+                @if (profile.IsCoach && profile.HasExpiredCertificates)
+                {
+                    <!-- Certificate Expired Warning Banner (Prompt requirement) -->
+                    <div class="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 shadow-xs flex items-start gap-3.5 animate-in fade-in">
+                        <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <h4 class="text-sm font-bold text-amber-900">Certificate Expired</h4>
+                            <p class="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                                One or more of this coach's certificates have expired. Please review the coach's current qualifications before making a purchase.
+                            </p>
+                        </div>
+                    </div>
+                }
 
                 <!-- Tab Container (Threads Style) -->
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -297,6 +287,106 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Certificates & Qualifications -->
+                                <div class="mt-6 pt-6 border-t border-gray-100">
+                                    <div class="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-9 h-9 rounded-xl bg-orange-50 text-[#FF5500] flex items-center justify-center flex-shrink-0">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h2 class="text-base font-bold text-gray-900">Certificates & Qualifications</h2>
+                                                <p class="text-xs text-gray-500">Verified credentials and professional certifications</p>
+                                            </div>
+                                        </div>
+                                        @if (profile.HasValidCertificates)
+                                        {
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                                </svg>
+                                                @profile.Certificates.Count Verified
+                                            </span>
+                                        }
+                                    </div>
+
+                                    @if (!profile.HasValidCertificates)
+                                    {
+                                        <!-- No Valid Certificates Notice (Prompt requirement) -->
+                                        <div class="p-5 rounded-xl bg-gray-50 border border-gray-200/80 text-center">
+                                            <div class="w-10 h-10 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-2.5">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                            </div>
+                                            <h4 class="text-sm font-bold text-gray-800">No Valid Certificates</h4>
+                                            <p class="text-xs text-gray-500 mt-1 max-w-md mx-auto leading-relaxed">
+                                                This coach currently has no valid, approved certificates on file. Please consider this when evaluating the coach's qualifications.
+                                            </p>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <!-- Valid Certificates List -->
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            @foreach (var cert in profile.Certificates)
+                                            {
+                                                <div class="p-4 bg-gray-50/70 hover:bg-orange-50/30 rounded-xl border border-gray-100 hover:border-orange-200 transition-all duration-200 flex flex-col justify-between">
+                                                    <div>
+                                                        <div class="flex items-start justify-between gap-2 mb-2">
+                                                            <h3 class="text-sm font-bold text-gray-900 leading-snug">
+                                                                @(string.IsNullOrWhiteSpace(cert.CertificateName) ? "Professional Certificate" : cert.CertificateName)
+                                                            </h3>
+                                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800 flex-shrink-0">
+                                                                <svg class="w-3 h-3 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                                                </svg>
+                                                                Verified
+                                                            </span>
+                                                        </div>
+
+                                                        @if (!string.IsNullOrWhiteSpace(cert.IssuedBy))
+                                                        {
+                                                            <p class="text-xs text-gray-600 font-medium flex items-center gap-1.5 mb-2">
+                                                                <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                                                </svg>
+                                                                <span>Issued by: <strong class="text-gray-800">@cert.IssuedBy</strong></span>
+                            </p>
+                        }
+
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+                            @if (cert.IssuedDate.HasValue)
+                            {
+                                <span>Issued: <strong class="text-gray-700">@cert.IssuedDate.Value.ToString("dd/MM/yyyy")</strong></span>
+                            }
+                            @if (cert.ExpiryDate.HasValue)
+                            {
+                                <span>Expires: <strong class="text-emerald-700">@cert.ExpiryDate.Value.ToString("dd/MM/yyyy")</strong></span>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(cert.CertificateUrl))
+                    {
+                        <div class="mt-3 pt-2 text-right">
+                            <a href="@cert.CertificateUrl" target="_blank" rel="noopener noreferrer"
+                               class="inline-flex items-center gap-1.5 text-xs font-bold text-[#FF5500] hover:text-[#E64A00] transition">
+                                <span>View Document</span>
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
                             }
 
                             <!-- Personal Information Details -->
@@ -428,6 +518,8 @@
                                 {
                                     <PostCard Post="@post"
                                               CurrentUserId="@currentUserId"
+                                              CurrentUserName="@headerUserName"
+                                              CurrentUserAvatarUrl="@headerUserAvatarUrl"
                                               OnLike="HandleLikePost"
                                               OnReport="HandleReportPost" />
                                 }
@@ -497,11 +589,7 @@
                 </div>
             }
 
-        </section>
-
-        <!-- Right Spacer (Empty to maintain 3-column balance on desktop) -->
-        <div class="home-right-sidebar hidden lg:block w-72 flex-shrink-0"></div>
-    </div>
+</div>
 
     @if (showReportModal && reportPostId.HasValue)
     {
@@ -528,4 +616,3 @@
             </div>
         </div>
     }
-</div>

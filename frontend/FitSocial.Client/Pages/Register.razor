@@ -16,7 +16,7 @@
 <PageTitle>Join the FitConnect Community</PageTitle>
 
 <div class="reg-hero">
-    <img src="Logo_FitSocial.jpg" alt="FitConnect" class="hero-logo" />
+    <img src="img/fitconnect-logo.png" alt="FitConnect" class="hero-logo" />
     <div class="hero-text">
         <h1 class="hero-title">Join the <span>FitConnect</span> Community</h1>
         <p class="hero-sub">Unlock your unlimited physical potential, sync your smart training journey and connect with thousands of athletes and top coaches.</p>
@@ -50,7 +50,7 @@
             <span class="coach-banner-icon"><AppIcon Name="shield" /></span>
             <div>
                 <strong>For Certified Professional Coaches</strong>
-                <p>Join the official FitSocial coaching network to offer 1-on-1 classes, publish lesson plans and earn from your sports expertise.</p>
+                <p>Join the official FitConnect coaching network to offer 1-on-1 classes, publish lesson plans and earn from your sports expertise.</p>
             </div>
         </div>
         <!-- Step indicator for Coach 5-step -->
@@ -156,7 +156,7 @@
 
             <label class="terms">
                 <input type="checkbox" @bind="agreedTerms" />
-                <span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> of the FitSocial sports platform. @(latestTerm != null ? $"({latestTerm.Version})" : "")</span>
+                <span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> of the FitConnect sports platform. @(latestTerm != null ? $"({latestTerm.Version})" : "")</span>
             </label>
             @if (latestTerm != null) { <details class="terms-box"><summary>@latestTerm.Title</summary><div class="terms-content">@latestTerm.Content</div></details> }
             @if (showTermsError && !agreedTerms) { <div class="field-error">Please agree to the terms of service to continue.</div> }
@@ -282,6 +282,24 @@
                 <p><strong>CCCD:</strong> @(ekycResult?.IdCardNumber ?? "Verified")</p>
             </div>
 
+            <!-- OTP verification (shown only when the code expired at the final step) -->
+            @if (showFinalOtp)
+            {
+            <div class="otp-panel" style="margin-top:12px;">
+                <div class="otp-head"><span class="otp-icon"><AppIcon Name="envelope" /></span><div><strong>OTP verification</strong><p>Refresh the code here if it expired. Valid for 15 minutes.</p></div></div>
+                <div class="otp-boxes">
+                    @for (int i = 0; i < 6; i++) { int idx = i; <input maxlength="1" inputmode="numeric" class="otp-box" value="@otpDigits[idx]" @oninput="(e) => OnOtpInput(e, idx)" @onkeydown="(e) => OnOtpKeyDown(e, idx)" @ref="otpRefs[idx]" /> }
+                </div>
+                @if (showOtpError && CombinedOtp.Length != 6) { <div class="field-error text-center">Please enter the full 6-digit OTP code.</div> }
+                <div class="otp-foot">
+                    <span class="resend-hint">Didn't receive the code?</span>
+                    @if (!otpSent) { <button type="button" class="resend-link" @onclick="HandleSendOtp" disabled="@isSendingOtp"><AppIcon Name="refresh" /> Send OTP@(isSendingOtp ? "..." : "")</button> }
+                    else if (countdown > 0) { <span class="resend-wait"><AppIcon Name="refresh" /> Resend OTP (@(countdown)s)</span> }
+                    else { <button type="button" class="resend-link" @onclick="HandleSendOtp" disabled="@isSendingOtp"><AppIcon Name="refresh" /> Resend OTP@(isSendingOtp ? "..." : "")</button> }
+                </div>
+            </div>
+            }
+
             <div class="field" style="margin-top:12px;">
                 <label>Choose Subscription Plan <span class="req">*</span></label>
                 @if (isLoadingPlans)
@@ -377,6 +395,7 @@
     private string? successMessage;
 
     private bool otpSent = false;
+    private bool showFinalOtp = false;
     private bool isSendingOtp = false;
     private bool isLoading = false;
     private string[] otpDigits = new string[6] { "", "", "", "", "", "" };
@@ -486,7 +505,7 @@
         if (string.IsNullOrWhiteSpace(registerModel.Email) || !registerModel.Email.Contains("@")) { errorMessage = "Please enter a valid email address before requesting an OTP code."; return; }
         isSendingOtp = true;
         var result = await AuthService.SendOtpAsync(new SendOtpRequest { Email = registerModel.Email.Trim(), Purpose = selectedRole == "COACH" ? "REGISTER_COACH" : "REGISTER_TRAINEE" });
-        if (result.Success) { otpSent = true; Array.Clear(otpDigits, 0, otpDigits.Length); StartCountdown(); successMessage = "The OTP code has been sent to your email (valid for 5 minutes)."; if (otpRefs[0].Context != null) await otpRefs[0].FocusAsync(); }
+        if (result.Success) { otpSent = true; Array.Clear(otpDigits, 0, otpDigits.Length); StartCountdown(); successMessage = "The OTP code has been sent to your email (valid for 15 minutes)."; if (otpRefs[0].Context != null) await otpRefs[0].FocusAsync(); }
         else errorMessage = result.Message ?? "Failed to send the OTP code. Please try again.";
         isSendingOtp = false;
     }
@@ -592,8 +611,15 @@
 
     private async Task HandleConfirmPay()
     {
-        showCoachErrors = true; showTermsError = true;
+        showCoachErrors = true; showTermsError = true; showOtpError = true;
         errorMessage = null;
+        registerModel.OtpCode = CombinedOtp;
+        if (string.IsNullOrWhiteSpace(registerModel.OtpCode) || registerModel.OtpCode.Length != 6)
+        {
+            if (!showFinalOtp) { showFinalOtp = true; errorMessage = "Your OTP has expired or is missing. Please resend and enter a new code below."; }
+            else errorMessage = "Please enter the full 6-digit OTP code (refresh it if expired).";
+            return;
+        }
         if (registerModel.CoachSubscriptionPlansId == null || registerModel.CoachSubscriptionPlansId == Guid.Empty) { errorMessage = "Please select a subscription plan."; return; }
         if (!agreedTerms) { errorMessage = "Please agree to the Terms of Service and Privacy Policy."; return; }
         if (latestTerm == null)
@@ -606,8 +632,15 @@
         // Keep pending for QR page
         PendingCoach.Draft = registerModel;
         var link = await PaymentService.CreateActivationLinkAsync(registerModel);
-        if (!link.Success || link.Data == null) { errorMessage = link.Message ?? "Could not create payment link."; isLoading = false; return; }
+        if (!link.Success || link.Data == null)
+        {
+            var msg = link.Message ?? "Could not create payment link.";
+            errorMessage = msg;
+            if (msg.Contains("expired", StringComparison.OrdinalIgnoreCase) || msg.Contains("OTP", StringComparison.OrdinalIgnoreCase)) showFinalOtp = true;
+            isLoading = false; return;
+        }
         activation = link.Data;
+        showFinalOtp = false;
         coachStep = 5;
         isLoading = false;
         StartPaymentPolling();

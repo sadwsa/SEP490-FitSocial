@@ -17,38 +17,63 @@
         style="display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important;">
     
     <!-- Left Section: Brand Logo & Search -->
-    <div class="flex items-center gap-4 w-1/3">
+    <div class="flex items-center gap-2 sm:gap-3 flex-1 max-w-xl min-w-0">
+        <!-- Nut mo menu (chi hien tren mobile/tablet) -->
+        @if (ShowMenuButton)
+        {
+            <button type="button" @onclick="HandleToggleMenu" title="Menu"
+                    class="lg:hidden p-2 -ml-1 text-gray-600 hover:text-[#FF5500] hover:bg-orange-50 rounded-lg transition flex-shrink-0 cursor-pointer">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+            </button>
+        }
+
         <!-- Brand Logo -->
-        <a href="home" class="flex-shrink-0 flex items-center hover:opacity-95 transition" title="FitSocial Home">
-            <img src="logo.jpg" alt="FitSocial"
+        <a href="home" @onclick="HandleLogoClick" @onclick:preventDefault="true"
+           class="flex-shrink-0 flex items-center hover:opacity-95 transition cursor-pointer" title="FitConnect Home">
+            <img src="img/fitconnect-logo.png" alt="FitConnect"
                  class="h-11 w-11 object-cover rounded-xl shadow-sm hover:scale-105 transition-transform duration-200" />
         </a>
 
         @if (ShowSearch)
         {
-            <div class="hidden md:flex relative w-full max-w-sm">
-                <input type="text" placeholder="@SearchPlaceholder" value="@SearchTerm"
-                       @oninput="HandleInput" @onkeyup="HandleKeyUp"
-                       class="w-full bg-gray-100 rounded-full py-2 pl-4 pr-16 focus:outline-none focus:ring-2 focus:ring-[#FF5500] text-sm transition" />
-                <div class="absolute right-2.5 top-2 flex items-center gap-1">
+            <div class="hidden md:flex items-center gap-2 flex-1 max-w-lg">
+                <div class="relative flex-1">
+                    <input type="text" placeholder="@SearchPlaceholder" value="@SearchTerm"
+                           @oninput="HandleInput" @onkeyup="HandleKeyUp"
+                           class="w-full bg-gray-100 rounded-full py-2 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-[#FF5500] text-sm transition" />
                     @if (!string.IsNullOrWhiteSpace(SearchTerm))
                     {
-                        <button class="text-gray-400 hover:text-gray-600 p-0.5 rounded-full transition cursor-pointer"
-                                @onclick="HandleClear" title="Clear search">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                        </button>
+                        <div class="absolute right-2.5 top-2 flex items-center">
+                            <button type="button" class="text-gray-400 hover:text-gray-600 p-0.5 rounded-full transition cursor-pointer"
+                                    @onclick="HandleClear" title="Clear search text">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
                     }
-                    <button class="text-gray-400 hover:text-[#FF5500] p-0.5 rounded-full transition cursor-pointer"
-                            @onclick="HandleSearch" title="Search">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </button>
                 </div>
+
+                <!-- Nút Search rõ ràng bên cạnh ô input -->
+                <button type="button" @onclick="HandleSearch"
+                        class="h-9 px-3.5 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] hover:opacity-95 text-white rounded-full text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs flex-shrink-0"
+                        title="Search">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <span>Search</span>
+                </button>
+
+                @if (SearchExtra != null)
+                {
+                    <div class="flex-shrink-0">
+                        @SearchExtra
+                    </div>
+                }
             </div>
         }
     </div>
@@ -62,7 +87,7 @@
     }
 
     <!-- Right Section: Quick Actions & Profile Menu -->
-    <div class="flex items-center justify-end gap-3 md:gap-4 w-1/3">
+    <div class="flex items-center justify-end gap-3 md:gap-4 flex-shrink-0">
         @if (RightContent != null)
         {
             @RightContent
@@ -182,7 +207,7 @@
                                         <!-- Content -->
                                         <div class="flex-1 min-w-0">
                                             <div class="flex items-center justify-between gap-1 mb-0.5">
-                                                <p class="text-xs font-semibold text-gray-900 truncate">@(item.SenderName ?? "FitSocial User")</p>
+                                                <p class="text-xs font-semibold text-gray-900 truncate">@(item.SenderName ?? "FitConnect User")</p>
                                                 <span class="text-[10px] text-gray-400 flex-shrink-0">@FormatNotificationTime(item.CreatedAt)</span>
                                             </div>
                                             <p class="text-xs text-gray-500 truncate @(!item.IsRead ? "font-semibold text-gray-800" : "")">
@@ -396,6 +421,16 @@
                         </svg>
                         My Profile
                     </a>
+                    @if (string.Equals(EffectiveUserRole, "Coach", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a href="/coach-renewal" @onclick="CloseProfileMenu"
+                           class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Coach Subscription
+                        </a>
+                    }
                     <a href="/training-packages/purchased" @onclick="CloseProfileMenu"
                        class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -462,7 +497,7 @@
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between">
-                        <p class="text-xs font-bold text-gray-900 truncate">@(_activeToast.SenderName ?? "FitSocial User")</p>
+                        <p class="text-xs font-bold text-gray-900 truncate">@(_activeToast.SenderName ?? "FitConnect User")</p>
                         <span class="text-[10px] text-gray-400">Just now</span>
                     </div>
                     <p class="text-xs text-gray-600 line-clamp-2 mt-0.5">
@@ -482,6 +517,8 @@
 
 @code {
     [Parameter] public string? Class { get; set; }
+    [Parameter] public bool ShowMenuButton { get; set; }
+    [Parameter] public EventCallback OnToggleMenu { get; set; }
     [Parameter] public bool ShowSearch { get; set; } = true;
     [Parameter] public string SearchPlaceholder { get; set; } = "Search posts, coaches, friends...";
     [Parameter] public string SearchTerm { get; set; } = string.Empty;
@@ -502,6 +539,8 @@
     [Parameter] public EventCallback OnLogout { get; set; }
     [Parameter] public RenderFragment? CenterContent { get; set; }
     [Parameter] public RenderFragment? RightContent { get; set; }
+    [Parameter] public RenderFragment? SearchExtra { get; set; }
+    [Parameter] public EventCallback OnLogoClick { get; set; }
 
     private bool showProfileMenu = false;
     private bool showMessageMenu = false;
@@ -537,6 +576,7 @@
     protected override async Task OnInitializedAsync()
     {
         CartService.OnCartChanged += HandleCartChanged;
+        AuthStateProvider.AuthenticationStateChanged += HandleAuthenticationStateChanged;
 
         try
         {
@@ -560,6 +600,7 @@
                 await LoadMessageNotificationsAsync();
 
                 NotificationService.OnConversationRead += HandleConversationReadLocally;
+                NotificationService.OnNotificationsChanged += HandleNotificationsChanged;
                 ChatHubClient.OnNotificationReceived += HandleRealtimeNotification;
                 await ChatHubClient.StartAsync();
 
@@ -769,9 +810,17 @@
         });
     }
 
+    private async void HandleNotificationsChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadMessageNotificationsAsync();
+        });
+    }
+
     private async void HandleConversationReadLocally(Guid conversationId)
     {
-        await InvokeAsync(() =>
+        await InvokeAsync(async () =>
         {
             var matched = _messageNotifications
                 .Where(n => n.ConversationId == conversationId && !n.IsRead)
@@ -782,10 +831,12 @@
                 foreach (var m in matched)
                 {
                     m.IsRead = true;
-                    _unreadMessageCount = Math.Max(0, _unreadMessageCount - 1);
                 }
+                _unreadMessageCount = _messageNotifications.Count(n => !n.IsRead);
                 StateHasChanged();
             }
+
+            await LoadMessageNotificationsAsync();
         });
     }
 
@@ -829,6 +880,26 @@
         var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
         return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
+    }
+
+    private async void HandleAuthenticationStateChanged(Task<AuthenticationState> stateTask)
+    {
+        try
+        {
+            var state = await stateTask;
+            if (state.User.Identity?.IsAuthenticated == true)
+            {
+                await LoadCurrentUserAsync();
+            }
+            else
+            {
+                loadedUserName = "User";
+                loadedUserInitials = "U";
+                loadedUserAvatarUrl = null;
+            }
+            StateHasChanged();
+        }
+        catch { }
     }
 
     private string FormatNotificationTime(DateTime? dt)
@@ -951,6 +1022,26 @@
         }
     }
 
+    private async Task HandleLogoClick()
+    {
+        if (OnLogoClick.HasDelegate)
+        {
+            await OnLogoClick.InvokeAsync();
+        }
+        else
+        {
+            Navigation.NavigateTo("home");
+        }
+    }
+
+    private async Task HandleToggleMenu()
+    {
+        if (OnToggleMenu.HasDelegate)
+        {
+            await OnToggleMenu.InvokeAsync();
+        }
+    }
+
     private async Task HandleLogoutClick()
     {
         showProfileMenu = false;
@@ -990,8 +1081,10 @@
 
     public ValueTask DisposeAsync()
     {
+        AuthStateProvider.AuthenticationStateChanged -= HandleAuthenticationStateChanged;
         CartService.OnCartChanged -= HandleCartChanged;
         NotificationService.OnConversationRead -= HandleConversationReadLocally;
+        NotificationService.OnNotificationsChanged -= HandleNotificationsChanged;
         ChatHubClient.OnNotificationReceived -= HandleRealtimeNotification;
         NotificationHubClient.OnNotificationReceived -= HandleRealtimeAppNotification;
         _toastTimer?.Dispose();

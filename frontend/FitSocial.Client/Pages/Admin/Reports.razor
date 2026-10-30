@@ -9,7 +9,7 @@
 @inject IReportService ReportService
 @inject NavigationManager Navigation
 
-<PageTitle>Reports - FitSocial Admin Console</PageTitle>
+<PageTitle>Reports - FitConnect Admin Console</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
@@ -432,7 +432,7 @@
                                 <strong class="text-sm text-gray-900">Process Violation Report</strong>
                             </div>
                             <p class="text-xs text-gray-600 mt-1">
-                                Apply disciplinary action based on FitSocial Business Rules. Threshold: 1st & 2nd violations = Warn; 3rd violation onwards (&gt;2) = Lock or Block.
+                                Apply disciplinary action based on FitConnect Business Rules. Threshold: 1st & 2nd violations = Warn; 3rd violation onwards (&gt;2) = Lock or Block.
                             </p>
 
                             @if (!string.Equals(selectedReport.Status, "PENDING", StringComparison.OrdinalIgnoreCase))

@@ -25,7 +25,7 @@ public class RevenueOverviewDto
     public decimal TraineePackagesGMV { get; set; }
 
     /// <summary>
-    /// Platform Net/Direct Revenue from Coach subscription plans (100% retained by FitSocial).
+    /// Platform Net/Direct Revenue from Coach subscription plans (100% retained by FitConnect).
     /// </summary>
     public decimal PlatformDirectRevenue { get; set; }
 

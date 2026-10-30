@@ -8,68 +8,45 @@
 @inject ILocationService LocationService
 @inject NavigationManager Navigation
 
-<PageTitle>Location List Management - FitSocial Admin Portal</PageTitle>
+<PageTitle>Location List Management - FitConnect Admin Portal</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
-        <div class="locations-page">
-            <!-- Toast notification for success -->
+        <!-- Toast notification for success -->
             @if (!string.IsNullOrEmpty(toastMessage))
             {
-                <div class="toast-alert success" role="alert">
-                    <AppIcon Name="check" />
-                    <span>@toastMessage</span>
-                    <button type="button" class="btn-close-toast" @onclick="DismissToast" aria-label="Close notification">✕</button>
+                <div class="auth-alert info toast-auto-dismiss" role="alert">
+                    <AppIcon Name="info" />
+                    <span class="toast-text">@toastMessage</span>
+                    <button type="button" class="toast-dismiss-btn" @onclick="DismissToast" title="Dismiss notification" aria-label="Dismiss notification">✕</button>
                 </div>
             }
 
-            <!-- Header section matching reference image -->
-            <div class="page-top-bar">
-                <div class="header-left">
-                    <div class="breadcrumb-trail">
-                        <span class="bc-admin">ADMIN PORTAL</span>
-                        <span class="bc-sep">&gt;</span>
-                        <span class="bc-dest">LOCATIONS &amp; FACILITIES</span>
-                    </div>
-                    <h1 class="page-heading">Location List Management</h1>
-                </div>
+            <h2 class="view-title">Locations &amp; Facilities</h2>
+            <p class="view-sub">Manage gym and partner locations across the FitConnect platform.</p>
 
-                <!-- Add New Location button (UC_35.1) -->
-                <div class="header-right">
-                    <button type="button" class="btn-add-location" @onclick="OpenCreateModal">
-                        <span class="btn-add-icon"><AppIcon Name="location-plus" /></span>
-                        <span>+ Add New Location</span>
-                    </button>
+            <div class="toolbar">
+                <div class="search-wrap grow">
+                    <span class="search-icon"><AppIcon Name="search" /></span>
+                    <input type="text"
+                           value="@searchTerm"
+                           @oninput="OnSearchInput"
+                           @onkeydown="OnSearchKeyDown"
+                           placeholder="Search by ID, location name, district..."
+                           class="toolbar-input" />
+                    @if (!string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        <button type="button" class="btn-clear-search" @onclick="ClearSearchAsync" title="Clear search">✕</button>
+                    }
                 </div>
+                <div class="count-badge" title="Total locations">All (@(pagedResult.TotalCount))</div>
+                <button type="button" class="row-btn" @onclick="() => LoadLocationsAsync(currentPage)" disabled="@isLoading" title="Refresh">
+                    <span class="btn-ic"><AppIcon Name="refresh" Class="@(isLoading ? "icon-spin" : "")" /></span> Refresh
+                </button>
+                <button type="button" class="row-btn add" @onclick="OpenCreateModal">
+                    <span class="btn-ic"><AppIcon Name="location-plus" /></span> + Add New Location
+                </button>
             </div>
-
-            <!-- Main card container -->
-            <div class="locations-card">
-                <!-- Search and Stats toolbar -->
-                <div class="search-and-stats-bar">
-                    <div class="search-input-box">
-                        <span class="search-icon"><AppIcon Name="search" /></span>
-                        <input type="text"
-                               value="@searchTerm"
-                               @oninput="OnSearchInput"
-                               @onkeydown="OnSearchKeyDown"
-                               placeholder="Search by ID, location name, district..."
-                               class="search-input" />
-                        @if (!string.IsNullOrWhiteSpace(searchTerm))
-                        {
-                            <button type="button" class="btn-clear-search" @onclick="ClearSearchAsync" title="Clear search">✕</button>
-                        }
-                    </div>
-
-                    <div class="stats-and-actions">
-                        <div class="count-badge" title="Total locations">
-                            All (@(pagedResult.TotalCount))
-                        </div>
-                        <button type="button" class="btn-refresh" @onclick="() => LoadLocationsAsync(currentPage)" disabled="@isLoading" title="Refresh">
-                            <AppIcon Name="refresh" Class="@(isLoading ? "icon-spin" : "")" />
-                        </button>
-                    </div>
-                </div>
 
                 <!-- Error State -->
                 @if (!string.IsNullOrWhiteSpace(errorMessage))
@@ -95,8 +72,8 @@
                 }
 
                 <!-- Table -->
-                <div class="table-responsive">
-                    <table class="locations-table">
+                <div class="table-wrap">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th class="col-id">LOCATION ID</th>
@@ -164,8 +141,8 @@
                     </table>
                 </div>
 
-                <!-- Pagination footer matching reference image -->
-                <div class="pagination-footer">
+                <!-- Pagination footer -->
+                <div class="pagination-container">
                     <div class="pagination-info">
                         @if (pagedResult.TotalCount > 0)
                         {
@@ -182,7 +159,7 @@
                     <!-- Pagination Controls: Always visible -->
                     <div class="pagination-controls">
                         <button type="button"
-                                class="page-nav-btn prev-btn"
+                                class="page-btn"
                                 disabled="@(!pagedResult.HasPreviousPage || currentPage <= 1)"
                                 @onclick="() => GoToPageAsync(currentPage - 1)"
                                 title="Previous page">
@@ -191,7 +168,7 @@
 
                         @if (pagedResult.TotalPages <= 1)
                         {
-                            <button type="button" class="page-num-btn active">1</button>
+                            <button type="button" class="page-btn active">1</button>
                         }
                         else
                         {
@@ -205,7 +182,7 @@
                                 {
                                     var pageNumber = p;
                                     <button type="button"
-                                            class="page-num-btn @(pageNumber == currentPage ? "active" : "")"
+                                            class="page-btn @(pageNumber == currentPage ? "active" : "")"
                                             @onclick="() => GoToPageAsync(pageNumber)">
                                         @pageNumber
                                     </button>
@@ -214,7 +191,7 @@
                         }
 
                         <button type="button"
-                                class="page-nav-btn next-btn"
+                                class="page-btn"
                                 disabled="@(!pagedResult.HasNextPage || currentPage >= pagedResult.TotalPages)"
                                 @onclick="() => GoToPageAsync(currentPage + 1)"
                                 title="Next page">
@@ -233,8 +210,6 @@
                         </select>
                     </div>
                 </div>
-            </div>
-        </div>
 
         <!-- ============================================== -->
         <!-- Add New Location Modal (UC_35.1)               -->
@@ -274,7 +249,7 @@
                             <input id="locNameInput"
                                    type="text"
                                    class="form-control @(!string.IsNullOrEmpty(nameValidationError) ? "is-invalid" : "")"
-                                   placeholder="E.g., FitSocial Flagship Hub - District 1"
+                                   placeholder="E.g., FitConnect Flagship Hub - District 1"
                                    value="@newLocationModel.LocationName"
                                    @oninput="OnLocationNameInput"
                                    maxlength="200"
@@ -370,7 +345,7 @@
                             <input id="editLocNameInput"
                                    type="text"
                                    class="form-control @(!string.IsNullOrEmpty(editNameValidationError) ? "is-invalid" : "")"
-                                   placeholder="E.g., FitSocial Flagship Hub - District 1"
+                                   placeholder="E.g., FitConnect Flagship Hub - District 1"
                                    value="@editLocationModel.LocationName"
                                    @oninput="OnEditLocationNameInput"
                                    maxlength="200"

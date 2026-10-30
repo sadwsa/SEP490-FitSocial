@@ -11,8 +11,12 @@ namespace FitSocial.API.Controllers;
 [Route("[controller]")]
 public class UploadController : ControllerBase
 {
-    private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".pdf" };
-    private const long MaxFileBytes = 10 * 1024 * 1024; // 10MB (coach credentials)
+    private static readonly string[] AllowedImageExtensions = { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+    private static readonly string[] AllowedVideoExtensions = { ".mp4", ".mov", ".avi", ".mkv", ".webm" };
+    private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".avi", ".mkv", ".webm", ".pdf" };
+    private const long MaxImageBytes = 10 * 1024 * 1024; // 10MB
+    private const long MaxVideoBytes = 100 * 1024 * 1024; // 100MB
+    private const long MaxFileBytes = 10 * 1024 * 1024; // 10MB (credentials / PDF)
 
     private readonly IConfiguration _configuration;
     private readonly ILogger<UploadController> _logger;
@@ -29,14 +33,12 @@ public class UploadController : ControllerBase
     }
 
     /// <summary>
-    /// Upload coach credential files (ID card images, certificates PDF/PNG/JPG, max 10MB) to Cloudinary.
-    /// Per FitConnect spec: stored as plain URL string in DB, Cloudinary folder must be Authenticated/Private
-    /// (Type=authenticated), frontend/admin must use Signed URLs (5-15 min) via GET /upload/signed-url.
-    /// Returns the secure URL of the stored file (plain string for DB storage).
+    /// Upload file (images max 10MB, videos max 100MB, PDF max 10MB) to Cloudinary.
+    /// Returns the secure URL of the stored file.
     /// </summary>
     [HttpPost]
     [AllowAnonymous]
-    [RequestSizeLimit(MaxFileBytes)]
+    [RequestSizeLimit(100 * 1024 * 1024)]
     [ProducesResponseType(typeof(ApiResponseDto<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<string>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Upload(IFormFile? file)
@@ -46,15 +48,30 @@ public class UploadController : ControllerBase
             return BadRequest(ApiResponseDto<string>.Fail("Please choose a file to upload."));
         }
 
-        if (file.Length > MaxFileBytes)
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var isImage = AllowedImageExtensions.Contains(extension);
+        var isVideo = AllowedVideoExtensions.Contains(extension);
+        var isPdf = extension == ".pdf";
+
+        if (!isImage && !isVideo && !isPdf)
         {
-            return BadRequest(ApiResponseDto<string>.Fail("File size must not exceed 10MB."));
+            return BadRequest(ApiResponseDto<string>.Fail(
+                $"Unsupported file format for '{file.FileName}'. Only images (JPG, PNG, WEBP, GIF) and videos (MP4, MOV, AVI, MKV, WEBM) are supported."));
         }
 
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!AllowedExtensions.Contains(extension))
+        if (isVideo && file.Length > MaxVideoBytes)
         {
-            return BadRequest(ApiResponseDto<string>.Fail("Only JPG, PNG images and PDF files are allowed."));
+            return BadRequest(ApiResponseDto<string>.Fail($"Video '{file.FileName}' exceeds the maximum allowed size (100MB)."));
+        }
+
+        if (isImage && file.Length > MaxImageBytes)
+        {
+            return BadRequest(ApiResponseDto<string>.Fail($"Image '{file.FileName}' exceeds the maximum allowed size (10MB)."));
+        }
+
+        if (isPdf && file.Length > MaxFileBytes)
+        {
+            return BadRequest(ApiResponseDto<string>.Fail($"File '{file.FileName}' exceeds the maximum allowed size (10MB)."));
         }
 
         var cloudName = _configuration["Cloudinary:CloudName"];
@@ -74,7 +91,26 @@ public class UploadController : ControllerBase
             await using var stream = file.OpenReadStream();
             UploadResult uploadResult;
 
-            if (extension == ".pdf")
+            if (isVideo)
+            {
+                var videoParams = new VideoUploadParams
+                {
+                    File = new FileDescription(file.FileName, stream),
+                    Folder = "fitsocial/posts/videos",
+                    UseFilename = false,
+                    UniqueFilename = true
+                };
+
+                if (file.Length > 20 * 1024 * 1024)
+                {
+                    uploadResult = await cloudinary.UploadLargeAsync(videoParams, bufferSize: 20 * 1024 * 1024);
+                }
+                else
+                {
+                    uploadResult = await cloudinary.UploadAsync(videoParams);
+                }
+            }
+            else if (isPdf)
             {
                 uploadResult = await cloudinary.UploadAsync(new RawUploadParams
                 {
@@ -90,10 +126,9 @@ public class UploadController : ControllerBase
                 uploadResult = await cloudinary.UploadAsync(new ImageUploadParams
                 {
                     File = new FileDescription(file.FileName, stream),
-                    Folder = "fitsocial/credentials",
-                    UseFilename = true,
-                    UniqueFilename = true,
-                    Type = "authenticated"
+                    Folder = "fitsocial/posts/images",
+                    UseFilename = false,
+                    UniqueFilename = true
                 });
             }
 
@@ -177,11 +212,6 @@ public class UploadController : ControllerBase
             return BadRequest(ApiResponseDto<string>.Fail($"Avatar upload failed: {ex.Message}"));
         }
     }
-
-    private static readonly string[] AllowedImageExtensions = { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
-    private static readonly string[] AllowedVideoExtensions = { ".mp4", ".mov", ".avi", ".mkv", ".webm" };
-    private const long MaxImageBytes = 10 * 1024 * 1024; // 10MB
-    private const long MaxVideoBytes = 100 * 1024 * 1024; // 100MB
 
     /// <summary>
     /// Upload media for a post (max 10 files, accepts both images and videos).

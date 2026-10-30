@@ -1,0 +1,212 @@
+@page "/coach-renewal/pay"
+@layout AppShellLayout
+@inject IPaymentService PaymentService
+@inject NavigationManager Navigation
+@using FitSocial.Client.Models.Payments
+@implements IDisposable
+
+<PageTitle>Coach Subscription Payment - FitConnect</PageTitle>
+
+<div class="flex flex-col gap-4 min-w-0">
+    <div class="bg-white rounded-xl shadow-sm p-5 flex justify-between items-center gap-4 border border-gray-100">
+        <h1 class="text-xl font-bold text-gray-800">Checkout &amp; Coach Subscription Activation</h1>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-5 sm:p-8">
+        @if (isLoading)
+        {
+            <div class="flex flex-col items-center justify-center py-16">
+                <div class="w-10 h-10 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p class="text-gray-500 font-medium text-sm">Preparing your order...</p>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(errorMessage) && activation == null)
+        {
+            <div class="bg-red-50 border border-red-200 text-red-700 p-6 rounded-xl text-center">
+                <p class="font-bold mb-1">Could not prepare checkout</p>
+                <p class="text-sm mb-4">@errorMessage</p>
+                <button @onclick='() => Navigation.NavigateTo("/coach-renewal")' class="px-5 py-2 bg-gray-100 text-sm font-semibold rounded-lg hover:bg-gray-200 transition">Back to Plans</button>
+            </div>
+        }
+        else if (activation == null)
+        {
+            <p class="text-sm text-gray-500">No plan selected.</p>
+            <button @onclick='() => Navigation.NavigateTo("/coach-renewal")' class="mt-4 px-5 py-2 bg-gray-100 text-sm font-semibold rounded-lg hover:bg-gray-200 transition">Back to Plans</button>
+        }
+        else
+        {
+            <div class="flex flex-col items-center">
+
+
+                <p class="font-bold text-gray-900 text-sm mb-4 text-center">Scan QR Code with Banking App</p>
+                <div class="border border-gray-200 w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center mb-4 bg-white">
+                    @if (!string.IsNullOrWhiteSpace(QrImageUrl))
+                    {
+                        <img src="@QrImageUrl" alt="VietQR payment code" class="w-60 h-60 sm:w-64 sm:h-64 object-contain" />
+                    }
+                    else
+                    {
+                        <div class="text-center text-gray-400 text-sm">
+                            <p>[ QR CODE IMAGE ]</p>
+                            <p>PayOS Gateway</p>
+                        </div>
+                    }
+                </div>
+
+                <div class="text-lg font-black text-gray-900 mb-5">@activation.Amount.ToString("N0") VND</div>
+
+                <div class="w-full border border-gray-100 bg-gray-50/60 rounded-xl px-5 py-4 mb-3 flex flex-col gap-3 text-sm">
+                    <div><span class="text-gray-500 text-xs">Content </span><span class="text-gray-900 font-semibold text-xs">COACH RENEWAL</span></div>
+                    <div>
+                        <span class="text-gray-500 text-xs">Account </span>
+                        <span class="text-gray-900 font-semibold text-xs">@activation.AccountNumber (@activation.AccountName)</span>
+                    </div>
+                    <div><span class="text-gray-500 text-xs">Order code </span><span class="text-gray-900 font-semibold text-xs">@activation.OrderCode</span></div>
+                </div>
+
+                <p class="text-xs text-gray-400 mb-2">Keep exact amount and content. Expires in about 15 minutes.</p>
+                <p class="text-xs text-[#EA580C] font-semibold mb-4 flex items-center gap-1.5">
+                    <span class="w-3 h-3 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin inline-block"></span>
+                    Auto-checking payment status...
+                </p>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="w-full bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-4">@errorMessage</div>
+                }
+
+                <div class="w-full flex flex-col sm:flex-row gap-3">
+                    <button @onclick="HandleCancelAsync" disabled="@isProcessing"
+                            class="sm:w-36 py-3 bg-gray-100 text-gray-700 font-semibold text-sm rounded-xl hover:bg-gray-200 transition disabled:opacity-60 cursor-pointer">
+                        @(isProcessing ? "..." : "Cancel order")
+                    </button>
+                    <button @onclick="HandleVerifyPaidAsync" disabled="@isProcessing"
+                            class="flex-1 py-3 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white font-bold text-sm rounded-xl shadow-md shadow-orange-500/25 hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-60 cursor-pointer">
+                        @if (isProcessing)
+                        {
+                            <span>Verifying payment with the bank...</span>
+                        }
+                        else
+                        {
+                            <span>I've Paid — Verify Now -&gt;</span>
+                        }
+                    </button>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(activation.CheckoutUrl))
+                {
+                    <p class="text-xs text-gray-400 mt-4">QR not loading? <a href="@activation.CheckoutUrl" target="_blank" rel="noopener" class="text-[#EA580C] underline">Open the full PayOS checkout</a></p>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+
+    [SupplyParameterFromQuery(Name = "planId")]
+    public Guid? PlanId { get; set; }
+
+    private ActivationLink? activation;
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private string? errorMessage;
+    private CancellationTokenSource? _autoCheckCts;
+
+    private string QrImageUrl
+    {
+        get
+        {
+            var qr = activation?.QrCode ?? "";
+            if (string.IsNullOrWhiteSpace(qr)) return "";
+            if (qr.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                qr.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                return qr;
+            }
+            return $"https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={Uri.EscapeDataString(qr)}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (PlanId == null || PlanId == Guid.Empty)
+        {
+            isLoading = false;
+            errorMessage = "No plan selected.";
+            return;
+        }
+        isLoading = true;
+        try
+        {
+            var res = await PaymentService.RenewCoachSubscriptionAsync(PlanId.Value);
+            if (res.Success && res.Data != null)
+                activation = res.Data;
+            else
+                errorMessage = res.Message ?? "Could not create payment link.";
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { isLoading = false; }
+
+        if (activation != null)
+            _ = StartAutoCheckAsync();
+    }
+
+    private async Task StartAutoCheckAsync()
+    {
+        _autoCheckCts = new CancellationTokenSource();
+        try
+        {
+            while (!_autoCheckCts.Token.IsCancellationRequested)
+            {
+                await Task.Delay(3000, _autoCheckCts.Token);
+                if (activation == null) break;
+
+                var res = await PaymentService.CompleteActivationAsync(activation.OrderCode);
+                if (res.Success)
+                {
+                    await Task.Delay(1000, _autoCheckCts.Token);
+                    Navigation.NavigateTo("/profile");
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch { /* keep polling silently */ }
+    }
+
+    private async Task HandleVerifyPaidAsync()
+    {
+        if (activation == null) return;
+        isProcessing = true;
+        errorMessage = null;
+        try
+        {
+            var res = await PaymentService.CompleteActivationAsync(activation.OrderCode);
+            if (res.Success)
+            {
+                await Task.Delay(1500);
+                Navigation.NavigateTo("/profile");
+            }
+            else
+            {
+                errorMessage = res.Message ?? "Payment not completed yet.";
+            }
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { isProcessing = false; }
+    }
+
+    private async Task HandleCancelAsync()
+    {
+        if (activation != null)
+            await PaymentService.CancelActivationAsync(activation.OrderCode);
+        Navigation.NavigateTo("/coach-renewal");
+    }
+
+    public void Dispose()
+    {
+        _autoCheckCts?.Cancel();
+        _autoCheckCts?.Dispose();
+    }
+}

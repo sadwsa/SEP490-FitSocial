@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Locations;
 using FitSocial.Application.DTOs.Users;
@@ -11,6 +12,7 @@ using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using FitSocial.Domain.Policies;
 
 namespace FitSocial.Application.Services;
 
@@ -43,6 +45,11 @@ public class UserService : IUserService
         if (role == RoleConstants.Coach)
         {
             var coachProfile = user.CoachProfileCoach;
+            var coachCerts = coachProfile?.CoachCertificates?.ToList() ?? new List<CoachCertificate>();
+            var hasExpired = CoachCertificatePolicy.HasExpiredCertificates(coachCerts);
+            var hasValid = CoachCertificatePolicy.HasValidCertificates(coachCerts);
+            var validCerts = CoachCertificatePolicy.GetValidCertificates(coachCerts);
+
             var coachDto = new CoachProfileDto
             {
                 FullName = user.FullName ?? string.Empty,
@@ -55,7 +62,19 @@ public class UserService : IUserService
                 CreatedAt = user.CreatedAt,
                 Bio = coachProfile?.Bio,
                 ExperienceYears = coachProfile?.ExperienceYears,
-                ApprovalStatus = coachProfile?.ApprovalStatus ?? "PENDING"
+                ApprovalStatus = coachProfile?.ApprovalStatus ?? "PENDING",
+                HasExpiredCertificates = hasExpired,
+                HasValidCertificates = hasValid,
+                Certificates = validCerts.Select(cert => new CoachCertificateDetailDto
+                {
+                    CertificateId = cert.CertificateId,
+                    CertificateName = cert.CertificateName,
+                    CertificateUrl = cert.CertificateUrl,
+                    IssuedBy = cert.IssuedBy,
+                    IssuedDate = cert.IssuedDate,
+                    ExpiryDate = cert.ExpiryDate,
+                    VerificationStatus = cert.VerificationStatus
+                }).ToList()
             };
 
             return ApiResponseDto<UserProfileDto>.Ok(coachDto, "Profile retrieved successfully.");
@@ -99,6 +118,11 @@ public class UserService : IUserService
                 ? string.Join(", ", coachProfile.Locations.Select(l => l.LocationName))
                 : null;
 
+            var coachCerts = coachProfile?.CoachCertificates?.ToList() ?? new List<CoachCertificate>();
+            var hasExpired = CoachCertificatePolicy.HasExpiredCertificates(coachCerts);
+            var hasValid = CoachCertificatePolicy.HasValidCertificates(coachCerts);
+            var validCerts = CoachCertificatePolicy.GetValidCertificates(coachCerts);
+
             var coachDto = new CoachProfileResponseDto
             {
                 UserId = user.UserId,
@@ -112,7 +136,19 @@ public class UserService : IUserService
                 CreatedAt = user.CreatedAt,
                 ExperienceYears = coachProfile?.ExperienceYears,
                 Rating = Math.Round(averageRating, 1),
-                TotalReviews = totalReviews
+                TotalReviews = totalReviews,
+                HasExpiredCertificates = hasExpired,
+                HasValidCertificates = hasValid,
+                Certificates = validCerts.Select(cert => new CoachCertificateDetailDto
+                {
+                    CertificateId = cert.CertificateId,
+                    CertificateName = cert.CertificateName,
+                    CertificateUrl = cert.CertificateUrl,
+                    IssuedBy = cert.IssuedBy,
+                    IssuedDate = cert.IssuedDate,
+                    ExpiryDate = cert.ExpiryDate,
+                    VerificationStatus = cert.VerificationStatus
+                }).ToList()
             };
 
             return ApiResponseDto<UserProfileResponseDto>.Ok(coachDto, "User profile retrieved successfully.");

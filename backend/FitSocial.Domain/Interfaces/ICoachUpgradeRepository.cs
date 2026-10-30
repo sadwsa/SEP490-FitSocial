@@ -4,6 +4,7 @@ namespace FitSocial.Domain.Interfaces;
 
 public interface ICoachUpgradeRepository : IRepository<CoachUpgrade>
 {
+    Task<CoachUpgrade?> GetLatestByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default);
     Task<Dictionary<Guid, (int Total, int Active)>> GetCountsByPlanIdsAsync(IEnumerable<Guid> planIds, CancellationToken cancellationToken = default);
     Task<int> CountAllAsync(CancellationToken cancellationToken = default);
     Task<int> CountByPlanIdAsync(Guid planId, CancellationToken cancellationToken = default);

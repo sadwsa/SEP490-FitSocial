@@ -70,7 +70,7 @@
                             </div>
                             <div class="notification-content-col">
                                 <div class="notification-title-line">
-                                    <span class="fw-semibold text-dark">@(item.SenderName ?? "FitSocial User")</span>
+                                    <span class="fw-semibold text-dark">@(item.SenderName ?? "FitConnect User")</span>
                                     <span class="text-muted small ms-1">sent you a message</span>
                                 </div>
                                 @if (!string.IsNullOrEmpty(item.MessagePreview))
@@ -112,7 +112,7 @@
                     }
                 </div>
                 <div class="toast-content-box flex-grow-1">
-                    <div class="fw-bold text-dark small">@(_activeToast.SenderName ?? "FitSocial User")</div>
+                    <div class="fw-bold text-dark small">@(_activeToast.SenderName ?? "FitConnect User")</div>
                     <div class="text-secondary small text-truncate toast-preview">
                         @(_activeToast.MessagePreview ?? "New message...")
                     </div>

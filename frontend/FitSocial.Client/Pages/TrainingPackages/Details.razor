@@ -1,18 +1,18 @@
 @page "/training-packages/{Id:guid}"
-@layout EmptyLayout
+@implements IDisposable
 @inject ITrainingPackageService PackageService
 @inject ICartService CartService
 @inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
+@inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Cart
 @using System.Security.Claims
 
-<PageTitle>Package Details - FitSocial</PageTitle>
+<PageTitle>Package Details - FitConnect</PageTitle>
 
-<div class="min-h-screen bg-gray-100 text-gray-800">
     <!-- Floating Success Toast Notification -->
     @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
     {
@@ -45,36 +45,7 @@
         </div>
     }
 
-    <AppHeader SearchTerm="@headerSearchTerm"
-               OnSearchInput="HandleHeaderSearchInput"
-               OnSearchKeyUp="HandleHeaderSearchKeyUp"
-               OnSearch="ExecuteHeaderSearch"
-               OnClearSearch="ClearHeaderSearch"
-               UserName="@userName"
-               UserInitials="@userInitials"
-               UserRole="@userRole"
-               CartCount="@cartCount"
-               OnLogout="HandleLogout" />
-
-    <style>
-        @@media (min-width: 1024px) {
-            .home-3col-layout {
-                display: grid !important;
-                grid-template-columns: minmax(18rem, 1fr) minmax(0, 42rem) minmax(18rem, 1fr) !important;
-                align-items: start !important;
-            }
-            .home-left-sidebar { justify-self: start !important; }
-            .home-center-feed { justify-self: center !important; width: 100% !important; max-width: 42rem !important; min-width: 0 !important; }
-            .home-right-sidebar { justify-self: center !important; }
-        }
-    </style>
-
-    <div class="home-3col-layout w-full pt-6 px-4 lg:px-6 flex flex-col items-start">
-        <!-- Left Sidebar -->
-        <AppSidebar ActiveItem="@(isOwnPackage ? "my-packages" : "package-list")" />
-
-        <!-- Center Column -->
-        <section class="home-center-feed w-full max-w-2xl flex flex-col gap-4 min-w-0 pb-10">
+    <div class="flex flex-col gap-4 min-w-0">
             @if (isLoading)
             {
                 <div class="flex flex-col items-center justify-center py-20">
@@ -108,7 +79,7 @@
                                 <div class="absolute bottom-4 left-6 right-6 text-white">
                                     <h1 class="text-2xl sm:text-3xl font-extrabold mb-1 drop-shadow-md">@package.Title</h1>
                                     <p class="text-orange-200 font-medium text-sm sm:text-base">
-                                        Coach: <span class="font-bold underline decoration-orange-400">@package.CoachName</span>
+                                        Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-400 hover:text-white transition">@package.CoachName</a>
                                     </p>
                                 </div>
                             </div>
@@ -136,7 +107,7 @@
                                 <svg class="w-40 h-40" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
                             </div>
                             <h1 class="text-3xl font-extrabold text-white mb-2 relative z-10">@package.Title</h1>
-                            <p class="text-orange-50 font-medium text-lg relative z-10">Coach: <span class="font-bold underline decoration-orange-300">@package.CoachName</span></p>
+                            <p class="text-orange-50 font-medium text-lg relative z-10">Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-300 hover:text-white transition">@package.CoachName</a></p>
                         </div>
                     }
                     
@@ -229,6 +200,41 @@
                         }
                         else
                         {
+                            @if (package.CoachHasExpiredCertificates)
+                            {
+                                <!-- Qualification Notice: Coach has expired certificate(s) -->
+                                <div class="mb-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 shadow-xs flex items-start gap-3 animate-in fade-in">
+                                    <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h5 class="text-xs font-bold text-amber-900">Qualification Notice</h5>
+                                        <p class="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                                            This coach has one or more expired certificates. Please consider this information carefully before purchasing a training plan.
+                                        </p>
+                                    </div>
+                                </div>
+                            }
+                            else if (!package.CoachHasValidCertificates)
+                            {
+                                <!-- Notice: Coach has no valid certificates on file -->
+                                <div class="mb-5 p-4 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 shadow-xs flex items-start gap-3 animate-in fade-in">
+                                    <div class="w-8 h-8 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h5 class="text-xs font-bold text-gray-900">No Valid Certificates</h5>
+                                        <p class="text-xs text-gray-600 mt-0.5 leading-relaxed">
+                                            This coach currently has no valid, approved certificates on file. Please consider this when evaluating the coach's qualifications.
+                                        </p>
+                                    </div>
+                                </div>
+                            }
+
                             <!-- Single Trainee Enrollment Policy (1 Package Max 1) -->
                             <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/70 p-4 rounded-xl border border-gray-100">
                                 <div>
@@ -535,11 +541,8 @@
             }
           
 
-        </section>
-
-        <!-- Right Sidebar (Empty) -->
-        <aside class="home-right-sidebar hidden lg:flex w-72 flex-shrink-0 flex-col gap-4 sticky top-24"></aside>
-    </div>
+        </div>
+  
 
     <!-- Package Already In Cart Modal Notification -->
     <PackageAlreadyInCartModal IsOpen="@showAlreadyInCartModal"
@@ -547,7 +550,6 @@
                                OnClose="() => showAlreadyInCartModal = false"
                                OnViewCart="NavigateToCart" />
 
-</div>
 <!-- EDIT REVIEW MODAL (EDITABLE ONCE ONLY) -->
 @if (isEditModalOpen)
 {
@@ -758,6 +760,21 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
+        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
+        Shell.SearchInputHandler = e =>
+        {
+            HandleHeaderSearchInput(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchKeyUpHandler = e =>
+        {
+            HandleHeaderSearchKeyUp(e);
+            return Task.CompletedTask;
+        };
+        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
+        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+
         await LoadUserInfoAsync();
         var response = await PackageService.GetPackageByIdAsync(Id);
         if (response.Success)
@@ -774,6 +791,11 @@
             errorMessage = response.Message ?? errorMessage;
         }
         isLoading = false;
+    }
+
+    public void Dispose()
+    {
+        Shell.Reset();
     }
 
     private async Task LoadUserInfoAsync()

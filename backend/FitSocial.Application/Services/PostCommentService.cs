@@ -59,7 +59,7 @@ public class PostCommentService : IPostCommentService
                 AuthorId = c.AuthorId,
                 AuthorName = !string.IsNullOrWhiteSpace(c.Author?.FullName)
                     ? c.Author.FullName
-                    : (!string.IsNullOrWhiteSpace(c.Author?.Email) ? c.Author.Email : "FitSocial Member"),
+                    : (!string.IsNullOrWhiteSpace(c.Author?.Email) ? c.Author.Email : "FitConnect Member"),
                 AuthorAvatarUrl = c.Author?.AvatarUrl,
                 Content = c.Content ?? string.Empty,
                 ParentCommentId = c.ParentCommentId,
@@ -74,6 +74,7 @@ public class PostCommentService : IPostCommentService
             });
 
         var rootComments = new List<CommentDto>();
+        var commentsById = comments.ToDictionary(c => c.Id);
 
         // Build hierarchical tree:
         // Top-level comments (ParentCommentId == null)
@@ -87,7 +88,21 @@ public class PostCommentService : IPostCommentService
             }
             else if (commentMap.TryGetValue(c.ParentCommentId.Value, out var parentDto))
             {
-                parentDto.Replies.Add(dto);
+                if (string.IsNullOrWhiteSpace(dto.ReplyToAuthorName))
+                {
+                    dto.ReplyToAuthorName = parentDto.AuthorName;
+                }
+
+                // Protect against circular references
+                if (HasCycle(c.Id, c.ParentCommentId.Value, commentsById))
+                {
+                    _logger?.LogWarning("Cycle detected for comment {CommentId} referencing parent {ParentId}. Adding to root comments.", c.Id, c.ParentCommentId.Value);
+                    rootComments.Add(dto);
+                }
+                else
+                {
+                    parentDto.Replies.Add(dto);
+                }
             }
             else
             {
@@ -97,6 +112,24 @@ public class PostCommentService : IPostCommentService
         }
 
         return ApiResponseDto<List<CommentDto>>.Ok(rootComments, "Comments retrieved successfully.");
+    }
+
+    private static bool HasCycle(Guid childId, Guid parentId, Dictionary<Guid, Comment> commentsById)
+    {
+        var visited = new HashSet<Guid> { childId };
+        var current = parentId;
+        while (visited.Add(current))
+        {
+            if (commentsById.TryGetValue(current, out var parent) && parent.ParentCommentId.HasValue)
+            {
+                current = parent.ParentCommentId.Value;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     public async Task<ApiResponseDto<CommentDto>> CreateCommentAsync(
@@ -183,7 +216,7 @@ public class PostCommentService : IPostCommentService
             AuthorId = authorId,
             AuthorName = !string.IsNullOrWhiteSpace(user.FullName)
                 ? user.FullName
-                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitSocial Member"),
+                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitConnect Member"),
             AuthorAvatarUrl = user.AvatarUrl,
             Content = comment.Content,
             ParentCommentId = comment.ParentCommentId,
@@ -273,7 +306,7 @@ public class PostCommentService : IPostCommentService
             AuthorId = authorId,
             AuthorName = !string.IsNullOrWhiteSpace(user.FullName)
                 ? user.FullName
-                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitSocial Member"),
+                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitConnect Member"),
             AuthorAvatarUrl = user.AvatarUrl,
             Content = reply.Content,
             ParentCommentId = commentId,

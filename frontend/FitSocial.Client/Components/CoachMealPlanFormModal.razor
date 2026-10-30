@@ -630,6 +630,7 @@
                         {
                             items.Add(new CreateMealPlanItemDto
                             {
+                                MealPlanItemId = itm.MealPlanItemId,
                                 WeekNumber = week.WeekNumber,
                                 DayNumber = day.DayNumber,
                                 MealType = itm.MealType ?? "Breakfast",
@@ -909,6 +910,7 @@
                     Status = planStatus,
                     Items = items.Select(i => new UpdateMealPlanItemDto
                     {
+                        MealPlanItemId = i.MealPlanItemId,
                         WeekNumber = i.WeekNumber,
                         DayNumber = i.DayNumber,
                         MealType = i.MealType,

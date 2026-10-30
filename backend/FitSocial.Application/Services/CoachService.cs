@@ -4,7 +4,9 @@ using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPackage;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using FitSocial.Domain.Policies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -132,7 +134,9 @@ public class CoachService : ICoachService
                 Address = l.Address
             }).ToList(),
 
-            Certificates = coach.CoachCertificates.Select(cert => new CoachCertificateDetailDto
+            HasExpiredCertificates = CoachCertificatePolicy.HasExpiredCertificates(coach.CoachCertificates),
+            HasValidCertificates = CoachCertificatePolicy.HasValidCertificates(coach.CoachCertificates),
+            Certificates = CoachCertificatePolicy.GetValidCertificates(coach.CoachCertificates).Select(cert => new CoachCertificateDetailDto
             {
                 CertificateId = cert.CertificateId,
                 CertificateName = cert.CertificateName,

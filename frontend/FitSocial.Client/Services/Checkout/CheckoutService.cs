@@ -18,6 +18,7 @@ public interface ICheckoutService
     Task<ApiResponse<OrderDto>> GetOrderByIdAsync(Guid orderId);
     Task<ApiResponse<List<OrderDto>>> GetMyOrdersAsync();
     Task<ApiResponse<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync();
+    Task<ApiResponse<CoachTraineeGroupDto>> GetCoachTraineeOrderDetailAsync(Guid traineeId);
 }
 
 public class CheckoutService : ICheckoutService
@@ -66,5 +67,10 @@ public class CheckoutService : ICheckoutService
     public Task<ApiResponse<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync()
     {
         return _apiClient.GetAsync<List<CoachTraineeGroupDto>>("orders/coach-trainees");
+    }
+
+    public Task<ApiResponse<CoachTraineeGroupDto>> GetCoachTraineeOrderDetailAsync(Guid traineeId)
+    {
+        return _apiClient.GetAsync<CoachTraineeGroupDto>($"orders/coach-trainees/{traineeId}");
     }
 }

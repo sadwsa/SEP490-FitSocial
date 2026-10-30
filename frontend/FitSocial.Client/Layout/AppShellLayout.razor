@@ -1,0 +1,168 @@
+@inherits LayoutComponentBase
+@namespace FitSocial.Client.Layout
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject AppShellContext Shell
+
+@* ------------------------------------------------------------------
+   AppShellLayout – layout mặc định cho toàn bộ trang người dùng (TRAINEE/COACH).
+
+   Desktop (≥ lg): topbar + 3 cột (sidebar trái · nội dung · sidebar phải).
+   Tablet / Mobile (< lg): topbar + cột giữa; sidebar trái trở thành menu
+   trượt (drawer), sidebar phải nằm chung trong drawer đó.
+   ------------------------------------------------------------------ *@
+
+<div class="app-shell @(drawerOpen ? "drawer-open" : "")">
+
+    <AppHeader ShowSearch="@Shell.ShowSearch"
+               ShowMenuButton="true"
+               OnToggleMenu="ToggleDrawer"
+               SearchPlaceholder="@Shell.SearchPlaceholder"
+               SearchTerm="@Shell.SearchTerm"
+               SearchTermChanged="@OnShellSearchTermChanged"
+               OnSearchInput="@OnShellSearchInput"
+               OnSearchKeyUp="@OnShellSearchKeyUp"
+               OnSearch="@OnShellSearch"
+               OnClearSearch="@OnShellClearSearch"
+               SearchExtra="@Shell.HeaderSearchExtra"
+               OnLogoClick="OnShellLogoClick"
+               OnLogout="HandleLogout" />
+
+    <CascadingValue Value="@Shell" Name="@AppShellContextName" IsFixed="true">
+        <div class="app-shell-body">
+
+            @* ---------- Cột trái: dán mép trái (desktop) / trượt vào (mobile) ---------- *@
+            <aside class="app-shell-side app-shell-side-left">
+                <div class="app-shell-drawer-head">
+                    <span class="font-bold text-gray-800">Menu</span>
+                    <button type="button" @onclick="CloseDrawer" title="Đóng menu"
+                            class="p-1.5 text-gray-400 hover:text-[#FF5500] rounded-lg transition cursor-pointer">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="app-shell-side-inner">
+                    <AppSidebar />
+
+                    @if (Shell.LeftSidebarExtra != null)
+                    {
+                        @Shell.LeftSidebarExtra
+                    }
+
+                    @* Trên mobile: widget cột phải nằm chung trong drawer *@
+                    <div class="app-shell-drawer-only">
+                        @if (Shell.RightSidebar != null)
+                        {
+                            @Shell.RightSidebar
+                        }
+                        else
+                        {
+                            <RightSidebar />
+                        }
+                    </div>
+                </div>
+            </aside>
+
+            @* ---------- Cột giữa: nội dung tuỳ chức năng ---------- *@
+            <main class="app-shell-center">
+                @Body
+            </main>
+
+            @* ---------- Cột phải: dán mép phải (chỉ desktop) ---------- *@
+            <aside class="app-shell-side app-shell-side-right">
+                <div class="app-shell-side-inner">
+                    @if (Shell.RightSidebar != null)
+                    {
+                        @Shell.RightSidebar
+                    }
+                    else
+                    {
+                        <RightSidebar />
+                    }
+                </div>
+            </aside>
+        </div>
+    </CascadingValue>
+
+    @* Lớp nền mờ khi mở drawer *@
+    <div class="app-shell-backdrop" @onclick="CloseDrawer"></div>
+</div>
+
+@code {
+    private const string AppShellContextName = "AppShellContext";
+
+    private bool drawerOpen = false;
+
+    protected override void OnInitialized()
+    {
+        Shell.StateChanged = StateHasChanged;
+    }
+
+    private void ToggleDrawer() => drawerOpen = !drawerOpen;
+
+    private void CloseDrawer() => drawerOpen = false;
+
+    private async Task OnShellSearchTermChanged(string value)
+    {
+        Shell.SearchTerm = value;
+        await Task.CompletedTask;
+    }
+
+    private async Task OnShellSearchInput(ChangeEventArgs args)
+    {
+        if (Shell.SearchInputHandler != null)
+        {
+            await Shell.SearchInputHandler(args);
+        }
+    }
+
+    private async Task OnShellSearchKeyUp(KeyboardEventArgs args)
+    {
+        if (Shell.SearchKeyUpHandler != null)
+        {
+            await Shell.SearchKeyUpHandler(args);
+            return;
+        }
+
+        if (args.Key == "Enter" && Shell.SearchExecuteHandler != null)
+        {
+            await Shell.SearchExecuteHandler();
+        }
+    }
+
+    private async Task OnShellSearch()
+    {
+        if (Shell.SearchExecuteHandler != null)
+        {
+            await Shell.SearchExecuteHandler();
+        }
+    }
+
+    private async Task OnShellClearSearch()
+    {
+        if (Shell.SearchClearHandler != null)
+        {
+            await Shell.SearchClearHandler();
+        }
+    }
+
+    private async Task OnShellLogoClick()
+    {
+        if (Shell.LogoClickHandler != null)
+        {
+            await Shell.LogoClickHandler();
+        }
+        else
+        {
+            Navigation.NavigateTo("home");
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+}

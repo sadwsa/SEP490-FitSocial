@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components.Authorization;
 using Blazored.LocalStorage;
 using FitSocial.Client;
+using FitSocial.Client.Layout;
 using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Http;
 using FitSocial.Client.Services.Posts;
@@ -42,6 +43,8 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseU
 // Core Services
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+// Shared state giữa AppShellLayout (topbar + 2 sidebar) và các page (tìm kiếm, nội dung sidebar)
+builder.Services.AddScoped<AppShellContext>();
 builder.Services.AddScoped<GoogleSignInService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IUserService, UserService>();

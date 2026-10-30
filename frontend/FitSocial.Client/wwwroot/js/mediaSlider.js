@@ -1,5 +1,5 @@
 /**
- * FitSocial Post Media Slider & Video Controller
+ * FitConnect Post Media Slider & Video Controller
  * Supports Next/Prev slide playback, Sound Mute/Unmute, and Feed scroll IntersectionObserver autoplay
  */
 window.fitMediaSlider = {

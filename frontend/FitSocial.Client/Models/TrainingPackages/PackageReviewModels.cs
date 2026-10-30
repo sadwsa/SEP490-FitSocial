@@ -19,7 +19,7 @@ public class PackageReviewDto
     public Guid ReviewId { get; set; }
     public Guid PackageId { get; set; }
     public Guid TraineeId { get; set; }
-    public string TraineeName { get; set; } = "FitSocial Member";
+    public string TraineeName { get; set; } = "FitConnect Member";
     public string? TraineeAvatarUrl { get; set; }
     public int Rating { get; set; }
     public string? Comment { get; set; }

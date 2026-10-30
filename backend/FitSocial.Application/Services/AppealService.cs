@@ -145,13 +145,22 @@ public class AppealService : IAppealService
         short sortOrder = 0;
         foreach (var url in cleanEvidenceUrls)
         {
+            var isVideo = url.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+                       || url.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+                       || url.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
+                       || url.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)
+                       || url.EndsWith(".webm", StringComparison.OrdinalIgnoreCase)
+                       || url.Contains("/video/upload/", StringComparison.OrdinalIgnoreCase);
+
             var isPdf = url.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+            var mediaType = isVideo ? "VIDEO" : (isPdf ? "PDF" : "IMAGE");
+
             appeal.AppealMedia.Add(new AppealMedium
             {
                 MediaId = Guid.NewGuid(),
                 AppealId = appeal.AppealId,
                 MediaUrl = url,
-                MediaType = isPdf ? "PDF" : "IMAGE",
+                MediaType = mediaType,
                 SortOrder = sortOrder++,
                 CreatedAt = now
             });

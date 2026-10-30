@@ -24,6 +24,7 @@ public class PayoutService : IPayoutService
     private readonly INotificationRepository _notifications;
     private readonly IEmailService _emailService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserContext? _currentUserContext;
 
     /// <summary>
     /// Serializes cycle generation: two concurrent Generate clicks must not
@@ -41,7 +42,8 @@ public class PayoutService : IPayoutService
         IAuditLogRepository auditLogs,
         INotificationRepository notifications,
         IUnitOfWork unitOfWork,
-        IEmailService? emailService = null)
+        IEmailService? emailService = null,
+        ICurrentUserContext? currentUserContext = null)
     {
         _payouts = payouts;
         _users = users;
@@ -53,6 +55,7 @@ public class PayoutService : IPayoutService
         _notifications = notifications;
         _emailService = emailService!;
         _unitOfWork = unitOfWork;
+        _currentUserContext = currentUserContext;
     }
 
     private static (DateTime from, DateTime to) CycleRange(int month, int year)
@@ -287,6 +290,12 @@ public class PayoutService : IPayoutService
         {
             return ApiResponseDto<GeneratePayoutsResultDto>.Fail("Could not generate payouts. Please try again.");
         }
+
+        // UC-23.1: generating the monthly snapshot is a Staff/Admin money-touching
+        // operation, so it is traced just like processing it.
+        await WriteAuditAsync(_currentUserContext?.UserId, "GENERATE_COACH_PAYOUT", null, "GENERATED",
+            new { month, year, created, updated, skippedZeroNet = skipped, generatedAt = now },
+            _currentUserContext?.IpAddress, cancellationToken);
 
         return ApiResponseDto<GeneratePayoutsResultDto>.Ok(
             new GeneratePayoutsResultDto { Month = month, Year = year, Created = created, Updated = updated, SkippedZeroNet = skipped },
@@ -738,6 +747,9 @@ public class PayoutService : IPayoutService
         var unpaid = UnpaidGrossItems(payout);
         if (unpaid.Count == 0)
         {
+            await WriteAuditAsync(staffId, "PAYOUT_NOOP", payout, payout.Status,
+                new { reason = "already fully paid" }, ipAddress, cancellationToken);
+
             return ApiResponseDto<ProcessPayoutResultDto>.Ok(
                 new ProcessPayoutResultDto
                 {
@@ -753,6 +765,9 @@ public class PayoutService : IPayoutService
         // Mutual Consistency: refunded orders require regeneration first.
         if (unpaid.Any(IsOrderRefunded))
         {
+            await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, payout.Status,
+                new { reason = "refunded orders in cycle; regenerate required" }, ipAddress, cancellationToken);
+
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("One or more orders in this payout cycle have been refunded. Please regenerate the payout cycle before processing.");
         }
 
@@ -792,11 +807,17 @@ public class PayoutService : IPayoutService
             .ToList();
         if (targets.Count == 0)
         {
+            await WriteAuditAsync(staffId, "PAYOUT_NOOP", payout, payout.Status,
+                new { reason = "selected lines already paid" }, ipAddress, cancellationToken);
+
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Selected lines are already paid or do not belong to this payout.");
         }
 
         if (targets.Any(IsOrderRefunded))
         {
+            await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, payout.Status,
+                new { reason = "selected orders refunded; regenerate required" }, ipAddress, cancellationToken);
+
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("One or more selected orders have been refunded. Please regenerate the payout cycle before processing.");
         }
 
@@ -820,6 +841,9 @@ public class PayoutService : IPayoutService
         var amount = grossTargets.Sum(i => i.NetAmount ?? 0) - relatedRefunds.Sum(i => i.RefundAdjustment ?? 0);
         if (amount <= 0)
         {
+            await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, payout.Status,
+                new { reason = "nothing positive to pay after refund adjustments" }, ipAddress, ct);
+
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Nothing positive to pay after refund adjustments.");
         }
 
@@ -863,6 +887,9 @@ public class PayoutService : IPayoutService
         var remainingAmount = remaining.Sum(i => i.NetAmount ?? 0) - remainingRefunds.Sum(i => i.RefundAdjustment ?? 0);
         if (remainingAmount <= 0)
         {
+            await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, payout.Status,
+                new { reason = "nothing positive to pay after refund adjustments" }, ipAddress, ct);
+
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Nothing positive to pay after refund adjustments.");
         }
 
@@ -992,26 +1019,28 @@ public class PayoutService : IPayoutService
             fullyPaid ? "PROCESSED" : "PENDING",
             new { transactionRef, amount, processedAt = now }, ipAddress, ct);
 
-        if (fullyPaid)
+        // Notify the coach for EVERY disbursement, not only full settlements:
+        // a partial payout (per-package pay) still moves real money to their bank
+        // account, so it must surface in the coach notification bell as well.
+        try
         {
-            try
+            await _notifications.AddAsync(new Notification
             {
-                await _notifications.AddAsync(new Notification
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = payout.CoachId,
-                    ActorId = staffId,
-                    ReferenceId = payout.PayoutId,
-                    Type = "PAYOUT_PROCESSED",
-                    Description = $"Your {payout.PayoutMonth:D2}/{payout.PayoutYear} payout of {amount:N0} VND has been processed. Ref: {transactionRef}.",
-                    IsRead = false,
-                    CreatedAt = now
-                }, ct);
-            }
-            catch
-            {
-                // Notifications must never break payout fulfillment
-            }
+                Id = Guid.NewGuid(),
+                UserId = payout.CoachId,
+                ActorId = staffId,
+                ReferenceId = payout.PayoutId,
+                Type = fullyPaid ? "PAYOUT_PROCESSED" : "PAYOUT_PARTIAL",
+                Description = fullyPaid
+                    ? $"Your {payout.PayoutMonth:D2}/{payout.PayoutYear} payout of {amount:N0} VND has been processed. Ref: {transactionRef}."
+                    : $"Partial payout of {amount:N0} VND has been transferred for {payout.PayoutMonth:D2}/{payout.PayoutYear}. Ref: {transactionRef}. The remaining lines stay pending.",
+                IsRead = false,
+                CreatedAt = now
+            }, ct);
+        }
+        catch
+        {
+            // Notifications must never break payout fulfillment
         }
 
         var paidTargets = payout.PayoutItems
@@ -1118,17 +1147,17 @@ public class PayoutService : IPayoutService
         }
     }
 
-    private async Task WriteAuditAsync(Guid staffId, string action, Payout payout, string newStatus, object details, string? ipAddress, CancellationToken ct)
+    private async Task WriteAuditAsync(Guid? actorId, string action, Payout? payout, string? newStatus, object details, string? ipAddress, CancellationToken ct)
     {
         try
         {
             await _auditLogs.AddAsync(new AuditLog
             {
-                ActorAccountId = staffId,
+                ActorAccountId = actorId,
                 Action = action,
                 EntityType = "Payout",
-                EntityId = payout.PayoutId.ToString(),
-                OldValue = JsonSerializer.Serialize(new { status = payout.Status }),
+                EntityId = payout?.PayoutId.ToString(),
+                OldValue = payout == null ? null : JsonSerializer.Serialize(new { status = payout.Status }),
                 NewValue = JsonSerializer.Serialize(new { status = newStatus, details }),
                 Ipaddress = ipAddress,
                 CreatedAt = DateTime.UtcNow

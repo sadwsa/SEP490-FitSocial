@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using FitSocial.Application.DTOs.Coach;
 
 namespace FitSocial.Application.DTOs.Users;
 
@@ -29,11 +31,15 @@ public class TraineeProfileDto : UserProfileDto
 
 /// <summary>
 /// Profile representation for Coaches. Includes coach-specific biography,
-/// years of experience, and verification approval status.
+/// years of experience, verification approval status, and valid certificates.
 /// </summary>
 public class CoachProfileDto : UserProfileDto
 {
     public string? Bio { get; set; }
     public int? ExperienceYears { get; set; }
     public string? ApprovalStatus { get; set; }
+    public bool HasExpiredCertificates { get; set; }
+    public bool HasValidCertificates { get; set; }
+    public List<CoachCertificateDetailDto> Certificates { get; set; } = new();
 }
+

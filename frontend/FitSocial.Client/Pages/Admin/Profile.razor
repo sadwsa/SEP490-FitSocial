@@ -13,7 +13,7 @@
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 
-<PageTitle>My Profile - FitSocial Admin Console</PageTitle>
+<PageTitle>My Profile - FitConnect Admin Console</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized Context="authCtx">
@@ -486,10 +486,11 @@
                     <EditForm Model="@pwdModel" OnValidSubmit="HandlePasswordChange">
                         <DataAnnotationsValidator />
 
+                        <div class="form-grid">
                         <div class="form-field-group">
                             <label class="form-field-label" for="pwdCurrentInput">Current password</label>
-                            <div style="position:relative;">
-                                <InputText id="pwdCurrentInput" type="@(showPwdCurrent ? "text" : "password")" @bind-Value="pwdModel.CurrentPassword" class="form-input-control" style="padding-right:2.5rem;" placeholder="Enter your current password" />
+                            <div style="position:relative; width:100%;">
+                                <input id="pwdCurrentInput" type="@(showPwdCurrent ? "text" : "password")" class="form-input-control" style="width:100%; padding-right:2.5rem;" placeholder="Enter your current password" @bind="pwdModel.CurrentPassword" />
                                 <button type="button" @onclick="() => showPwdCurrent = !showPwdCurrent" title="Show/hide password" class="pwd-eye-btn">
                                     <AppIcon Name="@(showPwdCurrent ? "eye-slash" : "eye")" />
                                 </button>
@@ -499,8 +500,8 @@
 
                         <div class="form-field-group">
                             <label class="form-field-label" for="pwdNewInput">New password</label>
-                            <div style="position:relative;">
-                                <InputText id="pwdNewInput" type="@(showPwdNew ? "text" : "password")" @bind-Value="pwdModel.NewPassword" class="form-input-control" style="padding-right:2.5rem;" placeholder="Minimum 8 characters, different from current" />
+                            <div style="position:relative; width:100%;">
+                                <input id="pwdNewInput" type="@(showPwdNew ? "text" : "password")" class="form-input-control" style="width:100%; padding-right:2.5rem;" placeholder="Minimum 8 characters, different from current" @bind="pwdModel.NewPassword" />
                                 <button type="button" @onclick="() => showPwdNew = !showPwdNew" title="Show/hide password" class="pwd-eye-btn">
                                     <AppIcon Name="@(showPwdNew ? "eye-slash" : "eye")" />
                                 </button>
@@ -510,8 +511,8 @@
 
                         <div class="form-field-group">
                             <label class="form-field-label" for="pwdConfirmInput">Confirm new password</label>
-                            <div style="position:relative;">
-                                <InputText id="pwdConfirmInput" type="@(showPwdConfirm ? "text" : "password")" @bind-Value="pwdModel.ConfirmPassword" class="form-input-control" style="padding-right:2.5rem;" placeholder="Re-enter the new password" />
+                            <div style="position:relative; width:100%;">
+                                <input id="pwdConfirmInput" type="@(showPwdConfirm ? "text" : "password")" class="form-input-control" style="width:100%; padding-right:2.5rem;" placeholder="Re-enter the new password" @bind="pwdModel.ConfirmPassword" />
                                 <button type="button" @onclick="() => showPwdConfirm = !showPwdConfirm" title="Show/hide password" class="pwd-eye-btn">
                                     <AppIcon Name="@(showPwdConfirm ? "eye-slash" : "eye")" />
                                 </button>
@@ -519,7 +520,8 @@
                             <ValidationMessage For="@(() => pwdModel.ConfirmPassword)" class="field-error-text" />
                         </div>
 
-                        <button type="submit" disabled="@isChangingPassword" class="action-btn-primary" style="margin-top:12px;">
+                        </div>
+                        <button type="submit" disabled="@isChangingPassword" class="btn-save" style="margin-top:12px;">
                             @if (isChangingPassword)
                             {
                                 <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>

@@ -1,7 +1,7 @@
 namespace FitSocial.Client.Models.Auth;
 
 /// <summary>
-/// Định nghĩa các Roles trong hệ thống FitSocial (Đồng bộ chuẩn Backend)
+/// Định nghĩa các Roles trong hệ thống FitConnect (Đồng bộ chuẩn Backend)
 /// </summary>
 public static class AppRoles
 {

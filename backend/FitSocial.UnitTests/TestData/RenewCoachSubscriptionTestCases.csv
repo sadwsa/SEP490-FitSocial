@@ -1,0 +1,7 @@
+UTCID,Type,PlanExists,PlanActive,CoachExists,SaveChangesThrows,PaymentLinkThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,N,TRUE,TRUE,TRUE,FALSE,FALSE,TRUE,Payment link created. Complete the payment to renew your coach subscription.
+UTCID02,A,FALSE,TRUE,TRUE,FALSE,FALSE,FALSE,Selected subscription plan is not available.
+UTCID03,A,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,Selected subscription plan is not available.
+UTCID04,A,TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,Coach account not found.
+UTCID05,A,TRUE,TRUE,TRUE,TRUE,FALSE,FALSE,Could not save your order. Please try again.
+UTCID06,A,TRUE,TRUE,TRUE,FALSE,TRUE,FALSE,Could not create the payment link: boom

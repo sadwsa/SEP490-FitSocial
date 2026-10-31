@@ -1,0 +1,8 @@
+UTCID,Type,IsActive,Search,Page,PageSize,Exception,ExpectedSuccess,ExpectedMessage,ExpectedPlanCount,ExpectedTotalPlans,ExpectedActivePlansCount
+UTCID01,N,,,1,20,FALSE,TRUE,Success,3,3,2
+UTCID02,N,TRUE,,1,20,FALSE,TRUE,Success,2,2,2
+UTCID03,N,FALSE,,1,20,FALSE,TRUE,Success,1,1,2
+UTCID04,N,,Basic,1,20,FALSE,TRUE,Success,1,1,2
+UTCID05,N,,,2,1,FALSE,TRUE,Success,1,3,2
+UTCID06,N,,,0,0,FALSE,TRUE,Success,1,3,2
+UTCID07,A,,,,,TRUE,FALSE,Could not load subscription plans.,0,0,0

@@ -1,0 +1,7 @@
+UTCID,Type,PlanExists,Amount,Currency,Description,IsActive,SaveChangesThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,N,TRUE,450000,VND,Updated Plan,TRUE,FALSE,TRUE,Subscription plan updated successfully.
+UTCID02,A,FALSE,450000,VND,Updated Plan,TRUE,FALSE,FALSE,Subscription plan not found.
+UTCID03,A,TRUE,-1,VND,Updated Plan,TRUE,FALSE,FALSE,Amount must be >= 0.
+UTCID04,A,TRUE,450000,VND,,TRUE,FALSE,FALSE,Description is required.
+UTCID05,A,TRUE,,VND,Updated Plan,TRUE,FALSE,FALSE,Amount must be >= 0.
+UTCID06,A,TRUE,450000,VND,Updated Plan,TRUE,TRUE,FALSE,Could not update subscription plan.

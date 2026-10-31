@@ -1,0 +1,9 @@
+UTCID,Type,BuyerIdEmpty,PackageIdEmpty,BuyerExists,PackageExists,CoachIdEqualsBuyer,PackageActive,AlreadyPurchased,ExpectedSuccess,ExpectedMessage
+UTCID01,N,FALSE,FALSE,TRUE,TRUE,FALSE,TRUE,FALSE,TRUE,Order summary ready. Review and proceed to payment.
+UTCID02,A,TRUE,FALSE,TRUE,TRUE,FALSE,TRUE,FALSE,FALSE,Invalid buyer or package.
+UTCID03,A,FALSE,TRUE,TRUE,TRUE,FALSE,TRUE,FALSE,FALSE,Invalid buyer or package.
+UTCID04,A,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,Buyer account not found.
+UTCID05,A,FALSE,FALSE,TRUE,FALSE,FALSE,TRUE,FALSE,FALSE,Training package not found.
+UTCID06,A,FALSE,FALSE,TRUE,TRUE,TRUE,TRUE,FALSE,FALSE,You cannot purchase your own training package.
+UTCID07,A,FALSE,FALSE,TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,This training package is no longer active or open for enrollment. Please refresh your cart.
+UTCID08,A,FALSE,FALSE,TRUE,TRUE,FALSE,TRUE,TRUE,FALSE,You have already purchased this training package. You can review it anytime in My Packages.

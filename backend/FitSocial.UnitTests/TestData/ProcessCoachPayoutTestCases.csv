@@ -1,0 +1,6 @@
+UTCID,Type,PayoutExists,HasUnpaid,HasRefunded,GatewaySuccess,ExpectedSuccess,ExpectedMessage
+UTCID01,N,TRUE,TRUE,FALSE,TRUE,TRUE,Payout processed successfully.
+UTCID02,A,FALSE,TRUE,FALSE,TRUE,FALSE,Payout record not found.
+UTCID03,B,TRUE,FALSE,FALSE,TRUE,TRUE,Payout is already fully paid.
+UTCID04,A,TRUE,TRUE,TRUE,TRUE,FALSE,One or more orders in this payout cycle have been refunded. Please regenerate the payout cycle before processing.
+UTCID05,A,TRUE,TRUE,FALSE,FALSE,FALSE,"PayOS accepted the order but money has not settled yet (state: FAILED). It is recorded — use retry/check again later instead of creating a duplicate order."

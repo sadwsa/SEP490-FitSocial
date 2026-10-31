@@ -61,6 +61,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="TestData\EditCoachSubscriptionPlanTestCases.csv" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FitSocial.Domain\FitSocial.Domain.csproj" />
     <ProjectReference Include="..\FitSocial.Application\FitSocial.Application.csproj" />
     <ProjectReference Include="..\FitSocial.Infrastructure\FitSocial.Infrastructure.csproj" />

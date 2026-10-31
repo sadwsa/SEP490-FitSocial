@@ -1,0 +1,5 @@
+UTCID,Type,HasExistingActiveSameChannel,DtoNull,SaveChangesThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage,ExpectedIsActive
+UTCID01,N,FALSE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,TRUE
+UTCID02,N,TRUE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,FALSE
+UTCID03,A,FALSE,TRUE,FALSE,TRUE,FALSE,Config payload cannot be null.,
+UTCID04,A,FALSE,FALSE,TRUE,TRUE,FALSE,,

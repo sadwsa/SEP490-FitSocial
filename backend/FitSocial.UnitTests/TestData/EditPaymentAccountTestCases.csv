@@ -1,0 +1,5 @@
+UTCID,Type,ConfigExists,OtherActiveExists,SaveChangesThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,N,TRUE,FALSE,FALSE,FALSE,TRUE,Payment gateway config updated successfully.
+UTCID02,A,FALSE,FALSE,FALSE,TRUE,FALSE,Payment gateway config not found.
+UTCID03,A,TRUE,TRUE,FALSE,TRUE,FALSE,Gateway 'Other' is currently active
+UTCID04,A,TRUE,FALSE,TRUE,TRUE,FALSE,

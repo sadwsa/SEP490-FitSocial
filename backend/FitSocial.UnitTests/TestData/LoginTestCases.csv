@@ -1,0 +1,19 @@
+UTCID,Type,Email,Password,RoleCode,RememberMe,UserExists,PasswordHash,PasswordCorrect,IsLocked,WarningCount,UserRole,CoachApproval,ExpectedSuccess,ExpectedMessage
+UTCID01,N,john@example.com,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!
+UTCID02,N,john@example.com,Password123,TRAINEE,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!
+UTCID03,N,coach@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,FALSE,0,COACH,EMPTY,TRUE,Signed in successfully!
+UTCID04,N,john@example.com,Password123,,FALSE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!
+UTCID05,N,  John@Example.com  ,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!
+UTCID06,A,notfound@example.com,Password123,,TRUE,FALSE,EMPTY,FALSE,FALSE,0,TRAINEE,EMPTY,FALSE,Invalid email or password.
+UTCID07,A,john@example.com,WrongPassword,,TRUE,TRUE,hashed,FALSE,FALSE,0,TRAINEE,EMPTY,FALSE,Invalid email or password.
+UTCID08,A,john@example.com,Password123,,TRUE,TRUE,EMPTY,FALSE,FALSE,0,TRAINEE,EMPTY,FALSE,Invalid email or password.
+UTCID09,A,locked@example.com,Password123,,TRUE,TRUE,hashed,TRUE,TRUE,1,TRAINEE,EMPTY,FALSE,This account has been locked. Please contact an administrator.
+UTCID10,A,coachpending@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,COACH,PENDING,FALSE,Your account application is currently under credential verification. Please check back later.
+UTCID11,A,coachrejected@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,COACH,REJECTED,FALSE,Your coach application has been rejected. Please check your email for details and resubmission instructions.
+UTCID12,A,blocked@example.com,Password123,,TRUE,TRUE,hashed,TRUE,TRUE,3,TRAINEE,EMPTY,FALSE,Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.
+UTCID13,A,admin@example.com,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,ADMIN,EMPTY,FALSE,Invalid email or password.
+UTCID14,A,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,FALSE,Invalid email or password.
+UTCID15,B,warning2@example.com,Password123,,TRUE,TRUE,hashed,TRUE,TRUE,2,TRAINEE,EMPTY,FALSE,This account has been locked. Please contact an administrator.
+UTCID16,B,warning3@example.com,Password123,,TRUE,TRUE,hashed,TRUE,TRUE,3,TRAINEE,EMPTY,FALSE,Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.
+UTCID17,B,coachlocked@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,COACH,EMPTY,FALSE,This account has been locked. Please contact an administrator.
+UTCID18,B,john@example.com,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!

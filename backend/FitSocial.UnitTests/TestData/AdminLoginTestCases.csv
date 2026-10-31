@@ -1,0 +1,11 @@
+UTCID,Type,Email,Password,RememberMe,UserExists,PasswordHash,PasswordCorrect,IsLocked,UserRole,ExpectedSuccess,ExpectedMessage
+UTCID01,N,admin@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,ADMIN,TRUE,Welcome to the Management Portal!
+UTCID02,N,staff@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,TRUE,Welcome to the Management Portal!
+UTCID03,N,admin@example.com,Password123,FALSE,TRUE,hashed,TRUE,FALSE,ADMIN,TRUE,Welcome to the Management Portal!
+UTCID04,N,  Admin@Example.com  ,Password123,TRUE,TRUE,hashed,TRUE,FALSE,ADMIN,TRUE,Welcome to the Management Portal!
+UTCID05,A,notfound@example.com,Password123,TRUE,FALSE,EMPTY,FALSE,FALSE,ADMIN,FALSE,Invalid email or password.
+UTCID06,A,admin@example.com,WrongPassword,TRUE,TRUE,hashed,FALSE,FALSE,ADMIN,FALSE,Invalid email or password.
+UTCID07,A,admin@example.com,Password123,TRUE,TRUE,hashed,TRUE,TRUE,ADMIN,FALSE,This account has been locked. Please contact an administrator.
+UTCID08,A,trainee@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,TRAINEE,FALSE,Invalid email or password.
+UTCID09,A,coach@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,COACH,FALSE,Invalid email or password.
+UTCID10,B,staff@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,TRUE,Welcome to the Management Portal!

@@ -1,0 +1,18 @@
+UTCID,Type,FullName,Email,Password,ConfirmPassword,OtpCode,PhoneNumber,Gender,DateOfBirth,TermId,EmailExists,TermExists,PhoneExists,OtpValid,OtpMessage,SaveChangesThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,N,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID02,N,Jane Doe,jane@example.com,Password123,Password123,123456,,FEMALE,,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID03,N,  John  ,  JOHN@Example.com  ,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID04,N,A B,ab@example.com,Passw0rd,Passw0rd,654321,,FEMALE,,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID05,B,Jo,jo@example.com,Passw0rd,Passw0rd,111222,,MALE,,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID06,B,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@x.com,Password123,Password123,123456,,MALE,,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID07,B,John Doe,john2@example.com,Pass1234,Pass1234,123456,,MALE,,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID08,B,John Doe,john3@example.com,Password123,Password123,123456,,MALE,,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID09,B,John Doe,john4@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID10,A,John Doe,john@example.com,Password123,Different123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,FALSE,Passwords do not match.
+UTCID11,A,John Doe,existing@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,TRUE,TRUE,FALSE,TRUE,,FALSE,FALSE,This email is already in use.
+UTCID12,A,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,EMPTY,FALSE,TRUE,FALSE,TRUE,,FALSE,FALSE,You must agree to the Terms and Privacy Policy.
+UTCID13,A,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,EMPTYGUID,FALSE,TRUE,FALSE,TRUE,,FALSE,FALSE,You must agree to the Terms and Privacy Policy.
+UTCID14,A,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,FALSE,FALSE,TRUE,,FALSE,FALSE,Selected terms version is not valid.
+UTCID15,A,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,TRUE,TRUE,,FALSE,FALSE,This phone number is already in use.
+UTCID16,A,John Doe,john@example.com,Password123,Password123,000000,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,FALSE,Invalid or expired OTP code.,FALSE,FALSE,Invalid or expired OTP code.
+UTCID17,A,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,TRUE,FALSE,"Could not create the account. The email or phone number may already be in use."

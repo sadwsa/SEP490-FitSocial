@@ -1,0 +1,5 @@
+UTCID,Type,PlanExists,Upgrades,OrderDetails,SaveChangesThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,A,FALSE,0,0,FALSE,FALSE,Subscription plan not found.
+UTCID02,N,TRUE,2,1,FALSE,TRUE,"Plan has 3 linked subscription record(s); it was deactivated instead of deleted to preserve billing history."
+UTCID03,N,TRUE,0,0,FALSE,TRUE,Subscription plan deleted successfully.
+UTCID04,A,TRUE,0,0,TRUE,FALSE,Could not delete subscription plan.

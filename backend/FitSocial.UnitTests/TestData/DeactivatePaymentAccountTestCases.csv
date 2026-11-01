@@ -1,0 +1,4 @@
+UTCID,Type,ConfigExists,SaveChangesThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,N,TRUE,FALSE,FALSE,TRUE,Payment gateway config deactivated successfully.
+UTCID02,A,FALSE,FALSE,TRUE,FALSE,Payment gateway config not found.
+UTCID03,A,TRUE,TRUE,TRUE,FALSE,

@@ -1,0 +1,6 @@
+UTCID,Type,Jti,ExpiresAtUtc,RefreshToken,ExpectedSuccess,ExpectedMessage
+UTCID01,N,token123,2026-12-31T00:00:00Z,refresh123,TRUE,Signed out successfully.
+UTCID02,N,,,refresh123,TRUE,Signed out successfully.
+UTCID03,N,token123,2026-12-31T00:00:00Z,,TRUE,Signed out successfully.
+UTCID04,B,token123,2020-01-01T00:00:00Z,refresh123,TRUE,Signed out successfully.
+UTCID05,B,,, ,TRUE,Signed out successfully.

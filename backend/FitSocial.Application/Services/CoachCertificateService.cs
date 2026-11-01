@@ -109,6 +109,42 @@ public class CoachCertificateService : ICoachCertificateService
         }
     }
 
+    public async Task<ApiResponseDto<CoachCertificateAdminDetailDto>> ProcessCertificateAsync(
+        Guid certificateId,
+        Guid reviewerId,
+        ProcessCoachCertificateDto request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Action))
+            {
+                return ApiResponseDto<CoachCertificateAdminDetailDto>.Fail("Action is required ('APPROVE' or 'REJECT').");
+            }
+
+            var action = request.Action.Trim().ToUpperInvariant();
+            if (action == "APPROVE")
+            {
+                return await ApproveCertificateAsync(certificateId, reviewerId, cancellationToken);
+            }
+            if (action == "REJECT")
+            {
+                var rejectDto = new RejectCoachCertificateDto
+                {
+                    Reason = request.Reason ?? string.Empty
+                };
+                return await RejectCertificateAsync(certificateId, reviewerId, rejectDto, cancellationToken);
+            }
+
+            return ApiResponseDto<CoachCertificateAdminDetailDto>.Fail($"Invalid action '{request.Action}'. Allowed actions are 'APPROVE' or 'REJECT'.");
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException != null ? $"{ex.Message} Inner: {ex.InnerException.Message}" : ex.Message;
+            return ApiResponseDto<CoachCertificateAdminDetailDto>.Fail($"Error processing certificate: {msg}");
+        }
+    }
+
     public async Task<ApiResponseDto<CoachCertificateAdminDetailDto>> ApproveCertificateAsync(
         Guid certificateId,
         Guid reviewerId,

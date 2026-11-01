@@ -77,6 +77,44 @@ public class CoachCertificatesController : ControllerBase
     }
 
     /// <summary>
+    /// UC: Process (Approve or Reject) a pending Coach Certificate.
+    /// Accessible to Staff and Admin.
+    /// </summary>
+    [HttpPut("{certificateId:guid}/process")]
+    [HttpPost("{certificateId:guid}/process")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachCertificateAdminDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ProcessCertificate(
+        Guid certificateId,
+        [FromBody] ProcessCoachCertificateDto request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachCertificateAdminDetailDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _certificateService.ProcessCertificateAsync(certificateId, currentUserId, request, cancellationToken);
+        if (!result.Success)
+        {
+            if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(result);
+            }
+            if (result.Message.Contains("already", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(result);
+            }
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
     /// UC: Approve a pending Coach Certificate.
     /// Accessible to Staff and Admin.
     /// </summary>

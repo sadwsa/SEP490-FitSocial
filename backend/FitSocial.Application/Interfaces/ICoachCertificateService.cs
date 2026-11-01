@@ -16,6 +16,12 @@ public interface ICoachCertificateService
         Guid certificateId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseDto<CoachCertificateAdminDetailDto>> ProcessCertificateAsync(
+        Guid certificateId,
+        Guid reviewerId,
+        ProcessCoachCertificateDto request,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseDto<CoachCertificateAdminDetailDto>> ApproveCertificateAsync(
         Guid certificateId,
         Guid reviewerId,

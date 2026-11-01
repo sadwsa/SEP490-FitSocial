@@ -58,6 +58,15 @@ public class RejectCoachCertificateDto
     public string Reason { get; set; } = string.Empty;
 }
 
+public class ProcessCoachCertificateDto
+{
+    [Required(ErrorMessage = "Action is required ('APPROVE' or 'REJECT').")]
+    public string Action { get; set; } = string.Empty;
+
+    [StringLength(1000, ErrorMessage = "Rejection reason cannot exceed 1000 characters.")]
+    public string? Reason { get; set; }
+}
+
 public class GetCoachCertificatesAdminQueryDto
 {
     public string? Search { get; set; }

@@ -164,6 +164,8 @@ public class SubmitCoachApplicationServiceTests
             .ReturnsAsync((tc.EkycValid, tc.EkycValid ? null : (string?)tc.EkycError, ekycExtract));
 
         _ekycs.Setup(e => e.ExistsByIdCardNumberAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(tc.IdCardDuplicate);
+        _ekycs.Setup(e => e.ListByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachEkycVerification>());
+        _certificates.Setup(c => c.ListByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachCertificate>());
 
         if (tc.SaveChangesThrows)
         {

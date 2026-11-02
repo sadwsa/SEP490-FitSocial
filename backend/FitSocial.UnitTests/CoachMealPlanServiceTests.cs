@@ -3,6 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Claims;
+using FitSocial.API.Controllers;
+using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using FitSocial.Application.DTOs.MealPlan;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Services;
@@ -60,15 +68,15 @@ public class CoachMealPlanServiceTests
         var dto = new CreateMealPlanDto
         {
             OrderDetailsId = orderDetailsId,
-            Title = "Thực đơn mẫu 30 ngày",
-            Description = "Dinh dưỡng chuẩn thể hình",
+            Title = "Thá»±c Ä‘Æ¡n máº«u 30 ngÃ y",
+            Description = "Dinh dÆ°á»¡ng chuáº©n thá»ƒ hÃ¬nh",
             StartDate = purchaseDate,
             EndDate = purchaseDate.AddDays(27),
             Status = "ACTIVE",
             Items = new List<CreateMealPlanItemDto>
             {
-                new() { WeekNumber = 1, DayNumber = 1, MealType = "Breakfast", FoodDescription = "Yến mạch + 3 trứng", Calories = 450 },
-                new() { WeekNumber = 1, DayNumber = 1, MealType = "Lunch", FoodDescription = "Ức gà + cơm gạo lứt", Calories = 600 }
+                new() { WeekNumber = 1, DayNumber = 1, MealType = "Breakfast", FoodDescription = "Yáº¿n máº¡ch + 3 trá»©ng", Calories = 450 },
+                new() { WeekNumber = 1, DayNumber = 1, MealType = "Lunch", FoodDescription = "á»¨c gÃ  + cÆ¡m gáº¡o lá»©t", Calories = 600 }
             }
         };
 
@@ -77,7 +85,7 @@ public class CoachMealPlanServiceTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal("Thực đơn mẫu 30 ngày", result.Title);
+        Assert.Equal("Thá»±c Ä‘Æ¡n máº«u 30 ngÃ y", result.Title);
         Assert.Equal(coachId, result.CoachId);
         Assert.Single(result.Weeks);
         Assert.Single(result.Weeks[0].Days);
@@ -112,7 +120,7 @@ public class CoachMealPlanServiceTests
         var dto = new CreateMealPlanDto
         {
             OrderDetailsId = orderDetailsId,
-            Title = "Thực đơn",
+            Title = "Thá»±c Ä‘Æ¡n",
             StartDate = purchaseDate,
             EndDate = purchaseDate.AddDays(27)
         };
@@ -191,7 +199,7 @@ public class CoachMealPlanServiceTests
         var dto = new CreateMealPlanDto
         {
             OrderDetailsId = orderDetailsId,
-            Title = "Thực đơn",
+            Title = "Thá»±c Ä‘Æ¡n",
             StartDate = purchaseDate.AddDays(-2),
             EndDate = purchaseDate.AddDays(25)
         };
@@ -226,7 +234,7 @@ public class CoachMealPlanServiceTests
         var dto = new CreateMealPlanDto
         {
             OrderDetailsId = orderDetailsId,
-            Title = "Thực đơn",
+            Title = "Thá»±c Ä‘Æ¡n",
             StartDate = purchaseDate,
             EndDate = purchaseDate.AddDays(35) // 35 > 30 days
         };
@@ -261,12 +269,12 @@ public class CoachMealPlanServiceTests
         var dto = new CreateMealPlanDto
         {
             OrderDetailsId = orderDetailsId,
-            Title = "Thực đơn 5 tuần",
+            Title = "Thá»±c Ä‘Æ¡n 5 tuáº§n",
             StartDate = purchaseDate,
             EndDate = purchaseDate.AddDays(29), // ~4 weeks
             Items = new List<CreateMealPlanItemDto>
             {
-                new() { WeekNumber = 5, DayNumber = 1, FoodDescription = "Bữa ăn tuần 5", MealType = "Lunch" }
+                new() { WeekNumber = 5, DayNumber = 1, FoodDescription = "Bá»¯a Äƒn tuáº§n 5", MealType = "Lunch" }
             }
         };
 
@@ -300,13 +308,13 @@ public class CoachMealPlanServiceTests
         var dto = new CreateMealPlanDto
         {
             OrderDetailsId = orderDetailsId,
-            Title = "Thực đơn bỏ trống tuần 1",
+            Title = "Thá»±c Ä‘Æ¡n bá» trá»‘ng tuáº§n 1",
             StartDate = purchaseDate,
             EndDate = purchaseDate.AddDays(28),
             // Only week 2 scheduled, week 1 is empty!
             Items = new List<CreateMealPlanItemDto>
             {
-                new() { WeekNumber = 2, DayNumber = 1, FoodDescription = "Bữa ăn tuần 2", MealType = "Lunch" }
+                new() { WeekNumber = 2, DayNumber = 1, FoodDescription = "Bá»¯a Äƒn tuáº§n 2", MealType = "Lunch" }
             }
         };
 
@@ -341,7 +349,7 @@ public class CoachMealPlanServiceTests
                     WeekNumber = 1,
                     DayNumber = 1,
                     MealType = "Breakfast",
-                    FoodDescription = "Trứng luộc",
+                    FoodDescription = "Trá»©ng luá»™c",
                     Calories = 200
                 }
             }
@@ -362,7 +370,7 @@ public class CoachMealPlanServiceTests
                     WeekNumber = 1,
                     DayNumber = 1,
                     MealType = "Breakfast",
-                    FoodDescription = "Bánh mì kẹp thịt (Modified!)",
+                    FoodDescription = "BÃ¡nh mÃ¬ káº¹p thá»‹t (Modified!)",
                     Calories = 500
                 },
                 new()
@@ -370,7 +378,7 @@ public class CoachMealPlanServiceTests
                     WeekNumber = 2,
                     DayNumber = 1,
                     MealType = "Lunch",
-                    FoodDescription = "Cơm trưa tuần 2",
+                    FoodDescription = "CÆ¡m trÆ°a tuáº§n 2",
                     Calories = 600
                 }
             }
@@ -396,7 +404,7 @@ public class CoachMealPlanServiceTests
         {
             MealPlanId = planId,
             CoachId = coachId,
-            Title = "Thực đơn cũ",
+            Title = "Thá»±c Ä‘Æ¡n cÅ©",
             StartDate = planStart,
             EndDate = planStart.AddDays(28),
             MealPlanItems = new List<MealPlanItem>
@@ -407,7 +415,7 @@ public class CoachMealPlanServiceTests
                     WeekNumber = 1,
                     DayNumber = 1,
                     MealType = "Breakfast",
-                    FoodDescription = "Yến mạch",
+                    FoodDescription = "Yáº¿n máº¡ch",
                     Calories = 300
                 }
             }
@@ -423,7 +431,7 @@ public class CoachMealPlanServiceTests
 
         var updateDto = new UpdateMealPlanDto
         {
-            Title = "Thực đơn mới cập nhật",
+            Title = "Thá»±c Ä‘Æ¡n má»›i cáº­p nháº­t",
             Items = new List<UpdateMealPlanItemDto>
             {
                 new()
@@ -432,7 +440,7 @@ public class CoachMealPlanServiceTests
                     WeekNumber = 1,
                     DayNumber = 1,
                     MealType = "Breakfast",
-                    FoodDescription = "Yến mạch + Táo đỏ",
+                    FoodDescription = "Yáº¿n máº¡ch + TÃ¡o Ä‘á»",
                     Calories = 350
                 },
                 new()
@@ -440,7 +448,7 @@ public class CoachMealPlanServiceTests
                     WeekNumber = 1,
                     DayNumber = 2,
                     MealType = "Lunch",
-                    FoodDescription = "Cá hồi áp chảo",
+                    FoodDescription = "CÃ¡ há»“i Ã¡p cháº£o",
                     Calories = 550
                 }
             }
@@ -451,8 +459,244 @@ public class CoachMealPlanServiceTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal("Thực đơn mới cập nhật", existingPlan.Title);
+        Assert.Equal("Thá»±c Ä‘Æ¡n má»›i cáº­p nháº­t", existingPlan.Title);
         Assert.Equal(2, existingPlan.MealPlanItems.Count);
         _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
+
+
+    [Fact]
+    public async Task UpdateMealPlanAsync_WhenCoachIdIsEmpty_ShouldThrowForbiddenException()
+    {
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _service.UpdateMealPlanAsync(Guid.Empty, Guid.NewGuid(), new UpdateMealPlanDto()));
+        Assert.Equal("Invalid coach identity.", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateMealPlanAsync_WhenDtoIsNull_ShouldThrowValidationException()
+    {
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.UpdateMealPlanAsync(Guid.NewGuid(), Guid.NewGuid(), null!));
+        Assert.Equal("Request body cannot be null.", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateMealPlanAsync_WhenPlanNotFound_ShouldThrowNotFoundException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+
+        _mockPlanRepo
+            .Setup(r => r.GetByIdWithItemsAsync(planId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MealPlan?)null);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.UpdateMealPlanAsync(coachId, planId, new UpdateMealPlanDto()));
+        Assert.Equal("Meal plan not found.", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateMealPlanAsync_WhenPlanBelongsToAnotherCoach_ShouldThrowForbiddenException()
+    {
+        // Arrange
+        var coachAId = Guid.NewGuid();
+        var coachBId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+
+        var planOfCoachA = new MealPlan
+        {
+            MealPlanId = planId,
+            CoachId = coachAId
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetByIdWithItemsAsync(planId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(planOfCoachA);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _service.UpdateMealPlanAsync(coachBId, planId, new UpdateMealPlanDto()));
+        Assert.Contains("do not have permission to update this meal plan", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetCoachMealPlanByOrderDetailsAsync_WhenNotOrderOwner_ShouldThrowForbiddenException()
+    {
+        // Arrange
+        var coachAId = Guid.NewGuid();
+        var coachBId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+
+        var plan = new MealPlan
+        {
+            MealPlanId = Guid.NewGuid(),
+            CoachId = coachAId,
+            OrderDetailsId = orderDetailsId,
+            OrderDetails = new OrderDetail
+            {
+                OrderDetailsId = orderDetailsId,
+                Order = new Order { CoachId = coachAId }
+            }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetMealPlanByOrderDetailsAsync(orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _service.GetCoachMealPlanByOrderDetailsAsync(coachBId, orderDetailsId));
+        Assert.Contains("do not have permission", ex.Message);
+    }
+
+    #region Controller Tests (CoachMealPlansController)
+
+    [Fact]
+    public void CoachMealPlansController_HasAuthorizeAttribute_WithCoachRoleOnly()
+    {
+        // Arrange & Act
+        var attr = typeof(CoachMealPlansController).GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        // Assert
+        Assert.NotNull(attr);
+        Assert.Equal("COACH", attr.Roles);
+    }
+
+    [Fact]
+    public async Task CreateMealPlan_Controller_WhenCoachAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var mockService = new Mock<IMealPlanService>();
+        var mockLogger = new Mock<ILogger<CoachMealPlansController>>();
+        var controller = new CoachMealPlansController(mockService.Object, mockLogger.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var dto = new CreateMealPlanDto { Title = "Nutrition plan" };
+        var expected = new TraineeMealPlanDto { MealPlanId = Guid.NewGuid(), Title = "Nutrition plan" };
+
+        mockService.Setup(s => s.CreateMealPlanAsync(coachId, dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        // Act
+        var result = await controller.CreateMealPlan(dto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<TraineeMealPlanDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(expected.MealPlanId, response.Data?.MealPlanId);
+    }
+
+    [Fact]
+    public async Task CreateMealPlan_Controller_WhenTokenMissingOrInvalid_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<IMealPlanService>();
+        var mockLogger = new Mock<ILogger<CoachMealPlansController>>();
+        var controller = new CoachMealPlansController(mockService.Object, mockLogger.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        // Act
+        var result = await controller.CreateMealPlan(new CreateMealPlanDto());
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<TraineeMealPlanDto>>(unauthorized.Value);
+        Assert.False(response.Success);
+        Assert.Contains("Invalid coach identity", response.Message);
+    }
+
+    [Fact]
+    public async Task UpdateMealPlan_Controller_WhenCoachAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var mockService = new Mock<IMealPlanService>();
+        var mockLogger = new Mock<ILogger<CoachMealPlansController>>();
+        var controller = new CoachMealPlansController(mockService.Object, mockLogger.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var dto = new UpdateMealPlanDto { Title = "Updated plan" };
+        var expected = new TraineeMealPlanDto { MealPlanId = planId, Title = "Updated plan" };
+
+        mockService.Setup(s => s.UpdateMealPlanAsync(coachId, planId, dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        // Act
+        var result = await controller.UpdateMealPlan(planId, dto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<TraineeMealPlanDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal("Updated plan", response.Data?.Title);
+    }
+
+    [Fact]
+    public async Task GetMealPlanByOrderDetail_Controller_WhenCoachAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+        var mockService = new Mock<IMealPlanService>();
+        var mockLogger = new Mock<ILogger<CoachMealPlansController>>();
+        var controller = new CoachMealPlansController(mockService.Object, mockLogger.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var expected = new TraineeMealPlanDto { OrderDetailsId = orderDetailsId, Title = "Current Meal Plan" };
+        mockService.Setup(s => s.GetCoachMealPlanByOrderDetailsAsync(coachId, orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        // Act
+        var result = await controller.GetMealPlanByOrderDetail(orderDetailsId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<TraineeMealPlanDto?>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(orderDetailsId, response.Data?.OrderDetailsId);
+    }
+    #endregion
 }

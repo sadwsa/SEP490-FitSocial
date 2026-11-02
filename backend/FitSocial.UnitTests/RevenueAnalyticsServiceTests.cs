@@ -1,19 +1,25 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.API.Controllers;
 using FitSocial.Application.DTOs.Analytics;
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Services;
+using FitSocial.Domain.Constants;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Domain.Models.Analytics;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Xunit;
 
 namespace FitSocial.UnitTests;
 
 /// <summary>
-/// Unit tests for UC_27: Admin View System Revenue Analytics (RevenueAnalyticsService).
+/// Unit tests for UC_27: Admin View System Revenue Analytics (RevenueAnalyticsService & AdminRevenueAnalyticsController).
 /// Verifies the 0% commission business model (Trainee package GMV belongs 100% to Coach;
 /// Platform Direct Revenue = 100% Coach Subscription Plans).
 /// </summary>
@@ -223,4 +229,71 @@ public class RevenueAnalyticsServiceTests
         Assert.Contains("Coach John", csvText);
         Assert.Contains("50.000.000", csvText);
     }
+
+    #region Controller Tests (AdminRevenueAnalyticsController)
+
+    [Fact]
+    public void AdminRevenueAnalyticsController_HasAuthorizeRoleAdminAttribute()
+    {
+        var attr = typeof(AdminRevenueAnalyticsController).GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(attr);
+        Assert.Equal(RoleConstants.Admin, attr.Roles);
+    }
+
+    [Fact]
+    public async Task GetRevenueOverview_Controller_ReturnsOk()
+    {
+        // Arrange
+        var mockService = new Mock<IRevenueAnalyticsService>();
+        var controller = new AdminRevenueAnalyticsController(mockService.Object);
+
+        var filter = new RevenueAnalyticsFilterDto { QuickFilter = "THIS_MONTH" };
+        var expectedResponse = ApiResponseDto<FullRevenueAnalyticsResponseDto>.Ok(new FullRevenueAnalyticsResponseDto
+        {
+            Overview = new RevenueOverviewDto
+            {
+                TotalGMV = 100_000_000m,
+                PlatformDirectRevenue = 15_000_000m
+            }
+        });
+
+        mockService.Setup(s => s.GetRevenueAnalyticsAsync(filter, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await controller.GetRevenueOverview(filter, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<FullRevenueAnalyticsResponseDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(100_000_000m, response.Data!.Overview.TotalGMV);
+    }
+
+    [Fact]
+    public async Task ExportRevenueCsv_Controller_ReturnsFileContentResult()
+    {
+        // Arrange
+        var mockService = new Mock<IRevenueAnalyticsService>();
+        var controller = new AdminRevenueAnalyticsController(mockService.Object);
+
+        var filter = new RevenueAnalyticsFilterDto { QuickFilter = "THIS_MONTH" };
+        var fakeCsvBytes = new byte[] { 0xEF, 0xBB, 0xBF, 0x31, 0x2C, 0x32 };
+
+        mockService.Setup(s => s.ExportRevenueCsvAsync(filter, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fakeCsvBytes);
+
+        // Act
+        var result = await controller.ExportRevenueCsv(filter, CancellationToken.None);
+
+        // Assert
+        var fileResult = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("text/csv; charset=utf-8", fileResult.ContentType);
+        Assert.StartsWith("FitSocial_Revenue_Report_", fileResult.FileDownloadName);
+        Assert.Equal(fakeCsvBytes, fileResult.FileContents);
+    }
+
+    #endregion
 }

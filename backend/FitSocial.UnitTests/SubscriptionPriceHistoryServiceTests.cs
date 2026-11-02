@@ -1,12 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.API.Controllers;
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.SubscriptionPriceHistory;
 using FitSocial.Application.Exceptions;
+using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Xunit;
 
@@ -168,6 +174,7 @@ public class SubscriptionPriceHistoryServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.True(result.Success);
+        Assert.NotNull(result.Data);
         var page = result.Data;
         Assert.Equal(2, page.PageNumber);
         Assert.Equal(10, page.PageSize);
@@ -277,4 +284,65 @@ public class SubscriptionPriceHistoryServiceTests
             10,
             It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    #region Controller Tests (SubscriptionPriceHistoryController)
+
+    [Fact]
+    public void SubscriptionPriceHistoryController_HasAuthorizeRolesStaffAndAdminAttribute()
+    {
+        var attr = typeof(SubscriptionPriceHistoryController).GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(attr);
+        Assert.Contains("STAFF", attr.Roles);
+        Assert.Contains("ADMIN", attr.Roles);
+    }
+
+    [Fact]
+    public async Task GetPriceHistory_Controller_ReturnsOk()
+    {
+        // Arrange
+        var mockService = new Mock<ISubscriptionPriceHistoryService>();
+        var controller = new SubscriptionPriceHistoryController(mockService.Object);
+
+        var filter = new GetPriceHistoryFilterDto
+        {
+            PageIndex = 1,
+            PageSize = 10
+        };
+
+        var pagedResult = new PagedResultDto<SubscriptionPriceHistoryDto>
+        {
+            Items = new List<SubscriptionPriceHistoryDto>
+            {
+                new()
+                {
+                    HistoryId = 1,
+                    PlanName = "1 Month Standard",
+                    OldPrice = 100000m,
+                    NewPrice = 150000m,
+                    PriceDifference = 50000m,
+                    PercentageChange = 50m
+                }
+            },
+            TotalCount = 1,
+            PageNumber = 1,
+            PageSize = 10
+        };
+
+        mockService.Setup(s => s.GetPriceHistoryAsync(filter, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<PagedResultDto<SubscriptionPriceHistoryDto>>.Ok(pagedResult));
+
+        // Act
+        var result = await controller.GetPriceHistory(filter, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<PagedResultDto<SubscriptionPriceHistoryDto>>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.NotNull(response.Data);
+        Assert.Single(response.Data.Items);
+    }
+
+    #endregion
 }

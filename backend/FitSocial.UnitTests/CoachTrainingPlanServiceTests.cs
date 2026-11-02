@@ -3,6 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Claims;
+using FitSocial.API.Controllers;
+using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using FitSocial.Application.DTOs.TrainingPlan;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Services;
@@ -1051,4 +1059,152 @@ public class CoachTrainingPlanServiceTests
         Assert.NotNull(result);
         _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    #region Controller Tests (CoachTrainingPlansController)
+
+    [Fact]
+    public void CoachTrainingPlansController_HasAuthorizeAttribute_WithCoachRoleOnly()
+    {
+        // Arrange & Act
+        var attr = typeof(CoachTrainingPlansController).GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        // Assert
+        Assert.NotNull(attr);
+        Assert.Equal("COACH", attr.Roles);
+    }
+
+    [Fact]
+    public async Task CreateTrainingPlan_Controller_WhenCoachAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var mockService = new Mock<ITrainingPlanService>();
+        var mockLogger = new Mock<ILogger<CoachTrainingPlansController>>();
+        var controller = new CoachTrainingPlansController(mockService.Object, mockLogger.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var dto = new CreateTrainingPlanDto { Title = "Hypertrophy Routine" };
+        var expected = new TrainingPlanDetailDto { TrainingPlanId = Guid.NewGuid(), Title = "Hypertrophy Routine" };
+
+        mockService.Setup(s => s.CreateTrainingPlanAsync(coachId, dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        // Act
+        var result = await controller.CreateTrainingPlan(dto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<TrainingPlanDetailDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(expected.TrainingPlanId, response.Data?.TrainingPlanId);
+    }
+
+    [Fact]
+    public async Task CreateTrainingPlan_Controller_WhenTokenMissingOrInvalid_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<ITrainingPlanService>();
+        var mockLogger = new Mock<ILogger<CoachTrainingPlansController>>();
+        var controller = new CoachTrainingPlansController(mockService.Object, mockLogger.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        // Act
+        var result = await controller.CreateTrainingPlan(new CreateTrainingPlanDto());
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<TrainingPlanDetailDto>>(unauthorized.Value);
+        Assert.False(response.Success);
+        Assert.Contains("Invalid coach identity", response.Message);
+    }
+
+    [Fact]
+    public async Task UpdateTrainingPlan_Controller_WhenCoachAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var mockService = new Mock<ITrainingPlanService>();
+        var mockLogger = new Mock<ILogger<CoachTrainingPlansController>>();
+        var controller = new CoachTrainingPlansController(mockService.Object, mockLogger.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var dto = new UpdateTrainingPlanDto { Title = "Updated plan" };
+        var expected = new TrainingPlanDetailDto { TrainingPlanId = planId, Title = "Updated plan" };
+
+        mockService.Setup(s => s.UpdateTrainingPlanAsync(coachId, planId, dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        // Act
+        var result = await controller.UpdateTrainingPlan(planId, dto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<TrainingPlanDetailDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal("Updated plan", response.Data?.Title);
+    }
+
+    [Fact]
+    public async Task GetTrainingPlanByOrderDetail_Controller_WhenCoachAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+        var mockService = new Mock<ITrainingPlanService>();
+        var mockLogger = new Mock<ILogger<CoachTrainingPlansController>>();
+        var controller = new CoachTrainingPlansController(mockService.Object, mockLogger.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var expected = new TrainingPlanDetailDto { TrainingPlanId = Guid.NewGuid(), Title = "Assigned Plan" };
+        mockService.Setup(s => s.GetTrainingPlanByOrderDetailsIdAsync(coachId, orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        // Act
+        var result = await controller.GetTrainingPlanByOrderDetail(orderDetailsId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<TrainingPlanDetailDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(expected.TrainingPlanId, response.Data?.TrainingPlanId);
+    }
+
+    #endregion
 }

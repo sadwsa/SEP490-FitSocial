@@ -1,17 +1,26 @@
 using System;
+using System.Linq;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.API.Controllers;
+using FitSocial.Application.DTOs.Coach;
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Exceptions;
+using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Xunit;
 
 namespace FitSocial.UnitTests;
 
 /// <summary>
-/// Unit tests for UC_17: View Coach Dashboard (CoachDashboardService).
+/// Unit tests for UC_17: View Coach Dashboard (CoachDashboardService & CoachDashboardController).
 /// Tests calculation of the 4 key overview metrics under various scenarios.
 /// </summary>
 public class CoachDashboardServiceTests
@@ -137,4 +146,83 @@ public class CoachDashboardServiceTests
 
         Assert.Equal("Coach account not found.", ex.Message);
     }
+
+    #region Controller Tests (CoachDashboardController)
+
+    [Fact]
+    public void CoachDashboardController_HasAuthorizeRoleCoachAttribute()
+    {
+        var attr = typeof(CoachDashboardController).GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(attr);
+        Assert.Equal("COACH", attr.Roles);
+    }
+
+    [Fact]
+    public async Task GetDashboardOverview_Controller_WhenAuthenticatedCoach_ReturnsOk()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var mockService = new Mock<ICoachDashboardService>();
+        var controller = new CoachDashboardController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var expectedMetrics = new CoachDashboardMetricsDto
+        {
+            ActiveTraineesCount = 5,
+            TotalPackagesSold = 12,
+            MonthlyRevenue = 10000000m,
+            PendingRequestsCount = 1,
+            Currency = "VND",
+            LastUpdatedAt = DateTime.UtcNow
+        };
+
+        mockService.Setup(s => s.GetCoachDashboardMetricsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<CoachDashboardMetricsDto>.Ok(expectedMetrics));
+
+        // Act
+        var result = await controller.GetDashboardOverview(CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<CoachDashboardMetricsDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(5, response.Data.ActiveTraineesCount);
+        Assert.Equal(10000000m, response.Data.MonthlyRevenue);
+    }
+
+    [Fact]
+    public async Task GetDashboardOverview_Controller_WhenTokenInvalid_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<ICoachDashboardService>();
+        var controller = new CoachDashboardController(mockService.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        // Act
+        var result = await controller.GetDashboardOverview(CancellationToken.None);
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<CoachDashboardMetricsDto>>(unauthorized.Value);
+        Assert.False(response.Success);
+        Assert.Contains("Unauthorized", response.Message);
+    }
+
+    #endregion
 }

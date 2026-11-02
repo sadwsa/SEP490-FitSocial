@@ -1,3 +1,10 @@
+using System.Linq;
+using System.Security.Claims;
+using FitSocial.API.Controllers;
+using FitSocial.Application.DTOs.Common;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -211,7 +218,7 @@ public class RefundRequestServiceTests
 
         // Assert - MUST snapshot 450,000, NOT 1,000,000
         Assert.NotNull(result);
-        Assert.Equal(450000, result.Data.RequestedAmount);
+        Assert.Equal(450000, result.Data!.RequestedAmount);
     }
 
     [Fact]
@@ -1062,5 +1069,149 @@ public class RefundRequestServiceTests
 
         Assert.Contains("Payout Bank Account", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
-}
+    #region Controller Tests (RefundRequestsController)
 
+    [Fact]
+    public void RefundRequestsController_HasAuthorizeAttribute()
+    {
+        var attr = typeof(RefundRequestsController).GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(attr);
+    }
+
+    [Fact]
+    public void RefundRequestsController_GetAllRefundRequests_HasAdminAndStaffRoleAttribute()
+    {
+        var method = typeof(RefundRequestsController).GetMethod(nameof(RefundRequestsController.GetAllRefundRequests));
+        Assert.NotNull(method);
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(attr);
+        Assert.Contains(RoleConstants.Admin, attr.Roles);
+        Assert.Contains(RoleConstants.Staff, attr.Roles);
+    }
+
+    [Fact]
+    public async Task CreateRefundRequest_Controller_WhenAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var mockService = new Mock<IRefundRequestService>();
+        var controller = new RefundRequestsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var requestDto = new CreateRefundRequestDto
+        {
+            OrderId = Guid.NewGuid(),
+            Reason = "Coach never scheduled any sessions."
+        };
+
+        var expectedResult = ApiResponseDto<RefundRequestDto>.Ok(new RefundRequestDto
+        {
+            RefundRequestId = Guid.NewGuid(),
+            OrderId = requestDto.OrderId,
+            RequestedBy = userId,
+            Status = "PENDING"
+        });
+
+        mockService.Setup(s => s.CreateRefundRequestAsync(userId, requestDto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await controller.CreateRefundRequest(requestDto, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<RefundRequestDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal("PENDING", response.Data!.Status);
+    }
+
+    [Fact]
+    public async Task CreateRefundRequest_Controller_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<IRefundRequestService>();
+        var controller = new RefundRequestsController(mockService.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        var requestDto = new CreateRefundRequestDto { OrderId = Guid.NewGuid(), Reason = "Test" };
+
+        // Act
+        var result = await controller.CreateRefundRequest(requestDto, CancellationToken.None);
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<RefundRequestDto>>(unauthorized.Value);
+        Assert.False(response.Success);
+        Assert.Equal("Unauthorized", response.Message);
+    }
+
+    [Fact]
+    public async Task GetMyRefundRequests_Controller_WhenAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var mockService = new Mock<IRefundRequestService>();
+        var controller = new RefundRequestsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.GetMyRefundRequestsAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<List<RefundRequestDto>>.Ok(new List<RefundRequestDto>()));
+
+        // Act
+        var result = await controller.GetMyRefundRequests(CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<List<RefundRequestDto>>>(okResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task GetMyRefundRequests_Controller_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<IRefundRequestService>();
+        var controller = new RefundRequestsController(mockService.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        // Act
+        var result = await controller.GetMyRefundRequests(CancellationToken.None);
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<List<RefundRequestDto>>>(unauthorized.Value);
+        Assert.False(response.Success);
+    }
+
+    #endregion
+}

@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Conversations;
+using System.Security.Claims;
+using FitSocial.API.Controllers;
+using FitSocial.Application.DTOs.Common;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
@@ -636,4 +642,435 @@ public class ConversationServiceTests
         // Display last message must NOT be the auto-reply or blocked message
         Assert.Null(blockerConvDto.LastMessage);
     }
+
+    #region Controller Tests (ConversationsController)
+
+    [Fact]
+    public void ConversationsController_HasAuthorizeAttribute()
+    {
+        var attr = typeof(ConversationsController).GetCustomAttributes(typeof(AuthorizeAttribute), true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(attr);
+    }
+
+    [Fact]
+    public async Task GetConversations_Controller_WhenAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.GetUserConversationsAsync(userId))
+            .ReturnsAsync(ApiResponseDto<List<ConversationDto>>.Ok(new List<ConversationDto>()));
+
+        // Act
+        var result = await controller.GetConversations();
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<List<ConversationDto>>>(okResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task GetConversations_Controller_WhenTokenInvalid_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        // Act
+        var result = await controller.GetConversations();
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<List<ConversationDto>>>(unauthorized.Value);
+        Assert.False(response.Success);
+    }
+
+    [Fact]
+    public async Task GetConversationDetail_Controller_WhenAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var convId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.GetConversationDetailAsync(convId, userId))
+            .ReturnsAsync(ApiResponseDto<ConversationDetailDto>.Ok(new ConversationDetailDto { ConversationId = convId }));
+
+        // Act
+        var result = await controller.GetConversationDetail(convId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<ConversationDetailDto>>(okResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task SendMessage_Controller_WhenAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var convId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var request = new SendMessageRequestDto { Content = "Hello Coach!" };
+        var expectedMsg = new MessageDto { Id = Guid.NewGuid(), Content = "Hello Coach!" };
+
+        mockService.Setup(s => s.SendMessageAsync(convId, userId, request))
+            .ReturnsAsync(ApiResponseDto<MessageDto>.Ok(expectedMsg));
+
+        // Act
+        var result = await controller.SendMessage(convId, request);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<MessageDto>>(okResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task SendMessage_Controller_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        var request = new SendMessageRequestDto { Content = "Hello" };
+
+        // Act
+        var result = await controller.SendMessage(Guid.NewGuid(), request);
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<MessageDto>>(unauthorized.Value);
+        Assert.False(response.Success);
+    }
+
+    [Fact]
+    public async Task SendMessage_Controller_WhenContentAndAttachmentEmpty_ReturnsBadRequest()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var request = new SendMessageRequestDto { Content = "   " };
+
+        // Act
+        var result = await controller.SendMessage(Guid.NewGuid(), request);
+
+        // Assert
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<MessageDto>>(badRequest.Value);
+        Assert.False(response.Success);
+    }
+
+    [Fact]
+    public async Task SendMessage_Controller_WhenNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var convId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var request = new SendMessageRequestDto { Content = "Hello" };
+        mockService.Setup(s => s.SendMessageAsync(convId, userId, request))
+            .ReturnsAsync(ApiResponseDto<MessageDto>.Fail("Conversation not found"));
+
+        // Act
+        var result = await controller.SendMessage(convId, request);
+
+        // Assert
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<MessageDto>>(notFound.Value);
+        Assert.False(response.Success);
+    }
+
+    [Fact]
+    public async Task SendMessage_Controller_WhenForbidden_ReturnsForbidden()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var convId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var request = new SendMessageRequestDto { Content = "Hello" };
+        mockService.Setup(s => s.SendMessageAsync(convId, userId, request))
+            .ReturnsAsync(ApiResponseDto<MessageDto>.Fail("User is not a participant in this conversation"));
+
+        // Act
+        var result = await controller.SendMessage(convId, request);
+
+        // Assert
+        var statusResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status403Forbidden, statusResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteConversation_Controller_WhenAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var convId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.DeleteConversationAsync(convId, userId))
+            .ReturnsAsync(ApiResponseDto<bool>.Ok(true, "Conversation deleted."));
+
+        // Act
+        var result = await controller.DeleteConversation(convId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<bool>>(okResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task DeleteConversation_Controller_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        // Act
+        var result = await controller.DeleteConversation(Guid.NewGuid());
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<bool>>(unauthorized.Value);
+        Assert.False(response.Success);
+    }
+
+    [Fact]
+    public async Task DeleteConversation_Controller_WhenNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var convId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.DeleteConversationAsync(convId, userId))
+            .ReturnsAsync(ApiResponseDto<bool>.Fail("Conversation not found"));
+
+        // Act
+        var result = await controller.DeleteConversation(convId);
+
+        // Assert
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<bool>>(notFound.Value);
+        Assert.False(response.Success);
+    }
+
+    [Fact]
+    public async Task BlockUser_Controller_WhenAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var convId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.BlockUserAsync(convId, userId))
+            .ReturnsAsync(ApiResponseDto<bool>.Ok(true, "User blocked."));
+
+        // Act
+        var result = await controller.BlockUser(convId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<bool>>(okResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task BlockUser_Controller_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        // Act
+        var result = await controller.BlockUser(Guid.NewGuid());
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<bool>>(unauthorized.Value);
+        Assert.False(response.Success);
+    }
+
+    [Fact]
+    public async Task UnblockUser_Controller_WhenAuthenticated_ReturnsOk()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var convId = Guid.NewGuid();
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        }, "TestAuth"));
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.UnblockUserAsync(convId, userId))
+            .ReturnsAsync(ApiResponseDto<bool>.Ok(true, "User unblocked."));
+
+        // Act
+        var result = await controller.UnblockUser(convId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<bool>>(okResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task UnblockUser_Controller_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var mockService = new Mock<IConversationService>();
+        var controller = new ConversationsController(mockService.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
+        };
+
+        // Act
+        var result = await controller.UnblockUser(Guid.NewGuid());
+
+        // Assert
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var response = Assert.IsType<ApiResponseDto<bool>>(unauthorized.Value);
+        Assert.False(response.Success);
+    }
+
+    #endregion
 }

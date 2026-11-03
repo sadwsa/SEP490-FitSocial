@@ -1,5 +1,5 @@
 UTCID,Type,SearchKeyword,MinExperience,SortBy,RepositoryThrows,ExpectedCount,ExpectedCoachNames
-UTCID01,B,,,,FALSE,3,Carol White|Alice Johnson|Bob Smith
+UTCID01,N,,,,FALSE,3,Carol White|Alice Johnson|Bob Smith
 UTCID02,B,   ,,,FALSE,3,Carol White|Alice Johnson|Bob Smith
 UTCID03,N,alice,,,FALSE,1,Alice Johnson
 UTCID04,N,Johnson,,,FALSE,1,Alice Johnson
@@ -17,7 +17,8 @@ UTCID15,B,yoga,0,,FALSE,2,Carol White|Alice Johnson
 UTCID16,B,yoga,99,,FALSE,0,
 UTCID17,N,yoga,,name_asc,FALSE,2,Alice Johnson|Carol White
 UTCID18,N,yoga,,exp_asc,FALSE,2,Alice Johnson|Carol White
-UTCID19,N,yoga,,unknown_sort,FALSE,2,Carol White|Alice Johnson
+UTCID19,B,yoga,,unknown_sort,FALSE,2,Carol White|Alice Johnson
+UTCID23,N,yoga,,name_desc,FALSE,2,Carol White|Alice Johnson
 UTCID20,N,,5,name_asc,FALSE,2,Alice Johnson|Carol White
 UTCID21,A,,,,TRUE,0,
 UTCID22,N,yoga,,EXP_ASC,FALSE,2,Alice Johnson|Carol White

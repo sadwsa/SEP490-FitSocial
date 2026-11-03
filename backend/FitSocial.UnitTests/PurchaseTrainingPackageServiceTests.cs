@@ -62,6 +62,8 @@ public class PurchaseTrainingPackageServiceTests
                     CoachIdEqualsBuyer = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "CoachIdEqualsBuyer")),
                     PackageActive = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PackageActive")),
                     AlreadyPurchased = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AlreadyPurchased")),
+                    NullFields = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "NullFields")),
+                    BuyerEmailNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "BuyerEmailNull")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -92,7 +94,7 @@ public class PurchaseTrainingPackageServiceTests
 
         if (tc.BuyerExists)
         {
-            _users.Setup(u => u.GetByIdAsync(buyerId, It.IsAny<CancellationToken>())).ReturnsAsync(new User { UserId = buyerId, FullName = "Buyer", Email = "buyer@example.com" });
+            if (tc.NullFields) { _users.Setup(u => u.GetByIdAsync(buyerId, It.IsAny<CancellationToken>())).ReturnsAsync(new User { UserId = buyerId, FullName = null, Email = tc.BuyerEmailNull ? null : "buyer@example.com" }); } else { _users.Setup(u => u.GetByIdAsync(buyerId, It.IsAny<CancellationToken>())).ReturnsAsync(new User { UserId = buyerId, FullName = "Buyer", Email = "buyer@example.com" }); }
         }
         else
         {
@@ -101,16 +103,32 @@ public class PurchaseTrainingPackageServiceTests
 
         if (tc.PackageExists)
         {
-            _packages.Setup(p => p.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(new TrainingPackage
+            if (tc.NullFields)
             {
-                PackageId = packageId,
-                CoachId = coachId,
-                IsActive = tc.PackageActive,
-                Title = "Package",
-                DurationDays = 30,
-                Price = 100000,
-                Coach = null
-            });
+                _packages.Setup(p => p.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(new TrainingPackage
+                {
+                    PackageId = packageId,
+                    CoachId = coachId,
+                    IsActive = tc.PackageActive,
+                    Title = null,
+                    DurationDays = null,
+                    Price = null,
+                    Coach = new CoachProfile { Coach = new User { FullName = null, Email = null } }
+                });
+            }
+            else
+            {
+                _packages.Setup(p => p.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(new TrainingPackage
+                {
+                    PackageId = packageId,
+                    CoachId = coachId,
+                    IsActive = tc.PackageActive,
+                    Title = "Package",
+                    DurationDays = 30,
+                    Price = 100000,
+                    Coach = new CoachProfile { Coach = new User { FullName = "CoachName", Email = "coach@example.com" } }
+                });
+            }
         }
         else
         {
@@ -151,6 +169,8 @@ public class PurchaseTrainingPackageServiceTests
         public bool CoachIdEqualsBuyer { get; set; }
         public bool PackageActive { get; set; }
         public bool AlreadyPurchased { get; set; }
+        public bool NullFields { get; set; }
+        public bool BuyerEmailNull { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

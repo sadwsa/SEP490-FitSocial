@@ -111,5 +111,23 @@ public class ManagementControllersAuthorizationTests
             Assert.DoesNotContain(RoleConstants.Trainee, methodAuth.Roles!);
         }
     }
-}
 
+    [Fact]
+    public void AdminUsersController_GetUsersEndpoint_RequiresStaffOrAdmin()
+    {
+        // Act: Verify GetUsers method exists and belongs to the controller decorated with [Authorize(Roles = "STAFF,ADMIN")]
+        var method = typeof(AdminUsersController).GetMethod("GetUsers");
+        Assert.NotNull(method);
+
+        var classAuth = typeof(AdminUsersController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(classAuth);
+        Assert.Contains(RoleConstants.Staff, classAuth.Roles!);
+        Assert.Contains(RoleConstants.Admin, classAuth.Roles!);
+        Assert.DoesNotContain(RoleConstants.Trainee, classAuth.Roles!);
+        Assert.DoesNotContain(RoleConstants.Coach, classAuth.Roles!);
+    }
+}

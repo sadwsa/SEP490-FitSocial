@@ -1,9 +1,9 @@
-UTCID,Type,PlanExists,Amount,Currency,Description,ImageUrl,SubscriptionDuration,TrainingPackageDuration,IsActive,SaveChangesThrows,AuditThrows,ExpectedSuccess,ExpectedMessage
-UTCID01,N,TRUE,450000,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,TRUE,TRUE,Subscription plan updated successfully.
-UTCID02,A,FALSE,450000,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,Subscription plan not found.
-UTCID03,A,TRUE,-1,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,Amount must be >= 0.
-UTCID04,A,TRUE,450000,VND,,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,Description is required.
-UTCID05,A,TRUE,,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,Amount must be >= 0.
-UTCID06,A,TRUE,450000,VND,Updated Plan,http://img.jpg,30,30,TRUE,TRUE,FALSE,FALSE,Could not update subscription plan.
-UTCID08,N,TRUE,100000,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,FALSE,TRUE,Subscription plan updated successfully.
-UTCID07,N,TRUE,450000,,Updated Plan,,,,TRUE,FALSE,FALSE,TRUE,Subscription plan updated successfully.
+UTCID,Type,PlanExists,Amount,Currency,Description,ImageUrl,SubscriptionDuration,TrainingPackageDuration,IsActive,SaveChangesThrows,AuditThrows,AuditLogsNull,ExpectedSuccess,ExpectedMessage
+UTCID01,N,TRUE,450000,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,TRUE,FALSE,TRUE,Subscription plan updated successfully.
+UTCID02,A,FALSE,450000,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,FALSE,Subscription plan not found.
+UTCID03,A,TRUE,-1,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,FALSE,Amount must be >= 0.
+UTCID04,A,TRUE,450000,VND,,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,FALSE,Description is required.
+UTCID05,A,TRUE,,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,FALSE,Amount must be >= 0.
+UTCID06,A,TRUE,450000,VND,Updated Plan,http://img.jpg,30,30,TRUE,TRUE,FALSE,FALSE,FALSE,Could not update subscription plan.
+UTCID07,N,TRUE,450000,,Updated Plan,,,,TRUE,FALSE,FALSE,TRUE,TRUE,Subscription plan updated successfully.
+UTCID08,N,TRUE,100000,VND,Updated Plan,http://img.jpg,30,30,TRUE,FALSE,FALSE,FALSE,TRUE,Subscription plan updated successfully.

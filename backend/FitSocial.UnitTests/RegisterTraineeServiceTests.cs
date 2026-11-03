@@ -179,7 +179,7 @@ public class RegisterTraineeServiceTests
             ConfirmPassword = tc.ConfirmPassword,
             OtpCode = tc.OtpCode,
             PhoneNumber = tc.PhoneRaw == "NULL" ? null : tc.PhoneRaw,
-            Gender = string.IsNullOrWhiteSpace(tc.GenderRaw) ? null : tc.GenderRaw,
+            Gender = (tc.GenderRaw == "NULL" || string.IsNullOrWhiteSpace(tc.GenderRaw)) ? null : tc.GenderRaw,
             DateOfBirth = dob,
             TermId = termId
         };

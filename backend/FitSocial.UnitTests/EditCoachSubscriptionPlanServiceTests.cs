@@ -65,6 +65,7 @@ public class EditCoachSubscriptionPlanServiceTests
                     IsActive = isActive,
                     SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
                     AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditThrows")),
+                    AuditLogsNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditLogsNull")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -143,6 +144,7 @@ public class EditCoachSubscriptionPlanServiceTests
         public bool? IsActive { get; set; }
         public bool SaveChangesThrows { get; set; }
         public bool AuditThrows { get; set; }
+        public bool AuditLogsNull { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

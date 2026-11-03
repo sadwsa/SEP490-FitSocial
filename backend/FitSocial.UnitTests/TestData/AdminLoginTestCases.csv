@@ -10,3 +10,4 @@ UTCID08,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,TRAINEE,FALSE
 UTCID09,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,COACH,FALSE,FALSE,Invalid email or password.
 UTCID10,B,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,FALSE,TRUE,Welcome to the Management Portal!
 UTCID11,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,,FALSE,FALSE,Invalid email or password.
+UTCID12,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,NULL,FALSE,FALSE,Invalid email or password.

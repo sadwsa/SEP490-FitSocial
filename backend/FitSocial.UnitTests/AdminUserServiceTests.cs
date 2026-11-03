@@ -942,4 +942,287 @@ public class AdminUserServiceTests
         Assert.Empty(result.Data.Items);
         Assert.Equal(0, result.Data.TotalCount);
     }
+
+    // =========================================================================
+    // View List User's Account (GetUsersAsync) Tests - Full Coverage
+    // =========================================================================
+
+    [Fact]
+    public async Task GetUsersAsync_ShouldCallListUsersForAdminAsync_AndReturnPagedUsers()
+    {
+        // Arrange (Happy Path)
+        var userId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var users = new System.Collections.Generic.List<User>
+        {
+            new()
+            {
+                UserId = userId,
+                FullName = "Tran Van Trainee",
+                Email = "trainee@fitsocial.com",
+                PhoneNumber = "0901234567",
+                RoleCode = RoleConstants.Trainee,
+                IsLocked = false,
+                WarningCount = 1,
+                TokenVersion = 3,
+                CreatedAt = now.AddDays(-10),
+                LastActiveAt = now.AddMinutes(-5)
+            },
+            new()
+            {
+                UserId = Guid.NewGuid(),
+                FullName = "Le Thi Coach",
+                Email = "coach@fitsocial.com",
+                PhoneNumber = "0987654321",
+                RoleCode = RoleConstants.Coach,
+                IsLocked = true,
+                WarningCount = 0,
+                TokenVersion = 1,
+                CreatedAt = now.AddDays(-30),
+                LastActiveAt = now.AddHours(-1)
+            }
+        };
+
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                null, null, null, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((users, 2));
+
+        // Act
+        var result = await _service.GetUsersAsync();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.TotalCount);
+        Assert.Equal(2, result.Data.Items.Count);
+        Assert.Equal(1, result.Data.PageNumber);
+        Assert.Equal(10, result.Data.PageSize);
+        Assert.Equal(1, result.Data.TotalPages);
+
+        var firstUser = result.Data.Items[0];
+        Assert.Equal(userId, firstUser.UserId);
+        Assert.Equal("Tran Van Trainee", firstUser.FullName);
+        Assert.Equal("trainee@fitsocial.com", firstUser.Email);
+        Assert.Equal("0901234567", firstUser.PhoneNumber);
+        Assert.Equal(RoleConstants.Trainee, firstUser.RoleCode);
+        Assert.False(firstUser.IsLocked);
+        Assert.Equal(1, firstUser.WarningCount);
+        Assert.Equal(3, firstUser.TokenVersion);
+        Assert.Equal(now.AddDays(-10), firstUser.CreatedAt);
+        Assert.Equal(now.AddMinutes(-5), firstUser.LastActiveAt);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_WithAllFilters_ShouldPassParametersCorrectlyToRepository()
+    {
+        // Arrange (Happy Path & Multi-Filter)
+        var users = new System.Collections.Generic.List<User>
+        {
+            new()
+            {
+                UserId = Guid.NewGuid(),
+                FullName = "Matched User",
+                Email = "matched@fitsocial.com",
+                RoleCode = RoleConstants.Coach,
+                IsLocked = true
+            }
+        };
+
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                "matched", RoleConstants.Coach, true, 2, 5, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((users, 1));
+
+        // Act
+        var result = await _service.GetUsersAsync(
+            search: "matched",
+            role: RoleConstants.Coach,
+            isLocked: true,
+            pageNumber: 2,
+            pageSize: 5);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Single(result.Data!.Items);
+        Assert.Equal("Matched User", result.Data.Items[0].FullName);
+        _userRepoMock.Verify(r => r.ListUsersForAdminAsync(
+            "matched", RoleConstants.Coach, true, 2, 5, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_WhenUserFullNameIsNull_ShouldFallbackToEmailPrefix()
+    {
+        // Arrange (Happy Path / Edge Case mapping: Fallback to email prefix)
+        var user = new User
+        {
+            UserId = Guid.NewGuid(),
+            FullName = null,
+            Email = "john.doe@fitsocial.com",
+            RoleCode = RoleConstants.Trainee,
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                null, null, null, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<User> { user }, 1));
+
+        // Act
+        var result = await _service.GetUsersAsync();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Single(result.Data!.Items);
+        Assert.Equal("john.doe", result.Data.Items[0].FullName);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_WhenRoleCodeAndIsLockedAreNull_ShouldApplyDefaults()
+    {
+        // Arrange (Happy Path / Edge Case mapping: RoleCode and IsLocked defaults)
+        var user = new User
+        {
+            UserId = Guid.NewGuid(),
+            Email = "guest@fitsocial.com",
+            RoleCode = null,
+            IsLocked = null
+        };
+
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                null, null, null, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<User> { user }, 1));
+
+        // Act
+        var result = await _service.GetUsersAsync();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Single(result.Data!.Items);
+        Assert.Equal("TRAINEE", result.Data.Items[0].RoleCode);
+        Assert.False(result.Data.Items[0].IsLocked);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_FilterByRole_ShouldPassRoleParameter()
+    {
+        // Arrange (Filter Case)
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                null, RoleConstants.Coach, null, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<User>(), 0));
+
+        // Act
+        var result = await _service.GetUsersAsync(role: RoleConstants.Coach);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        _userRepoMock.Verify(r => r.ListUsersForAdminAsync(
+            null, RoleConstants.Coach, null, 1, 10, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_FilterByLockedStatus_ShouldPassIsLockedParameter()
+    {
+        // Arrange (Filter Case)
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                null, null, true, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<User>(), 0));
+
+        // Act
+        var result = await _service.GetUsersAsync(isLocked: true);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        _userRepoMock.Verify(r => r.ListUsersForAdminAsync(
+            null, null, true, 1, 10, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_EmptyResult_ShouldReturnEmptyPagedResult()
+    {
+        // Arrange (Boundary Case: 0 users found)
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<User>(), 0));
+
+        // Act
+        var result = await _service.GetUsersAsync(pageNumber: 1, pageSize: 10);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Empty(result.Data.Items);
+        Assert.Equal(0, result.Data.TotalCount);
+        Assert.Equal(0, result.Data.TotalPages);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_CustomPaginationBoundaries_ShouldCalculateTotalPagesCorrectly()
+    {
+        // Arrange (Boundary Case: TotalCount = 12, PageSize = 5 => TotalPages = 3)
+        var users = new System.Collections.Generic.List<User>
+        {
+            new() { UserId = Guid.NewGuid(), Email = "user1@fitsocial.com" },
+            new() { UserId = Guid.NewGuid(), Email = "user2@fitsocial.com" }
+        };
+
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                null, null, null, 2, 5, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((users, 12));
+
+        // Act
+        var result = await _service.GetUsersAsync(pageNumber: 2, pageSize: 5);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Items.Count);
+        Assert.Equal(12, result.Data.TotalCount);
+        Assert.Equal(2, result.Data.PageNumber);
+        Assert.Equal(5, result.Data.PageSize);
+        Assert.Equal(3, result.Data.TotalPages);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_WhenRepositoryThrows_ShouldReturnFailureResult()
+    {
+        // Arrange (Exception Case: Database failure)
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("PostgreSQL connection refused"));
+
+        // Act
+        var result = await _service.GetUsersAsync();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error retrieving users", result.Message);
+        Assert.Contains("PostgreSQL connection refused", result.Message);
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_WhenCancellationRequested_ShouldReturnFailureResult()
+    {
+        // Arrange (Exception Case: Operation cancelled)
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        _userRepoMock.Setup(r => r.ListUsersForAdminAsync(
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>(), cts.Token))
+            .ThrowsAsync(new OperationCanceledException(cts.Token));
+
+        // Act
+        var result = await _service.GetUsersAsync(cancellationToken: cts.Token);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error retrieving users", result.Message);
+    }
 }

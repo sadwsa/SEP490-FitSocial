@@ -1,3 +1,9 @@
+using FitSocial.Application.Interfaces;
+using FitSocial.API.Controllers;
+using FitSocial.Application.DTOs.Common;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using FitSocial.Application.DTOs.Reports;
 using FitSocial.Application.Exceptions;
 using FitSocial.Application.Services;
@@ -756,5 +762,456 @@ public class ReportServiceTests
         _mockNotificationRepo.Verify(n => n.AddAsync(It.Is<Notification>(notif => notif.UserId == actualAuthorId), It.IsAny<CancellationToken>()), Times.Once);
         _mockNotificationRepo.Verify(n => n.AddAsync(It.Is<Notification>(notif => notif.UserId == staleReportedUserId), It.IsAny<CancellationToken>()), Times.Never);
     }
-}
 
+    #region Submit Coach Complaint (ReportUserAsync) Tests - Happy Path
+
+    [Fact]
+    public async Task ReportUserAsync_ValidCoachComplaintWithMedia_ShouldCreateReportSuccessfully()
+    {
+        // Arrange
+        var reporterTraineeId = Guid.NewGuid();
+        var reportedCoachId = Guid.NewGuid();
+
+        var coachUser = new User
+        {
+            UserId = reportedCoachId,
+            FullName = "Coach Mike",
+            RoleCode = RoleConstants.Coach
+        };
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedCoachId,
+            Reason = "Unprofessional behavior during training sessions",
+            Description = "Coach cancelled sessions repeatedly without prior notification.",
+            Type = "COACH",
+            MediaUrls = new List<string>
+            {
+                "https://cdn.example.com/chat_screenshot.jpg",
+                "https://cdn.example.com/schedule_proof.jpg"
+            }
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedCoachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(coachUser);
+        _mockReportRepo.Setup(r => r.AddAsync(It.IsAny<Report>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.ReportUserAsync(reporterTraineeId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("User reported successfully.", result.Message);
+        Assert.NotNull(result.Data);
+
+        _mockReportRepo.Verify(r => r.AddAsync(It.Is<Report>(report =>
+            report.ReporterId == reporterTraineeId &&
+            report.ReportedUserId == reportedCoachId &&
+            report.Reason == "Unprofessional behavior during training sessions" &&
+            report.Description == "Coach cancelled sessions repeatedly without prior notification." &&
+            report.Type == "COACH" &&
+            report.Status == "PENDING" &&
+            report.ReportMedia.Count == 2), It.IsAny<CancellationToken>()), Times.Once);
+
+        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WithoutExplicitType_ShouldDefaultTypeToUSER()
+    {
+        // Arrange
+        var reporterId = Guid.NewGuid();
+        var reportedCoachId = Guid.NewGuid();
+
+        var coachUser = new User { UserId = reportedCoachId, RoleCode = RoleConstants.Coach };
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedCoachId,
+            Reason = "Harassment in private messages",
+            Type = null // No type provided
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedCoachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(coachUser);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.ReportUserAsync(reporterId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        _mockReportRepo.Verify(r => r.AddAsync(It.Is<Report>(report => report.Type == "USER"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReportsController_ReportUser_WhenAuthenticatedAndSuccessful_ShouldReturn200Ok()
+    {
+        // Arrange
+        var reportServiceMock = new Mock<IReportService>();
+        var reporterId = Guid.NewGuid();
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = Guid.NewGuid(),
+            Reason = "Inappropriate language"
+        };
+        var expectedDto = new ReportListItemDto { ReportId = Guid.NewGuid(), Reason = "Inappropriate language" };
+
+        reportServiceMock.Setup(s => s.ReportUserAsync(reporterId, request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<ReportListItemDto>.Ok(expectedDto, "User reported successfully."));
+
+        var controller = new ReportsController(reportServiceMock.Object);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, reporterId.ToString())
+                }, "TestAuth"))
+            }
+        };
+
+        // Act
+        var actionResult = await controller.ReportUser(request, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<ReportListItemDto>>(okResult.Value);
+        Assert.True(body.Success);
+        Assert.Equal("User reported successfully.", body.Message);
+    }
+
+    #endregion
+
+    #region Submit Coach Complaint (ReportUserAsync) Tests - Negative Cases
+
+    [Fact]
+    public async Task ReportUserAsync_WhenReporterIdIsEmptyGuid_ShouldThrowValidationException()
+    {
+        // Arrange
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = Guid.NewGuid(),
+            Reason = "Valid reason"
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReportUserAsync(Guid.Empty, request));
+
+        Assert.Equal("User is not authenticated.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenRequestIsNull_ShouldThrowValidationException()
+    {
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReportUserAsync(Guid.NewGuid(), null!));
+
+        Assert.Equal("Reported user ID is required.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenReportedUserIdIsEmptyGuid_ShouldThrowValidationException()
+    {
+        // Arrange
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = Guid.Empty,
+            Reason = "Valid reason"
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReportUserAsync(Guid.NewGuid(), request));
+
+        Assert.Equal("Reported user ID is required.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenUserReportsThemselves_ShouldThrowBusinessException()
+    {
+        // Arrange: Reporter is reporting their own ID
+        var selfId = Guid.NewGuid();
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = selfId,
+            Reason = "Self reporting test"
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.ReportUserAsync(selfId, request));
+
+        Assert.Equal("You cannot report yourself.", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task ReportUserAsync_WhenReasonIsNullOrWhitespace_ShouldThrowValidationException(string? invalidReason)
+    {
+        // Arrange
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = Guid.NewGuid(),
+            Reason = invalidReason!
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReportUserAsync(Guid.NewGuid(), request));
+
+        Assert.Equal("Reason is required.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenReportedUserDoesNotExist_ShouldThrowNotFoundException()
+    {
+        // Arrange
+        var reportedUserId = Guid.NewGuid();
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid reason"
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((User?)null);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.ReportUserAsync(Guid.NewGuid(), request));
+
+        Assert.Equal("Reported user not found.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportsController_ReportUser_WhenUnauthenticated_ShouldReturn401Unauthorized()
+    {
+        // Arrange
+        var reportServiceMock = new Mock<IReportService>();
+        var controller = new ReportsController(reportServiceMock.Object);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity()) // Unauthenticated: no claims
+            }
+        };
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = Guid.NewGuid(),
+            Reason = "Valid reason"
+        };
+
+        // Act
+        var actionResult = await controller.ReportUser(request, CancellationToken.None);
+
+        // Assert
+        var unauthorizedResult = Assert.IsType<UnauthorizedObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status401Unauthorized, unauthorizedResult.StatusCode);
+    }
+
+    #endregion
+
+    #region Submit Coach Complaint (ReportUserAsync) Tests - Boundary Cases
+
+    [Fact]
+    public async Task ReportUserAsync_WithMediaUrlsContainingNullOrWhitespace_ShouldFilterThemOut()
+    {
+        // Arrange: Media list containing empty strings and null entries
+        var reportedCoachId = Guid.NewGuid();
+        var coachUser = new User { UserId = reportedCoachId, RoleCode = RoleConstants.Coach };
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedCoachId,
+            Reason = "Scam report",
+            MediaUrls = new List<string>
+            {
+                "https://example.com/proof1.png",
+                "",
+                "   ",
+                null!,
+                "https://example.com/proof2.png"
+            }
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedCoachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(coachUser);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.ReportUserAsync(Guid.NewGuid(), request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+
+        _mockReportRepo.Verify(r => r.AddAsync(It.Is<Report>(report =>
+            report.ReportMedia.Count == 2 &&
+            report.ReportMedia.All(m => !string.IsNullOrWhiteSpace(m.MediaUrl))), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WithLeadingTrailingWhitespaceInReasonAndDescription_ShouldTrimProperly()
+    {
+        // Arrange
+        var reportedCoachId = Guid.NewGuid();
+        var coachUser = new User { UserId = reportedCoachId, RoleCode = RoleConstants.Coach };
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedCoachId,
+            Reason = "   Coach missed multiple appointments   ",
+            Description = "   No explanation was provided whatsoever.   "
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedCoachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(coachUser);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.ReportUserAsync(Guid.NewGuid(), request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+
+        _mockReportRepo.Verify(r => r.AddAsync(It.Is<Report>(report =>
+            report.Reason == "Coach missed multiple appointments" &&
+            report.Description == "No explanation was provided whatsoever."), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WithoutMediaUrls_ShouldCreateReportWithEmptyMediaList()
+    {
+        // Arrange: MediaUrls is null
+        var reportedCoachId = Guid.NewGuid();
+        var coachUser = new User { UserId = reportedCoachId, RoleCode = RoleConstants.Coach };
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedCoachId,
+            Reason = "Rudeness",
+            MediaUrls = null
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedCoachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(coachUser);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.ReportUserAsync(Guid.NewGuid(), request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+
+        _mockReportRepo.Verify(r => r.AddAsync(It.Is<Report>(report =>
+            report.ReportMedia.Count == 0), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    #endregion
+
+    #region Submit Coach Complaint (ReportUserAsync) Tests - Exception Cases
+
+    [Fact]
+    public async Task ReportUserAsync_WhenUserRepositoryThrowsException_ShouldPropagateException()
+    {
+        // Arrange
+        var reportedUserId = Guid.NewGuid();
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid reason"
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("DB connection dropped"));
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ReportUserAsync(Guid.NewGuid(), request));
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenRepositoryAddThrowsException_ShouldPropagateException()
+    {
+        // Arrange
+        var reportedUserId = Guid.NewGuid();
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid reason"
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { UserId = reportedUserId });
+        _mockReportRepo.Setup(r => r.AddAsync(It.IsAny<Report>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Database insert error"));
+
+        // Act & Assert
+        await Assert.ThrowsAsync<Exception>(() =>
+            _service.ReportUserAsync(Guid.NewGuid(), request));
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenUnitOfWorkThrowsException_ShouldPropagateException()
+    {
+        // Arrange
+        var reportedUserId = Guid.NewGuid();
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid reason"
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { UserId = reportedUserId });
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Transaction deadlock"));
+
+        // Act & Assert
+        await Assert.ThrowsAsync<Exception>(() =>
+            _service.ReportUserAsync(Guid.NewGuid(), request));
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenCancellationRequested_ShouldPropagateOperationCanceledException()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var reportedUserId = Guid.NewGuid();
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid reason"
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException(cts.Token));
+
+        // Act & Assert
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            _service.ReportUserAsync(Guid.NewGuid(), request, cts.Token));
+    }
+
+    #endregion
+}

@@ -1,0 +1,20 @@
+UTCID,Type,SearchKeyword,MinExperience,SortBy,RepositoryThrows,ExpectedCount,ExpectedCoachNames,ExpectedFirstStatus,ExpectedFirstApprovalStatus,ExpectedFirstExperienceYears,ExpectedFirstLocationCount
+UTCID01,N,,,,FALSE,3,Carol White|Alice Johnson|Bob Smith,INACTIVE,PENDING,10,1
+UTCID02,N,yoga,,,FALSE,2,Carol White|Alice Johnson,INACTIVE,PENDING,10,1
+UTCID03,N,ALICE,,,FALSE,1,Alice Johnson,ACTIVE,APPROVED,5,2
+UTCID04,N,nonexistent,,,FALSE,0,,,,0,0
+UTCID05,N,,5,,FALSE,2,Carol White|Alice Johnson,INACTIVE,PENDING,10,1
+UTCID06,B,,0,,FALSE,3,Carol White|Alice Johnson|Bob Smith,INACTIVE,PENDING,10,1
+UTCID07,N,,,exp_asc,FALSE,3,Bob Smith|Alice Johnson|Carol White,ACTIVE,APPROVED,2,0
+UTCID08,N,,,name_asc,FALSE,3,Alice Johnson|Bob Smith|Carol White,ACTIVE,APPROVED,5,2
+UTCID09,N,,,name_desc,FALSE,3,Carol White|Bob Smith|Alice Johnson,INACTIVE,PENDING,10,1
+UTCID10,N,,,unknown_sort,FALSE,3,Carol White|Alice Johnson|Bob Smith,INACTIVE,PENDING,10,1
+UTCID11,N,yoga,6,,FALSE,1,Carol White,INACTIVE,PENDING,10,1
+UTCID12,B,   ,,,FALSE,3,Carol White|Alice Johnson|Bob Smith,INACTIVE,PENDING,10,1
+UTCID13,B,,-1,,FALSE,3,Carol White|Alice Johnson|Bob Smith,INACTIVE,PENDING,10,1
+UTCID14,B,,99,,FALSE,0,,,,0,0
+UTCID15,N,Strength,,name_desc,FALSE,1,Bob Smith,ACTIVE,APPROVED,2,0
+UTCID16,N,coach,,exp_desc,FALSE,1,Bob Smith,ACTIVE,APPROVED,2,0
+UTCID17,A,,,,TRUE,0,,,,0,0
+UTCID18,N,,,EXP_ASC,FALSE,3,Bob Smith|Alice Johnson|Carol White,ACTIVE,APPROVED,2,0
+UTCID19,N,  yoga  ,,,FALSE,2,Carol White|Alice Johnson,INACTIVE,PENDING,10,1

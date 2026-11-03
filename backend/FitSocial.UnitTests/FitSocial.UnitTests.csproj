@@ -103,6 +103,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="TestData\ViewCoachListTestCases.csv" />
+    <EmbeddedResource Include="TestData\SearchCoachesTestCases.csv" />
   </ItemGroup>
 
   <ItemGroup>

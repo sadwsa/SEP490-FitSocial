@@ -298,3 +298,4 @@ public class ManagementControllersAuthorizationTests
         Assert.Equal("clear", httpDeleteClear.Template);
     }
 }
+}

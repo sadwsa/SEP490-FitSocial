@@ -1261,5 +1261,429 @@ public class LocationServiceTests
     }
 
     #endregion
+
+    #region Delete Location Tests - Happy Path
+
+    [Fact]
+    public async Task DeleteLocationAsync_ValidLocationWithNoPostsAndNoCoaches_ShouldDeleteSuccessfully()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var location = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Empty Gym",
+            Address = "123 Empty St",
+            Posts = new List<Post>(),
+            Coaches = new List<CoachProfile>()
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.True(result.Data);
+        Assert.Equal("Location deleted successfully.", result.Message);
+
+        _locationRepoMock.Verify(r => r.Remove(location), Times.Once);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteLocationAsync_LocationWithOnlyDeletedPosts_ShouldDeleteSuccessfully()
+    {
+        // Arrange: All posts associated with this location are soft-deleted (IsDeleted == true)
+        var locationId = Guid.NewGuid();
+        var location = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Archived Gym",
+            Address = "456 Archived St",
+            Posts = new List<Post>
+            {
+                new Post { Id = Guid.NewGuid(), IsDeleted = true },
+                new Post { Id = Guid.NewGuid(), IsDeleted = true }
+            },
+            Coaches = new List<CoachProfile>()
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.True(result.Data);
+        _locationRepoMock.Verify(r => r.Remove(location), Times.Once);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LocationsController_DeleteLocation_WhenSuccessful_ShouldReturn200Ok()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+
+        locationServiceMock.Setup(s => s.DeleteLocationAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<bool>.Ok(true, "Location deleted successfully."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.DeleteLocation(locationId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<bool>>(okResult.Value);
+        Assert.True(body.Success);
+        Assert.True(body.Data);
+        Assert.Equal("Location deleted successfully.", body.Message);
+    }
+
+    #endregion
+
+    #region Delete Location Tests - Negative Cases
+
+    [Fact]
+    public async Task DeleteLocationAsync_WhenLocationNotFound_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location not found.", result.Message);
+        Assert.False(result.Data);
+
+        _locationRepoMock.Verify(r => r.Remove(It.IsAny<Location>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteLocationAsync_WhenLocationHasActivePosts_ShouldReturnFailureResult()
+    {
+        // Arrange: Location is associated with at least one non-deleted post
+        var locationId = Guid.NewGuid();
+        var location = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Active Posts Gym",
+            Posts = new List<Post>
+            {
+                new Post { Id = Guid.NewGuid(), IsDeleted = false }
+            },
+            Coaches = new List<CoachProfile>()
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Cannot delete this location because it is currently used by active posts.", result.Message);
+        Assert.False(result.Data);
+
+        _locationRepoMock.Verify(r => r.Remove(It.IsAny<Location>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteLocationAsync_WhenLocationHasLinkedCoaches_ShouldReturnFailureResult()
+    {
+        // Arrange: Location is linked to at least one coach
+        var locationId = Guid.NewGuid();
+        var location = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Coached Gym",
+            Posts = new List<Post>(),
+            Coaches = new List<CoachProfile>
+            {
+                new CoachProfile { UserId = Guid.NewGuid() }
+                new CoachProfile { CoachId = Guid.NewGuid() }
+            }
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Cannot delete this location because it is currently linked to coaches.", result.Message);
+        Assert.False(result.Data);
+
+        _locationRepoMock.Verify(r => r.Remove(It.IsAny<Location>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LocationsController_DeleteLocation_WhenLocationNotFound_ShouldReturn404NotFound()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+
+        locationServiceMock.Setup(s => s.DeleteLocationAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<bool>.Fail("Location not found."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.DeleteLocation(locationId);
+
+        // Assert
+        var notFoundResult = Assert.IsType<NotFoundObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<bool>>(notFoundResult.Value);
+        Assert.False(body.Success);
+        Assert.Contains("not found", body.Message);
+    }
+
+    [Fact]
+    public async Task LocationsController_DeleteLocation_WhenLocationUsedByActivePosts_ShouldReturn409Conflict()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+
+        locationServiceMock.Setup(s => s.DeleteLocationAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<bool>.Fail("Cannot delete this location because it is currently used by active posts."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.DeleteLocation(locationId);
+
+        // Assert
+        var conflictResult = Assert.IsType<ConflictObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status409Conflict, conflictResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<bool>>(conflictResult.Value);
+        Assert.False(body.Success);
+        Assert.Contains("used by", body.Message);
+    }
+
+    [Fact]
+    public async Task LocationsController_DeleteLocation_WhenLocationLinkedToCoaches_ShouldReturn409Conflict()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+
+        locationServiceMock.Setup(s => s.DeleteLocationAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<bool>.Fail("Cannot delete this location because it is currently linked to coaches."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.DeleteLocation(locationId);
+
+        // Assert
+        var conflictResult = Assert.IsType<ConflictObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status409Conflict, conflictResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<bool>>(conflictResult.Value);
+        Assert.False(body.Success);
+        Assert.Contains("linked", body.Message);
+    }
+
+    [Fact]
+    public async Task LocationsController_DeleteLocation_WhenOtherFailureOccurs_ShouldReturn400BadRequest()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+
+        locationServiceMock.Setup(s => s.DeleteLocationAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<bool>.Fail("Unexpected failure while deleting location."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.DeleteLocation(locationId);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<bool>>(badRequestResult.Value);
+        Assert.False(body.Success);
+    }
+
+    #endregion
+
+    #region Delete Location Tests - Boundary Cases
+
+    [Fact]
+    public async Task DeleteLocationAsync_WhenLocationHasNullPostsAndNullCoachesCollections_ShouldDeleteSuccessfully()
+    {
+        // Arrange: Location entity with null collections
+        var locationId = Guid.NewGuid();
+        var location = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Null Collections Gym",
+            Address = "Address",
+            Posts = null!,
+            Coaches = null!
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.True(result.Data);
+        _locationRepoMock.Verify(r => r.Remove(location), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteLocationAsync_WhenLocationHasPostWithNullIsDeleted_ShouldTreatAsActiveAndRejectDeletion()
+    {
+        // Arrange: Post.IsDeleted is null (considered active because p.IsDeleted != true is true)
+        var locationId = Guid.NewGuid();
+        var location = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Null IsDeleted Gym",
+            Posts = new List<Post>
+            {
+                new Post { Id = Guid.NewGuid(), IsDeleted = null }
+            },
+            Coaches = new List<CoachProfile>()
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("active posts", result.Message);
+        _locationRepoMock.Verify(r => r.Remove(It.IsAny<Location>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteLocationAsync_WithEmptyGuid_WhenNotFound_ShouldReturnFailureResult()
+    {
+        // Arrange
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(Guid.Empty, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+
+        // Act
+        var result = await _service.DeleteLocationAsync(Guid.Empty);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location not found.", result.Message);
+    }
+
+    #endregion
+
+    #region Delete Location Tests - Exception Cases
+
+    [Fact]
+    public async Task DeleteLocationAsync_WhenRepositoryThrowsException_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Database connection timeout."));
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error deleting location: Database connection timeout.", result.Message);
+        Assert.False(result.Data);
+    }
+
+    [Fact]
+    public async Task DeleteLocationAsync_WhenUnitOfWorkThrowsException_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var location = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Gym",
+            Posts = new List<Post>(),
+            Coaches = new List<CoachProfile>()
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB constraint violation during save."));
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error deleting location: DB constraint violation during save.", result.Message);
+        Assert.False(result.Data);
+    }
+
+    [Fact]
+    public async Task DeleteLocationAsync_WhenCancellationRequested_ShouldReturnFailureResult()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var locationId = Guid.NewGuid();
+        _locationRepoMock.Setup(r => r.GetByIdWithDetailsAsync(locationId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException(cts.Token));
+
+        // Act
+        var result = await _service.DeleteLocationAsync(locationId, cts.Token);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error deleting location", result.Message);
+    }
+
+    #endregion
 }
 

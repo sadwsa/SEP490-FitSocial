@@ -212,4 +212,29 @@ public class ManagementControllersAuthorizationTests
         Assert.DoesNotContain(RoleConstants.Trainee, authAttribute.Roles);
         Assert.DoesNotContain(RoleConstants.Coach, authAttribute.Roles);
     }
+
+    [Fact]
+    public void LocationsController_DeleteLocationEndpoint_RequiresStaffOrAdmin()
+    {
+        // Act: Verify DeleteLocation method exists, has HttpDelete and is restricted to Staff and Admin
+        var method = typeof(LocationsController).GetMethod("DeleteLocation");
+        Assert.NotNull(method);
+
+        var deleteAttribute = method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpDeleteAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpDeleteAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(deleteAttribute);
+        Assert.Equal("{locationId:guid}", deleteAttribute.Template);
+
+        var authAttribute = method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(authAttribute);
+        Assert.NotNull(authAttribute.Roles);
+        Assert.Contains(RoleConstants.Staff, authAttribute.Roles);
+        Assert.Contains(RoleConstants.Admin, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Trainee, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Coach, authAttribute.Roles);
+    }
 }

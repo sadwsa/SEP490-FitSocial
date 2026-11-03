@@ -1,11 +1,12 @@
-UTCID,Type,Email,Password,RememberMe,UserExists,PasswordHash,PasswordCorrect,IsLocked,UserRole,ExpectedSuccess,ExpectedMessage
-UTCID01,N,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,ADMIN,TRUE,Welcome to the Management Portal!
-UTCID02,N,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,TRUE,Welcome to the Management Portal!
-UTCID03,N,john@example.com,Password123,FALSE,TRUE,hashed,TRUE,FALSE,ADMIN,TRUE,Welcome to the Management Portal!
-UTCID04,N,  John@Example.com  ,Password123,TRUE,TRUE,hashed,TRUE,FALSE,ADMIN,TRUE,Welcome to the Management Portal!
-UTCID05,A,john@example.com,Password123,TRUE,FALSE,EMPTY,FALSE,FALSE,ADMIN,FALSE,Invalid email or password.
-UTCID06,A,john@example.com,WrongPassword,TRUE,TRUE,hashed,FALSE,FALSE,ADMIN,FALSE,Invalid email or password.
-UTCID07,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,TRUE,ADMIN,FALSE,This account has been locked. Please contact an administrator.
-UTCID08,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,TRAINEE,FALSE,Invalid email or password.
-UTCID09,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,COACH,FALSE,Invalid email or password.
-UTCID10,B,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,TRUE,Welcome to the Management Portal!
+UTCID,Type,Email,Password,RememberMe,UserExists,PasswordHash,PasswordCorrect,IsLocked,UserRole,AuditThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,N,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,ADMIN,TRUE,TRUE,Welcome to the Management Portal!
+UTCID02,N,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,FALSE,TRUE,Welcome to the Management Portal!
+UTCID03,N,john@example.com,Password123,FALSE,TRUE,hashed,TRUE,FALSE,ADMIN,FALSE,TRUE,Welcome to the Management Portal!
+UTCID04,N,  John@Example.com  ,Password123,TRUE,TRUE,hashed,TRUE,FALSE,ADMIN,FALSE,TRUE,Welcome to the Management Portal!
+UTCID05,A,john@example.com,Password123,TRUE,FALSE,EMPTY,FALSE,FALSE,ADMIN,FALSE,FALSE,Invalid email or password.
+UTCID06,A,john@example.com,WrongPassword,TRUE,TRUE,hashed,FALSE,FALSE,ADMIN,FALSE,FALSE,Invalid email or password.
+UTCID07,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,TRUE,ADMIN,FALSE,FALSE,This account has been locked. Please contact an administrator.
+UTCID08,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,TRAINEE,FALSE,FALSE,Invalid email or password.
+UTCID09,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,COACH,FALSE,FALSE,Invalid email or password.
+UTCID10,B,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,FALSE,TRUE,Welcome to the Management Portal!
+UTCID11,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,,FALSE,FALSE,Invalid email or password.

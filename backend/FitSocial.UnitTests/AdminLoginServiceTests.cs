@@ -66,6 +66,7 @@ public class AdminLoginServiceTests
                     PasswordCorrect = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PasswordCorrect")),
                     IsLocked = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "IsLocked")),
                     UserRole = CsvTestHelper.Get(row, index, "UserRole"),
+                    AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -93,7 +94,14 @@ public class AdminLoginServiceTests
         _auditLogService.Reset();
         _tokenService.Reset();
 
-        _auditLogService.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new AuditLog());
+        if (tc.AuditThrows)
+        {
+            _auditLogService.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("audit fail"));
+        }
+        else
+        {
+            _auditLogService.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new AuditLog());
+        }
 
         _passwordHasher.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>())).Returns(tc.PasswordCorrect);
         _tokenService.Setup(t => t.CreateSessionAsync(It.IsAny<User>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(new AuthResponseDto());
@@ -139,6 +147,7 @@ public class AdminLoginServiceTests
         public bool PasswordCorrect { get; set; }
         public bool IsLocked { get; set; }
         public string UserRole { get; set; } = string.Empty;
+        public bool AuditThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

@@ -24,6 +24,7 @@ public class EditCoachSubscriptionPlanServiceTests
     private readonly Mock<ICoachUpgradeRepository> _upgrades = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Mock<ILogger<SystemOperationsService>> _logger = new();
+    private readonly Mock<IAuditLogRepository> _auditLog = new();
 
     public static TheoryData<EditCoachSubscriptionPlanTestCase> TestCases
     {
@@ -58,8 +59,12 @@ public class EditCoachSubscriptionPlanServiceTests
                     Amount = amount,
                     Currency = CsvTestHelper.Get(row, index, "Currency"),
                     Description = CsvTestHelper.Get(row, index, "Description"),
+                    ImageUrl = CsvTestHelper.Get(row, index, "ImageUrl"),
+                    SubscriptionDuration = int.TryParse(CsvTestHelper.Get(row, index, "SubscriptionDuration"), out var sd) ? (int?)sd : null,
+                    TrainingPackageDuration = int.TryParse(CsvTestHelper.Get(row, index, "TrainingPackageDuration"), out var tpd) ? (int?)tpd : null,
                     IsActive = isActive,
                     SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -70,7 +75,7 @@ public class EditCoachSubscriptionPlanServiceTests
 
     private SystemOperationsService CreateSut()
     {
-        return new SystemOperationsService(_planRepo.Object, _upgrades.Object, _unitOfWork.Object, _logger.Object, null);
+        return new SystemOperationsService(_planRepo.Object, _upgrades.Object, _unitOfWork.Object, _logger.Object, _auditLog.Object);
     }
 
     [Theory]
@@ -111,6 +116,9 @@ public class EditCoachSubscriptionPlanServiceTests
             Amount = tc.Amount,
             Currency = tc.Currency,
             Description = tc.Description,
+            ImageUrl = string.IsNullOrWhiteSpace(tc.ImageUrl) ? null : tc.ImageUrl,
+            SubscriptionDuration = tc.SubscriptionDuration,
+            TrainingPackageDuration = tc.TrainingPackageDuration,
             IsActive = tc.IsActive
         };
 
@@ -129,8 +137,12 @@ public class EditCoachSubscriptionPlanServiceTests
         public decimal? Amount { get; set; }
         public string Currency { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
+        public int? SubscriptionDuration { get; set; }
+        public int? TrainingPackageDuration { get; set; }
         public bool? IsActive { get; set; }
         public bool SaveChangesThrows { get; set; }
+        public bool AuditThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

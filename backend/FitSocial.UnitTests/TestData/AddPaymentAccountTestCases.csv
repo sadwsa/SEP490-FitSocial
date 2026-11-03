@@ -1,5 +1,8 @@
-UTCID,Type,HasExistingActiveSameChannel,DtoNull,SaveChangesThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage,ExpectedIsActive
-UTCID01,N,FALSE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,TRUE
-UTCID02,N,TRUE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,FALSE
-UTCID03,A,FALSE,TRUE,FALSE,TRUE,FALSE,Config payload cannot be null.,
-UTCID04,A,FALSE,FALSE,TRUE,TRUE,FALSE,,
+UTCID,Type,HasExistingActiveSameChannel,DtoNull,SaveChangesThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage,ExpectedIsActive,IsPayout,WebhookUrl,ConfigsNull
+UTCID01,N,FALSE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,TRUE,FALSE,http://hook,FALSE
+UTCID02,N,TRUE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,FALSE,FALSE,,FALSE
+UTCID03,A,FALSE,TRUE,FALSE,TRUE,FALSE,Config payload cannot be null.,,FALSE,,FALSE
+UTCID04,A,FALSE,FALSE,TRUE,TRUE,FALSE,,NULL,FALSE,,FALSE
+UTCID05,N,FALSE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,TRUE,TRUE,http://hook,FALSE
+UTCID06,N,TRUE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,FALSE,TRUE,,FALSE
+UTCID07,N,FALSE,FALSE,FALSE,FALSE,TRUE,Payment gateway config created successfully.,TRUE,FALSE,,TRUE

@@ -214,6 +214,10 @@ public class ManagementControllersAuthorizationTests
     }
 
     [Fact]
+    public void ReportsController_ClassLevel_RequiresAuthorize()
+    {
+        // Act: Verify ReportsController has class-level [Authorize]
+        var classAuth = typeof(ReportsController)
     public void LocationsController_DeleteLocationEndpoint_RequiresStaffOrAdmin()
     {
         // Act: Verify DeleteLocation method exists, has HttpDelete and is restricted to Staff and Admin
@@ -248,6 +252,23 @@ public class ManagementControllersAuthorizationTests
             .FirstOrDefault();
 
         Assert.NotNull(classAuth);
+    }
+
+    [Fact]
+    public void ReportsController_ReportUserEndpoint_HasHttpPostAttribute()
+    {
+        // Act: Verify ReportUser method has [HttpPost("user")]
+        var method = typeof(ReportsController).GetMethod("ReportUser");
+        Assert.NotNull(method);
+
+        var httpPost = method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpPostAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpPostAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(httpPost);
+        Assert.Equal("user", httpPost.Template);
+    }
+}
         Assert.NotNull(classAuth.Roles);
         Assert.Contains(RoleConstants.Trainee, classAuth.Roles);
         Assert.Contains(RoleConstants.Coach, classAuth.Roles);

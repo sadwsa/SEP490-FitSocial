@@ -57,6 +57,12 @@ public class RenewCoachSubscriptionServiceTests
                     PlanExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PlanExists")),
                     PlanActive = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PlanActive")),
                     CoachExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "CoachExists")),
+                    PlanCurrency = CsvTestHelper.Get(row, index, "PlanCurrency"),
+                    PlanDescription = CsvTestHelper.Get(row, index, "PlanDescription"),
+                    PlanSubscriptionDuration = int.TryParse(CsvTestHelper.Get(row, index, "PlanSubscriptionDuration"), out var psd) ? (int?)psd : null,
+                    PlanTrainingPackageDuration = int.TryParse(CsvTestHelper.Get(row, index, "PlanTrainingPackageDuration"), out var ptpd) ? (int?)ptpd : null,
+                    HasStaleOrders = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "HasStaleOrders")),
+                    OriginUrl = CsvTestHelper.Get(row, index, "OriginUrl"),
                     SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
                     PaymentLinkThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PaymentLinkThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
@@ -95,9 +101,11 @@ public class RenewCoachSubscriptionServiceTests
             {
                 CoachSubscriptionPlansId = planId,
                 IsActive = tc.PlanActive,
-                Amount = 100000,
-                Currency = "VND",
-                Description = "Plan"
+                Currency = string.IsNullOrWhiteSpace(tc.PlanCurrency) ? null : tc.PlanCurrency,
+                Description = string.IsNullOrWhiteSpace(tc.PlanDescription) ? null : tc.PlanDescription,
+                SubscriptionDuration = tc.PlanSubscriptionDuration,
+                TrainingPackageDuration = tc.PlanTrainingPackageDuration,
+                Amount = 100000
             });
         }
         else
@@ -107,14 +115,14 @@ public class RenewCoachSubscriptionServiceTests
 
         if (tc.CoachExists)
         {
-            _users.Setup(u => u.GetByIdAsync(coachId, It.IsAny<CancellationToken>())).ReturnsAsync(new User { UserId = coachId, FullName = "Coach", Email = "coach@example.com" });
+            _users.Setup(u => u.GetByIdAsync(coachId, It.IsAny<CancellationToken>())).ReturnsAsync(new User { UserId = coachId, FullName = string.IsNullOrWhiteSpace(tc.PlanDescription) ? null : "Coach", Email = "coach@example.com" });
         }
         else
         {
             _users.Setup(u => u.GetByIdAsync(coachId, It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
         }
 
-        _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order>());
+        if (tc.HasStaleOrders) { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order> { new Order { OrderStatus = PaymentConstants.OrderStatusPending, OrderDetails = new List<OrderDetail> { new OrderDetail { PackageId = planId } } } }); } else { if (tc.HasStaleOrders) { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order> { new Order { OrderStatus = PaymentConstants.OrderStatusPending, OrderDetails = new List<OrderDetail> { new OrderDetail { PackageId = planId } } } }); } else { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order>()); } }
 
         if (tc.SaveChangesThrows)
         {
@@ -138,7 +146,7 @@ public class RenewCoachSubscriptionServiceTests
         _orders.Setup(o => o.AddAsync(It.IsAny<Order>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var sut = CreateSut();
-        var result = await sut.RenewCoachSubscriptionAsync(coachId, planId, "http://localhost");
+        var result = await sut.RenewCoachSubscriptionAsync(coachId, planId, tc.OriginUrl);
 
         Assert.True(result.Success == tc.ExpectedSuccess && result.Message == tc.ExpectedMessage,
             $"{tc.UtcId} ({tc.Type}): expected Success={tc.ExpectedSuccess}, Message=\"{tc.ExpectedMessage}\" but got Success={result.Success}, Message=\"{result.Message}\"");
@@ -151,6 +159,12 @@ public class RenewCoachSubscriptionServiceTests
         public bool PlanExists { get; set; }
         public bool PlanActive { get; set; }
         public bool CoachExists { get; set; }
+        public string PlanCurrency { get; set; } = string.Empty;
+        public string PlanDescription { get; set; } = string.Empty;
+        public int? PlanSubscriptionDuration { get; set; }
+        public int? PlanTrainingPackageDuration { get; set; }
+        public bool HasStaleOrders { get; set; }
+        public string OriginUrl { get; set; } = string.Empty;
         public bool SaveChangesThrows { get; set; }
         public bool PaymentLinkThrows { get; set; }
         public bool ExpectedSuccess { get; set; }

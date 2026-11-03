@@ -163,4 +163,28 @@ public class ManagementControllersAuthorizationTests
 
         Assert.NotNull(allowAnonymousAttribute);
     }
+
+    [Fact]
+    public void LocationsController_CreateLocationEndpoint_RequiresStaffOrAdmin()
+    {
+        // Act: Verify CreateLocation method exists, has HttpPost and is restricted to Staff and Admin
+        var method = typeof(LocationsController).GetMethod("CreateLocation");
+        Assert.NotNull(method);
+
+        var postAttribute = method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpPostAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpPostAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(postAttribute);
+
+        var authAttribute = method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(authAttribute);
+        Assert.NotNull(authAttribute.Roles);
+        Assert.Contains(RoleConstants.Staff, authAttribute.Roles);
+        Assert.Contains(RoleConstants.Admin, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Trainee, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Coach, authAttribute.Roles);
+    }
 }

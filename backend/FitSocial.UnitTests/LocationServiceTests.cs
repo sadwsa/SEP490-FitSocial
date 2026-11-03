@@ -9,6 +9,7 @@ using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Xunit;
@@ -419,6 +420,366 @@ public class LocationServiceTests
         Assert.False(result.Success);
         Assert.Contains("Failed to retrieve public locations: Database down.", result.Message);
         Assert.Null(result.Data);
+    }
+
+    #endregion
+
+    #region Create Location Tests - Happy Path
+
+    [Fact]
+    public async Task CreateLocationAsync_ValidData_ShouldCreateLocationSuccessfully()
+    {
+        // Arrange
+        var dto = new CreateLocationDto
+        {
+            LocationName = "Saigon Central Fitness",
+            Address = "123 Le Loi, D1, HCMC"
+        };
+
+        _locationRepoMock.Setup(r => r.GetByNameAsync("Saigon Central Fitness", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _locationRepoMock.Setup(r => r.AddAsync(It.IsAny<Location>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("Location created successfully.", result.Message);
+        Assert.NotNull(result.Data);
+        Assert.Equal("Saigon Central Fitness", result.Data.LocationName);
+        Assert.Equal("123 Le Loi, D1, HCMC", result.Data.Address);
+        Assert.NotEqual(Guid.Empty, result.Data.LocationId);
+
+        _locationRepoMock.Verify(r => r.AddAsync(It.Is<Location>(l => l.LocationName == "Saigon Central Fitness" && l.Address == "123 Le Loi, D1, HCMC"), It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateLocationAsync_WithLeadingAndTrailingWhitespace_ShouldTrimBeforeSaving()
+    {
+        // Arrange
+        var dto = new CreateLocationDto
+        {
+            LocationName = "   Hanoi Fitness Club   ",
+            Address = "   456 Ba Dinh, Hanoi   "
+        };
+
+        _locationRepoMock.Setup(r => r.GetByNameAsync("Hanoi Fitness Club", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _locationRepoMock.Setup(r => r.AddAsync(It.IsAny<Location>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("Hanoi Fitness Club", result.Data!.LocationName);
+        Assert.Equal("456 Ba Dinh, Hanoi", result.Data.Address);
+
+        _locationRepoMock.Verify(r => r.AddAsync(It.Is<Location>(l => l.LocationName == "Hanoi Fitness Club" && l.Address == "456 Ba Dinh, Hanoi"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LocationsController_CreateLocation_WhenSuccessful_ShouldReturn201Created()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var dto = new CreateLocationDto { LocationName = "Saigon Fitness", Address = "123 Le Loi" };
+        var createdDto = new LocationDto { LocationId = Guid.NewGuid(), LocationName = "Saigon Fitness", Address = "123 Le Loi" };
+
+        locationServiceMock.Setup(s => s.CreateLocationAsync(dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<LocationDto>.Ok(createdDto, "Location created successfully."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.CreateLocation(dto);
+
+        // Assert
+        var objectResult = Assert.IsType<ObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status201Created, objectResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<LocationDto>>(objectResult.Value);
+        Assert.True(body.Success);
+        Assert.Equal("Location created successfully.", body.Message);
+    }
+
+    #endregion
+
+    #region Create Location Tests - Negative Cases
+
+    [Fact]
+    public async Task CreateLocationAsync_WhenDtoIsNull_ShouldReturnFailureResult()
+    {
+        // Act
+        var result = await _service.CreateLocationAsync(null!);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Request payload cannot be null.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateLocationAsync_WhenLocationNameIsNullOrWhitespace_ShouldReturnFailureResult(string? invalidName)
+    {
+        // Arrange
+        var dto = new CreateLocationDto { LocationName = invalidName!, Address = "Valid Address" };
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location name cannot be empty.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateLocationAsync_WhenAddressIsNullOrWhitespace_ShouldReturnFailureResult(string? invalidAddress)
+    {
+        // Arrange
+        var dto = new CreateLocationDto { LocationName = "Valid Gym", Address = invalidAddress };
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Address cannot be empty.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task CreateLocationAsync_WhenLocationNameAlreadyExists_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var dto = new CreateLocationDto { LocationName = "Existing Gym", Address = "123 Address" };
+        var existingLocation = new Location { LocationId = Guid.NewGuid(), LocationName = "Existing Gym", Address = "Old Address" };
+
+        _locationRepoMock.Setup(r => r.GetByNameAsync("Existing Gym", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingLocation);
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location 'Existing Gym' already exists.", result.Message);
+        Assert.Null(result.Data);
+
+        _locationRepoMock.Verify(r => r.AddAsync(It.IsAny<Location>(), It.IsAny<CancellationToken>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LocationsController_CreateLocation_WhenNameAlreadyExists_ShouldReturn409Conflict()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var dto = new CreateLocationDto { LocationName = "Existing Gym", Address = "123 Le Loi" };
+
+        locationServiceMock.Setup(s => s.CreateLocationAsync(dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<LocationDto>.Fail("Location 'Existing Gym' already exists."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.CreateLocation(dto);
+
+        // Assert
+        var conflictResult = Assert.IsType<ConflictObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status409Conflict, conflictResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<LocationDto>>(conflictResult.Value);
+        Assert.False(body.Success);
+        Assert.Contains("already exists", body.Message);
+    }
+
+    [Fact]
+    public async Task LocationsController_CreateLocation_WhenValidationFails_ShouldReturn400BadRequest()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var dto = new CreateLocationDto { LocationName = "", Address = "123 Le Loi" };
+
+        locationServiceMock.Setup(s => s.CreateLocationAsync(dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<LocationDto>.Fail("Location name cannot be empty."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.CreateLocation(dto);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<LocationDto>>(badRequestResult.Value);
+        Assert.False(body.Success);
+    }
+
+    #endregion
+
+    #region Create Location Tests - Boundary Cases
+
+    [Fact]
+    public async Task CreateLocationAsync_NameAndAddressExactly200Characters_ShouldSucceed()
+    {
+        // Arrange
+        var name = new string('A', 200);
+        var address = new string('B', 200);
+        var dto = new CreateLocationDto { LocationName = name, Address = address };
+
+        _locationRepoMock.Setup(r => r.GetByNameAsync(name, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal(200, result.Data!.LocationName.Length);
+        Assert.Equal(200, result.Data.Address!.Length);
+    }
+
+    [Fact]
+    public async Task CreateLocationAsync_WhenNameExceeds200Characters_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var name = new string('A', 201);
+        var dto = new CreateLocationDto { LocationName = name, Address = "Valid Address" };
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location name cannot exceed 200 characters.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task CreateLocationAsync_WhenAddressExceeds200Characters_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var address = new string('B', 201);
+        var dto = new CreateLocationDto { LocationName = "Valid Name", Address = address };
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Address cannot exceed 200 characters.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task CreateLocationAsync_WhenNameWithWhitespaceExceeds200BeforeTrimButUnder200AfterTrim_ShouldSucceed()
+    {
+        // Arrange
+        var rawName = "   " + new string('C', 200) + "   "; // Length 206 before trim, 200 after trim
+        var dto = new CreateLocationDto { LocationName = rawName, Address = "Valid Address" };
+
+        _locationRepoMock.Setup(r => r.GetByNameAsync(new string('C', 200), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal(200, result.Data!.LocationName.Length);
+    }
+
+    #endregion
+
+    #region Create Location Tests - Exception Cases
+
+    [Fact]
+    public async Task CreateLocationAsync_WhenRepositoryThrowsException_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var dto = new CreateLocationDto { LocationName = "Valid Gym", Address = "Valid Address" };
+
+        _locationRepoMock.Setup(r => r.GetByNameAsync("Valid Gym", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("DB connection dropped."));
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Failed to create location: DB connection dropped.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task CreateLocationAsync_WhenUnitOfWorkThrowsException_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var dto = new CreateLocationDto { LocationName = "Valid Gym", Address = "Valid Address" };
+
+        _locationRepoMock.Setup(r => r.GetByNameAsync("Valid Gym", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Deadlock detected during commit."));
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Failed to create location: Deadlock detected during commit.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task CreateLocationAsync_WhenCancellationRequested_ShouldReturnFailureResult()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var dto = new CreateLocationDto { LocationName = "Valid Gym", Address = "Valid Address" };
+
+        _locationRepoMock.Setup(r => r.GetByNameAsync("Valid Gym", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException(cts.Token));
+
+        // Act
+        var result = await _service.CreateLocationAsync(dto, cts.Token);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Failed to create location", result.Message);
     }
 
     #endregion

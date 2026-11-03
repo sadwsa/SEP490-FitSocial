@@ -48,6 +48,8 @@ public class ActivatePaymentAccountServiceTests
                     ConfigExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ConfigExists")),
                     OtherActiveExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "OtherActiveExists")),
                     SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    IsPayout = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "IsPayout")),
+                    AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditThrows")),
                     ExpectedThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
@@ -73,12 +75,12 @@ public class ActivatePaymentAccountServiceTests
         var id = Guid.NewGuid();
         if (tc.ConfigExists)
         {
-            var config = new PaymentGatewayConfig { GatewayId = id, GatewayName = "Gateway", IsActive = false, IsPayout = false };
+            var config = new PaymentGatewayConfig { GatewayId = id, GatewayName = "Gateway", IsActive = false, IsPayout = tc.IsPayout };
             _configRepo.Setup(c => c.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(config);
 
             if (tc.OtherActiveExists)
             {
-                var other = new PaymentGatewayConfig { GatewayId = Guid.NewGuid(), GatewayName = "Other", IsActive = true, IsPayout = false };
+                var other = new PaymentGatewayConfig { GatewayId = Guid.NewGuid(), GatewayName = "Other", IsActive = true, IsPayout = tc.IsPayout };
                 _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<PaymentGatewayConfig> { config, other });
             }
             else
@@ -136,6 +138,8 @@ public class ActivatePaymentAccountServiceTests
         public bool ConfigExists { get; set; }
         public bool OtherActiveExists { get; set; }
         public bool SaveChangesThrows { get; set; }
+        public bool AuditThrows { get; set; }
+        public bool IsPayout { get; set; }
         public bool ExpectedThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;

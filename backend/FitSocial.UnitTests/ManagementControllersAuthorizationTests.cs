@@ -187,4 +187,29 @@ public class ManagementControllersAuthorizationTests
         Assert.DoesNotContain(RoleConstants.Trainee, authAttribute.Roles);
         Assert.DoesNotContain(RoleConstants.Coach, authAttribute.Roles);
     }
+
+    [Fact]
+    public void LocationsController_UpdateLocationEndpoint_RequiresStaffOrAdmin()
+    {
+        // Act: Verify UpdateLocation method exists, has HttpPut and is restricted to Staff and Admin
+        var method = typeof(LocationsController).GetMethod("UpdateLocation");
+        Assert.NotNull(method);
+
+        var putAttribute = method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpPutAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpPutAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(putAttribute);
+        Assert.Equal("{locationId:guid}", putAttribute.Template);
+
+        var authAttribute = method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(authAttribute);
+        Assert.NotNull(authAttribute.Roles);
+        Assert.Contains(RoleConstants.Staff, authAttribute.Roles);
+        Assert.Contains(RoleConstants.Admin, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Trainee, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Coach, authAttribute.Roles);
+    }
 }

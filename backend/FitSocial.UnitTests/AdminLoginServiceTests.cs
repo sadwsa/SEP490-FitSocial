@@ -115,9 +115,9 @@ public class AdminLoginServiceTests
                 UserId = Guid.NewGuid(),
                 Email = tc.Email.Trim().ToLower(),
                 PasswordHash = string.Equals(tc.PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
-                RoleCode = tc.UserRole,
+                RoleCode = tc.UserRole == "NULL" ? null : tc.UserRole,
                 IsLocked = tc.IsLocked,
-                FullName = "Admin User"
+                FullName = tc.AuditThrows ? null : "Admin User"
             };
         }
         _users.Setup(u => u.FindByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(user);

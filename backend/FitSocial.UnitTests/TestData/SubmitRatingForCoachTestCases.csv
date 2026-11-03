@@ -1,0 +1,17 @@
+UTCID,Type,CoachExists,OrderStatus,OrderLink,Rating,Comment,SaveChangesThrows,ExpectedSuccess,ExpectedExceptionType,ExpectedMessage
+UTCID01,N,TRUE,PAID,DIRECT,5,Great coach,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID02,N,TRUE,COMPLETED,DIRECT,4,Good session,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID03,B,TRUE,ACTIVE,DIRECT,3,,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID04,B,TRUE,paid,DIRECT,5,Lowercase status,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID05,B,TRUE,PAID,PACKAGE,5,Package purchase,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID06,N,TRUE,PAID,MULTI,4,One paid order,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID07,B,TRUE,PAID,DIRECT,1,Lowest rating,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID08,B,TRUE,PAID,DIRECT,5,,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID09,A,FALSE,PAID,DIRECT,5,Coach missing,FALSE,FALSE,NOT_FOUND,Coach not found.
+UTCID10,N,TRUE,PAID,NONE,5,No orders,FALSE,FALSE,VALIDATION,You can only review a coach if you have purchased their training package.
+UTCID11,N,TRUE,PENDING,DIRECT,5,Pending order,FALSE,FALSE,VALIDATION,You can only review a coach if you have purchased their training package.
+UTCID12,N,TRUE,CANCELLED,DIRECT,4,Cancelled order,FALSE,FALSE,VALIDATION,You can only review a coach if you have purchased their training package.
+UTCID13,N,TRUE,NULL,DIRECT,3,Null status,FALSE,FALSE,VALIDATION,You can only review a coach if you have purchased their training package.
+UTCID14,N,TRUE,EMPTY,DIRECT,2,Empty status,FALSE,FALSE,VALIDATION,You can only review a coach if you have purchased their training package.
+UTCID15,N,TRUE,PAID,OTHER,5,Other coach,FALSE,FALSE,VALIDATION,You can only review a coach if you have purchased their training package.
+UTCID16,A,TRUE,PAID,DIRECT,5,Save failure,TRUE,FALSE,DB_UPDATE,db fail

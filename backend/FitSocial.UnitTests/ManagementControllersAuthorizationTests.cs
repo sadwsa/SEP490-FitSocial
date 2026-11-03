@@ -130,4 +130,37 @@ public class ManagementControllersAuthorizationTests
         Assert.DoesNotContain(RoleConstants.Trainee, classAuth.Roles!);
         Assert.DoesNotContain(RoleConstants.Coach, classAuth.Roles!);
     }
+
+    [Fact]
+    public void LocationsController_GetLocationsEndpoint_RequiresStaffOrAdmin()
+    {
+        // Act: Verify GetLocations method exists and is restricted to Staff and Admin
+        var method = typeof(LocationsController).GetMethod("GetLocations");
+        Assert.NotNull(method);
+
+        var authAttribute = method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(authAttribute);
+        Assert.NotNull(authAttribute.Roles);
+        Assert.Contains(RoleConstants.Staff, authAttribute.Roles);
+        Assert.Contains(RoleConstants.Admin, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Trainee, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Coach, authAttribute.Roles);
+    }
+
+    [Fact]
+    public void LocationsController_GetPublicLocationsEndpoint_AllowsAnonymous()
+    {
+        // Act: Verify GetPublicLocations method is public for all users via [AllowAnonymous]
+        var method = typeof(LocationsController).GetMethod("GetPublicLocations");
+        Assert.NotNull(method);
+
+        var allowAnonymousAttribute = method.GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true)
+            .Cast<AllowAnonymousAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(allowAnonymousAttribute);
+    }
 }

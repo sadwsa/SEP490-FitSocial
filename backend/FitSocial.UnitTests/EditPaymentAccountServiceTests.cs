@@ -48,6 +48,7 @@ public class EditPaymentAccountServiceTests
                     OtherActiveExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "OtherActiveExists")),
                     SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
                     ExpectedThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedThrows")),
+                    UpdateFields = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "UpdateFields")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -105,7 +106,10 @@ public class EditPaymentAccountServiceTests
             GatewayName = "Updated",
             ClientId = "client2",
             IsActive = true,
-            IsPayout = false
+            IsPayout = false,
+            ApiKey = tc.UpdateFields ? "newapikey" : null,
+            ChecksumKey = tc.UpdateFields ? "newchecksum" : null,
+            WebhookUrl = tc.UpdateFields ? "http://hook" : null
         };
 
         var sut = CreateSut();
@@ -145,6 +149,7 @@ public class EditPaymentAccountServiceTests
         public bool OtherActiveExists { get; set; }
         public bool SaveChangesThrows { get; set; }
         public bool ExpectedThrows { get; set; }
+        public bool UpdateFields { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

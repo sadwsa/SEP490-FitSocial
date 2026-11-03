@@ -218,6 +218,35 @@ public class ManagementControllersAuthorizationTests
     {
         // Act: Verify ReportsController has class-level [Authorize]
         var classAuth = typeof(ReportsController)
+    public void LocationsController_DeleteLocationEndpoint_RequiresStaffOrAdmin()
+    {
+        // Act: Verify DeleteLocation method exists, has HttpDelete and is restricted to Staff and Admin
+        var method = typeof(LocationsController).GetMethod("DeleteLocation");
+        Assert.NotNull(method);
+
+        var deleteAttribute = method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpDeleteAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpDeleteAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(deleteAttribute);
+        Assert.Equal("{locationId:guid}", deleteAttribute.Template);
+
+        var authAttribute = method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(authAttribute);
+        Assert.NotNull(authAttribute.Roles);
+        Assert.Contains(RoleConstants.Staff, authAttribute.Roles);
+        Assert.Contains(RoleConstants.Admin, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Trainee, authAttribute.Roles);
+        Assert.DoesNotContain(RoleConstants.Coach, authAttribute.Roles);
+    }
+
+    [Fact]
+    public void CartsController_ClassLevel_RequiresTraineeOrCoach()
+    {
+        // Act: Verify CartsController is restricted to Trainee and Coach
+        var classAuth = typeof(CartsController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>()
             .FirstOrDefault();
@@ -239,4 +268,55 @@ public class ManagementControllersAuthorizationTests
         Assert.NotNull(httpPost);
         Assert.Equal("user", httpPost.Template);
     }
+}
+        Assert.NotNull(classAuth.Roles);
+        Assert.Contains(RoleConstants.Trainee, classAuth.Roles);
+        Assert.Contains(RoleConstants.Coach, classAuth.Roles);
+        Assert.DoesNotContain(RoleConstants.Admin, classAuth.Roles);
+        Assert.DoesNotContain(RoleConstants.Staff, classAuth.Roles);
+    }
+
+    [Fact]
+    public void CartsController_GetCartEndpoints_HaveHttpGetAttributes()
+    {
+        // Act: Verify GetCart has HttpGet
+        var getCartMethod = typeof(CartsController).GetMethod("GetCart");
+        Assert.NotNull(getCartMethod);
+        var httpGet = getCartMethod.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpGetAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpGetAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(httpGet);
+
+        // Act: Verify GetCartCount has HttpGet("count")
+        var getCartCountMethod = typeof(CartsController).GetMethod("GetCartCount");
+        Assert.NotNull(getCartCountMethod);
+        var httpGetCount = getCartCountMethod.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpGetAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpGetAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(httpGetCount);
+        Assert.Equal("count", httpGetCount.Template);
+    }
+
+    [Fact]
+    public void CartsController_RemoveCartEndpoints_HaveHttpDeleteAttributes()
+    {
+        // Act: Verify RemoveCartItem has HttpDelete("{cartId:guid}")
+        var removeMethod = typeof(CartsController).GetMethod("RemoveCartItem");
+        Assert.NotNull(removeMethod);
+        var httpDelete = removeMethod.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpDeleteAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpDeleteAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(httpDelete);
+        Assert.Equal("{cartId:guid}", httpDelete.Template);
+
+        // Act: Verify ClearCart has HttpDelete("clear")
+        var clearMethod = typeof(CartsController).GetMethod("ClearCart");
+        Assert.NotNull(clearMethod);
+        var httpDeleteClear = clearMethod.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpDeleteAttribute), inherit: true)
+            .Cast<Microsoft.AspNetCore.Mvc.HttpDeleteAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(httpDeleteClear);
+        Assert.Equal("clear", httpDeleteClear.Template);
+    }
+}
 }

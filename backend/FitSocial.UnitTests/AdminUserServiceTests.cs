@@ -712,4 +712,234 @@ public class AdminUserServiceTests
         Assert.False(result.Success);
         Assert.Contains("Email is already registered", result.Message);
     }
+
+    [Fact]
+    public async Task SetUserLockStatusAsync_UnlockUser_ShouldSetIsLockedFalse_AndClearLockedBy()
+    {
+        // Arrange (Happy Path for Unlock)
+        var userId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var lockedUser = new User
+        {
+            UserId = userId,
+            Email = "locked.user@example.com",
+            IsLocked = true,
+            LockedBy = adminId,
+            TokenVersion = 2
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(lockedUser);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.SetUserLockStatusAsync(userId, isLocked: false, adminId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.False(lockedUser.IsLocked);
+        Assert.Null(lockedUser.LockedBy);
+        Assert.Contains("unlocked", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SetUserLockStatusAsync_UserNotFound_ShouldReturnFailure()
+    {
+        // Arrange (Negative Case: User does not exist)
+        var userId = Guid.NewGuid();
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((User?)null);
+
+        // Act
+        var result = await _service.SetUserLockStatusAsync(userId, isLocked: true);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("User not found", result.Message);
+    }
+
+    [Fact]
+    public async Task SetUserLockStatusAsync_WhenRepositoryThrows_ShouldReturnFailure()
+    {
+        // Arrange (Exception Case)
+        var userId = Guid.NewGuid();
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("DB timeout"));
+
+        // Act
+        var result = await _service.SetUserLockStatusAsync(userId, isLocked: true);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error setting lock status", result.Message);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_NullRequest_ShouldReturnFailure()
+    {
+        // Act (Negative Case)
+        var result = await _service.CreateStaffAccountAsync(null!);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Request cannot be null", result.Message);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_FullNameLength1_ShouldReturnFailure()
+    {
+        // Arrange (Boundary Case: Length < 2)
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "A", // 1 char - boundary below min
+            Email = "staff.bound@fitsocial.com",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!"
+        };
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("at least 2 characters", result.Message);
+    }
+
+    [Fact]
+    public async Task CreateStaffAccountAsync_PasswordLength5_ShouldReturnFailure()
+    {
+        // Arrange (Boundary Case: Length < 6)
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "Nguyen Staff",
+            Email = "staff.pass5@fitsocial.com",
+            Password = "12345", // 5 chars - boundary below min
+            ConfirmPassword = "12345"
+        };
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("at least 6 characters", result.Message);
+    }
+
+    [Theory]
+    [InlineData("090123456")] // 9 digits - boundary below min
+    [InlineData("09012345678")] // 11 digits - boundary above max
+    public async Task CreateStaffAccountAsync_PhoneNumberInvalidBoundaryLength_ShouldReturnFailure(string phone)
+    {
+        // Arrange (Boundary Case: Length != 10)
+        var request = new CreateStaffAccountRequestDto
+        {
+            FullName = "Nguyen Staff",
+            Email = "staff.phonebound@fitsocial.com",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!",
+            PhoneNumber = phone
+        };
+
+        // Act
+        var result = await _service.CreateStaffAccountAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("valid 10-digit number", result.Message);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAccountAsync_NullRequest_ShouldReturnFailure()
+    {
+        // Act (Negative Case)
+        var result = await _service.UpdateStaffAccountAsync(Guid.NewGuid(), null!);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Request cannot be null", result.Message);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAccountAsync_FullNameLength1_ShouldReturnFailure()
+    {
+        // Arrange (Boundary Case: Length < 2)
+        var userId = Guid.NewGuid();
+        var staff = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Staff,
+            FullName = "Current Staff"
+        };
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(staff);
+
+        var request = new UpdateStaffAccountRequestDto
+        {
+            FullName = "X", // 1 char - boundary below min
+            Email = "staff.update@fitsocial.com"
+        };
+
+        // Act
+        var result = await _service.UpdateStaffAccountAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("at least 2 characters", result.Message);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAccountAsync_WhenExceptionOccurs_ShouldReturnFailureResult()
+    {
+        // Arrange (Exception Case)
+        var userId = Guid.NewGuid();
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("DB error"));
+
+        var request = new UpdateStaffAccountRequestDto
+        {
+            FullName = "Valid Name",
+            Email = "valid@fitsocial.com"
+        };
+
+        // Act
+        var result = await _service.UpdateStaffAccountAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error updating staff account", result.Message);
+    }
+
+    [Fact]
+    public async Task GetStaffUsersAsync_EmptyResult_ShouldReturnEmptyPagedResult()
+    {
+        // Arrange (Boundary Case: 0 records found)
+        _userRepoMock.Setup(r => r.ListStaffForAdminAsync(
+            It.IsAny<string?>(),
+            It.IsAny<bool?>(),
+            1,
+            10,
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<User>(), 0));
+
+        // Act
+        var result = await _service.GetStaffUsersAsync(pageNumber: 1, pageSize: 10);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Empty(result.Data.Items);
+        Assert.Equal(0, result.Data.TotalCount);
+    }
 }

@@ -524,4 +524,153 @@ public class StaffAdminProfileServiceTests
         Assert.Null(result.Data?.Avatar);
         Assert.Null(adminUser.AvatarUrl);
     }
+
+    [Fact]
+    public async Task UpdateStaffAdminProfileAsync_NullRequest_ThrowsValidationException()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+
+        // Act & Assert (Negative case)
+        await Assert.ThrowsAsync<ValidationException>(() => _userService.UpdateStaffAdminProfileAsync(userId, null!));
+    }
+
+    [Fact]
+    public async Task UpdateStaffAdminProfileAsync_FullNameLength1_ThrowsValidationException()
+    {
+        // Arrange (Boundary case: Length < 2)
+        var userId = Guid.NewGuid();
+        var adminUser = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Admin,
+            FullName = "Admin User",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(adminUser);
+
+        var request = new UpdateStaffAdminProfileRequestDto
+        {
+            FullName = "A" // 1 char - boundary below min
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _userService.UpdateStaffAdminProfileAsync(userId, request));
+        Assert.Contains("between 2 and 100", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAdminProfileAsync_FullNameLength2_UpdatesSuccessfully()
+    {
+        // Arrange (Boundary case: Exact min length = 2)
+        var userId = Guid.NewGuid();
+        var adminUser = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Admin,
+            FullName = "Admin User",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(adminUser);
+
+        var request = new UpdateStaffAdminProfileRequestDto
+        {
+            FullName = "An" // exactly 2 chars - boundary min valid
+        };
+
+        // Act
+        var result = await _userService.UpdateStaffAdminProfileAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("An", result.Data?.FullName);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAdminProfileAsync_FullNameLength100_UpdatesSuccessfully()
+    {
+        // Arrange (Boundary case: Exact max length = 100)
+        var userId = Guid.NewGuid();
+        var adminUser = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Admin,
+            FullName = "Admin User",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(adminUser);
+
+        var request = new UpdateStaffAdminProfileRequestDto
+        {
+            FullName = new string('A', 100) // exactly 100 chars - boundary max valid
+        };
+
+        // Act
+        var result = await _userService.UpdateStaffAdminProfileAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal(100, result.Data?.FullName.Length);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAdminProfileAsync_FullNameLength101_ThrowsValidationException()
+    {
+        // Arrange (Boundary case: Length > 100)
+        var userId = Guid.NewGuid();
+        var adminUser = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Admin,
+            FullName = "Admin User",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(adminUser);
+
+        var request = new UpdateStaffAdminProfileRequestDto
+        {
+            FullName = new string('A', 101) // 101 chars - boundary above max
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _userService.UpdateStaffAdminProfileAsync(userId, request));
+        Assert.Contains("between 2 and 100", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAdminProfileAsync_WhenDatabaseThrowsException_ThrowsException()
+    {
+        // Arrange (Exception case: DB failure)
+        var userId = Guid.NewGuid();
+        var adminUser = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Admin,
+            FullName = "Admin User",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(adminUser);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Database connection timed out"));
+
+        var request = new UpdateStaffAdminProfileRequestDto
+        {
+            FullName = "Valid Admin Name"
+        };
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _userService.UpdateStaffAdminProfileAsync(userId, request));
+    }
 }

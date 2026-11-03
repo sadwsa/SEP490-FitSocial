@@ -185,4 +185,110 @@ public class SystemLogServiceTests
         Assert.DoesNotContain("my_jwt_token_123456789", sanitizedBearer);
         Assert.Contains("Bearer ***REDACTED***", sanitizedBearer);
     }
+
+    [Fact]
+    public async Task GetSystemLogsAsync_WhenPageSizeExceeds100_ClampsPageSizeTo100()
+    {
+        // Arrange (Boundary case: PageSize > 100)
+        _repoMock.Setup(r => r.GetPagedLogsAsync(
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            1,
+            200,
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<AuditLog>(), 0));
+
+        var query = new GetSystemLogsQueryDto { PageNumber = 1, PageSize = 200 };
+
+        // Act
+        var result = await _service.GetSystemLogsAsync(query);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(100, result.Data.PageSize); // Clamped to max 100
+    }
+
+    [Fact]
+    public async Task GetSystemLogsAsync_WhenPageNumberLessThan1_NormalizesToOne()
+    {
+        // Arrange (Boundary case: PageNumber < 1)
+        _repoMock.Setup(r => r.GetPagedLogsAsync(
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            -5,
+            10,
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<AuditLog>(), 0));
+
+        var query = new GetSystemLogsQueryDto { PageNumber = -5, PageSize = 10 };
+
+        // Act
+        var result = await _service.GetSystemLogsAsync(query);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(1, result.Data.PageNumber); // Normalized to min 1
+    }
+
+    [Fact]
+    public async Task GetSystemLogsAsync_WhenNoLogsFound_ReturnsEmptyPagedResult()
+    {
+        // Arrange (Boundary case: 0 items)
+        _repoMock.Setup(r => r.GetPagedLogsAsync(
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<AuditLog>(), 0));
+
+        var query = new GetSystemLogsQueryDto { PageNumber = 1, PageSize = 10 };
+
+        // Act
+        var result = await _service.GetSystemLogsAsync(query);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Empty(result.Data.Items);
+        Assert.Equal(0, result.Data.TotalCount);
+    }
+
+    [Fact]
+    public async Task GetSystemLogsAsync_WhenRepositoryThrows_ReturnsFailResult()
+    {
+        // Arrange (Exception case)
+        _repoMock.Setup(r => r.GetPagedLogsAsync(
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Failed to read audit logs from database"));
+
+        // Act
+        var result = await _service.GetSystemLogsAsync(new GetSystemLogsQueryDto());
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Failed to load system logs", result.Message);
+    }
 }

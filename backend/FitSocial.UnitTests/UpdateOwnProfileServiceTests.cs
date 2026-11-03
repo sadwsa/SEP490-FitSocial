@@ -354,4 +354,178 @@ public class UpdateOwnProfileServiceTests
         Assert.Null(result.Data?.AvatarUrl);
         Assert.Null(userWithAvatar.AvatarUrl);
     }
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_NullRequest_ThrowsValidationException()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+
+        // Act & Assert (Negative case)
+        await Assert.ThrowsAsync<ValidationException>(() => _userService.UpdateOwnProfileAsync(userId, null!));
+    }
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_WhenUserRoleIsNotTraineeOrCoach_ThrowsForbiddenException()
+    {
+        // Arrange (Authorization case: Admin trying to use trainee/coach endpoint)
+        var userId = Guid.NewGuid();
+        var adminUser = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Admin,
+            FullName = "Admin User",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetUserForUpdateAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(adminUser);
+
+        var request = new UpdateOwnProfileRequestDto
+        {
+            FullName = "New Admin Name"
+        };
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ForbiddenException>(() => _userService.UpdateOwnProfileAsync(userId, request));
+    }
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_FullNameLength1_ThrowsValidationException()
+    {
+        // Arrange (Boundary case: Length < 2)
+        var userId = Guid.NewGuid();
+        var trainee = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Trainee,
+            FullName = "Valid Trainee",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetUserForUpdateAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(trainee);
+
+        var request = new UpdateOwnProfileRequestDto
+        {
+            FullName = "A" // 1 char - boundary below min
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _userService.UpdateOwnProfileAsync(userId, request));
+        Assert.Contains("between 2 and 100", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_FullNameLength2_UpdatesSuccessfully()
+    {
+        // Arrange (Boundary case: Exact min length = 2)
+        var userId = Guid.NewGuid();
+        var trainee = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Trainee,
+            FullName = "Valid Trainee",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetUserForUpdateAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(trainee);
+
+        var request = new UpdateOwnProfileRequestDto
+        {
+            FullName = "An" // exactly 2 chars - boundary min valid
+        };
+
+        // Act
+        var result = await _userService.UpdateOwnProfileAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("An", result.Data?.FullName);
+    }
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_FullNameLength100_UpdatesSuccessfully()
+    {
+        // Arrange (Boundary case: Exact max length = 100)
+        var userId = Guid.NewGuid();
+        var trainee = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Trainee,
+            FullName = "Valid Trainee",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetUserForUpdateAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(trainee);
+
+        var request = new UpdateOwnProfileRequestDto
+        {
+            FullName = new string('A', 100) // exactly 100 chars - boundary max valid
+        };
+
+        // Act
+        var result = await _userService.UpdateOwnProfileAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal(100, result.Data?.FullName.Length);
+    }
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_FullNameLength101_ThrowsValidationException()
+    {
+        // Arrange (Boundary case: Length > 100)
+        var userId = Guid.NewGuid();
+        var trainee = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Trainee,
+            FullName = "Valid Trainee",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetUserForUpdateAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(trainee);
+
+        var request = new UpdateOwnProfileRequestDto
+        {
+            FullName = new string('A', 101) // 101 chars - boundary above max
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _userService.UpdateOwnProfileAsync(userId, request));
+        Assert.Contains("between 2 and 100", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateOwnProfileAsync_WhenDatabaseThrowsException_ThrowsException()
+    {
+        // Arrange (Exception case: DB failure)
+        var userId = Guid.NewGuid();
+        var trainee = new User
+        {
+            UserId = userId,
+            RoleCode = RoleConstants.Trainee,
+            FullName = "Valid Trainee",
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetUserForUpdateAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(trainee);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Database write error"));
+
+        var request = new UpdateOwnProfileRequestDto
+        {
+            FullName = "Updated Trainee"
+        };
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _userService.UpdateOwnProfileAsync(userId, request));
+    }
 }

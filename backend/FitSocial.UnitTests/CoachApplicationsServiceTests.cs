@@ -980,4 +980,133 @@ public class CoachApplicationsServiceTests
         Assert.True(result.Success);
         Assert.Equal("REJECTED", profile.ApprovalStatus);
     }
+
+    [Fact]
+    public async Task GetCoachApplicationsAsync_WhenNoApplicationsExist_ReturnsEmptyPagedResult()
+    {
+        // Arrange (Boundary case: 0 items)
+        _coachProfileRepoMock.Setup(r => r.GetPagedCoachApplicationsAsync(
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<int?>(),
+            It.IsAny<int?>(),
+            It.IsAny<string?>(),
+            1,
+            10,
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new System.Collections.Generic.List<CoachProfile>(), 0));
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationStatusCountsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new System.Collections.Generic.Dictionary<string, int>());
+
+        // Act
+        var result = await _coachService.GetCoachApplicationsAsync(pageNumber: 1, pageSize: 10);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Empty(result.Data.Applications.Items);
+        Assert.Equal(0, result.Data.Applications.TotalCount);
+    }
+
+    [Fact]
+    public async Task GetCoachApplicationsAsync_WhenRepositoryThrows_ReturnsFailResult()
+    {
+        // Arrange (Exception case)
+        _coachProfileRepoMock.Setup(r => r.GetPagedCoachApplicationsAsync(
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<int?>(),
+            It.IsAny<int?>(),
+            It.IsAny<string?>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Database connection failed"));
+
+        // Act
+        var result = await _coachService.GetCoachApplicationsAsync();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error retrieving coach applications", result.Message);
+    }
+
+    [Fact]
+    public async Task ApproveCoachApplicationAsync_WhenDatabaseSaveFails_ReturnsFailResult()
+    {
+        // Arrange (Exception case: DB error on Approve)
+        var coachId = Guid.NewGuid();
+        var approverId = Guid.NewGuid();
+
+        var user = new User
+        {
+            UserId = coachId,
+            RoleCode = "TRAINEE",
+            IsLocked = true
+        };
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "PENDING",
+            Coach = user,
+            CoachCertificates = new System.Collections.Generic.List<CoachCertificate>
+            {
+                new CoachCertificate
+                {
+                    CertificateId = Guid.NewGuid(),
+                    VerificationStatus = "APPROVED"
+                }
+            }
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Failed to commit approval transaction"));
+
+        // Act
+        var result = await _coachService.ApproveCoachApplicationAsync(coachId, approverId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error approving coach application", result.Message);
+    }
+
+    [Fact]
+    public async Task RejectCoachApplicationAsync_WhenDatabaseSaveFails_ReturnsFailResult()
+    {
+        // Arrange (Exception case: DB error on Reject)
+        var coachId = Guid.NewGuid();
+        var rejectorId = Guid.NewGuid();
+
+        var user = new User
+        {
+            UserId = coachId,
+            RoleCode = "TRAINEE",
+            IsLocked = true
+        };
+        var profile = new CoachProfile
+        {
+            CoachId = coachId,
+            ApprovalStatus = "PENDING",
+            Coach = user
+        };
+
+        _coachProfileRepoMock.Setup(r => r.GetCoachApplicationDetailsAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Failed to commit rejection transaction"));
+
+        // Act
+        var result = await _coachService.RejectCoachApplicationAsync(coachId, rejectorId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error rejecting coach application", result.Message);
+    }
 }

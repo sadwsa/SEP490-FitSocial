@@ -317,4 +317,96 @@ public class CartServiceTests
         Assert.True(result.Success);
         Assert.Equal(0, result.Data);
     }
+
+    [Fact]
+    public async Task AddToCartAsync_NullDto_ShouldReturnFail()
+    {
+        // Act (Negative case: null request)
+        var result = await _service.AddToCartAsync(Guid.NewGuid(), null!);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Invalid training package information", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AddToCartAsync_PackageIsActiveNull_ShouldTreatAsActiveAndSucceed()
+    {
+        // Arrange (Boundary case: IsActive is null, defaults to active)
+        var userId = Guid.NewGuid();
+        var packageId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+
+        var package = new TrainingPackage
+        {
+            PackageId = packageId,
+            CoachId = coachId,
+            Title = "Package with Null IsActive",
+            Price = 300000,
+            DurationDays = 14,
+            IsActive = null // Boundary: null active flag
+        };
+
+        _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(package);
+        _mockCartRepo.Setup(r => r.GetCartItemAsync(userId, packageId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Cart?)null);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var dto = new AddToCartDto
+        {
+            PackageId = packageId,
+            Quantity = 1
+        };
+
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(packageId, result.Data.PackageId);
+    }
+
+    [Fact]
+    public async Task AddToCartAsync_WhenDatabaseSaveThrowsException_ShouldReturnFail()
+    {
+        // Arrange (Exception case: DB failure)
+        var userId = Guid.NewGuid();
+        var packageId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+
+        var package = new TrainingPackage
+        {
+            PackageId = packageId,
+            CoachId = coachId,
+            Title = "Valid Package",
+            Price = 400000,
+            IsActive = true
+        };
+
+        _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(package);
+        _mockCartRepo.Setup(r => r.GetCartItemAsync(userId, packageId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Cart?)null);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("DB deadlock detected"));
+
+        var dto = new AddToCartDto
+        {
+            PackageId = packageId,
+            Quantity = 1
+        };
+
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Error adding to cart", result.Message);
+    }
 }

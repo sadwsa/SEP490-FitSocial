@@ -18,3 +18,9 @@ UTCID16,B,john@example.com,Password123,,TRUE,TRUE,hashed,TRUE,TRUE,3,TRAINEE,EMP
 UTCID17,B,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,COACH,EMPTY,FALSE,This account has been locked. Please contact an administrator.
 UTCID18,B,john@example.com,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!
 UTCID19,A,john@example.com,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,,EMPTY,FALSE,Invalid email or password.
+UTCID20,A,john@example.com,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,NULL,EMPTY,FALSE,Invalid email or password.
+UTCID20,A,john@example.com,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,NULL,EMPTY,FALSE,Invalid email or password.
+UTCID21,A,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,COACH,NULL,FALSE,This account has been locked. Please contact an administrator.
+UTCID22,A,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,NULL,EMPTY,FALSE,This account has been locked. Please contact an administrator.
+UTCID23,N,john@example.com,Password123,   ,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!
+UTCID24,A,john@example.com,Password123,TRAINEE,TRUE,TRUE,hashed,TRUE,FALSE,0,NULL,EMPTY,FALSE,Invalid email or password.

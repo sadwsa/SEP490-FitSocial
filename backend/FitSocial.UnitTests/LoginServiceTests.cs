@@ -128,7 +128,7 @@ public class LoginServiceTests
                 UserId = Guid.NewGuid(),
                 Email = tc.Email.Trim().ToLower(),
                 PasswordHash = string.Equals(tc.PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
-                RoleCode = tc.UserRole,
+                RoleCode = tc.UserRole == "NULL" ? null : tc.UserRole,
                 IsLocked = tc.IsLocked,
                 WarningCount = tc.WarningCount,
                 FullName = "Test User"
@@ -139,10 +139,7 @@ public class LoginServiceTests
         if (tc.UserExists && tc.IsLocked && string.Equals(tc.UserRole, "COACH", StringComparison.OrdinalIgnoreCase))
         {
             FitSocial.Domain.Entities.CoachProfile? profile = null;
-            if (!string.Equals(tc.CoachApproval, "EMPTY", StringComparison.OrdinalIgnoreCase))
-            {
-                profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = tc.CoachApproval };
-            }
+            if (string.Equals(tc.CoachApproval, "NULL", StringComparison.OrdinalIgnoreCase)) { profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = null }; } else if (!string.Equals(tc.CoachApproval, "EMPTY", StringComparison.OrdinalIgnoreCase)) { profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = tc.CoachApproval }; }
             _coachProfiles.Setup(c => c.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(profile);
         }
 

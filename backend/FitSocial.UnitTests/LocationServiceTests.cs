@@ -783,5 +783,483 @@ public class LocationServiceTests
     }
 
     #endregion
+
+    #region Edit Location Tests - Happy Path
+
+    [Fact]
+    public async Task UpdateLocationAsync_ValidData_ShouldUpdateLocationSuccessfully()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var existingLocation = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Old Location Name",
+            Address = "Old Address"
+        };
+        var dto = new UpdateLocationDto
+        {
+            LocationName = "Updated Location Name",
+            Address = "123 Updated Street, D1"
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingLocation);
+        _locationRepoMock.Setup(r => r.GetByNameExcludingIdAsync("Updated Location Name", locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("Location updated successfully.", result.Message);
+        Assert.NotNull(result.Data);
+        Assert.Equal(locationId, result.Data.LocationId);
+        Assert.Equal("Updated Location Name", result.Data.LocationName);
+        Assert.Equal("123 Updated Street, D1", result.Data.Address);
+        Assert.Equal("Updated Location Name", existingLocation.LocationName);
+        Assert.Equal("123 Updated Street, D1", existingLocation.Address);
+
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_SameNameForSameLocation_ShouldSucceedWithoutConflict()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var existingLocation = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Consistent Fitness Club",
+            Address = "123 Old St"
+        };
+        var dto = new UpdateLocationDto
+        {
+            LocationName = "Consistent Fitness Club", // Same name, keeping it unchanged
+            Address = "456 New St"
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingLocation);
+        _locationRepoMock.Setup(r => r.GetByNameExcludingIdAsync("Consistent Fitness Club", locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null); // Excludes current location, so no conflict found
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("Consistent Fitness Club", result.Data!.LocationName);
+        Assert.Equal("456 New St", result.Data.Address);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_WithLeadingAndTrailingWhitespace_ShouldTrimBeforeSaving()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var existingLocation = new Location
+        {
+            LocationId = locationId,
+            LocationName = "Original Name",
+            Address = "Original Address"
+        };
+        var dto = new UpdateLocationDto
+        {
+            LocationName = "   Trimmed Name Gym   ",
+            Address = "   789 Trimmed Street   "
+        };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingLocation);
+        _locationRepoMock.Setup(r => r.GetByNameExcludingIdAsync("Trimmed Name Gym", locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("Trimmed Name Gym", result.Data!.LocationName);
+        Assert.Equal("789 Trimmed Street", result.Data.Address);
+        Assert.Equal("Trimmed Name Gym", existingLocation.LocationName);
+        Assert.Equal("789 Trimmed Street", existingLocation.Address);
+    }
+
+    [Fact]
+    public async Task LocationsController_UpdateLocation_WhenSuccessful_ShouldReturn200Ok()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+        var dto = new UpdateLocationDto { LocationName = "Saigon Gym", Address = "123 Le Loi" };
+        var updatedDto = new LocationDto { LocationId = locationId, LocationName = "Saigon Gym", Address = "123 Le Loi" };
+
+        locationServiceMock.Setup(s => s.UpdateLocationAsync(locationId, dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<LocationDto>.Ok(updatedDto, "Location updated successfully."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.UpdateLocation(locationId, dto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<LocationDto>>(okResult.Value);
+        Assert.True(body.Success);
+        Assert.Equal("Location updated successfully.", body.Message);
+    }
+
+    #endregion
+
+    #region Edit Location Tests - Negative Cases
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenDtoIsNull_ShouldReturnFailureResult()
+    {
+        // Act
+        var result = await _service.UpdateLocationAsync(Guid.NewGuid(), null!);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Request payload cannot be null.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task UpdateLocationAsync_WhenLocationNameIsNullOrWhitespace_ShouldReturnFailureResult(string? invalidName)
+    {
+        // Arrange
+        var dto = new UpdateLocationDto { LocationName = invalidName!, Address = "Valid Address" };
+
+        // Act
+        var result = await _service.UpdateLocationAsync(Guid.NewGuid(), dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location name cannot be empty.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task UpdateLocationAsync_WhenAddressIsNullOrWhitespace_ShouldReturnFailureResult(string? invalidAddress)
+    {
+        // Arrange
+        var dto = new UpdateLocationDto { LocationName = "Valid Name", Address = invalidAddress };
+
+        // Act
+        var result = await _service.UpdateLocationAsync(Guid.NewGuid(), dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Address cannot be empty.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenLocationDoesNotExist_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var dto = new UpdateLocationDto { LocationName = "Nonexistent Gym", Address = "Some Address" };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location not found.", result.Message);
+        Assert.Null(result.Data);
+
+        _locationRepoMock.Verify(r => r.GetByNameExcludingIdAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenAnotherLocationHasSameName_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var otherLocationId = Guid.NewGuid();
+        var currentLocation = new Location { LocationId = locationId, LocationName = "Current Gym", Address = "Address 1" };
+        var duplicateLocation = new Location { LocationId = otherLocationId, LocationName = "Taken Gym Name", Address = "Address 2" };
+
+        var dto = new UpdateLocationDto { LocationName = "Taken Gym Name", Address = "Updated Address" };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(currentLocation);
+        _locationRepoMock.Setup(r => r.GetByNameExcludingIdAsync("Taken Gym Name", locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(duplicateLocation);
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location 'Taken Gym Name' already exists.", result.Message);
+        Assert.Null(result.Data);
+
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LocationsController_UpdateLocation_WhenLocationNotFound_ShouldReturn404NotFound()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+        var dto = new UpdateLocationDto { LocationName = "Ghost Gym", Address = "123 Nowhere" };
+
+        locationServiceMock.Setup(s => s.UpdateLocationAsync(locationId, dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<LocationDto>.Fail("Location not found."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.UpdateLocation(locationId, dto);
+
+        // Assert
+        var notFoundResult = Assert.IsType<NotFoundObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<LocationDto>>(notFoundResult.Value);
+        Assert.False(body.Success);
+        Assert.Contains("not found", body.Message);
+    }
+
+    [Fact]
+    public async Task LocationsController_UpdateLocation_WhenDuplicateName_ShouldReturn409Conflict()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+        var dto = new UpdateLocationDto { LocationName = "Taken Gym", Address = "123 Le Loi" };
+
+        locationServiceMock.Setup(s => s.UpdateLocationAsync(locationId, dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<LocationDto>.Fail("Location 'Taken Gym' already exists."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.UpdateLocation(locationId, dto);
+
+        // Assert
+        var conflictResult = Assert.IsType<ConflictObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status409Conflict, conflictResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<LocationDto>>(conflictResult.Value);
+        Assert.False(body.Success);
+        Assert.Contains("already exists", body.Message);
+    }
+
+    [Fact]
+    public async Task LocationsController_UpdateLocation_WhenValidationFails_ShouldReturn400BadRequest()
+    {
+        // Arrange
+        var locationServiceMock = new Mock<ILocationService>();
+        var locationId = Guid.NewGuid();
+        var dto = new UpdateLocationDto { LocationName = "", Address = "123 Le Loi" };
+
+        locationServiceMock.Setup(s => s.UpdateLocationAsync(locationId, dto, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponseDto<LocationDto>.Fail("Location name cannot be empty."));
+
+        var controller = new LocationsController(locationServiceMock.Object);
+
+        // Act
+        var actionResult = await controller.UpdateLocation(locationId, dto);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+        var body = Assert.IsType<ApiResponseDto<LocationDto>>(badRequestResult.Value);
+        Assert.False(body.Success);
+    }
+
+    #endregion
+
+    #region Edit Location Tests - Boundary Cases
+
+    [Fact]
+    public async Task UpdateLocationAsync_NameAndAddressExactly200Characters_ShouldSucceed()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var existingLocation = new Location { LocationId = locationId, LocationName = "Old", Address = "Old" };
+        var name = new string('A', 200);
+        var address = new string('B', 200);
+        var dto = new UpdateLocationDto { LocationName = name, Address = address };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingLocation);
+        _locationRepoMock.Setup(r => r.GetByNameExcludingIdAsync(name, locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal(200, result.Data!.LocationName.Length);
+        Assert.Equal(200, result.Data.Address!.Length);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenNameExceeds200Characters_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var name = new string('A', 201);
+        var dto = new UpdateLocationDto { LocationName = name, Address = "Valid Address" };
+
+        // Act
+        var result = await _service.UpdateLocationAsync(Guid.NewGuid(), dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Location name cannot exceed 200 characters.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenAddressExceeds200Characters_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var address = new string('B', 201);
+        var dto = new UpdateLocationDto { LocationName = "Valid Name", Address = address };
+
+        // Act
+        var result = await _service.UpdateLocationAsync(Guid.NewGuid(), dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal("Address cannot exceed 200 characters.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenNameWithWhitespaceExceeds200BeforeTrimButUnder200AfterTrim_ShouldSucceed()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var existingLocation = new Location { LocationId = locationId, LocationName = "Old", Address = "Old" };
+        var rawName = "   " + new string('X', 200) + "   "; // Length 206 before trim, 200 after trim
+        var dto = new UpdateLocationDto { LocationName = rawName, Address = "Valid Address" };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingLocation);
+        _locationRepoMock.Setup(r => r.GetByNameExcludingIdAsync(new string('X', 200), locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal(200, result.Data!.LocationName.Length);
+    }
+
+    #endregion
+
+    #region Edit Location Tests - Exception Cases
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenRepositoryThrowsException_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var dto = new UpdateLocationDto { LocationName = "Valid Gym", Address = "Valid Address" };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("DB connection closed."));
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Failed to update location: DB connection closed.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenUnitOfWorkThrowsException_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var locationId = Guid.NewGuid();
+        var existingLocation = new Location { LocationId = locationId, LocationName = "Gym", Address = "Address" };
+        var dto = new UpdateLocationDto { LocationName = "New Gym", Address = "New Address" };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingLocation);
+        _locationRepoMock.Setup(r => r.GetByNameExcludingIdAsync("New Gym", locationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Location?)null);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Database commit error."));
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Failed to update location: Database commit error.", result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task UpdateLocationAsync_WhenCancellationRequested_ShouldReturnFailureResult()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var locationId = Guid.NewGuid();
+        var dto = new UpdateLocationDto { LocationName = "Valid Gym", Address = "Valid Address" };
+
+        _locationRepoMock.Setup(r => r.GetByIdAsync(locationId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException(cts.Token));
+
+        // Act
+        var result = await _service.UpdateLocationAsync(locationId, dto, cts.Token);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Failed to update location", result.Message);
+    }
+
+    #endregion
 }
 

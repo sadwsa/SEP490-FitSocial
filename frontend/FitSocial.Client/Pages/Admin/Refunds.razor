@@ -1,4 +1,4 @@
-@page "/admin/refunds"
+﻿@page "/admin/refunds"
 @layout AdminLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
 @using FitSocial.Client.Models.Common
@@ -70,20 +70,20 @@
                 }
             </div>
 
-            <button type="button" class="row-btn" @onclick="LoadRefundRequestsAsync" disabled="@isLoading">
+            <button type="button" class="row-btn" @onclick="() => LoadRefundRequestsAsync(false)" disabled="@(isLoading || isReloading || isProcessingAction)">
                 <span class="btn-ic"><AppIcon Name="refresh" /></span> Refresh
             </button>
         </div>
 
         <!-- Loading State -->
-        @if (isLoading)
+        @if (isLoading && (pagedRefunds.Items == null || !pagedRefunds.Items.Any()))
         {
             <div class="loading-state">
                 <div class="spinner"></div>
                 <span>Loading refund requests...</span>
             </div>
         }
-        else if (pagedRefunds.Items.Count == 0)
+        else if (pagedRefunds.Items == null || pagedRefunds.Items.Count == 0)
         {
             <div class="empty-state">
                 <div class="empty-icon"><AppIcon Name="shield" /></div>
@@ -94,7 +94,13 @@
         else
         {
             <!-- Refund Requests Table -->
-            <div class="table-wrap">
+            <div class="table-wrap @(isReloading ? "table-is-refreshing" : "")">
+                @if (isReloading)
+                {
+                    <div class="table-refresh-bar">
+                        <div class="table-refresh-indeterminate"></div>
+                    </div>
+                }
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -649,6 +655,43 @@
                 </div>
             </div>
         }
+
+        <!-- PROCESSING OVERLAY SCREEN (APPROVE / REJECT) -->
+        @if (isProcessingAction)
+        {
+            <div class="processing-overlay-backdrop">
+                <div class="processing-card">
+                    <div class="processing-icon-container @(processingActionType == "APPROVE" ? "theme-approve" : "theme-reject")">
+                        <div class="processing-ring"></div>
+                        <div class="processing-center-icon">
+                            @if (processingActionType == "APPROVE")
+                            {
+                                <AppIcon Name="shield" />
+                            }
+                            else
+                            {
+                                <AppIcon Name="warning" />
+                            }
+                        </div>
+                    </div>
+
+                    <h3 class="processing-card-title">@processingTitle</h3>
+                    <p class="processing-card-desc">@processingDescription</p>
+
+                    @if (!string.IsNullOrWhiteSpace(processingSubtext))
+                    {
+                        <div class="processing-note-box">
+                            <span class="processing-pulse-dot"></span>
+                            <span class="processing-note-text">@processingSubtext</span>
+                        </div>
+                    }
+
+                    <div class="processing-progress-bar">
+                        <div class="processing-progress-indeterminate @(processingActionType == "APPROVE" ? "bar-approve" : "bar-reject")"></div>
+                    </div>
+                </div>
+            </div>
+        }
     </Authorized>
 </AuthorizeView>
 
@@ -673,6 +716,14 @@
     private bool isRejectModalOpen = false;
     private bool isProcessing = false;
 
+    // Processing UI Overlay
+    private bool isProcessingAction = false;
+    private string processingActionType = "APPROVE";
+    private string processingTitle = "";
+    private string processingDescription = "";
+    private string? processingSubtext;
+    private bool isReloading = false;
+
     // Modal Form States
     private string approvalNote = "";
     private string rejectionNote = "";
@@ -683,9 +734,17 @@
         await LoadRefundRequestsAsync();
     }
 
-    private async Task LoadRefundRequestsAsync()
+    private async Task LoadRefundRequestsAsync(bool isSilent = false)
     {
-        isLoading = true;
+        if (pagedRefunds.Items == null || !pagedRefunds.Items.Any())
+        {
+            isLoading = true;
+        }
+        else
+        {
+            isReloading = !isSilent;
+        }
+
         try
         {
             var query = new GetRefundRequestsQuery
@@ -715,6 +774,8 @@
         finally
         {
             isLoading = false;
+            isReloading = false;
+            StateHasChanged();
         }
     }
 
@@ -836,6 +897,17 @@
         if (selectedRefund == null) return;
 
         isProcessing = true;
+        isProcessingAction = true;
+        processingActionType = "APPROVE";
+        processingTitle = "Processing & Disbursing Refund...";
+        var amountStr = FormatCurrency(selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount ?? 0);
+        var bankTarget = !string.IsNullOrWhiteSpace(selectedRefund.BankName)
+            ? $"to {selectedRefund.BankName} ({selectedRefund.MaskedAccountNumber})"
+            : "";
+        processingDescription = $"Connecting to Napas 24/7 banking gateway to automatically disburse {amountStr} {bankTarget} for trainee {selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail}.";
+        processingSubtext = "Please keep this page open. Do not close or refresh your browser while the bank transfer is in progress...";
+        StateHasChanged();
+
         try
         {
             var req = new ApproveRefundRequest
@@ -858,9 +930,17 @@
                     found.ReviewedAt = DateTime.UtcNow;
                 }
 
-                ShowToast("Refund request approved and processed successfully.", "success");
-                CloseModals();
-                _ = LoadRefundRequestsAsync();
+                processingTitle = "Refund Approved & Disbursed!";
+                processingDescription = "Bank transfer completed successfully. Refreshing requests list...";
+                processingSubtext = "Finalizing in a moment...";
+                StateHasChanged();
+
+                isApproveModalOpen = false;
+                isDetailModalOpen = false;
+
+                await LoadRefundRequestsAsync(isSilent: true);
+
+                ShowToast("Refund request approved and disbursed successfully.", "success");
             }
             else
             {
@@ -869,11 +949,14 @@
         }
         catch (Exception ex)
         {
-            ShowToast(ex.Message, "error");
+            ShowToast($"Error processing refund approval: {ex.Message}", "error");
         }
         finally
         {
             isProcessing = false;
+            isProcessingAction = false;
+            selectedRefund = null;
+            StateHasChanged();
         }
     }
 
@@ -922,6 +1005,13 @@
 
         rejectionNoteValidationFailed = false;
         isProcessing = true;
+        isProcessingAction = true;
+        processingActionType = "REJECT";
+        processingTitle = "Processing Refund Rejection...";
+        processingDescription = $"Recording rejection reason and sending notification to trainee {selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail}...";
+        processingSubtext = "Please wait a moment...";
+        StateHasChanged();
+
         try
         {
             var req = new RejectRefundRequest
@@ -940,9 +1030,17 @@
                     found.ReviewedAt = DateTime.UtcNow;
                 }
 
+                processingTitle = "Refund Request Rejected!";
+                processingDescription = "Rejection recorded successfully. Refreshing requests list...";
+                processingSubtext = "Finalizing in a moment...";
+                StateHasChanged();
+
+                isRejectModalOpen = false;
+                isDetailModalOpen = false;
+
+                await LoadRefundRequestsAsync(isSilent: true);
+
                 ShowToast("Refund request rejected.", "info");
-                CloseModals();
-                _ = LoadRefundRequestsAsync();
             }
             else
             {
@@ -951,11 +1049,14 @@
         }
         catch (Exception ex)
         {
-            ShowToast(ex.Message, "error");
+            ShowToast($"Error rejecting refund request: {ex.Message}", "error");
         }
         finally
         {
             isProcessing = false;
+            isProcessingAction = false;
+            selectedRefund = null;
+            StateHasChanged();
         }
     }
 

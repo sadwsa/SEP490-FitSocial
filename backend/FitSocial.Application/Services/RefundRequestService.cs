@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -1351,6 +1351,19 @@ public class RefundRequestService : IRefundRequestService
     {
         try
         {
+            var status = r.Status?.Trim().ToUpperInvariant();
+            if (status == "APPROVED")
+            {
+                dto.TraineeRefundAmount = r.ApprovedAmount ?? r.RequestedAmount;
+                dto.RefundCase = "CASE_1";
+                return;
+            }
+            if (status == "REJECTED")
+            {
+                dto.TraineeRefundAmount = 0;
+                return;
+            }
+
             var order = r.Order ?? await _orderRepository.GetOrderByIdWithDetailsAsync(r.OrderId, ct);
             if (order != null)
             {

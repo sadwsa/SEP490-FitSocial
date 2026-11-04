@@ -1,0 +1,17 @@
+UTCID,Type,ReviewExists,OwnedByTrainee,Rating,Comment,IsEdited,HasUpdatedAt,HasReply,HasPackage,SaveChangesThrows,ExpectedSuccess,ExpectedExceptionType,ExpectedMessage
+UTCID01,N,TRUE,TRUE,5,Updated comment,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID02,N,TRUE,TRUE,4,Better plan,FALSE,TRUE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID03,B,TRUE,TRUE,1,,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID04,B,TRUE,TRUE,5,Edited twice,TRUE,FALSE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID05,B,TRUE,TRUE,3,   ,NULL,FALSE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID06,N,TRUE,TRUE,2,Reply kept,FALSE,FALSE,TRUE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID07,N,TRUE,TRUE,4,Package kept,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID08,N,TRUE,TRUE,5,IsEdited null kept,NULL,FALSE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID09,N,TRUE,TRUE,3,UpdatedAt replaced,FALSE,TRUE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID10,N,TRUE,TRUE,2,No package,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID11,A,FALSE,TRUE,5,Missing review,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,NOT_FOUND,Review not found.
+UTCID12,A,TRUE,FALSE,5,Other trainee,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,UNAUTHORIZED,You can only edit your own review.
+UTCID13,A,TRUE,TRUE,5,Save failure,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,DB_UPDATE,db fail
+UTCID14,B,TRUE,TRUE,1,,NULL,FALSE,TRUE,TRUE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID15,B,TRUE,TRUE,5,Long comment kept intact,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,NONE,Review updated successfully.
+UTCID16,B,TRUE,TRUE,4,All metadata,TRUE,TRUE,TRUE,TRUE,FALSE,TRUE,NONE,Review updated successfully.

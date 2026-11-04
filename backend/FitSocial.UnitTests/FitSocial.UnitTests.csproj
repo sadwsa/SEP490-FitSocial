@@ -107,6 +107,7 @@
     <EmbeddedResource Include="TestData\SubmitRatingForCoachTestCases.csv" />
     <EmbeddedResource Include="TestData\WriteReviewForCoachTestCases.csv" />
     <EmbeddedResource Include="TestData\EditOwnReviewTestCases.csv" />
+    <EmbeddedResource Include="TestData\CoachReplyToTraineeReviewTestCases.csv" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,17 @@
+UTCID,Type,PackageExists,PackageOwnedByCoach,ReviewExists,ReviewPackageMode,ReviewCoachIsOther,Reply,ExistingReply,HasUpdatedAt,SaveChangesThrows,ExpectedSuccess,ExpectedExceptionType,ExpectedMessage
+UTCID01,N,TRUE,TRUE,TRUE,MATCH,FALSE,Thank you for the feedback,NONE,FALSE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID02,N,TRUE,TRUE,TRUE,MATCH,FALSE,  Thanks for the detailed review  ,NONE,FALSE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID03,B,TRUE,TRUE,TRUE,MATCH,FALSE,,NONE,FALSE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID04,B,TRUE,TRUE,TRUE,MATCH,FALSE,   ,NONE,FALSE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID05,N,TRUE,TRUE,TRUE,MATCH,FALSE,Updated reply,Old reply,FALSE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID06,N,TRUE,TRUE,TRUE,MATCH,FALSE,Reply after update,NONE,TRUE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID07,N,TRUE,TRUE,TRUE,MATCH,FALSE,Thanks for the plan,NONE,FALSE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID08,B,TRUE,TRUE,TRUE,NULL,FALSE,Reply for null package,NONE,FALSE,FALSE,FALSE,NOT_FOUND,Review not found for this package.
+UTCID09,A,FALSE,TRUE,FALSE,NONE,FALSE,Package missing,NONE,FALSE,FALSE,FALSE,NOT_FOUND,Package not found.
+UTCID10,A,TRUE,FALSE,TRUE,MATCH,FALSE,Wrong coach,NONE,FALSE,FALSE,FALSE,UNAUTHORIZED,Only the coach who owns this package can reply to its reviews.
+UTCID11,A,TRUE,TRUE,FALSE,NONE,FALSE,Missing review,NONE,FALSE,FALSE,FALSE,NOT_FOUND,Review not found for this package.
+UTCID12,A,TRUE,TRUE,TRUE,OTHER,FALSE,Wrong package,NONE,FALSE,FALSE,FALSE,NOT_FOUND,Review not found for this package.
+UTCID13,A,TRUE,TRUE,TRUE,MATCH,FALSE,Save failure,NONE,FALSE,TRUE,FALSE,DB_UPDATE,db fail
+UTCID14,B,TRUE,TRUE,TRUE,MATCH,FALSE,Thanks!   Keep going.,NONE,FALSE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID15,B,TRUE,TRUE,TRUE,MATCH,FALSE,New reply,Old reply,TRUE,FALSE,TRUE,NONE,Reply posted successfully.
+UTCID16,N,TRUE,TRUE,TRUE,MATCH,TRUE,Thanks from the coach,NONE,FALSE,FALSE,TRUE,NONE,Reply posted successfully.

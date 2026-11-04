@@ -46,8 +46,11 @@ public class AddPaymentAccountServiceTests
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
                     HasExistingActiveSameChannel = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "HasExistingActiveSameChannel")),
+                    IsPayout = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "IsPayout")),
                     DtoNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "DtoNull")),
+                    WebhookUrl = CsvTestHelper.Get(row, index, "WebhookUrl"),
                     SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    ConfigsNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ConfigsNull")),
                     ExpectedThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage"),
@@ -75,11 +78,15 @@ public class AddPaymentAccountServiceTests
         _encryption.Setup(e => e.Encrypt(It.IsAny<string>(), It.IsAny<bool>())).Returns(new byte[] { 1, 2, 3 });
         _configRepo.Setup(c => c.AddAsync(It.IsAny<PaymentGatewayConfig>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-        if (tc.HasExistingActiveSameChannel)
+        if (tc.ConfigsNull)
+        {
+            _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync((List<PaymentGatewayConfig>?)null);
+        }
+        else if (tc.HasExistingActiveSameChannel)
         {
             _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<PaymentGatewayConfig>
             {
-                new() { GatewayId = Guid.NewGuid(), IsActive = true, IsPayout = false }
+                new() { GatewayId = Guid.NewGuid(), IsActive = true, IsPayout = tc.IsPayout }
             });
         }
         else
@@ -103,7 +110,8 @@ public class AddPaymentAccountServiceTests
             ApiKey = "apikey",
             ChecksumKey = "checksum",
             IsActive = true,
-            IsPayout = false
+            IsPayout = tc.IsPayout,
+            WebhookUrl = (tc.WebhookUrl == "NULL" || string.IsNullOrWhiteSpace(tc.WebhookUrl)) ? null : tc.WebhookUrl
         };
 
         var sut = CreateSut();
@@ -145,6 +153,9 @@ public class AddPaymentAccountServiceTests
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public bool HasExistingActiveSameChannel { get; set; }
+        public bool IsPayout { get; set; }
+        public string WebhookUrl { get; set; } = string.Empty;
+        public bool ConfigsNull { get; set; }
         public bool DtoNull { get; set; }
         public bool SaveChangesThrows { get; set; }
         public bool ExpectedThrows { get; set; }

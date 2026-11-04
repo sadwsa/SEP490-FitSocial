@@ -107,7 +107,7 @@ public class ChangePasswordServiceTests
                 UserId = Guid.NewGuid(),
                 Email = "user@example.com",
                 PasswordHash = string.Equals(tc.PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
-                FullName = "Test User",
+                FullName = string.Equals(tc.PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "Test User",
                 RoleCode = "TRAINEE"
             };
         }

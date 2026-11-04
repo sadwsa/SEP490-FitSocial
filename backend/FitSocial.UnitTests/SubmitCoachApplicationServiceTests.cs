@@ -159,11 +159,15 @@ public class SubmitCoachApplicationServiceTests
         _otp.Setup(o => o.ValidateOtpAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((tc.OtpValid, tc.OtpValid ? "OTP verified." : tc.OtpMessage));
 
-        var ekycExtract = new EkycExtract("123456789", "Coach One", null, tc.EkycValid ? "SUCCESS" : "FAILED", tc.EkycValid ? null : tc.EkycError);
+        var ekycError = tc.EkycError == "NULL" ? null : tc.EkycError;
         _ekycService.Setup(e => e.VerifyAsync(It.IsAny<EkycVerificationDto>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((tc.EkycValid, tc.EkycValid ? null : (string?)tc.EkycError, ekycExtract));
+            .ReturnsAsync((tc.EkycValid, tc.EkycValid ? null : ekycError, new EkycExtract("123456789", "Coach One", null, tc.EkycValid ? "SUCCESS" : "FAILED", tc.EkycValid ? null : ekycError)));
 
         _ekycs.Setup(e => e.ExistsByIdCardNumberAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(tc.IdCardDuplicate);
+        if (tc.UtcId == "UTCID13") { _ekycs.Setup(e => e.ListByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachEkycVerification> { new CoachEkycVerification() }); _certificates.Setup(c => c.ListByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachCertificate> { new CoachCertificate() }); } else { _ekycs.Setup(e => e.ListByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachEkycVerification>()); _certificates.Setup(c => c.ListByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachCertificate>()); }
+        _agreements.Setup(a => a.FindByUserAndTermAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(tc.UtcId == "UTCID01" ? new UserAgreement { AgreementId = Guid.NewGuid() } : null);
+        _ekycs.Setup(e => e.ListByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachEkycVerification>());
+        _certificates.Setup(c => c.ListByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachCertificate>());
 
         if (tc.SaveChangesThrows)
         {
@@ -177,6 +181,7 @@ public class SubmitCoachApplicationServiceTests
         var request = new RegisterCoachRequestDto
         {
             FullName = tc.FullName,
+            Gender = tc.UtcId == "UTCID01" ? "MALE" : null,
             Email = tc.Email,
             Password = tc.Password,
             ConfirmPassword = tc.ConfirmPassword,
@@ -186,7 +191,10 @@ public class SubmitCoachApplicationServiceTests
             BackCardUrl = string.IsNullOrWhiteSpace(tc.BackCardUrl) ? null : tc.BackCardUrl,
             FaceImageUrl = string.IsNullOrWhiteSpace(tc.FaceImageUrl) ? null : tc.FaceImageUrl,
             TermId = termId,
-            ExperienceYears = tc.ExperienceYears
+            CertificateUrl = tc.UtcId == "UTCID01" ? "http://cert.jpg" : null,
+            Certificates = tc.UtcId == "UTCID15" ? new List<FitSocial.Application.DTOs.Coach.CoachCertificateDto> { new() { CertificateUrl = "http://cert.jpg", CertificateName = "Cert" } } : (tc.UtcId == "UTCID18" ? new List<FitSocial.Application.DTOs.Coach.CoachCertificateDto>() : (tc.UtcId == "UTCID19" ? new List<FitSocial.Application.DTOs.Coach.CoachCertificateDto> { new() { CertificateUrl = "http://cert.jpg", CertificateName = "" } } : null)),
+            ExperienceYears = tc.ExperienceYears,
+            Biography = tc.UtcId == "UTCID13" ? "Bio" : null,
         };
 
         var sut = CreateSut();

@@ -57,6 +57,7 @@ public class ProcessCoachPayoutServiceTests
                     HasUnpaid = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "HasUnpaid")),
                     HasRefunded = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "HasRefunded")),
                     GatewaySuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "GatewaySuccess")),
+                    GuardFail = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "GuardFail")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -65,14 +66,21 @@ public class ProcessCoachPayoutServiceTests
         }
     }
 
-    private PayoutService CreateSut()
+    private PayoutService CreateSut(bool guardFail)
     {
         _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         _reports.Setup(r => r.CountUnresolvedAgainstUserAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        _banks.Setup(b => b.ListActiveByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachBankAccount>
+        if (guardFail)
         {
-            new() { BankId = Guid.NewGuid(), CoachId = _coachId, BankCode = "970436", AccountName = "Coach", EncryptedAccountNumber = new byte[] { 1, 2, 3 }, IsDefault = true, IsActive = true }
-        });
+            _banks.Setup(b => b.ListActiveByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachBankAccount>());
+        }
+        else
+        {
+            _banks.Setup(b => b.ListActiveByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachBankAccount>
+            {
+                new() { BankId = Guid.NewGuid(), CoachId = _coachId, BankCode = "970436", AccountName = "Coach", EncryptedAccountNumber = new byte[] { 1, 2, 3 }, IsDefault = true, IsActive = true }
+            });
+        }
         _encryption.Setup(e => e.Decrypt(It.IsAny<byte[]>())).Returns("1234567890");
         return new PayoutService(_payouts.Object, _users.Object, _banks.Object, _reports.Object, _encryption.Object, _gateway.Object, _auditLogs.Object, _notifications.Object, _unitOfWork.Object);
     }
@@ -146,7 +154,7 @@ public class ProcessCoachPayoutServiceTests
                 _gateway.Setup(g => g.CreateTransferAsync(It.IsAny<BankTransferRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(new CreatedTransfer(true, "gw-1", false, "FAILED", "fail", null));
             }
 
-            var sut = CreateSut();
+            var sut = CreateSut(tc.GuardFail);
             var result = await sut.ProcessPayoutAsync(payout.PayoutId, _staffId);
 
             Assert.True(result.Success == tc.ExpectedSuccess && result.Message == tc.ExpectedMessage,
@@ -155,7 +163,7 @@ public class ProcessCoachPayoutServiceTests
         }
 
         // payout not found case uses any guid
-        var sut2 = CreateSut();
+        var sut2 = CreateSut(tc.GuardFail);
         var result2 = await sut2.ProcessPayoutAsync(Guid.NewGuid(), _staffId);
         Assert.True(result2.Success == tc.ExpectedSuccess && result2.Message == tc.ExpectedMessage,
             $"{tc.UtcId} ({tc.Type}): expected Success={tc.ExpectedSuccess}, Message=\"{tc.ExpectedMessage}\" but got Success={result2.Success}, Message=\"{result2.Message}\"");
@@ -169,6 +177,7 @@ public class ProcessCoachPayoutServiceTests
         public bool HasUnpaid { get; set; }
         public bool HasRefunded { get; set; }
         public bool GatewaySuccess { get; set; }
+        public bool GuardFail { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

@@ -16,3 +16,5 @@ UTCID14,A,John Doe,john@example.com,Password123,Password123,123456,0901234567,MA
 UTCID15,A,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,TRUE,TRUE,,FALSE,FALSE,This phone number is already in use.
 UTCID16,A,John Doe,john@example.com,Password123,Password123,000000,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,FALSE,Invalid or expired OTP code.,FALSE,FALSE,Invalid or expired OTP code.
 UTCID17,A,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,TRUE,FALSE,"Could not create the account. The email or phone number may already be in use."
+UTCID18,N,John Doe,john@example.com,Password123,Password123,123456,NULL,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
+UTCID19,N,John Doe,john@example.com,Password123,Password123,123456,0901234567,NULL,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!

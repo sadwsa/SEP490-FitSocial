@@ -132,7 +132,7 @@ public class RegisterTraineeServiceTests
 
         _users.Setup(u => u.ExistsByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(tc.EmailExists);
 
-        var phone = string.IsNullOrWhiteSpace(tc.PhoneRaw) ? null : tc.PhoneRaw.Trim();
+        var phone = (tc.PhoneRaw == "NULL" || string.IsNullOrWhiteSpace(tc.PhoneRaw)) ? null : tc.PhoneRaw.Trim();
         if (phone != null)
         {
             _users.Setup(u => u.ExistsByPhoneAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(tc.PhoneExists);
@@ -178,8 +178,8 @@ public class RegisterTraineeServiceTests
             Password = tc.Password,
             ConfirmPassword = tc.ConfirmPassword,
             OtpCode = tc.OtpCode,
-            PhoneNumber = tc.PhoneRaw,
-            Gender = string.IsNullOrWhiteSpace(tc.GenderRaw) ? null : tc.GenderRaw,
+            PhoneNumber = tc.PhoneRaw == "NULL" ? null : tc.PhoneRaw,
+            Gender = (tc.GenderRaw == "NULL" || string.IsNullOrWhiteSpace(tc.GenderRaw)) ? null : tc.GenderRaw,
             DateOfBirth = dob,
             TermId = termId
         };

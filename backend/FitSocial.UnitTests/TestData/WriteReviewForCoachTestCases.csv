@@ -1,0 +1,17 @@
+UTCID,Type,PackageExists,OrderScenario,OrderStatus,ExistingReview,Rating,Comment,SaveChangesThrows,ExpectedSuccess,ExpectedExceptionType,ExpectedMessage
+UTCID01,N,TRUE,MATCH,PAID,NONE,5,Great package,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID02,N,TRUE,MATCH,COMPLETED,NONE,4,Good structured plan,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID03,N,TRUE,MATCH,ACTIVE,NONE,3,,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID04,B,TRUE,MATCH,paid,NONE,1,Helpful basics,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID05,N,TRUE,MULTI,PAID,NONE,5,Multiple orders,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID06,B,TRUE,MATCH,PAID,NOT_EDITED,2,Updated after one session,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID07,B,TRUE,MATCH,PAID,NULL_EDITED,4,Updated once,FALSE,TRUE,NONE,Review submitted successfully.
+UTCID08,A,TRUE,MATCH,PAID,ALREADY_EDITED,5,Second edit blocked,FALSE,FALSE,VALIDATION,This review has been edited once and cannot be edited further.
+UTCID09,A,FALSE,NONE,,NONE,5,Missing package,FALSE,FALSE,NOT_FOUND,Training package not found.
+UTCID10,N,TRUE,NONE,,NONE,5,No orders,FALSE,FALSE,VALIDATION,You can only review a package that you have successfully purchased.
+UTCID11,N,TRUE,MATCH,PENDING,NONE,5,Pending order,FALSE,FALSE,VALIDATION,You can only review a package that you have successfully purchased.
+UTCID12,N,TRUE,MATCH,CANCELLED,NONE,4,Cancelled order,FALSE,FALSE,VALIDATION,You can only review a package that you have successfully purchased.
+UTCID13,B,TRUE,MATCH,NULL,NONE,3,Null status,FALSE,FALSE,VALIDATION,You can only review a package that you have successfully purchased.
+UTCID14,B,TRUE,MATCH,EMPTY,NONE,2,Empty status,FALSE,FALSE,VALIDATION,You can only review a package that you have successfully purchased.
+UTCID15,N,TRUE,OTHER,PAID,NONE,5,Other package,FALSE,FALSE,VALIDATION,You can only review a package that you have successfully purchased.
+UTCID16,A,TRUE,MATCH,PAID,NONE,5,Save failure,TRUE,FALSE,DB_UPDATE,db fail

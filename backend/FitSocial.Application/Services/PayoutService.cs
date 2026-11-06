@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Payouts;
 using FitSocial.Application.Interfaces;
@@ -1006,6 +1006,7 @@ public class PayoutService : IPayoutService
         Guid staffId, string? ipAddress, string? customMessage, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
+        var previousStatus = payout.Status;
         var fullyPaid = !UnpaidGrossItems(payout).Any();
         if (fullyPaid)
         {
@@ -1017,7 +1018,7 @@ public class PayoutService : IPayoutService
 
         await WriteAuditAsync(staffId, fullyPaid ? "PAYOUT_PROCESSED" : "PAYOUT_PARTIAL", payout,
             fullyPaid ? "PROCESSED" : "PENDING",
-            new { transactionRef, amount, processedAt = now }, ipAddress, ct);
+            new { transactionRef, amount, processedAt = now }, ipAddress, ct, previousStatus);
 
         // Notify the coach for EVERY disbursement, not only full settlements:
         // a partial payout (per-package pay) still moves real money to their bank
@@ -1147,7 +1148,7 @@ public class PayoutService : IPayoutService
         }
     }
 
-    private async Task WriteAuditAsync(Guid? actorId, string action, Payout? payout, string? newStatus, object details, string? ipAddress, CancellationToken ct)
+    private async Task WriteAuditAsync(Guid? actorId, string action, Payout? payout, string? newStatus, object details, string? ipAddress, CancellationToken ct, string? oldStatus = null)
     {
         try
         {
@@ -1157,7 +1158,7 @@ public class PayoutService : IPayoutService
                 Action = action,
                 EntityType = "Payout",
                 EntityId = payout?.PayoutId.ToString(),
-                OldValue = payout == null ? null : JsonSerializer.Serialize(new { status = payout.Status }),
+                OldValue = payout == null ? null : JsonSerializer.Serialize(new { status = oldStatus ?? payout.Status }),
                 NewValue = JsonSerializer.Serialize(new { status = newStatus, details }),
                 Ipaddress = ipAddress,
                 CreatedAt = DateTime.UtcNow

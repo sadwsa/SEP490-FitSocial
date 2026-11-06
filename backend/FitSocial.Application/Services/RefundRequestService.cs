@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -830,6 +830,10 @@ public class RefundRequestService : IRefundRequestService
 
             try
             {
+                var previousStaffNote = item.StaffNote;
+                var previousApprovedAmount = item.ApprovedAmount ?? 0m;
+                var previousTxRef = item.RefundTransactionRef;
+
                 // Update RefundRequest entity (Concurrency token on Status property ensures atomic transition)
                 item.Status = "APPROVED";
                 item.ApprovedAmount = approvedAmount;
@@ -925,7 +929,30 @@ public class RefundRequestService : IRefundRequestService
                 }
 
                 // 3. Audit log for APPROVE_REFUND
+                var bankDisplay = bank != null ? $"{bank.BankName} ({MaskAccountNumber(plainAccountNumber)})" : null;
+                var reqAmount = item.RequestedAmount ?? snapshotAmount;
+                var cleanOldStaffNote = !string.IsNullOrWhiteSpace(previousStaffNote) && !previousStaffNote.TrimStart().StartsWith("[Policy:", StringComparison.OrdinalIgnoreCase)
+                    ? previousStaffNote.Trim()
+                    : "None";
+                var cleanNewStaffNote = !string.IsNullOrWhiteSpace(staffNoteText) ? staffNoteText : "None";
                 var auditDesc = $"Refund request approved & disbursed.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nCoach Payout Portion: {calc.CoachPayoutAmount:N0} VND\nPolicy Case: {calc.RefundCase} ({calc.CaseTitle})\nTarget Bank: {(bank != null ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})" : "None")}\nTx Ref: {txRef}\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nProcessed By: {staffName}";
+                var oldAuditSnapshot = new
+                {
+                    status = currentStatus,
+                    requestedAmount = reqAmount,
+                    buyer = buyerName,
+                    order = orderRef,
+                    seller = coachName,
+                    package = packageName,
+                    originalPaidAmount = snapshotAmount,
+                    refundAmount = previousApprovedAmount,
+                    approvedAmount = previousApprovedAmount,
+                    coachPayoutPortion = calc.CoachPayoutAmount,
+                    policyCase = calc.RefundCase,
+                    bankAccount = bankDisplay,
+                    staffNote = cleanOldStaffNote,
+                    refundTransactionRef = !string.IsNullOrWhiteSpace(previousTxRef) ? previousTxRef : "Pending disbursement"
+                };
                 if (_auditLogService != null)
                 {
                     await _auditLogService.LogAsync(
@@ -934,22 +961,23 @@ public class RefundRequestService : IRefundRequestService
                         entityType: "RefundRequest",
                         entityId: item.RefundRequestId.ToString(),
                         description: auditDesc,
-                        oldValue: new { status = currentStatus, requestedAmount = item.RequestedAmount },
+                        oldValue: oldAuditSnapshot,
                         newValue: new
                         {
+                            status = "APPROVED",
+                            requestedAmount = reqAmount,
                             buyer = buyerName,
+                            order = orderRef,
                             seller = coachName,
                             package = packageName,
-                            order = orderRef,
                             originalPaidAmount = snapshotAmount,
                             refundAmount = approvedAmount,
+                            approvedAmount,
                             coachPayoutPortion = calc.CoachPayoutAmount,
                             policyCase = calc.RefundCase,
-                            bankAccount = bank != null ? $"{bank.BankName} ({MaskAccountNumber(plainAccountNumber)})" : null,
-                            status = "APPROVED",
-                            approvedAmount,
+                            bankAccount = bankDisplay,
+                            staffNote = cleanNewStaffNote,
                             refundTransactionRef = txRef,
-                            staffNote = item.StaffNote,
                             processedBy = staffName,
                             processedAt = now
                         },
@@ -964,22 +992,24 @@ public class RefundRequestService : IRefundRequestService
                         Action = "APPROVE_REFUND",
                         EntityType = "RefundRequest",
                         EntityId = item.RefundRequestId.ToString(),
-                        OldValue = JsonSerializer.Serialize(new { status = currentStatus, requestedAmount = item.RequestedAmount }),
+                        OldValue = JsonSerializer.Serialize(oldAuditSnapshot),
                         NewValue = JsonSerializer.Serialize(new
                         {
                             description = auditDesc,
+                            status = "APPROVED",
+                            requestedAmount = reqAmount,
                             buyer = buyerName,
+                            order = orderRef,
                             seller = coachName,
                             package = packageName,
-                            order = orderRef,
                             originalPaidAmount = snapshotAmount,
                             refundAmount = approvedAmount,
+                            approvedAmount,
                             coachPayoutPortion = calc.CoachPayoutAmount,
                             policyCase = calc.RefundCase,
-                            status = "APPROVED",
-                            approvedAmount,
+                            bankAccount = bankDisplay,
+                            staffNote = cleanNewStaffNote,
                             refundTransactionRef = txRef,
-                            staffNote = item.StaffNote,
                             processedBy = staffName,
                             processedAt = now
                         }),
@@ -1092,6 +1122,7 @@ public class RefundRequestService : IRefundRequestService
             }
 
             var now = DateTime.UtcNow;
+            var previousStaffNote = item.StaffNote;
 
             item.Status = "REJECTED";
             item.ReviewedBy = staffUserId;
@@ -1162,7 +1193,22 @@ public class RefundRequestService : IRefundRequestService
             }
 
             // 3. Audit log for REJECT_REFUND
+            var cleanOldRejectStaffNote = !string.IsNullOrWhiteSpace(previousStaffNote) && !previousStaffNote.TrimStart().StartsWith("[Policy:", StringComparison.OrdinalIgnoreCase)
+                ? previousStaffNote.Trim()
+                : "None";
             var auditDesc = $"Refund request rejected.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nPurchase Date: {(order?.CreatedAt.HasValue == true ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nRequested At: {(item.RequestedAt.HasValue ? item.RequestedAt.Value.ToString("dd/MM/yyyy HH:mm") : now.ToString("dd/MM/yyyy HH:mm"))}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nPrevious Status: PENDING\nNew Status: REJECTED\nProcessed By: {staffName}\nRejection Reason: {rejectionReason}";
+            var oldRejectSnapshot = new
+            {
+                status = currentStatus,
+                requestedAmount = snapshotAmount,
+                buyer = buyerName,
+                order = orderRef,
+                seller = coachName,
+                package = packageName,
+                originalPaidAmount = snapshotAmount,
+                staffNote = cleanOldRejectStaffNote,
+                rejectionReason = "None"
+            };
             if (_auditLogService != null)
             {
                 await _auditLogService.LogAsync(
@@ -1171,17 +1217,19 @@ public class RefundRequestService : IRefundRequestService
                     entityType: "RefundRequest",
                     entityId: item.RefundRequestId.ToString(),
                     description: auditDesc,
-                    oldValue: new { status = currentStatus },
+                    oldValue: oldRejectSnapshot,
                     newValue: new
                     {
+                        status = "REJECTED",
+                        requestedAmount = snapshotAmount,
                         buyer = buyerName,
+                        order = orderRef,
                         seller = coachName,
                         package = packageName,
-                        order = orderRef,
-                        status = "REJECTED",
+                        originalPaidAmount = snapshotAmount,
                         staffNote = item.StaffNote,
-                        processedBy = staffName,
                         rejectionReason,
+                        processedBy = staffName,
                         processedAt = now
                     },
                     ipAddress: ipAddress,
@@ -1195,18 +1243,20 @@ public class RefundRequestService : IRefundRequestService
                     Action = "REJECT_REFUND",
                     EntityType = "RefundRequest",
                     EntityId = item.RefundRequestId.ToString(),
-                    OldValue = JsonSerializer.Serialize(new { status = currentStatus }),
+                    OldValue = JsonSerializer.Serialize(oldRejectSnapshot),
                     NewValue = JsonSerializer.Serialize(new
                     {
                         description = auditDesc,
+                        status = "REJECTED",
+                        requestedAmount = snapshotAmount,
                         buyer = buyerName,
+                        order = orderRef,
                         seller = coachName,
                         package = packageName,
-                        order = orderRef,
-                        status = "REJECTED",
+                        originalPaidAmount = snapshotAmount,
                         staffNote = item.StaffNote,
-                        processedBy = staffName,
                         rejectionReason,
+                        processedBy = staffName,
                         processedAt = now
                     }),
                     Ipaddress = ipAddress,

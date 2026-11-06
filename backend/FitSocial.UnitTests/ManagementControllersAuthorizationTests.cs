@@ -218,6 +218,14 @@ public class ManagementControllersAuthorizationTests
     {
         // Act: Verify ReportsController has class-level [Authorize]
         var classAuth = typeof(ReportsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .FirstOrDefault();
+
+        Assert.NotNull(classAuth);
+    }
+
+    [Fact]
     public void LocationsController_DeleteLocationEndpoint_RequiresStaffOrAdmin()
     {
         // Act: Verify DeleteLocation method exists, has HttpDelete and is restricted to Staff and Admin
@@ -252,6 +260,11 @@ public class ManagementControllersAuthorizationTests
             .FirstOrDefault();
 
         Assert.NotNull(classAuth);
+        Assert.NotNull(classAuth.Roles);
+        Assert.Contains(RoleConstants.Trainee, classAuth.Roles);
+        Assert.Contains(RoleConstants.Coach, classAuth.Roles);
+        Assert.DoesNotContain(RoleConstants.Admin, classAuth.Roles);
+        Assert.DoesNotContain(RoleConstants.Staff, classAuth.Roles);
     }
 
     [Fact]
@@ -267,13 +280,6 @@ public class ManagementControllersAuthorizationTests
 
         Assert.NotNull(httpPost);
         Assert.Equal("user", httpPost.Template);
-    }
-}
-        Assert.NotNull(classAuth.Roles);
-        Assert.Contains(RoleConstants.Trainee, classAuth.Roles);
-        Assert.Contains(RoleConstants.Coach, classAuth.Roles);
-        Assert.DoesNotContain(RoleConstants.Admin, classAuth.Roles);
-        Assert.DoesNotContain(RoleConstants.Staff, classAuth.Roles);
     }
 
     [Fact]
@@ -318,5 +324,4 @@ public class ManagementControllersAuthorizationTests
         Assert.NotNull(httpDeleteClear);
         Assert.Equal("clear", httpDeleteClear.Template);
     }
-}
 }

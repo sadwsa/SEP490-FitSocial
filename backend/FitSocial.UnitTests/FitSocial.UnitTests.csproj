@@ -82,6 +82,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="TestData\ViewListPaymentAccountsTestCases.csv" />
+    <EmbeddedResource Include="TestData\ViewListPackagesTestCases.csv" />
   </ItemGroup>
 
   <ItemGroup>

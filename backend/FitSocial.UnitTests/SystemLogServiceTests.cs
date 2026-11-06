@@ -291,4 +291,112 @@ public class SystemLogServiceTests
         Assert.False(result.Success);
         Assert.Contains("Failed to load system logs", result.Message);
     }
+
+    [Fact]
+    public async Task GetSystemLogsAsync_ExcludesTraineeAndCoachActorLogs_OnlyReturnsAdminAndStaff()
+    {
+        // Arrange
+        var logs = new List<AuditLog>
+        {
+            new AuditLog
+            {
+                AuditLogId = 10,
+                Action = "LOCK_USER",
+                EntityType = "User",
+                EntityId = "trainee-1",
+                CreatedAt = DateTime.UtcNow,
+                OldValue = "{\"isLocked\": false, \"status\": \"ACTIVE\", \"targetName\": \"Trainee One\"}",
+                NewValue = "{\"isLocked\": true, \"status\": \"LOCKED\", \"targetName\": \"Trainee One\"}",
+                ActorAccount = new User { FullName = "System Admin", Email = "admin@fitsocial.com", RoleCode = "ADMIN" }
+            },
+            new AuditLog
+            {
+                AuditLogId = 11,
+                Action = "APPROVE_COACH_APPLICATION",
+                EntityType = "CoachProfile",
+                EntityId = "coach-1",
+                CreatedAt = DateTime.UtcNow,
+                ActorAccount = new User { FullName = "Operations Staff", Email = "staff@fitsocial.com", RoleCode = "STAFF" }
+            },
+            new AuditLog
+            {
+                AuditLogId = 12,
+                Action = "UPDATE_PROFILE",
+                EntityType = "User",
+                EntityId = "trainee-2",
+                CreatedAt = DateTime.UtcNow,
+                ActorAccount = new User { FullName = "Trainee Actor", Email = "trainee@fitsocial.com", RoleCode = "TRAINEE" }
+            },
+            new AuditLog
+            {
+                AuditLogId = 13,
+                Action = "UPDATE_PROFILE",
+                EntityType = "User",
+                EntityId = "coach-2",
+                CreatedAt = DateTime.UtcNow,
+                ActorAccount = new User { FullName = "Coach Actor", Email = "coach@fitsocial.com", RoleCode = "COACH" }
+            }
+        };
+
+        _repoMock.Setup(r => r.GetPagedLogsAsync(
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            1,
+            20,
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync((logs, 4));
+
+        // Act
+        var result = await _service.GetSystemLogsAsync(new GetSystemLogsQueryDto { PageNumber = 1, PageSize = 20 });
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Items.Count);
+        Assert.Equal(2, result.Data.TotalCount);
+        Assert.All(result.Data.Items, item => Assert.True(item.ActorRole == "ADMIN" || item.ActorRole == "STAFF"));
+        Assert.Equal("LOCK", result.Data.Items[0].ActionType);
+        Assert.Equal("Trainee One", result.Data.Items[0].TargetDisplayName);
+    }
+
+    [Fact]
+    public async Task GetSystemLogsSummaryAsync_ShouldReturnSummaryCounts()
+    {
+        // Arrange
+        _repoMock.Setup(r => r.GetLogsSummaryAsync(
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync((120, 45, 75, 4));
+
+        // Act
+        var result = await _service.GetSystemLogsSummaryAsync();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(120, result.Data.TotalActivities);
+        Assert.Equal(45, result.Data.AdminActivities);
+        Assert.Equal(75, result.Data.StaffActivities);
+        Assert.Equal(4, result.Data.FailedActivities);
+    }
+
+    [Theory]
+    [InlineData("CREATE_STAFF", "CREATE")]
+    [InlineData("CREATE_LOCATION", "CREATE")]
+    [InlineData("UPDATE_LOCATION", "UPDATE")]
+    [InlineData("UPDATE_PROFILE", "UPDATE")]
+    [InlineData("DELETE_LOCATION", "DELETE")]
+    [InlineData("LOCK_USER", "LOCK")]
+    [InlineData("UNLOCK_USER", "UNLOCK")]
+    [InlineData("APPROVE_COACH_APPLICATION", "APPROVE")]
+    [InlineData("REJECT_COACH_APPLICATION", "REJECT")]
+    public void DetermineActionType_ShouldReturnCanonicalActionType(string action, string expectedActionType)
+    {
+        var actual = SystemLogService.DetermineActionType(action);
+        Assert.Equal(expectedActionType, actual);
+    }
 }

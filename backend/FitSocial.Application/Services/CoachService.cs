@@ -442,6 +442,7 @@ public class CoachService : ICoachService
             }
 
             var now = DateTime.UtcNow;
+            var previousProfileStatus = profile.Status ?? "PENDING";
 
             // 1. Update CoachProfile
             profile.ApprovalStatus = "APPROVED";
@@ -519,8 +520,8 @@ public class CoachService : ICoachService
                         description: string.IsNullOrWhiteSpace(request?.Note)
                             ? $"Coach application for {profile.Coach?.FullName ?? profile.Coach?.Email} approved."
                             : $"Coach application for {profile.Coach?.FullName ?? profile.Coach?.Email} approved. Note: {request.Note}",
-                        oldValue: new { approvalStatus = currentStatus },
-                        newValue: new { approvalStatus = "APPROVED", status = "ACTIVE", approvedBy = approverId, note = request?.Note },
+                        oldValue: new { approvalStatus = currentStatus, status = previousProfileStatus, note = "None" },
+                        newValue: new { approvalStatus = "APPROVED", status = "ACTIVE", approvedBy = approverId, note = string.IsNullOrWhiteSpace(request?.Note) ? "None" : request.Note },
                         cancellationToken: cancellationToken);
                 }
                 catch (Exception auditEx)
@@ -653,8 +654,8 @@ public class CoachService : ICoachService
                         description: string.IsNullOrWhiteSpace(request?.Reason)
                             ? $"Coach application for {profile.Coach?.FullName ?? profile.Coach?.Email} rejected."
                             : $"Coach application for {profile.Coach?.FullName ?? profile.Coach?.Email} rejected. Reason: {request.Reason}",
-                        oldValue: new { approvalStatus = currentStatus },
-                        newValue: new { approvalStatus = "REJECTED", reason = request?.Reason, rejectedBy = rejectorId },
+                        oldValue: new { approvalStatus = currentStatus, reason = "None" },
+                        newValue: new { approvalStatus = "REJECTED", reason = string.IsNullOrWhiteSpace(request?.Reason) ? "None" : request.Reason, rejectedBy = rejectorId },
                         cancellationToken: cancellationToken);
                 }
                 catch (Exception auditEx)

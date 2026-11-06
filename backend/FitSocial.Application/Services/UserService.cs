@@ -20,11 +20,16 @@ public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork? _unitOfWork;
+    private readonly IAuditLogService? _auditLogService;
 
-    public UserService(IUserRepository userRepository, IUnitOfWork? unitOfWork = null)
+    public UserService(
+        IUserRepository userRepository,
+        IUnitOfWork? unitOfWork = null,
+        IAuditLogService? auditLogService = null)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDto<UserProfileDto>> GetOwnProfileAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -235,6 +240,15 @@ public class UserService : IUserService
             throw new ForbiddenException("Access denied. Only Staff and Admin profiles are allowed.");
         }
 
+        var oldProfileSnapshot = new
+        {
+            fullName = user.FullName,
+            phoneNumber = user.PhoneNumber,
+            gender = user.Gender,
+            dateOfBirth = user.DateOfBirth?.ToString("yyyy-MM-dd"),
+            avatarUrl = user.AvatarUrl
+        };
+
         // Rule (UC_35.1):
         // Field không nhập / để trống -> giữ nguyên dữ liệu cũ trong database.
         // Field có nhập -> validate nghiêm ngặt; nếu hợp lệ mới cập nhật.
@@ -338,6 +352,33 @@ public class UserService : IUserService
         if (_unitOfWork != null)
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        if (_auditLogService != null)
+        {
+            try
+            {
+                await _auditLogService.LogAsync(
+                    actorAccountId: userId,
+                    action: "UPDATE_PROFILE",
+                    entityType: "User",
+                    entityId: user.UserId.ToString(),
+                    description: $"{role} '{user.FullName ?? user.Email}' updated own profile.",
+                    oldValue: oldProfileSnapshot,
+                    newValue: new
+                    {
+                        fullName = user.FullName,
+                        phoneNumber = user.PhoneNumber,
+                        gender = user.Gender,
+                        dateOfBirth = user.DateOfBirth?.ToString("yyyy-MM-dd"),
+                        avatarUrl = user.AvatarUrl
+                    },
+                    cancellationToken: cancellationToken);
+            }
+            catch
+            {
+                // Audit log failure is non-fatal
+            }
         }
 
         var profileDto = new StaffAdminOwnProfileDto

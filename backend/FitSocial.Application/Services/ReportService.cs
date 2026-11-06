@@ -713,6 +713,8 @@ public class ReportService : IReportService
                 "Locking would disrupt ongoing trainee packages. Only 'BLOCK' action is permitted.");
         }
 
+        var previousIsLocked = reportedUser.IsLocked ?? false;
+
         // Execute changes atomically inside transaction
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
@@ -831,8 +833,8 @@ public class ReportService : IReportService
                     entityType: "User",
                     entityId: reportedUser.UserId.ToString(),
                     description: $"Reported user '{reportedUser.FullName ?? reportedUser.Email}' ({reportedUser.UserId}) processed with action {action}. Violation count: {nextViolationCount}.",
-                    oldValue: new { warningCount = currentViolationCount, isLocked = reportedUser.IsLocked },
-                    newValue: new { warningCount = reportedUser.WarningCount, isLocked = reportedUser.IsLocked, reportId = report.ReportId, action },
+                    oldValue: new { warningCount = currentViolationCount, isLocked = previousIsLocked, targetName = reportedUser.FullName, targetEmail = reportedUser.Email },
+                    newValue: new { warningCount = reportedUser.WarningCount, isLocked = reportedUser.IsLocked ?? false, reportId = report.ReportId, action, targetName = reportedUser.FullName, targetEmail = reportedUser.Email },
                     cancellationToken: cancellationToken);
             }
 

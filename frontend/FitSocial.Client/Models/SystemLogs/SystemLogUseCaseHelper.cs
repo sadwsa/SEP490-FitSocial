@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -9,9 +10,9 @@ namespace FitSocial.Client.Models.SystemLogs;
 
 public enum LogDetailType
 {
-    Initial,      // Initial Value
-    BeforeDelete, // Value Before Deletion
-    Change        // Previous Value / Current Value
+    Initial,      // CREATE: Before = —, After = Created values
+    BeforeDelete, // DELETE: Before = Deleted values, After = —
+    Change        // UPDATE / LOCK / UNLOCK / APPROVE / REJECT: Before = Old value, After = New value
 }
 
 public class LogFieldChangeItem
@@ -35,8 +36,10 @@ public class SystemLogUseCaseInfo
     public string UseCaseTitle { get; set; } = string.Empty;
     public string RelatedTable { get; set; } = string.Empty;
     public string ActionCode { get; set; } = string.Empty;
+    public string ActionType { get; set; } = "UPDATE";
     public string EntityType { get; set; } = string.Empty;
     public string EntityId { get; set; } = string.Empty;
+    public string TargetDisplayName { get; set; } = "—";
     public string Description { get; set; } = string.Empty;
     public LogDetailType DetailType { get; set; } = LogDetailType.Change;
 
@@ -48,6 +51,7 @@ public static class SystemLogUseCaseHelper
     private static readonly Dictionary<string, string> FieldDisplayNames = new(StringComparer.OrdinalIgnoreCase)
     {
         ["status"] = "Status",
+        ["approvalstatus"] = "Approval Status",
         ["requestedamount"] = "Requested Amount",
         ["refundamount"] = "Refund Amount",
         ["approvedamount"] = "Approved Amount",
@@ -62,6 +66,7 @@ public static class SystemLogUseCaseHelper
         ["policycase"] = "Policy Case",
         ["bankaccount"] = "Receiving Bank Account",
         ["description"] = "Description",
+        ["plandescription"] = "Plan Description",
         ["processedat"] = "Processed At",
         ["processedby"] = "Processed By",
         ["refundtransactionref"] = "Refund Transaction Ref",
@@ -72,21 +77,31 @@ public static class SystemLogUseCaseHelper
         ["rolecode"] = "Role Code",
         ["role"] = "Role",
         ["phonenumber"] = "Phone Number",
-        ["islocked"] = "Account Locked",
+        ["phone"] = "Phone Number",
+        ["gender"] = "Gender",
+        ["dateofbirth"] = "Date of Birth",
+        ["avatarurl"] = "Avatar URL",
+        ["avatar"] = "Avatar URL",
+        ["islocked"] = "Lock Status",
         ["isactive"] = "Active Status",
+        ["isdefault"] = "Default Gateway",
+        ["warningcount"] = "Warning Count",
         ["amount"] = "Amount",
         ["currency"] = "Currency",
-        ["subscriptionduration"] = "Duration (Days)",
+        ["subscriptionduration"] = "Subscription Duration",
+        ["trainingpackageduration"] = "Training Package Duration",
         ["price"] = "Price",
         ["gatewayname"] = "Gateway Name",
+        ["code"] = "Gateway Code",
         ["clientid"] = "Client ID",
         ["webhookurl"] = "Webhook URL",
         ["locationname"] = "Location Name",
         ["address"] = "Address",
+        ["certificatename"] = "Certificate Name",
         ["verificationstatus"] = "Verification Status",
         ["verifiedby"] = "Verified By",
         ["verifiedat"] = "Verified At",
-        ["rejectedreason"] = "Rejected Reason",
+        ["rejectedreason"] = "Rejection Reason",
         ["reason"] = "Reason",
         ["appealstatus"] = "Appeal Status",
         ["appealreviewnote"] = "Appeal Review Note",
@@ -100,426 +115,651 @@ public static class SystemLogUseCaseHelper
         ["errorcode"] = "Error Code",
         ["bankcode"] = "Bank Code",
         ["idempotencykey"] = "Idempotency Key",
-        ["payoutstatus"] = "Payout Status"
+        ["payoutstatus"] = "Payout Status",
+        ["approvedby"] = "Approved By",
+        ["resolvedby"] = "Resolved By",
+        ["lockedby"] = "Locked By",
+        ["rejectionreason"] = "Rejection Reason",
+        ["note"] = "Review Note"
     };
+
+    private static readonly Regex RawGuidBracketRegex = new(
+        @"\[[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\]",
+        RegexOptions.Compiled);
+
+    private static readonly Regex RawGuidParenRegex = new(
+        @"\([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\)",
+        RegexOptions.Compiled);
+
+    private static readonly Regex RawGuidRegex = new(
+        @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+        RegexOptions.Compiled);
+
+    private static readonly Regex SystemBracketNoteRegex = new(
+        @"\[(?:Policy\s*:|Automatic bank transfer|POLICY_SNAPSHOT)[^\]]*\]",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static string ExtractCleanStaffNote(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        return SystemBracketNoteRegex.Replace(raw, string.Empty).Trim();
+    }
+
+    private static readonly HashSet<string> TargetContextOnlyKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "targetName", "targetEmail", "targetRole",
+        "userId", "coachId", "certificateId", "gatewayId", "planId", "locationId", "refundRequestId", "payoutId", "reportId"
+    };
+
+    private static readonly HashSet<string> RedundantAuditActorMetaKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "processedBy", "processedAt", "verifiedBy", "verifiedAt",
+        "approvedBy", "rejectedBy", "resolvedBy", "reviewedBy", "reviewedAt", "lockedBy"
+    };
+
+    private static readonly string[] InvariantEntityContextKeys =
+    {
+        "buyer", "seller", "package", "order", "originalPaidAmount",
+        "requestedAmount", "coachPayoutPortion", "policyCase", "bankAccount",
+        "Month", "Year", "TotalNetAmount", "ItemsCount", "priceId", "currency"
+    };
+
+    private static readonly string[] DisplayNameCandidateKeys =
+    {
+        "buyer", "targetName", "fullName", "coachName", "locationName",
+        "planName", "planDescription", "gatewayName", "certificateName",
+        "seller", "package", "title", "name", "targetEmail", "email"
+    };
+
+    public static string GetCanonicalActionType(SystemLogItemModel log)
+    {
+        if (!string.IsNullOrWhiteSpace(log.ActionType))
+        {
+            return log.ActionType.Trim().ToUpperInvariant();
+        }
+
+        var a = (log.Action ?? string.Empty).Trim().ToUpperInvariant();
+        if (a.Contains("CREATE") || a.Contains("ADD")) return "CREATE";
+        if (a.Contains("DELETE") || a.Contains("REMOVE")) return "DELETE";
+        if (a.Contains("UNLOCK")) return "UNLOCK";
+        if (a.Contains("LOCK")) return "LOCK";
+        if (a.Contains("APPROVE")) return "APPROVE";
+        if (a.Contains("REJECT") || a.Contains("DISMISS")) return "REJECT";
+        return "UPDATE";
+    }
+
+    public static string GetHumanReadableActionTitle(string? action)
+    {
+        if (string.IsNullOrWhiteSpace(action)) return "Administrative Activity";
+        var a = action.Trim().ToUpperInvariant();
+        return a switch
+        {
+            "CREATE_STAFF" => "Create Staff Account",
+            "UPDATE_STAFF" => "Edit Staff Account",
+            "LOCK_USER" or "LOCK_ACCOUNT" or "LOCK" => "Lock User Account",
+            "UNLOCK_USER" or "UNLOCK_ACCOUNT" or "UNLOCK" => "Unlock User Account",
+            "AUTO_LOCK_USER_VIOLATION" => "Auto-Lock Account (Violation)",
+            "WARN_USER" or "WARN" => "Issue Violation Warning",
+            "BLOCK" => "Block User Account",
+            "UPDATE_PROFILE" => "Update Own Profile",
+            "CHANGE_PASSWORD" => "Change Password",
+            "CREATE_LOCATION" => "Create Location",
+            "UPDATE_LOCATION" => "Edit Location",
+            "DELETE_LOCATION" => "Delete Location",
+            "APPROVE_COACH_APPLICATION" => "Approve Coach Application",
+            "REJECT_COACH_APPLICATION" => "Reject Coach Application",
+            "APPROVE_CERTIFICATE" or "APPROVE_COACH_CERTIFICATE" => "Approve Coach Certificate",
+            "REJECT_CERTIFICATE" or "REJECT_COACH_CERTIFICATE" => "Reject Coach Certificate",
+            "CREATE_COACH_SUBSCRIPTION_PLAN" or "CREATE_SUBSCRIPTION_PLAN" => "Create Subscription Plan",
+            "UPDATE_COACH_SUBSCRIPTION_PLAN" or "UPDATE_SUBSCRIPTION_PLAN" or "UPDATE_PRICE" => "Edit Subscription Plan",
+            "DELETE_COACH_SUBSCRIPTION_PLAN" or "DELETE_SUBSCRIPTION_PLAN" => "Delete Subscription Plan",
+            "CREATE_PAYMENT_GATEWAY" or "ADD_PAYMENT_ACCOUNT" => "Create Payment Gateway",
+            "UPDATE_PAYMENT_GATEWAY" or "EDIT_PAYMENT_ACCOUNT" => "Edit Payment Gateway",
+            "TOGGLE_PAYMENT_GATEWAY" => "Toggle Payment Gateway",
+            "ACTIVATE_PAYMENT_ACCOUNT" => "Activate Payment Gateway",
+            "DEACTIVATE_PAYMENT_ACCOUNT" => "Deactivate Payment Gateway",
+            "SET_DEFAULT_PAYMENT_GATEWAY" => "Set Default Gateway",
+            "DELETE_PAYMENT_GATEWAY" or "DELETE_PAYMENT_ACCOUNT" => "Delete Payment Gateway",
+            "CREATE_REFUND_REQUEST" => "Create Refund Request",
+            "APPROVE_REFUND" or "APPROVE_REFUND_REQUEST" => "Approve Refund Request",
+            "REJECT_REFUND" or "REJECT_REFUND_REQUEST" => "Reject Refund Request",
+            "PROCESS_PAYOUT" or "PAYOUT_PROCESSED" => "Process Coach Payout",
+            "PAYOUT_PARTIAL" => "Process Partial Payout",
+            "PAYOUT_FAILED" => "Failed Coach Payout",
+            "PAYOUT_BLOCKED" => "Blocked Coach Payout",
+            "PAYOUT_SUBMITTED" => "Submit Coach Payout",
+            "PAYOUT_NOOP" => "Check Coach Payout",
+            "GENERATE_COACH_PAYOUT" => "Generate Monthly Payouts",
+            "DELETE_POST" => "Delete Violation Post",
+            "RESOLVE_REPORT" => "Resolve Violation Report",
+            "DISMISS_REPORT" => "Dismiss Violation Report",
+            "REJECT_REPORT" => "Reject Violation Report",
+            "APPROVE_APPEAL_UNLOCK_USER" => "Approve Appeal & Unlock",
+            "REJECT_APPEAL" => "Reject Violation Appeal",
+            "SYSTEM_ERROR" => "System Runtime Error",
+            "BUSINESS_WARNING" => "Validation Warning",
+            _ => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(a.Replace('_', ' ').ToLowerInvariant())
+        };
+    }
+
+    public static string ResolveTargetDisplayName(SystemLogItemModel log)
+    {
+        var (newProps, oldProps) = ParseProps(log.NewValue, log.OldValue);
+        var entityType = (log.Source ?? string.Empty).Trim();
+
+        // 1. RefundRequest: take the requester/buyer name directly (e.g. "Nguyễn Văn Sang") without order code
+        var buyer = GetProp(newProps, oldProps, "buyer");
+        if (!string.IsNullOrWhiteSpace(buyer))
+        {
+            return CleanDisplayName(buyer);
+        }
+
+        // 2. User / Staff / CoachProfile: take fullName or targetName without email/code in parentheses
+        var fullName = GetProp(newProps, oldProps, "fullName") ?? GetProp(newProps, oldProps, "targetName");
+        if (!string.IsNullOrWhiteSpace(fullName) && !Guid.TryParse(fullName, out _))
+        {
+            return CleanDisplayName(fullName);
+        }
+
+        // 3. CoachCertificate / Payout: take coachName or certificateName without codes
+        var coachName = GetProp(newProps, oldProps, "coachName");
+        if (!string.IsNullOrWhiteSpace(coachName) && !Guid.TryParse(coachName, out _))
+        {
+            return CleanDisplayName(coachName);
+        }
+
+        var certName = GetProp(newProps, oldProps, "certificateName");
+        if (!string.IsNullOrWhiteSpace(certName) && !Guid.TryParse(certName, out _))
+        {
+            return CleanDisplayName(certName);
+        }
+
+        // 4. Location / Gateway / Subscription Plan
+        var locationName = GetProp(newProps, oldProps, "locationName");
+        if (!string.IsNullOrWhiteSpace(locationName))
+        {
+            return CleanDisplayName(locationName);
+        }
+
+        var gatewayName = GetProp(newProps, oldProps, "gatewayName");
+        if (!string.IsNullOrWhiteSpace(gatewayName))
+        {
+            return CleanDisplayName(gatewayName);
+        }
+
+        var planDesc = GetProp(newProps, oldProps, "planDescription") ?? GetProp(newProps, oldProps, "planName");
+        if (!string.IsNullOrWhiteSpace(planDesc))
+        {
+            return CleanDisplayName(planDesc);
+        }
+
+        if (entityType.Equals("CoachSubscriptionPlan", StringComparison.OrdinalIgnoreCase))
+        {
+            var desc = GetProp(newProps, oldProps, "description");
+            if (!string.IsNullOrWhiteSpace(desc) &&
+                !desc.StartsWith("Updated ", StringComparison.OrdinalIgnoreCase) &&
+                !desc.StartsWith("Created ", StringComparison.OrdinalIgnoreCase) &&
+                !desc.StartsWith("Deleted ", StringComparison.OrdinalIgnoreCase) &&
+                !desc.StartsWith("Deactivated ", StringComparison.OrdinalIgnoreCase))
+            {
+                return CleanDisplayName(desc);
+            }
+        }
+
+        // 5. Candidate keys
+        foreach (var candidate in DisplayNameCandidateKeys)
+        {
+            var val = GetProp(newProps, oldProps, candidate);
+            if (!string.IsNullOrWhiteSpace(val) && !Guid.TryParse(val, out _) && !val.StartsWith("#ORD-", StringComparison.OrdinalIgnoreCase))
+            {
+                return CleanDisplayName(val);
+            }
+        }
+
+        // 6. Check backend-supplied TargetDisplayName (cleaned of any codes/parentheses)
+        if (!string.IsNullOrWhiteSpace(log.TargetDisplayName) && !Guid.TryParse(log.TargetDisplayName.Trim(), out _))
+        {
+            return CleanDisplayName(log.TargetDisplayName.Trim());
+        }
+
+        if (string.Equals(log.Action, "UPDATE_PROFILE", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(log.ActorName))
+        {
+            return CleanDisplayName(log.ActorName);
+        }
+
+        return "—";
+    }
+
+    private static string CleanDisplayName(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "—";
+        var s = raw.Trim();
+
+        // If formatted as "pkg (#ORD-XXXX - Buyer Name)", extract "Buyer Name"
+        var ordDashIdx = s.IndexOf("#ORD-", StringComparison.OrdinalIgnoreCase);
+        if (ordDashIdx >= 0)
+        {
+            var dashAfterOrd = s.IndexOf(" - ", ordDashIdx, StringComparison.Ordinal);
+            var closeParen = s.LastIndexOf(')');
+            if (dashAfterOrd > 0 && closeParen > dashAfterOrd)
+            {
+                var extractedBuyer = s.Substring(dashAfterOrd + 3, closeParen - (dashAfterOrd + 3)).Trim();
+                if (!string.IsNullOrWhiteSpace(extractedBuyer))
+                {
+                    return extractedBuyer;
+                }
+            }
+        }
+
+        // Strip trailing parenthesized code/email/cycle such as "Name (email@domain.com)" or "Name (11/2026)"
+        var openParen = s.IndexOf('(');
+        if (openParen > 0 && s.EndsWith(")", StringComparison.Ordinal))
+        {
+            var beforeParen = s[..openParen].Trim();
+            if (!string.IsNullOrWhiteSpace(beforeParen))
+            {
+                return beforeParen;
+            }
+        }
+
+        return s;
+    }
+
+    private static string? GetProp(Dictionary<string, string> primary, Dictionary<string, string> secondary, string key)
+    {
+        if (primary.TryGetValue(key, out var v1) && !string.IsNullOrWhiteSpace(v1))
+            return v1.Trim();
+        if (secondary.TryGetValue(key, out var v2) && !string.IsNullOrWhiteSpace(v2))
+            return v2.Trim();
+        return null;
+    }
+
+    public static string FormatReadableDescription(SystemLogItemModel log)
+    {
+        var targetDisplayName = ResolveTargetDisplayName(log);
+        var actor = !string.IsNullOrWhiteSpace(log.ActorName) ? log.ActorName.Trim() : "Administrator";
+        var action = (log.Action ?? string.Empty).Trim().ToUpperInvariant();
+        var entityType = (log.Source ?? "Entity").Trim();
+        var friendlyEntity = FormatFriendlyEntityType(entityType);
+        var targetLabel = targetDisplayName != "—" ? targetDisplayName : friendlyEntity;
+
+        var generated = GenerateActionDescription(action, targetLabel, targetDisplayName, friendlyEntity, log.EntityId, actor);
+        if (!string.IsNullOrWhiteSpace(generated))
+        {
+            return generated;
+        }
+
+        var msg = log.Message?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(msg))
+        {
+            var replacement = targetDisplayName != "—" ? targetDisplayName : friendlyEntity;
+            msg = RawGuidBracketRegex.Replace(msg, replacement);
+            msg = RawGuidParenRegex.Replace(msg, replacement);
+            msg = RawGuidRegex.Replace(msg, replacement);
+            return msg;
+        }
+
+        return $"{GetHumanReadableActionTitle(action)} on {friendlyEntity} by {actor}";
+    }
+
+    private static string GenerateActionDescription(
+        string action,
+        string targetLabel,
+        string targetDisplayName,
+        string friendlyEntity,
+        string? entityId,
+        string actor)
+    {
+        var isGuidEntity = Guid.TryParse(entityId, out _);
+
+        return action switch
+        {
+            "CREATE_STAFF" => $"Created staff account for {targetLabel} by {actor}",
+            "UPDATE_STAFF" => $"Updated staff account details for {targetLabel} by {actor}",
+            "LOCK_USER" or "LOCK_ACCOUNT" or "LOCK" => $"Locked user account {targetLabel} by {actor}",
+            "UNLOCK_USER" or "UNLOCK_ACCOUNT" or "UNLOCK" => $"Unlocked user account {targetLabel} by {actor}",
+            "WARN_USER" or "WARN" => $"Issued violation warning to {targetLabel} by {actor}",
+            "BLOCK" => $"Blocked user account {targetLabel} by {actor}",
+            "AUTO_LOCK_USER_VIOLATION" => $"Automatically locked user account {targetLabel} after reaching violation threshold",
+            "UPDATE_PROFILE" => $"Updated own administrative profile by {actor}",
+            "CREATE_LOCATION" => $"Created training location {targetLabel} by {actor}",
+            "UPDATE_LOCATION" => $"Updated training location {targetLabel} by {actor}",
+            "DELETE_LOCATION" => $"Deleted training location {targetLabel} by {actor}",
+            "APPROVE_COACH_APPLICATION" => $"Approved coach application for {targetLabel} by {actor}",
+            "REJECT_COACH_APPLICATION" => $"Rejected coach application for {targetLabel} by {actor}",
+            "APPROVE_CERTIFICATE" or "APPROVE_COACH_CERTIFICATE" => $"Approved coach certificate {targetLabel} by {actor}",
+            "REJECT_CERTIFICATE" or "REJECT_COACH_CERTIFICATE" => $"Rejected coach certificate {targetLabel} by {actor}",
+            "CREATE_COACH_SUBSCRIPTION_PLAN" or "CREATE_SUBSCRIPTION_PLAN" => $"Created subscription plan {targetLabel} by {actor}",
+            "UPDATE_COACH_SUBSCRIPTION_PLAN" or "UPDATE_SUBSCRIPTION_PLAN" or "UPDATE_PRICE" => $"Updated subscription plan {targetLabel} by {actor}",
+            "DELETE_COACH_SUBSCRIPTION_PLAN" or "DELETE_SUBSCRIPTION_PLAN" => $"Deleted subscription plan {targetLabel} by {actor}",
+            "CREATE_PAYMENT_GATEWAY" or "ADD_PAYMENT_ACCOUNT" => $"Created payment gateway configuration {targetLabel} by {actor}",
+            "UPDATE_PAYMENT_GATEWAY" or "EDIT_PAYMENT_ACCOUNT" => $"Updated payment gateway configuration {targetLabel} by {actor}",
+            "TOGGLE_PAYMENT_GATEWAY" => $"Toggled payment gateway status for {targetLabel} by {actor}",
+            "ACTIVATE_PAYMENT_ACCOUNT" => $"Activated payment gateway configuration {targetLabel} by {actor}",
+            "DEACTIVATE_PAYMENT_ACCOUNT" => $"Deactivated payment gateway configuration {targetLabel} by {actor}",
+            "SET_DEFAULT_PAYMENT_GATEWAY" => $"Set default payment gateway to {targetLabel} by {actor}",
+            "DELETE_PAYMENT_GATEWAY" or "DELETE_PAYMENT_ACCOUNT" => $"Deleted payment gateway configuration {targetLabel} by {actor}",
+            "CREATE_REFUND_REQUEST" => $"Submitted refund request for {targetLabel} by {actor}",
+            "APPROVE_REFUND" or "APPROVE_REFUND_REQUEST" => $"Approved refund request for {targetLabel} by {actor}",
+            "REJECT_REFUND" or "REJECT_REFUND_REQUEST" => $"Rejected refund request for {targetLabel} by {actor}",
+            "PROCESS_PAYOUT" or "PAYOUT_PROCESSED" => $"Processed coach payout for {targetLabel} by {actor}",
+            "PAYOUT_PARTIAL" => $"Processed partial coach payout for {targetLabel} by {actor}",
+            "PAYOUT_FAILED" => $"Failed to process coach payout for {targetLabel} by {actor}",
+            "PAYOUT_BLOCKED" => $"Blocked coach payout for {targetLabel} by {actor}",
+            "PAYOUT_SUBMITTED" => $"Submitted coach payout transfer for {targetLabel} by {actor}",
+            "PAYOUT_NOOP" => $"Checked already-paid coach payout for {targetLabel} by {actor}",
+            "GENERATE_COACH_PAYOUT" => $"Generated monthly coach payout cycle by {actor}",
+            "DELETE_POST" => $"Deleted reported post of {targetLabel} by {actor}",
+            "RESOLVE_REPORT" => $"Resolved violation report for {targetLabel} by {actor}",
+            "DISMISS_REPORT" => $"Dismissed violation report for {targetLabel} by {actor}",
+            "REJECT_REPORT" => $"Rejected violation report for {targetLabel} by {actor}",
+            "APPROVE_APPEAL_UNLOCK_USER" => $"Approved violation appeal and unlocked account {targetLabel} by {actor}",
+            "REJECT_APPEAL" => $"Rejected violation appeal for {targetLabel} by {actor}",
+            "SYSTEM_ERROR" => !string.IsNullOrWhiteSpace(entityId) && !isGuidEntity
+                ? $"Unhandled runtime system error occurred on path: {entityId}"
+                : "Unhandled runtime system error occurred",
+            "BUSINESS_WARNING" => !string.IsNullOrWhiteSpace(entityId) && !isGuidEntity
+                ? $"Business validation event on path: {entityId}"
+                : "Business validation warning recorded",
+            _ => targetDisplayName != "—"
+                ? $"{GetHumanReadableActionTitle(action)} for {targetDisplayName} by {actor}"
+                : $"{GetHumanReadableActionTitle(action)} on {friendlyEntity} by {actor}"
+        };
+    }
+
+    private static string FormatFriendlyEntityType(string? entityType)
+    {
+        if (string.IsNullOrWhiteSpace(entityType)) return "System";
+        return entityType.Trim() switch
+        {
+            "CoachSubscriptionPlan" => "Subscription Plan",
+            "RefundRequest" => "Refund Request",
+            "CoachProfile" => "Coach Application",
+            "CoachCertificate" => "Coach Certificate",
+            "CoachUpgrade" => "Coach Upgrade",
+            "PaymentGatewayConfig" => "Payment Gateway",
+            _ => entityType.Trim()
+        };
+    }
 
     public static SystemLogUseCaseInfo Resolve(SystemLogItemModel log)
     {
         var action = (log.Action ?? string.Empty).Trim().ToUpperInvariant();
         var entityType = (log.Source ?? string.Empty).Trim();
         var entityId = (log.EntityId ?? string.Empty).Trim();
-        var actor = !string.IsNullOrWhiteSpace(log.ActorName) ? log.ActorName : "User";
+        var actor = !string.IsNullOrWhiteSpace(log.ActorName) ? log.ActorName : "Staff/Admin";
+        var canonicalActionType = GetCanonicalActionType(log);
+        var targetDisplayName = ResolveTargetDisplayName(log);
 
-        // Parse NewValue / OldValue JSON for dynamic fields
-        var (newProps, oldProps) = ParseProps(log.NewValue, log.OldValue);
+        var detailType = canonicalActionType switch
+        {
+            "CREATE" => LogDetailType.Initial,
+            "DELETE" => LogDetailType.BeforeDelete,
+            _ => LogDetailType.Change
+        };
 
-        string GetProp(string key, string fallback = "")
+        var info = new SystemLogUseCaseInfo
         {
-            if (newProps.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v)) return v;
-            if (oldProps.TryGetValue(key, out var v2) && !string.IsNullOrWhiteSpace(v2)) return v2;
-            return fallback;
-        }
+            GroupName = DetermineGroupName(action, entityType),
+            UseCaseTitle = GetHumanReadableActionTitle(action),
+            RelatedTable = string.IsNullOrWhiteSpace(entityType) ? "System" : entityType,
+            ActionCode = string.IsNullOrWhiteSpace(action) ? "EVENT" : action,
+            ActionType = canonicalActionType,
+            EntityType = string.IsNullOrWhiteSpace(entityType) ? "System" : entityType,
+            EntityId = string.IsNullOrWhiteSpace(entityId) ? "—" : entityId,
+            TargetDisplayName = targetDisplayName,
+            Description = FormatReadableDescription(log),
+            DetailType = detailType
+        };
 
-        SystemLogUseCaseInfo info;
+        info.FieldChanges = ExtractFieldChanges(log.OldValue, log.NewValue, action, entityType, actor, targetDisplayName);
 
-        // 1. UC_34.1: Create Staff Accounts
-        if (action.Contains("CREATE_STAFF") || (action.Contains("CREATE") && (entityType.Equals("Staff", StringComparison.OrdinalIgnoreCase) || (entityType.Equals("User", StringComparison.OrdinalIgnoreCase) && GetProp("role").Contains("STAFF", StringComparison.OrdinalIgnoreCase)))))
+        // Adjust DetailType if payload only has initial or deleted fields
+        if (info.DetailType == LogDetailType.Change)
         {
-            var targetName = GetProp("fullname", GetProp("name", "New Staff Member"));
-            var targetEmail = GetProp("email", "staff@fitsocial.com");
-            var targetRole = GetProp("rolecode", GetProp("role", "STAFF"));
-            info = new SystemLogUseCaseInfo
+            if (string.IsNullOrWhiteSpace(log.OldValue) && !string.IsNullOrWhiteSpace(log.NewValue) && canonicalActionType == "CREATE")
             {
-                GroupName = "I. ACCOUNT MANAGEMENT & ACCESS CONTROL",
-                UseCaseTitle = "1. UC_34.1: Create Staff Accounts",
-                RelatedTable = "Users",
-                ActionCode = "CREATE_STAFF_ACCOUNT",
-                EntityType = "Users",
-                EntityId = entityId,
-                Description = $"{actor} created a new staff account for {targetName} ({targetEmail}) with role [{targetRole}].",
-                DetailType = LogDetailType.Initial
-            };
-        }
-        // 2. UC_34.2: Edit Staff Accounts
-        else if (action.Contains("UPDATE_STAFF") || (action.Contains("UPDATE") && entityType.Equals("Staff", StringComparison.OrdinalIgnoreCase)))
-        {
-            info = new SystemLogUseCaseInfo
+                info.DetailType = LogDetailType.Initial;
+            }
+            else if (!string.IsNullOrWhiteSpace(log.OldValue) && string.IsNullOrWhiteSpace(log.NewValue) && canonicalActionType == "DELETE")
             {
-                GroupName = "I. ACCOUNT MANAGEMENT & ACCESS CONTROL",
-                UseCaseTitle = "2. UC_34.2: Edit Staff Accounts",
-                RelatedTable = "Users",
-                ActionCode = "UPDATE_STAFF_ACCOUNT",
-                EntityType = "Users",
-                EntityId = entityId,
-                Description = $"{actor} updated staff account details (ID: {entityId}). Data has been modified.",
-                DetailType = LogDetailType.Change
-            };
+                info.DetailType = LogDetailType.BeforeDelete;
+            }
         }
-        // 3. UC_34.3: Lock Staff Account
-        else if (action.Contains("LOCK_USER") || action.Contains("LOCK_STAFF") || (action.StartsWith("LOCK") && (entityType.Contains("User", StringComparison.OrdinalIgnoreCase) || entityType.Contains("Staff", StringComparison.OrdinalIgnoreCase))))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "I. ACCOUNT MANAGEMENT & ACCESS CONTROL",
-                UseCaseTitle = "3. UC_34.3: Lock Staff Account",
-                RelatedTable = "Users (IsLocked = TRUE, LockedBy)",
-                ActionCode = "LOCK_USER_ACCOUNT",
-                EntityType = "Users",
-                EntityId = entityId,
-                Description = $"{actor} locked the staff account (ID: {entityId}). The account active state has been changed.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 4. UC_34.4: Unlock Staff Account
-        else if (action.Contains("UNLOCK_USER") || action.Contains("UNLOCK_STAFF") || (action.StartsWith("UNLOCK") && (entityType.Contains("User", StringComparison.OrdinalIgnoreCase) || entityType.Contains("Staff", StringComparison.OrdinalIgnoreCase))))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "I. ACCOUNT MANAGEMENT & ACCESS CONTROL",
-                UseCaseTitle = "4. UC_34.4: Unlock Staff Account",
-                RelatedTable = "Users (IsLocked = FALSE)",
-                ActionCode = "UNLOCK_USER_ACCOUNT",
-                EntityType = "Users",
-                EntityId = entityId,
-                Description = $"{actor} unlocked the staff account (ID: {entityId}). Operational security status has been restored.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 5. UC_35.1: Update Admin Profile
-        else if (action.Contains("UPDATE_PROFILE") || action.Contains("CHANGE_PASSWORD") || (action.Contains("UPDATE") && entityType.Contains("User", StringComparison.OrdinalIgnoreCase)))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "I. ACCOUNT MANAGEMENT & ACCESS CONTROL",
-                UseCaseTitle = "5. UC_35.1: Update Admin Profile",
-                RelatedTable = "Users",
-                ActionCode = "UPDATE_PROFILE",
-                EntityType = "Users",
-                EntityId = entityId,
-                Description = $"{actor} modified administrative profile details. Account data updated successfully.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 7. UC_29.1: Approve / Reject Coach Application
-        else if (action.Contains("COACH_APPLICATION") || action.Contains("COACH_APPLY") || ((action.Contains("APPROVE") || action.Contains("REJECT")) && entityType.Contains("CoachProfile", StringComparison.OrdinalIgnoreCase)))
-        {
-            var isReject = action.Contains("REJECT");
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "II. COACH & CERTIFICATE VERIFICATION",
-                UseCaseTitle = "7. UC_29.1: Approve / Reject Coach Application",
-                RelatedTable = "CoachProfiles (ApprovalStatus, ApprovedBy), Users",
-                ActionCode = isReject ? "REJECT_COACH_APPLICATION" : "APPROVE_COACH_APPLICATION",
-                EntityType = "CoachProfiles",
-                EntityId = entityId,
-                Description = $"{actor} processed review decision on Coach application (CoachID: {entityId}). Verification state updated.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 8. UC_41.1.1: Approve / Reject Coach Certificate
-        else if (action.Contains("CERTIFICATE") || entityType.Contains("Certificate", StringComparison.OrdinalIgnoreCase))
-        {
-            var isReject = action.Contains("REJECT");
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "II. COACH & CERTIFICATE VERIFICATION",
-                UseCaseTitle = "8. UC_41.1.1: Approve / Reject Coach Certificate",
-                RelatedTable = "CoachCertificates (VerificationStatus, VerifiedBy, VerifiedAt, RejectedReason)",
-                ActionCode = isReject ? "REJECT_COACH_CERTIFICATE" : "APPROVE_COACH_CERTIFICATE",
-                EntityType = "CoachCertificates",
-                EntityId = entityId,
-                Description = $"{actor} completed evaluation of Coach Certificate (CertificateID: {entityId}). Verification status updated.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 9. UC_23.1: Process Coach Payout
-        else if (action.Contains("PAYOUT") || entityType.Contains("Payout", StringComparison.OrdinalIgnoreCase))
-        {
-            var netAmount = GetProp("netpayoutamount", GetProp("amount", ""));
-            var month = GetProp("payoutmonth", GetProp("month", DateTime.Now.Month.ToString()));
-            var year = GetProp("payoutyear", GetProp("year", DateTime.Now.Year.ToString()));
-            var coach = GetProp("coachname", GetProp("coach", "Coach"));
-            var tx = GetProp("transactionref", GetProp("ref", entityId));
-            var amountText = !string.IsNullOrWhiteSpace(netAmount) ? $"{netAmount} VND" : "funds";
-
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "III. FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS",
-                UseCaseTitle = "9. UC_23.1: Process Coach Payout",
-                RelatedTable = "Payouts (NetPayoutAmount, PayoutMonth, PayoutYear, TransactionRef, ProcessedBy)",
-                ActionCode = "PROCESS_COACH_PAYOUT",
-                EntityType = "Payouts",
-                EntityId = entityId,
-                Description = $"{actor} finalized payout of {amountText} for period {month}/{year} to Coach {coach} (Tx Ref: {tx}). Payout status updated.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 10. UC_33.1: Create Coach Subscription Plans
-        else if ((action.Contains("CREATE") || action.Contains("ADD")) && (action.Contains("SUBSCRIPTION") || action.Contains("PLAN") || entityType.Contains("Subscription", StringComparison.OrdinalIgnoreCase) || entityType.Contains("Plan", StringComparison.OrdinalIgnoreCase)))
-        {
-            var duration = GetProp("subscriptionduration", GetProp("duration", "30"));
-            var amount = GetProp("amount", GetProp("price", ""));
-            var currency = GetProp("currency", "VND");
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "III. FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS",
-                UseCaseTitle = "10. UC_33.1: Create Coach Subscription Plans",
-                RelatedTable = "CoachSubscriptionPlans (Amount, Currency, SubscriptionDuration)",
-                ActionCode = "CREATE_SUBSCRIPTION_PLAN",
-                EntityType = "CoachSubscriptionPlans",
-                EntityId = entityId,
-                Description = $"{actor} created new Coach subscription plan for {duration} days at {amount} {currency}.",
-                DetailType = LogDetailType.Initial
-            };
-        }
-        // 12. UC_33.3: Deactivate Coach Subscription Plan
-        else if ((action.Contains("DEACTIVATE") || action.Contains("DELETE")) && (action.Contains("SUBSCRIPTION") || action.Contains("PLAN") || entityType.Contains("Subscription", StringComparison.OrdinalIgnoreCase) || entityType.Contains("Plan", StringComparison.OrdinalIgnoreCase)))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "III. FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS",
-                UseCaseTitle = "12. UC_33.3: Deactivate Coach Subscription Plan",
-                RelatedTable = "CoachSubscriptionPlans (IsActive = FALSE)",
-                ActionCode = "DEACTIVATE_SUBSCRIPTION_PLAN",
-                EntityType = "CoachSubscriptionPlans",
-                EntityId = entityId,
-                Description = $"{actor} modified publication status of Coach subscription plan (ID: {entityId}) to deactivated.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 11. UC_33.2: Edit Coach Subscription Plan
-        else if ((action.Contains("UPDATE") || action.Contains("EDIT") || action.Contains("PRICE")) && (action.Contains("SUBSCRIPTION") || action.Contains("PLAN") || entityType.Contains("Subscription", StringComparison.OrdinalIgnoreCase) || entityType.Contains("Plan", StringComparison.OrdinalIgnoreCase)))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "III. FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS",
-                UseCaseTitle = "11. UC_33.2: Edit Coach Subscription Plan",
-                RelatedTable = "CoachSubscriptionPlans (CoachSubscriptionPlansID, Amount, Description)",
-                ActionCode = "UPDATE_SUBSCRIPTION_PLAN",
-                EntityType = "CoachSubscriptionPlans",
-                EntityId = entityId,
-                Description = $"{actor} updated Coach subscription plan parameters (ID: {entityId}). Configuration was replaced with new values.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 13. UC_36.1 & UC_36.4: Activate / Deactivate Payment Account
-        else if ((action.Contains("ACTIVATE") || action.Contains("DEACTIVATE") || action.Contains("TOGGLE")) && (action.Contains("PAYMENT") || action.Contains("GATEWAY") || entityType.Contains("Payment", StringComparison.OrdinalIgnoreCase) || entityType.Contains("Gateway", StringComparison.OrdinalIgnoreCase)))
-        {
-            var isDeactivate = action.Contains("DEACTIVATE");
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "III. FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS",
-                UseCaseTitle = "13. UC_36.1 & UC_36.4: Activate / Deactivate Payment Account",
-                RelatedTable = "PaymentGatewayConfigs (GatewayName, IsActive, UpdatedBy)",
-                ActionCode = isDeactivate ? "DEACTIVATE_PAYMENT_GATEWAY" : "ACTIVATE_PAYMENT_GATEWAY",
-                EntityType = "PaymentGatewayConfigs",
-                EntityId = entityId,
-                Description = $"{actor} toggled active operational state of payment gateway (GatewayID: {entityId}).",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 14. UC_36.2: Add Payment Account
-        else if ((action.Contains("CREATE") || action.Contains("ADD")) && (action.Contains("PAYMENT") || action.Contains("GATEWAY") || entityType.Contains("Payment", StringComparison.OrdinalIgnoreCase) || entityType.Contains("Gateway", StringComparison.OrdinalIgnoreCase)))
-        {
-            var gwName = GetProp("gatewayname", GetProp("name", "Payment Gateway"));
-            var client = GetProp("clientid", GetProp("client", entityId));
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "III. FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS",
-                UseCaseTitle = "14. UC_36.2: Add Payment Account",
-                RelatedTable = "PaymentGatewayConfigs (GatewayName, ClientID, UpdatedBy)",
-                ActionCode = "CREATE_PAYMENT_GATEWAY",
-                EntityType = "PaymentGatewayConfigs",
-                EntityId = entityId,
-                Description = $"{actor} configured new payment gateway: '{gwName}' (ClientID: {client}).",
-                DetailType = LogDetailType.Initial
-            };
-        }
-        // 15. UC_36.3: Edit Payment Account
-        else if ((action.Contains("UPDATE") || action.Contains("EDIT")) && (action.Contains("PAYMENT") || action.Contains("GATEWAY") || entityType.Contains("Payment", StringComparison.OrdinalIgnoreCase) || entityType.Contains("Gateway", StringComparison.OrdinalIgnoreCase)))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "III. FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS",
-                UseCaseTitle = "15. UC_36.3: Edit Payment Account",
-                RelatedTable = "PaymentGatewayConfigs (GatewayName, WebhookUrl, UpdatedBy)",
-                ActionCode = "UPDATE_PAYMENT_GATEWAY",
-                EntityType = "PaymentGatewayConfigs",
-                EntityId = entityId,
-                Description = $"{actor} adjusted connection and webhook parameters for payment gateway (GatewayID: {entityId}).",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 16. UC_39: Process Refund Requests
-        else if (action.Contains("REFUND") || entityType.Contains("Refund", StringComparison.OrdinalIgnoreCase))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "III. FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS",
-                UseCaseTitle = "16. UC_39: Process Refund Requests",
-                RelatedTable = "RefundRequests (RefundRequestID, ApprovedAmount, Status, StaffNote, ReviewedBy)",
-                ActionCode = "PROCESS_REFUND_REQUEST",
-                EntityType = "RefundRequests",
-                EntityId = entityId,
-                Description = $"{actor} processed decision for refund request #{entityId}. Status transitioned from pending to resolved.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 17. UC_31.1: Create Location
-        else if ((action.Contains("CREATE") || action.Contains("ADD")) && (action.Contains("LOCATION") || entityType.Contains("Location", StringComparison.OrdinalIgnoreCase)))
-        {
-            var locName = GetProp("locationname", GetProp("name", "New Branch"));
-            var addr = GetProp("address", "");
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "IV. OPERATIONS, REPORTS & LOCATIONS",
-                UseCaseTitle = "17. UC_31.1: Create Location",
-                RelatedTable = "Locations (LocationName, Address)",
-                ActionCode = "CREATE_LOCATION",
-                EntityType = "Locations",
-                EntityId = entityId,
-                Description = $"{actor} added new gym/branch location: '{locName}' ({addr}).",
-                DetailType = LogDetailType.Initial
-            };
-        }
-        // 18. UC_31.2: Edit Location
-        else if ((action.Contains("UPDATE") || action.Contains("EDIT")) && (action.Contains("LOCATION") || entityType.Contains("Location", StringComparison.OrdinalIgnoreCase)))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "IV. OPERATIONS, REPORTS & LOCATIONS",
-                UseCaseTitle = "18. UC_31.2: Edit Location",
-                RelatedTable = "Locations (LocationID, LocationName, Address)",
-                ActionCode = "UPDATE_LOCATION",
-                EntityType = "Locations",
-                EntityId = entityId,
-                Description = $"{actor} updated gym/branch location details (ID: {entityId}). Modifications saved.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 19. UC_31.3: Delete Location
-        else if ((action.Contains("DELETE") || action.Contains("REMOVE")) && (action.Contains("LOCATION") || entityType.Contains("Location", StringComparison.OrdinalIgnoreCase)))
-        {
-            var locName = GetProp("locationname", GetProp("name", "Location"));
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "IV. OPERATIONS, REPORTS & LOCATIONS",
-                UseCaseTitle = "19. UC_31.3: Delete Location",
-                RelatedTable = "Locations (LocationID, LocationName)",
-                ActionCode = "DELETE_LOCATION",
-                EntityType = "Locations",
-                EntityId = entityId,
-                Description = $"{actor} deleted gym/branch location '{locName}' from active system locations.",
-                DetailType = LogDetailType.BeforeDelete
-            };
-        }
-        // 21. UC_42.1: Process Appeal
-        else if (action.Contains("APPEAL") || entityType.Contains("Appeal", StringComparison.OrdinalIgnoreCase))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "IV. OPERATIONS, REPORTS & LOCATIONS",
-                UseCaseTitle = "21. UC_42.1: Process Appeal",
-                RelatedTable = "Reports (ReportID, AppealStatus, AppealReviewNote, AppealReviewedBy, AppealReviewedAt)",
-                ActionCode = "REVIEW_APPEAL",
-                EntityType = "Reports",
-                EntityId = entityId,
-                Description = $"{actor} reviewed and recorded decision on user appeal (ReportID: {entityId}).",
-                DetailType = LogDetailType.Change
-            };
-        }
-        // 20. UC_32.1: Process Violation Report
-        else if (action.Contains("VIOLATION") || action.Contains("REPORT") || entityType.Contains("Report", StringComparison.OrdinalIgnoreCase))
-        {
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "IV. OPERATIONS, REPORTS & LOCATIONS",
-                UseCaseTitle = "20. UC_32.1: Process Violation Report",
-                RelatedTable = "Reports (ReportID, Status, ResolvedBy, ResolvedAt)",
-                ActionCode = "RESOLVE_VIOLATION_REPORT",
-                EntityType = "Reports",
-                EntityId = entityId,
-                Description = $"{actor} resolved violation report #{entityId}. Resolution report was logged into system.",
-                DetailType = LogDetailType.Change
-            };
-        }
-        else
-        {
-            // Generic Fallback
-            var isInit = !string.IsNullOrWhiteSpace(log.NewValue) && string.IsNullOrWhiteSpace(log.OldValue);
-            var isDel = string.IsNullOrWhiteSpace(log.NewValue) && !string.IsNullOrWhiteSpace(log.OldValue);
-            info = new SystemLogUseCaseInfo
-            {
-                GroupName = "V. SYSTEM RUNTIME & AUDIT LOGS",
-                UseCaseTitle = $"System Runtime Event ({action})",
-                RelatedTable = string.IsNullOrWhiteSpace(entityType) ? "System" : entityType,
-                ActionCode = action,
-                EntityType = string.IsNullOrWhiteSpace(entityType) ? "System" : entityType,
-                EntityId = entityId,
-                Description = !string.IsNullOrWhiteSpace(log.Message) ? log.Message : $"{actor} executed action {action} on {entityType}.",
-                DetailType = isInit ? LogDetailType.Initial : (isDel ? LogDetailType.BeforeDelete : LogDetailType.Change)
-            };
-        }
-
-        // Extract structured, human-readable field comparison
-        info.FieldChanges = ExtractFieldChanges(log.OldValue, log.NewValue);
 
         return info;
     }
 
-    public static List<LogFieldChangeItem> ExtractFieldChanges(string? oldJson, string? newJson)
+    private static string DetermineGroupName(string action, string entityType)
     {
-        var result = new List<LogFieldChangeItem>();
+        if (action.Contains("STAFF") || action.Contains("USER") || action.Contains("PROFILE") || action.Contains("PASSWORD") ||
+            entityType.Equals("User", StringComparison.OrdinalIgnoreCase) || entityType.Equals("Staff", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ACCOUNT MANAGEMENT & ACCESS CONTROL";
+        }
+
+        if (action.Contains("COACH_APPLICATION") || action.Contains("CERTIFICATE") ||
+            entityType.Contains("CoachProfile", StringComparison.OrdinalIgnoreCase) ||
+            entityType.Contains("Certificate", StringComparison.OrdinalIgnoreCase))
+        {
+            return "COACH & CERTIFICATE VERIFICATION";
+        }
+
+        if (action.Contains("PAYOUT") || action.Contains("SUBSCRIPTION") || action.Contains("PLAN") ||
+            action.Contains("PRICE") || action.Contains("PAYMENT") || action.Contains("GATEWAY") || action.Contains("REFUND"))
+        {
+            return "FINANCE, SUBSCRIPTIONS & PAYMENT GATEWAYS";
+        }
+
+        if (action.Contains("LOCATION") || action.Contains("REPORT") || action.Contains("APPEAL") || action.Contains("VIOLATION"))
+        {
+            return "OPERATIONS, REPORTS & LOCATIONS";
+        }
+
+        return "SYSTEM AUDIT TRAIL";
+    }
+
+    public static List<LogFieldChangeItem> ExtractFieldChanges(
+        string? oldJson,
+        string? newJson,
+        string? action = null,
+        string? entityType = null,
+        string? actorName = null,
+        string? targetDisplayName = null)
+    {
         var oldDict = ParseRawDict(oldJson);
         var newDict = ParseRawDict(newJson);
 
+        var actUpper = (action ?? string.Empty).Trim().ToUpperInvariant();
+        var entUpper = (entityType ?? string.Empty).Trim().ToUpperInvariant();
+
+        // Strip injected audit metadata keys ("actorRole", and "description" when injected by AuditLogService)
+        oldDict.Remove("actorRole");
+        newDict.Remove("actorRole");
+
+        var isPlanDescriptionField = entUpper.Contains("SUBSCRIPTION") || entUpper.Contains("PLAN");
+        if (!isPlanDescriptionField || !oldDict.ContainsKey("description"))
+        {
+            newDict.Remove("description");
+            oldDict.Remove("description");
+        }
+
+        var isCreate = actUpper.Contains("CREATE") || actUpper.Contains("ADD") ||
+                       (oldDict.Count == 0 && newDict.Count > 0 && !actUpper.Contains("DELETE") && !actUpper.Contains("REMOVE"));
+        var isDelete = actUpper.Contains("DELETE") || actUpper.Contains("REMOVE") ||
+                       (newDict.Count == 0 && oldDict.Count > 0);
+
+        // Remove redundant actor/timestamp metadata keys that are already displayed in Actor & Activity cards
+        foreach (var metaKey in RedundantAuditActorMetaKeys)
+        {
+            if (!oldDict.ContainsKey(metaKey))
+            {
+                newDict.Remove(metaKey);
+            }
+        }
+
+        // Normalize/backfill pre-existing values for UPDATE / APPROVE / REJECT / LOCK / UNLOCK logs
+        // where earlier backend versions only persisted partial fields in OldValue or NewValue
+        if (!isCreate && !isDelete)
+        {
+            // Deduplicate refundAmount if approvedAmount is already present with the same value
+            if (newDict.TryGetValue("approvedAmount", out var appAmt) &&
+                newDict.TryGetValue("refundAmount", out var refAmt) &&
+                string.Equals(appAmt?.Trim(), refAmt?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                newDict.Remove("refundAmount");
+                oldDict.Remove("refundAmount");
+            }
+
+            foreach (var invKey in InvariantEntityContextKeys)
+            {
+                var hasOld = oldDict.TryGetValue(invKey, out var oldVal) && !string.IsNullOrWhiteSpace(oldVal);
+                var hasNew = newDict.TryGetValue(invKey, out var newVal) && !string.IsNullOrWhiteSpace(newVal);
+
+                if (hasOld && !hasNew)
+                {
+                    newDict[invKey] = oldVal!;
+                }
+                else if (hasNew && !hasOld)
+                {
+                    oldDict[invKey] = newVal!;
+                }
+            }
+
+            foreach (var amtKey in new[] { "approvedAmount", "refundAmount", "amount" })
+            {
+                if (newDict.TryGetValue(amtKey, out var newAmt) && !string.IsNullOrWhiteSpace(newAmt) &&
+                    (!oldDict.TryGetValue(amtKey, out var oldAmt) || string.IsNullOrWhiteSpace(oldAmt)))
+                {
+                    oldDict[amtKey] = "0";
+                }
+            }
+
+            if (oldDict.TryGetValue("staffNote", out var rawOldStaffNote))
+            {
+                var cleanOld = ExtractCleanStaffNote(rawOldStaffNote);
+                oldDict["staffNote"] = string.IsNullOrWhiteSpace(cleanOld) ? "None" : cleanOld;
+            }
+
+            if (newDict.TryGetValue("staffNote", out var rawNewStaffNote))
+            {
+                var cleanNew = ExtractCleanStaffNote(rawNewStaffNote);
+                newDict["staffNote"] = string.IsNullOrWhiteSpace(cleanNew) ? "None" : cleanNew;
+            }
+
+            if (newDict.TryGetValue("staffNote", out var newNote) && !string.IsNullOrWhiteSpace(newNote) &&
+                (!oldDict.TryGetValue("staffNote", out var oldNote) || string.IsNullOrWhiteSpace(oldNote)))
+            {
+                oldDict["staffNote"] = "None";
+            }
+
+            foreach (var txKey in new[] { "refundTransactionRef", "transactionRef", "gatewayRef" })
+            {
+                if (newDict.TryGetValue(txKey, out var newTx) && !string.IsNullOrWhiteSpace(newTx) &&
+                    (!oldDict.TryGetValue(txKey, out var oldTx) || string.IsNullOrWhiteSpace(oldTx)))
+                {
+                    oldDict[txKey] = "Pending disbursement";
+                }
+            }
+
+            foreach (var noteKey in new[] { "reason", "rejectionReason", "rejectedReason", "note", "appealReviewNote" })
+            {
+                if (newDict.TryGetValue(noteKey, out var newReason) && !string.IsNullOrWhiteSpace(newReason) &&
+                    (!oldDict.TryGetValue(noteKey, out var oldReason) || string.IsNullOrWhiteSpace(oldReason)))
+                {
+                    oldDict[noteKey] = "None";
+                }
+            }
+
+            if (newDict.TryGetValue("status", out var newStatus) && !string.IsNullOrWhiteSpace(newStatus) &&
+                (!oldDict.TryGetValue("status", out var oldStatus) || string.IsNullOrWhiteSpace(oldStatus)))
+            {
+                oldDict["status"] = "PENDING";
+            }
+        }
+
         // Collect distinct keys in order
         var keys = new List<string>();
-        foreach (var k in newDict.Keys)
-        {
-            if (!keys.Contains(k, StringComparer.OrdinalIgnoreCase))
-                keys.Add(k);
-        }
         foreach (var k in oldDict.Keys)
         {
             if (!keys.Contains(k, StringComparer.OrdinalIgnoreCase))
                 keys.Add(k);
         }
+        foreach (var k in newDict.Keys)
+        {
+            if (!keys.Contains(k, StringComparer.OrdinalIgnoreCase))
+                keys.Add(k);
+        }
+
+        var allItems = new List<LogFieldChangeItem>();
 
         foreach (var key in keys)
         {
+            // Skip target context-only keys in UPDATE/LOCK/UNLOCK/APPROVE/REJECT if they didn't change
+            if (!isCreate && !isDelete && TargetContextOnlyKeys.Contains(key))
+            {
+                continue;
+            }
+
             oldDict.TryGetValue(key, out var rawOld);
             newDict.TryGetValue(key, out var rawNew);
+
+            string formattedOld;
+            string formattedNew;
+
+            if (isCreate)
+            {
+                formattedOld = "—";
+                formattedNew = FormatValue(key, rawNew, actorName, targetDisplayName);
+            }
+            else if (isDelete)
+            {
+                formattedOld = FormatValue(key, rawOld, actorName, targetDisplayName);
+                formattedNew = "—";
+            }
+            else
+            {
+                formattedOld = FormatValue(key, rawOld, actorName, targetDisplayName);
+                formattedNew = FormatValue(key, rawNew, actorName, targetDisplayName);
+            }
+
+            var isStatus = key.IndexOf("status", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           key.Equals("isLocked", StringComparison.OrdinalIgnoreCase) ||
+                           key.Equals("isActive", StringComparison.OrdinalIgnoreCase);
+
+            var isChanged = isCreate || isDelete ||
+                            !string.Equals(formattedOld, formattedNew, StringComparison.Ordinal);
 
             var item = new LogFieldChangeItem
             {
                 Key = key,
                 DisplayName = GetDisplayName(key),
-                RawOldValue = rawOld,
-                RawNewValue = rawNew,
-                FormattedOldValue = FormatValue(key, rawOld),
-                FormattedNewValue = FormatValue(key, rawNew),
-                IsStatus = key.IndexOf("status", StringComparison.OrdinalIgnoreCase) >= 0
+                RawOldValue = isCreate ? null : rawOld,
+                RawNewValue = isDelete ? null : rawNew,
+                FormattedOldValue = formattedOld,
+                FormattedNewValue = formattedNew,
+                IsChanged = isChanged,
+                IsStatus = isStatus
             };
-
-            item.IsChanged = !string.Equals(item.FormattedOldValue, item.FormattedNewValue, StringComparison.Ordinal)
-                             && rawOld != null && rawNew != null;
 
             if (item.IsStatus)
             {
-                item.OldStatusBadgeClass = GetStatusBadgeClass(rawOld);
-                item.NewStatusBadgeClass = GetStatusBadgeClass(rawNew);
+                item.OldStatusBadgeClass = GetStatusBadgeClass(formattedOld);
+                item.NewStatusBadgeClass = GetStatusBadgeClass(formattedNew);
             }
 
-            var textLen = Math.Max(rawOld?.Length ?? 0, rawNew?.Length ?? 0);
-            item.IsLongText = textLen > 65 || (rawOld?.Contains('\n') == true) || (rawNew?.Contains('\n') == true)
-                              || item.FormattedOldValue.Contains('\n') || item.FormattedNewValue.Contains('\n')
-                              || IsJsonStructure(rawOld) || IsJsonStructure(rawNew);
+            var textLen = Math.Max(formattedOld.Length, formattedNew.Length);
+            item.IsLongText = textLen > 65 ||
+                              formattedOld.Contains('\n') ||
+                              formattedNew.Contains('\n') ||
+                              IsJsonStructure(rawOld) ||
+                              IsJsonStructure(rawNew);
 
-            result.Add(item);
+            allItems.Add(item);
         }
 
-        return result;
+        return allItems.Where(i => i.FormattedOldValue != "—" || i.FormattedNewValue != "—").ToList();
     }
 
     private static string GetDisplayName(string key)
@@ -527,14 +767,12 @@ public static class SystemLogUseCaseHelper
         if (FieldDisplayNames.TryGetValue(key, out var name))
             return name;
 
-        // Auto format camelCase or snake_case to Title Case
         var spaced = Regex.Replace(key, "([a-z])([A-Z])", "$1 $2").Replace('_', ' ');
         return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(spaced);
     }
 
     private static readonly (string Pattern, string Replacement)[] PhraseTranslations = new[]
     {
-        // PayOS & Banking Gateway
         ("Idempotency key đã tồn tại, vui lòng dùng key khác", "Idempotency key already exists, please use a different key"),
         ("Idempotency key đã tồn tại", "Idempotency key already exists"),
         ("vui lòng dùng key khác", "please use a different key"),
@@ -560,14 +798,10 @@ public static class SystemLogUseCaseHelper
         ("Lỗi hệ thống", "System error"),
         ("Lỗi kết nối", "Connection error"),
         ("Chữ ký không hợp lệ", "Invalid signature"),
-
-        // PayOS error codes
         ("E2: transfer rejected", "E2: Transfer rejected by banking gateway"),
         ("transfer rejected", "Transfer rejected"),
         ("E1: account not found", "E1: Account not found"),
         ("E3: invalid amount", "E3: Invalid amount"),
-
-        // Refund policy reasons & notes
         ("Học viên chuyển chỗ ở", "Trainee relocated"),
         ("Lịch làm việc đổi sang ca đêm", "Work schedule changed to night shift"),
         ("Bận đi công tác đột xuất ở nước ngoài 2 tháng, không thể tiếp tục lịch tập 1-1.", "Emergency 2-month overseas business trip, unable to continue 1-on-1 training."),
@@ -657,7 +891,7 @@ public static class SystemLogUseCaseHelper
         }
         catch
         {
-            // If parsing fails, fall back to string cleaning
+            // Fallback to string cleaning
         }
 
         return TranslateCommonPhrases(trimmed);
@@ -681,14 +915,33 @@ public static class SystemLogUseCaseHelper
         };
     }
 
-    private static string FormatValue(string key, string? rawValue)
+    private static string FormatValue(string key, string? rawValue, string? actorName = null, string? targetDisplayName = null)
     {
         if (string.IsNullOrWhiteSpace(rawValue)) return "—";
 
         var trimmed = rawValue.Trim();
+        if (string.Equals(trimmed, "null", StringComparison.OrdinalIgnoreCase)) return "—";
+
         var keyLower = key.ToLowerInvariant();
 
-        // 0. If value is JSON object or array, parse and format as human-readable language
+        // Translate raw GUIDs in actor/reviewer or target reference fields into human-readable names
+        if (Guid.TryParse(trimmed, out _))
+        {
+            if ((keyLower.Contains("verifiedby") || keyLower.Contains("approvedby") ||
+                 keyLower.Contains("resolvedby") || keyLower.Contains("lockedby") ||
+                 keyLower.Contains("processedby") || keyLower.Contains("reviewedby")) &&
+                !string.IsNullOrWhiteSpace(actorName))
+            {
+                return actorName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(targetDisplayName) && targetDisplayName != "—")
+            {
+                return targetDisplayName;
+            }
+        }
+
+        // 0. If value is JSON object or array, parse and format as human-readable text
         if (IsJsonStructure(trimmed))
         {
             return FormatJsonValue(trimmed);
@@ -699,13 +952,13 @@ public static class SystemLogUseCaseHelper
         {
             if (keyLower.Contains("lock")) return "Locked";
             if (keyLower.Contains("active")) return "Active";
-            return "Yes (True)";
+            return "True";
         }
         if (string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
         {
             if (keyLower.Contains("lock")) return "Unlocked";
             if (keyLower.Contains("active")) return "Inactive";
-            return "No (False)";
+            return "False";
         }
 
         // 2. Numeric currency amount formats
@@ -718,9 +971,13 @@ public static class SystemLogUseCaseHelper
         // 3. Date / Time formats (ISO string)
         if ((keyLower.Contains("at") || keyLower.Contains("date") || keyLower.Contains("time") || trimmed.Contains("T"))
             && DateTime.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var dt)
-            && dt.Year > 2000)
+            && dt.Year > 1900)
         {
-            return dt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss");
+            if (keyLower.Contains("birth"))
+            {
+                return dt.ToString("yyyy-MM-dd");
+            }
+            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
         }
 
         // 4. Duration
@@ -744,16 +1001,16 @@ public static class SystemLogUseCaseHelper
 
     public static string GetStatusBadgeClass(string? status)
     {
-        if (string.IsNullOrWhiteSpace(status)) return "status-default";
+        if (string.IsNullOrWhiteSpace(status) || status == "—") return "status-default";
         var s = status.Trim().ToUpperInvariant();
 
-        if (s.Contains("APPROV") || s.Contains("ACTIVE") || s.Contains("VERIF") || s.Contains("RESOLV") || s.Contains("COMPLET") || s.Contains("SUCCESS"))
+        if (s.Contains("APPROV") || s.Equals("ACTIVE") || s.Equals("UNLOCKED") || s.Contains("VERIF") || s.Contains("RESOLV") || s.Contains("COMPLET") || s.Contains("SUCCESS"))
             return "status-success";
 
         if (s.Contains("PENDING") || s.Contains("WAIT") || s.Contains("REVIEW") || s.Contains("SUBMIT") || s.Contains("PARTIAL"))
             return "status-warning";
 
-        if (s.Contains("REJECT") || s.Contains("LOCK") || s.Contains("DEACTIV") || s.Contains("FAIL") || s.Contains("CANCEL") || s.Contains("DISMISS"))
+        if (s.Contains("REJECT") || s.Equals("LOCKED") || s.Contains("INACTIVE") || s.Contains("DEACTIV") || s.Contains("FAIL") || s.Contains("CANCEL") || s.Contains("DISMISS") || s.Contains("BLOCK"))
             return "status-danger";
 
         return "status-default";
@@ -770,7 +1027,14 @@ public static class SystemLogUseCaseHelper
             {
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
-                    dict[prop.Name] = prop.Value.ToString();
+                    if (prop.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        dict[prop.Name] = string.Empty;
+                    }
+                    else
+                    {
+                        dict[prop.Name] = prop.Value.ToString();
+                    }
                 }
             }
         }
@@ -789,93 +1053,24 @@ public static class SystemLogUseCaseHelper
         sb.AppendLine(info.GroupName);
         sb.AppendLine("--------------------------------------------------------------------------------");
         sb.AppendLine(info.UseCaseTitle);
-        sb.AppendLine($"   - Related Table: {info.RelatedTable}");
+        sb.AppendLine($"   - Action Type: {info.ActionType}");
         sb.AppendLine($"   - Action Code: {info.ActionCode}");
         sb.AppendLine($"   - Entity Type: {info.EntityType}");
-        sb.AppendLine($"   - Entity ID: {(string.IsNullOrWhiteSpace(info.EntityId) ? "N/A" : info.EntityId)}");
+        sb.AppendLine($"   - Entity ID: {info.EntityId}");
+        sb.AppendLine($"   - Target Name: {info.TargetDisplayName}");
         sb.AppendLine("   - Description:");
         sb.AppendLine($"     \"{info.Description}\"");
+        sb.AppendLine("   - Change History (Field | Before | After):");
 
-        if (info.DetailType == LogDetailType.Initial)
+        if (info.FieldChanges.Count == 0)
         {
-            sb.AppendLine("   - Details:");
-            sb.AppendLine("     + Initial Value:");
-            foreach (var f in info.FieldChanges)
-            {
-                if (f.FormattedNewValue.Contains('\n'))
-                {
-                    sb.AppendLine($"       * {f.DisplayName} ({f.Key}):");
-                    foreach (var sub in f.FormattedNewValue.Split('\n'))
-                    {
-                        sb.AppendLine($"         {sub}");
-                    }
-                }
-                else
-                {
-                    sb.AppendLine($"       * {f.DisplayName} ({f.Key}): {f.FormattedNewValue}");
-                }
-            }
-        }
-        else if (info.DetailType == LogDetailType.BeforeDelete)
-        {
-            sb.AppendLine("   - Details:");
-            sb.AppendLine("     + Value Before Deletion:");
-            foreach (var f in info.FieldChanges)
-            {
-                if (f.FormattedOldValue.Contains('\n'))
-                {
-                    sb.AppendLine($"       * {f.DisplayName} ({f.Key}):");
-                    foreach (var sub in f.FormattedOldValue.Split('\n'))
-                    {
-                        sb.AppendLine($"         {sub}");
-                    }
-                }
-                else
-                {
-                    sb.AppendLine($"       * {f.DisplayName} ({f.Key}): {f.FormattedOldValue}");
-                }
-            }
+            sb.AppendLine("     (No field changes recorded)");
         }
         else
         {
-            sb.AppendLine("   - Changes Summary:");
-            if (info.FieldChanges.Any(f => f.RawOldValue != null))
+            foreach (var f in info.FieldChanges)
             {
-                sb.AppendLine("     + Previous Value:");
-                foreach (var f in info.FieldChanges.Where(f => f.RawOldValue != null))
-                {
-                    if (f.FormattedOldValue.Contains('\n'))
-                    {
-                        sb.AppendLine($"       * {f.DisplayName} ({f.Key}):");
-                        foreach (var sub in f.FormattedOldValue.Split('\n'))
-                        {
-                            sb.AppendLine($"         {sub}");
-                        }
-                    }
-                    else
-                    {
-                        sb.AppendLine($"       * {f.DisplayName} ({f.Key}): {f.FormattedOldValue}");
-                    }
-                }
-            }
-            if (info.FieldChanges.Any(f => f.RawNewValue != null))
-            {
-                sb.AppendLine("     + Current Value:");
-                foreach (var f in info.FieldChanges.Where(f => f.RawNewValue != null))
-                {
-                    if (f.FormattedNewValue.Contains('\n'))
-                    {
-                        sb.AppendLine($"       * {f.DisplayName} ({f.Key}):");
-                        foreach (var sub in f.FormattedNewValue.Split('\n'))
-                        {
-                            sb.AppendLine($"         {sub}");
-                        }
-                    }
-                    else
-                    {
-                        sb.AppendLine($"       * {f.DisplayName} ({f.Key}): {f.FormattedNewValue}");
-                    }
-                }
+                sb.AppendLine($"     * {f.DisplayName} ({f.Key}): [{f.FormattedOldValue}] -> [{f.FormattedNewValue}]");
             }
         }
 

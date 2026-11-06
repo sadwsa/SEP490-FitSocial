@@ -18,6 +18,25 @@ public interface IAuditLogRepository : IRepository<AuditLog>
         int pageSize,
         CancellationToken cancellationToken = default);
 
+    Task<(List<AuditLog> Items, int TotalCount)> GetPagedLogsAsync(
+        string? search,
+        string? level,
+        string? source,
+        DateTime? fromDate,
+        DateTime? toDate,
+        int pageNumber,
+        int pageSize,
+        string? role,
+        string? actionType,
+        string? status,
+        string? sortOrder,
+        CancellationToken cancellationToken = default);
+
+    Task<(int TotalActivities, int AdminActivities, int StaffActivities, int FailedActivities)> GetLogsSummaryAsync(
+        DateTime? fromDate = null,
+        DateTime? toDate = null,
+        CancellationToken cancellationToken = default);
+
     Task<(List<AuditLog> Items, int TotalCount)> GetPagedAuditLogsAsync(
         string? search,
         string? action,

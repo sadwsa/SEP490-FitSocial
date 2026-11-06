@@ -10,6 +10,8 @@ public class SystemLogItemDto
     public string Level { get; set; } = "Information";
     public string Source { get; set; } = string.Empty;
     public string Action { get; set; } = string.Empty;
+    public string ActionType { get; set; } = string.Empty;
+    public string Status { get; set; } = "Success";
     public string Message { get; set; } = string.Empty;
     public Guid? ActorId { get; set; }
     public string? ActorName { get; set; }
@@ -17,7 +19,16 @@ public class SystemLogItemDto
     public string? ActorRole { get; set; }
     public string? IpAddress { get; set; }
     public string? EntityId { get; set; }
+    public string? TargetDisplayName { get; set; }
     public string? OldValue { get; set; }
     public string? NewValue { get; set; }
     public string? Details { get; set; }
+}
+
+public class SystemLogSummaryDto
+{
+    public int TotalActivities { get; set; }
+    public int AdminActivities { get; set; }
+    public int StaffActivities { get; set; }
+    public int FailedActivities { get; set; }
 }

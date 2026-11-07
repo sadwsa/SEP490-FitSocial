@@ -340,7 +340,9 @@ public class PaymentService : IPaymentService
 
     public async Task<ApiResponseDto<CoachSubscriptionStatusDto>> GetCurrentCoachSubscriptionAsync(Guid coachId)
     {
-        var upgrade = await _coachUpgrades.GetLatestByCoachIdAsync(coachId);
+        // Only consider finished (paid/expired) upgrades for display; an unpaid (PENDING)
+        // or cancelled renewal must not replace the previously purchased (possibly expired) plan.
+        var upgrade = await _coachUpgrades.GetLatestFinishedByCoachIdAsync(coachId);
         if (upgrade == null)
             return ApiResponseDto<CoachSubscriptionStatusDto>.Ok(new CoachSubscriptionStatusDto { Status = "NONE" }, "No subscription found.");
 
@@ -488,6 +490,12 @@ public class PaymentService : IPaymentService
         payment.Status = PaymentConstants.PaymentStatusFailed;
         payment.FailureReason = "Cancelled by user.";
         payment.UpdatedAt = DateTime.UtcNow;
+
+        var upgrade = await _coachUpgrades.GetByOrderIdAsync(order.OrderId);
+        if (upgrade != null)
+        {
+            upgrade.Status = "CANCELLED";
+        }
 
         await _unitOfWork.SaveChangesAsync();
 

@@ -154,8 +154,8 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.GoogleProviderId)
                 .HasMaxLength(255)
                 .HasColumnName("GoogleProviderID");
-            entity.Property(e => e.IsInternal).HasDefaultValue(false);
-            entity.Property(e => e.IsLocked).HasDefaultValue(false);
+            entity.Property(e => e.IsInternal).HasDefaultValue(false).ValueGeneratedNever();
+            entity.Property(e => e.IsLocked).HasDefaultValue(false).ValueGeneratedNever();
             entity.Property(e => e.LastActiveAt).HasColumnType("timestamp without time zone");
             entity.Property(e => e.LockedBy).HasColumnName("LockedBy");
             entity.Property(e => e.PasswordHash).HasMaxLength(255);

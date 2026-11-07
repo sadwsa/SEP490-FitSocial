@@ -436,6 +436,7 @@ public class AuthService : IAuthService
             user.PhoneNumber = normalizedPhone;
             user.Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim();
             user.DateOfBirth = request.DateOfBirth;
+            user.IsLocked = true;
             user.UpdatedAt = now;
             profile = await _coachProfiles.GetByIdAsync(user.UserId);
             if (profile == null)

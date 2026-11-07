@@ -270,4 +270,6 @@ main {
 
 .app-shell-side-inner .app-shell-card {
     height: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
 }

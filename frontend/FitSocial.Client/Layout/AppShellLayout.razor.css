@@ -84,6 +84,9 @@
     min-height: 0;
     flex: 1 1 auto;      /* chiếm hết chiều cao cột */
     width: 100%;
+    overflow-x: hidden;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 /* Lưu ý: quy tắc "ô trắng full chiều dọc" (.app-shell-card, .app-shell-side-inner > *)

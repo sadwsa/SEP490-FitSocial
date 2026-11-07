@@ -34,7 +34,7 @@ public class RegisterRequest
 
     [Phone(ErrorMessage = "Invalid phone number format")]
     public string? PhoneNumber { get; set; }
-    public string? Gender { get; set; } = "MALE";
+    public string? Gender { get; set; }
     public DateOnly? DateOfBirth { get; set; }
     public int? ExperienceYears { get; set; }
     public string? Biography { get; set; }

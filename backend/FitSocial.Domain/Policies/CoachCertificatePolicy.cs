@@ -37,8 +37,8 @@ public static class CoachCertificatePolicy
     /// Checks whether a certificate is valid and can be displayed publicly.
     /// Rules:
     /// 1. VerificationStatus must be APPROVED.
-    /// 2. ExpiryDate must be present and on or after the business date (not expired).
-    /// Note: If ExpiryDate is missing or indeterminate, it is not assumed to be valid.
+    /// 2. If ExpiryDate is present, it must be on or after the business date (not expired).
+    /// If ExpiryDate is null (lifetime/undated certificate), it is considered valid once approved.
     /// </summary>
     public static bool IsCertificateValid(CoachCertificate? cert, DateOnly? businessToday = null)
     {
@@ -48,14 +48,8 @@ public static class CoachCertificatePolicy
             return false;
         }
 
-        // Must have an explicit ExpiryDate and not be expired
-        if (!cert.ExpiryDate.HasValue)
-        {
-            return false;
-        }
-
         var today = businessToday ?? GetBusinessToday();
-        return cert.ExpiryDate.Value >= today;
+        return !cert.ExpiryDate.HasValue || cert.ExpiryDate.Value >= today;
     }
 
     /// <summary>

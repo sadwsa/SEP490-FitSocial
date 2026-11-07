@@ -2,6 +2,7 @@
 @layout AppShellLayout
 @inject IPaymentService PaymentService
 @inject NavigationManager Navigation
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @using FitSocial.Client.Models.Payments
 @implements IDisposable
 
@@ -130,6 +131,20 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Nếu reload trang, thử khôi phục đơn đang chờ từ localStorage
+        try
+        {
+            var saved = await LocalStorage.GetItemAsync<ActivationLink>("pendingRenewalActivation");
+            if (saved != null)
+            {
+                activation = saved;
+                isLoading = false;
+                _ = StartAutoCheckAsync();
+                return;
+            }
+        }
+        catch { }
+
         if (PlanId == null || PlanId == Guid.Empty)
         {
             isLoading = false;
@@ -141,7 +156,10 @@
         {
             var res = await PaymentService.RenewCoachSubscriptionAsync(PlanId.Value);
             if (res.Success && res.Data != null)
+            {
                 activation = res.Data;
+                await LocalStorage.SetItemAsync("pendingRenewalActivation", activation);
+            }
             else
                 errorMessage = res.Message ?? "Could not create payment link.";
         }
@@ -165,6 +183,7 @@
                 var res = await PaymentService.CompleteActivationAsync(activation.OrderCode);
                 if (res.Success)
                 {
+                    await LocalStorage.RemoveItemAsync("pendingRenewalActivation");
                     await Task.Delay(1000, _autoCheckCts.Token);
                     Navigation.NavigateTo("/profile");
                     return;
@@ -185,6 +204,7 @@
             var res = await PaymentService.CompleteActivationAsync(activation.OrderCode);
             if (res.Success)
             {
+                await LocalStorage.RemoveItemAsync("pendingRenewalActivation");
                 await Task.Delay(1500);
                 Navigation.NavigateTo("/profile");
             }
@@ -201,6 +221,7 @@
     {
         if (activation != null)
             await PaymentService.CancelActivationAsync(activation.OrderCode);
+        await LocalStorage.RemoveItemAsync("pendingRenewalActivation");
         Navigation.NavigateTo("/coach-renewal");
     }
 

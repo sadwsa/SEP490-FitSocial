@@ -16,6 +16,7 @@ public interface IPaymentService
     /// Creates a new pending order + CoachUpgrade and returns a PayOS payment link.
     /// </summary>
     Task<ApiResponseDto<ActivationLinkDto>> RenewCoachSubscriptionAsync(Guid coachId, Guid planId, string originUrl, string? ipAddress = null);
+    Task<ApiResponseDto<ActivationLinkDto>> RegenerateCoachActivationAsync(Guid coachId, string originUrl, string? ipAddress = null);
 
     Task<ApiResponseDto<CoachSubscriptionStatusDto>> GetCurrentCoachSubscriptionAsync(Guid coachId);
 

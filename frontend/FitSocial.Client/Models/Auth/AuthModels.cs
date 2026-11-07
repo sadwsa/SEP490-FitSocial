@@ -87,6 +87,7 @@ public class AuthResponse
     public UserInfo User { get; set; } = new();
     public bool IsBlockedDueToReports { get; set; }
     public string? BlockReasonMessage { get; set; }
+    public bool IsPaymentPending { get; set; }
     public string? AppealToken { get; set; }
     public int? WarningCount { get; set; }
 }

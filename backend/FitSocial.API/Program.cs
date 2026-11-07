@@ -7,6 +7,7 @@ using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
 using System.IdentityModel.Tokens.Jwt;
+using FitSocial.Domain.Constants;
 using FitSocial.Domain.Interfaces;
 using FitSocial.API.Hubs;
 using FitSocial.API.Services;
@@ -152,7 +153,22 @@ builder.Services.AddAuthentication(options =>
             if (Guid.TryParse(userIdStr, out var userId) && int.TryParse(tokenVersionStr, out var tokenVersion))
             {
                 var user = await userRepository.GetByIdAsync(userId);
-                if (user == null || user.IsLocked == true || user.TokenVersion != tokenVersion)
+                // Allow locked coach accounts that have not completed activation payment yet
+                // to keep using their session (they are redirected to the payment page).
+                bool isUnpaidCoach = false;
+                if (user != null && user.IsLocked == true &&
+                    string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var upgradeRepo = context.HttpContext.RequestServices.GetService<ICoachUpgradeRepository>();
+                        var latest = upgradeRepo?.GetLatestFinishedByCoachIdAsync(user.UserId).GetAwaiter().GetResult();
+                        isUnpaidCoach = latest == null || latest.Status != "ACTIVE";
+                    }
+                    catch { isUnpaidCoach = true; }
+                }
+
+                if (user == null || (user.IsLocked == true && !isUnpaidCoach) || user.TokenVersion != tokenVersion)
                 {
                     context.Fail("Account has been locked, password changed, or the session is no longer valid.");
                 }

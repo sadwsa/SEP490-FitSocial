@@ -27,6 +27,7 @@ public class AuthService : IAuthService
     private readonly ICoachEkycVerificationRepository _ekycs;
     private readonly ICoachCertificateRepository _certificates;
     private readonly ICoachProfileRepository _coachProfiles;
+    private readonly ICoachUpgradeRepository? _coachUpgrades;
     private readonly IEkycService _ekycService;
     private readonly IEncryptionService _encryptionService;
     private readonly IAppealService _appealService;
@@ -50,7 +51,8 @@ public class AuthService : IAuthService
         IEkycService ekycService,
         IEncryptionService encryptionService,
         IAppealService appealService,
-        IAuditLogService auditLogService)
+        IAuditLogService auditLogService,
+        ICoachUpgradeRepository? coachUpgrades = null)
     {
         _users = users;
         _unitOfWork = unitOfWork;
@@ -66,6 +68,7 @@ public class AuthService : IAuthService
         _ekycs = ekycs;
         _certificates = certificates;
         _coachProfiles = coachProfiles;
+        _coachUpgrades = coachUpgrades;
         _ekycService = ekycService;
         _encryptionService = encryptionService;
         _appealService = appealService;
@@ -190,6 +193,24 @@ public class AuthService : IAuthService
             // Coach pending approval: specific message per spec Step 5 abnormal flow
             if (string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
             {
+                // Unpaid coach (locked + no active subscription): allow login to complete payment
+                var hasActiveSubscription = false;
+                if (_coachUpgrades != null)
+                {
+                    var latestUpgrade = await _coachUpgrades.GetLatestFinishedByCoachIdAsync(user.UserId);
+                    hasActiveSubscription = latestUpgrade != null && latestUpgrade.Status == "ACTIVE";
+                }
+                if (!hasActiveSubscription)
+                {
+                    user.LastActiveAt = DateTime.UtcNow;
+                    user.UpdatedAt = DateTime.UtcNow;
+                    var paymentPendingResponse = await _tokenService.CreateSessionAsync(user, null, request.RememberMe);
+                    paymentPendingResponse.User = paymentPendingResponse.User ?? new UserDto();
+                    paymentPendingResponse.IsPaymentPending = true;
+                    await _unitOfWork.SaveChangesAsync();
+                    return ApiResponseDto<AuthResponseDto>.Ok(paymentPendingResponse, "Payment required to activate your coach account.");
+                }
+
                 var profile = await _coachProfiles.GetByIdAsync(user.UserId);
                 var approval = profile?.ApprovalStatus?.Trim().ToUpperInvariant();
                 if (approval == "PENDING")

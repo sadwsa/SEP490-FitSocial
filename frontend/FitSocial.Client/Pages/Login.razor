@@ -226,6 +226,11 @@
         var result = await AuthService.LoginAsync(loginModel);
         if (result.Success)
         {
+            if (result.Data?.IsPaymentPending == true)
+            {
+                Navigation.NavigateTo("/coach-activation");
+                return;
+            }
             NavigateAfterLogin(result.Data?.User?.RoleCode);
         }
         else

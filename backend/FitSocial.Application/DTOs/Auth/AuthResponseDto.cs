@@ -20,4 +20,9 @@ public class AuthResponseDto
     public string? AppealToken { get; set; }
 
     public int? WarningCount { get; set; }
+
+    /// <summary>
+    /// Indicates that the coach account is locked because the activation payment has not been completed yet.
+    /// </summary>
+    public bool IsPaymentPending { get; set; }
 }

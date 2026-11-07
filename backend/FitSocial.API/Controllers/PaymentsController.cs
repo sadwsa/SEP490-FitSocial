@@ -87,6 +87,25 @@ public class PaymentsController : ControllerBase
     /// Check the PayOS payment by order code; if paid, unlock the account and sign the coach in.
     /// Called by the frontend payment-result page after the gateway redirects back.
     /// </summary>
+    /// <summary>
+    /// Regenerate a VietQR payment link for a coach whose activation payment is still pending.
+    /// Used when the user logs in again before paying.
+    /// </summary>
+    [HttpPost("coach-activation/regenerate")]
+    [Authorize(Roles = $"{RoleConstants.Coach}")]
+    [ProducesResponseType(typeof(ApiResponseDto<ActivationLinkDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RegenerateCoachActivation([FromQuery] string? originUrl = null)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized(ApiResponseDto<ActivationLinkDto>.Fail("Unauthorized"));
+
+        var result = await _paymentService.RegenerateCoachActivationAsync(userId, originUrl ?? string.Empty, null);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
     [HttpPost("coach-activation/complete")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]

@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Payments;
+using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.Payment;
@@ -36,15 +37,19 @@ public interface IPaymentService
     Task<ApiResponse<bool>> CancelActivationAsync(long orderCode);
     Task<ApiResponse<CoachSubscriptionStatus>> GetCurrentCoachSubscriptionAsync();
     Task<ApiResponse<ActivationLink>> RenewCoachSubscriptionAsync(Guid planId);
+    Task<ApiResponse<ActivationLink>> RegenerateCoachActivationAsync();
 }
 
 public class PaymentApiService : IPaymentService
 {
     private readonly HttpClient _httpClient;
+    private readonly ITokenStorage _tokenStorage;
+    private const string AuthTokenKey = "authToken";
 
-    public PaymentApiService(HttpClient httpClient)
+    public PaymentApiService(HttpClient httpClient, ITokenStorage tokenStorage)
     {
         _httpClient = httpClient;
+        _tokenStorage = tokenStorage;
     }
 
     public async Task<ApiResponse<CoachActivationPreview>> PrepareCoachActivationAsync(RegisterRequest draft)
@@ -177,6 +182,26 @@ public class PaymentApiService : IPaymentService
             var result = await response.Content.ReadFromJsonAsync<ApiResponse<ActivationLink>>();
             if (result != null) return result;
             return new ApiResponse<ActivationLink> { Success = false, Message = "Could not create renewal link." };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ActivationLink> { Success = false, Message = $"Connection error: {ex.Message}" };
+        }
+    }
+
+    public async Task<ApiResponse<ActivationLink>> RegenerateCoachActivationAsync()
+    {
+        try
+        {
+            var token = await _tokenStorage.GetItemAsync<string>(AuthTokenKey);
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+            var response = await _httpClient.PostAsync("payments/coach-activation/regenerate", null);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<ActivationLink>>();
+            if (result != null) return result;
+            return new ApiResponse<ActivationLink> { Success = false, Message = "Could not create payment link." };
         }
         catch (Exception ex)
         {

@@ -7,6 +7,7 @@
 @inject IAuthService AuthService
 @inject GoogleSignInService GoogleSignIn
 @inject PendingCoachRegistration PendingCoach
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @inject ITermsService TermsService
 @inject IEkycService EkycService
 @inject IPaymentService PaymentService
@@ -548,6 +549,7 @@
         if (isCoach)
         {
             PendingCoach.Draft = registerModel;
+            await LocalStorage.SetItemAsync("pendingCoachDraft", registerModel);
             Navigation.NavigateTo("/coach-payment"); return;
         }
         var result = await AuthService.RegisterAsync(registerModel);
@@ -631,6 +633,7 @@
         isLoading = true;
         // Keep pending for QR page
         PendingCoach.Draft = registerModel;
+        await LocalStorage.SetItemAsync("pendingCoachDraft", registerModel);
         var link = await PaymentService.CreateActivationLinkAsync(registerModel);
         if (!link.Success || link.Data == null)
         {

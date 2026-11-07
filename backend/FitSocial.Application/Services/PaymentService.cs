@@ -338,6 +338,141 @@ public class PaymentService : IPaymentService
             "Payment link created. Complete the payment to renew your coach subscription.");
     }
 
+    /// <summary>
+    /// Regenerates a coach activation payment link for an already-created (locked) coach account
+    /// whose activation payment has not been completed yet. Used when the user logs in again
+    /// before paying. Reuses the latest pending/cancelled upgrade's plan (or the first active plan).
+    /// </summary>
+    public async Task<ApiResponseDto<ActivationLinkDto>> RegenerateCoachActivationAsync(Guid coachId, string originUrl, string? ipAddress = null)
+    {
+        var user = await _users.GetByIdAsync(coachId);
+        if (user == null)
+            return ApiResponseDto<ActivationLinkDto>.Fail("Account not found.");
+
+        // Already activated -> no need to pay again
+        var activeUpgrade = await _coachUpgrades.GetLatestFinishedByCoachIdAsync(coachId);
+        if (activeUpgrade != null && activeUpgrade.Status == "ACTIVE")
+            return ApiResponseDto<ActivationLinkDto>.Fail("Your coach account is already activated.");
+
+        // Resolve plan: prefer the latest upgrade's plan, otherwise first active plan
+        var latestUpgrade = await _coachUpgrades.GetLatestByCoachIdAsync(coachId);
+        Guid? planId = latestUpgrade?.CoachSubscriptionPlansId;
+        if (planId == null || planId == Guid.Empty)
+        {
+            var plans = await _plans.ListActivePlansAsync();
+            var first = plans?.FirstOrDefault();
+            if (first == null)
+                return ApiResponseDto<ActivationLinkDto>.Fail("No subscription plan available.");
+            planId = first.CoachSubscriptionPlansId;
+        }
+
+        var plan = await _plans.GetByIdAsync(planId.Value);
+        if (plan == null || plan.IsActive != true || plan.Amount == null)
+            return ApiResponseDto<ActivationLinkDto>.Fail("Selected subscription plan is not available.");
+
+        // Cancel stale pending orders
+        var staleOrders = await _orders.ListPendingActivationByUserAsync(user.UserId, PaymentConstants.OrderTypeCoachActivation);
+        foreach (var stale in staleOrders)
+            stale.OrderStatus = PaymentConstants.OrderStatusCancelled;
+
+        var fee = plan.Amount.Value;
+        var currency = string.IsNullOrWhiteSpace(plan.Currency) ? PaymentConstants.CurrencyVnd : plan.Currency!;
+        int durationDays;
+        if (plan.SubscriptionDuration.HasValue)
+            durationDays = plan.SubscriptionDuration.Value * 30;
+        else if (plan.TrainingPackageDuration.HasValue)
+            durationDays = plan.TrainingPackageDuration.Value;
+        else
+            durationDays = 365;
+
+        var now = DateTime.UtcNow;
+        var orderCode = long.Parse($"{DateTimeOffset.UtcNow:yyMMddHHmmss}{Random.Shared.Next(100, 999)}");
+
+        var order = new Order
+        {
+            OrderId = Guid.NewGuid(),
+            BuyerId = user.UserId,
+            CoachId = user.UserId,
+            TotalAmount = fee,
+            OrderStatus = PaymentConstants.OrderStatusPending,
+            OrderType = PaymentConstants.OrderTypeCoachActivation,
+            CreatedAt = now
+        };
+        order.OrderDetails.Add(new OrderDetail
+        {
+            OrderDetailsId = Guid.NewGuid(),
+            OrderId = order.OrderId,
+            CoachSubscriptionPlansId = plan.CoachSubscriptionPlansId,
+            PackagePrice = fee,
+            PackageTitle = string.IsNullOrWhiteSpace(plan.Description) ? "Coach Subscription Plan" : plan.Description!,
+            PackageDurationDays = durationDays,
+            CoachName = user.FullName ?? user.Email,
+            CreatedAt = now
+        });
+        order.Payments.Add(new Payment
+        {
+            PaymentId = Guid.NewGuid(),
+            OrderId = order.OrderId,
+            Amount = fee,
+            Currency = currency,
+            Method = "VietQR",
+            GatewayId = null,
+            TransactionRef = $"COACH{orderCode}",
+            GatewayTransactionId = orderCode.ToString(),
+            Status = PaymentConstants.OrderStatusPending,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await _orders.AddAsync(order);
+
+        var upgrade = new CoachUpgrade
+        {
+            UpgradeId = Guid.NewGuid(),
+            CoachSubscriptionPlansId = plan.CoachSubscriptionPlansId,
+            CoachId = user.UserId,
+            OrderId = order.OrderId,
+            Status = "PENDING",
+            CreatedAt = now
+        };
+        await _coachUpgrades.AddAsync(upgrade);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return ApiResponseDto<ActivationLinkDto>.Fail("Could not save your order. Please try again.");
+        }
+
+        string frontend = string.IsNullOrWhiteSpace(originUrl) ? "https://localhost:7012" : originUrl.TrimEnd('/');
+        PaymentLinkInfo link;
+        try
+        {
+            link = await _paymentGateway.CreatePaymentLinkAsync(
+                orderCode, fee, "COACH ACTIVATION",
+                $"{frontend}/payment-result", $"{frontend}/payment-result");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDto<ActivationLinkDto>.Fail($"Could not create the payment link: {ex.Message}");
+        }
+
+        return ApiResponseDto<ActivationLinkDto>.Ok(
+            new ActivationLinkDto
+            {
+                CheckoutUrl = link.CheckoutUrl,
+                OrderCode = orderCode,
+                OrderId = order.OrderId,
+                QrCode = link.QrCode,
+                AccountNumber = link.AccountNumber,
+                AccountName = link.AccountName,
+                Amount = link.Amount,
+                Description = link.Description
+            },
+            "Payment link created. Complete the payment to activate your coach account.");
+    }
+
     public async Task<ApiResponseDto<CoachSubscriptionStatusDto>> GetCurrentCoachSubscriptionAsync(Guid coachId)
     {
         // Only consider finished (paid/expired) upgrades for display; an unpaid (PENDING)
@@ -443,7 +578,8 @@ public class PaymentService : IPaymentService
             else
                 upgrade.EndDay = now.AddDays(planForUpgrade?.TrainingPackageDuration ?? 365);
         }
-        user.IsLocked = false;
+        // Keep the account locked until an admin approves the coach application.
+        // Only the admin approval flow (ApproveCoachApplicationAsync) unlocks it.
         user.LastActiveAt = now;
         user.UpdatedAt = now;
 

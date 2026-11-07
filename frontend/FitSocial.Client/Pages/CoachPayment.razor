@@ -4,6 +4,7 @@
 @inject IAuthService AuthService
 @inject IPaymentService PaymentService
 @inject NavigationManager Navigation
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 
 <PageTitle>Coach Pro Activation - FitConnect</PageTitle>
 
@@ -181,6 +182,20 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Khôi phục draft từ localStorage nếu reload trang (mất state in-memory)
+        if (!PendingCoach.HasDraft || PendingCoach.Draft == null)
+        {
+            try
+            {
+                var savedDraft = await LocalStorage.GetItemAsync<FitSocial.Client.Models.Auth.RegisterRequest>("pendingCoachDraft");
+                if (savedDraft != null)
+                {
+                    PendingCoach.Draft = savedDraft;
+                }
+            }
+            catch { }
+        }
+
         // Guard: no draft means the user opened this URL directly
         if (!PendingCoach.HasDraft || PendingCoach.Draft == null)
         {
@@ -200,6 +215,15 @@
         }
 
         isLoadingPreview = false;
+
+        // Khôi phục activation từ localStorage nếu reload trang
+        try
+        {
+            var savedActivation = await LocalStorage.GetItemAsync<ActivationLink>("pendingCoachActivation");
+            if (savedActivation != null)
+                activation = savedActivation;
+        }
+        catch { }
     }
 
     private void GoBack()
@@ -232,6 +256,7 @@
         }
 
         activation = link.Data;
+        await LocalStorage.SetItemAsync("pendingCoachActivation", activation);
         isProcessing = false;
     }
 
@@ -253,6 +278,8 @@
         {
             await AuthService.PersistLoginAsync(result.Data);
             PendingCoach.Clear();
+            await LocalStorage.RemoveItemAsync("pendingCoachDraft");
+            await LocalStorage.RemoveItemAsync("pendingCoachActivation");
             successMessage = "Payment successful! Coach account created. Redirecting to home...";
             StateHasChanged();
             await Task.Delay(1500);
@@ -271,6 +298,8 @@
             await PaymentService.CancelActivationAsync(activation.OrderCode);
             activation = null;
         }
+        await LocalStorage.RemoveItemAsync("pendingCoachDraft");
+        await LocalStorage.RemoveItemAsync("pendingCoachActivation");
         Navigation.NavigateTo("/register");
     }
 }

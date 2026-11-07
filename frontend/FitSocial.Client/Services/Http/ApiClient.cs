@@ -5,6 +5,7 @@ using System.Text.Json;
 using Blazored.LocalStorage;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Services.Auth;
+using Microsoft.AspNetCore.Components;
 
 namespace FitSocial.Client.Services.Http;
 
@@ -13,13 +14,15 @@ public class ApiClient
     private readonly HttpClient _http;
     private readonly ITokenStorage _localStorage;
     private readonly IAuthService _authService;
+    private readonly NavigationManager _navigation;
     private const string AuthTokenKey = "authToken";
 
-    public ApiClient(HttpClient http, ITokenStorage localStorage, IAuthService authService)
+    public ApiClient(HttpClient http, ITokenStorage localStorage, IAuthService authService, NavigationManager navigation)
     {
         _http = http;
         _localStorage = localStorage;
         _authService = authService;
+        _navigation = navigation;
     }
 
     /// <summary>
@@ -92,6 +95,19 @@ public class ApiClient
         }
     }
 
+    private void HandleNetworkError()
+    {
+        try
+        {
+            var current = _navigation.Uri;
+            if (!current.Contains("/connection-error", StringComparison.OrdinalIgnoreCase))
+            {
+                _navigation.NavigateTo("/connection-error", forceLoad: false);
+            }
+        }
+        catch { }
+    }
+
     private static bool IsAuthEndpoint(string endpoint) =>
         endpoint.StartsWith("auth/", StringComparison.OrdinalIgnoreCase);
 
@@ -108,12 +124,31 @@ public class ApiClient
 
         try
         {
-            return await _authService.RefreshTokenAsync();
+            var refreshed = await _authService.RefreshTokenAsync();
+            if (!refreshed)
+            {
+                RedirectToLogin();
+            }
+            return refreshed;
         }
         catch
         {
+            RedirectToLogin();
             return false;
         }
+    }
+
+    private void RedirectToLogin()
+    {
+        try
+        {
+            var current = _navigation.Uri;
+            if (current.Contains("/admin", StringComparison.OrdinalIgnoreCase))
+                _navigation.NavigateTo("/admin/login", forceLoad: true);
+            else
+                _navigation.NavigateTo("/login", forceLoad: true);
+        }
+        catch { }
     }
 
     public async Task<ApiResponse<T>> GetAsync<T>(string endpoint)
@@ -169,6 +204,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<T>
             {
                 Success = false,
@@ -230,6 +266,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -291,6 +328,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -333,6 +371,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -375,6 +414,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -436,6 +476,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -464,6 +505,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse
             {
                 Success = false,

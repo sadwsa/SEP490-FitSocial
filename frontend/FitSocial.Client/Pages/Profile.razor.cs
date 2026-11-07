@@ -609,6 +609,32 @@ public partial class Profile : ComponentBase
         };
     }
 
+    // Certificate Lightbox
+    private bool isCertLightboxOpen = false;
+    private string? certLightboxUrl;
+    private string? certLightboxTitle;
+
+    private static bool IsPdfUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        var cleanUrl = url.Split('?')[0].Split('#')[0];
+        return cleanUrl.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OpenCertificateLightbox(string url, string title)
+    {
+        certLightboxUrl = url;
+        certLightboxTitle = title;
+        isCertLightboxOpen = true;
+    }
+
+    private void CloseCertificateLightbox()
+    {
+        isCertLightboxOpen = false;
+        certLightboxUrl = null;
+        certLightboxTitle = null;
+    }
+
     public void Dispose()
     {
         Shell.Reset();

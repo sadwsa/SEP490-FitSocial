@@ -686,6 +686,12 @@
             await NotificationService.MarkAsReadAsync(item.NotificationId);
         }
 
+        if (item.Type != null && item.Type.Contains("SCHEDULE"))
+        {
+            Navigation.NavigateTo("coach/trainee-orders");
+            return;
+        }
+
         Navigation.NavigateTo("notifications");
     }
 
@@ -706,6 +712,9 @@
         if (string.IsNullOrWhiteSpace(type)) return "Notification";
         return type.Trim().ToUpperInvariant() switch
         {
+            "WORKOUT_SCHEDULE_REMINDER" => "Workout Schedule Reminder",
+            "WORKOUT_SCHEDULE_URGENT" => "Urgent Workout Alert",
+            "MEAL_SCHEDULE_REMINDER" => "Meal Plan Reminder",
             "REFUND_APPROVED" => "Refund Approved",
             "REFUND_REJECTED" => "Refund Rejected",
             "CERTIFICATE_APPROVED" => "Certificate Approved",

@@ -130,7 +130,7 @@ public class CoachScheduleReminderBackgroundService : BackgroundService
 
                     if (!alreadyNotifiedToday)
                     {
-                        var traineeName = plan.OrderDetails?.Order?.Buyer?.FullName ?? "học viên";
+                        var traineeName = plan.OrderDetails?.Order?.Buyer?.FullName ?? "Trainee";
 
                         var notif = new Notification
                         {
@@ -139,7 +139,7 @@ public class CoachScheduleReminderBackgroundService : BackgroundService
                             ActorId = null, // Sent by SYSTEM automatically, not by trainee
                             ReferenceId = plan.MealPlanId,
                             Type = "MEAL_SCHEDULE_REMINDER",
-                            Description = $"[Hệ thống FitSocial] Thực đơn ngày {twoDaysAhead:dd/MM/yyyy} của học viên {traineeName} chưa được chuẩn bị. Vui lòng lên thực đơn trước 2 ngày để học viên kịp chuẩn bị thực phẩm.",
+                            Description = $"[FitConnect System] Meal plan for trainee {traineeName} on {twoDaysAhead:dd/MM/yyyy} has not been prepared. Please schedule meals at least 2 days in advance so the trainee can prepare.",
                             IsRead = false,
                             CreatedAt = DateTime.UtcNow
                         };
@@ -149,7 +149,7 @@ public class CoachScheduleReminderBackgroundService : BackgroundService
 
                         try
                         {
-                            await notifier.SendNotificationAsync(plan.CoachId, "Hệ thống FitSocial: Nhắc nhở lên thực đơn", notif.Description);
+                            await notifier.SendNotificationAsync(plan.CoachId, "FitConnect System: Meal Plan Reminder", notif.Description);
                         }
                         catch (Exception ex)
                         {
@@ -225,18 +225,18 @@ public class CoachScheduleReminderBackgroundService : BackgroundService
             bool needsReminder = false;
             string severity = "WARNING"; // WARNING (Yellow) or URGENT (Red)
             string reminderMessage = string.Empty;
-            var traineeName = plan.OrderDetails?.Order?.Buyer?.FullName ?? "học viên";
+            var traineeName = plan.OrderDetails?.Order?.Buyer?.FullName ?? "Trainee";
 
             string packageRemainingInfo = remainingSessions.HasValue
-                ? $"(Gói còn {remainingSessions.Value} buổi chưa lên lịch)"
-                : $"(Gói còn {remainingDays} ngày hiệu lực)";
+                ? $"({remainingSessions.Value} sessions remaining)"
+                : $"({remainingDays} days remaining in package)";
 
             if (upcomingSessions.Count == 0)
             {
                 // RED ALERT: Zero upcoming sessions scheduled while plan is active
                 needsReminder = true;
                 severity = "URGENT";
-                reminderMessage = $"[Hệ thống FitSocial] Học viên {traineeName} hiện chưa có buổi tập tiếp theo nào được lên lịch {packageRemainingInfo}. Vui lòng cập nhật lịch tập sớm để đảm bảo tiến độ huấn luyện!";
+                reminderMessage = $"[FitConnect System] Trainee {traineeName} currently has no upcoming workout sessions scheduled {packageRemainingInfo}. Please update the workout schedule soon to keep training on track!";
             }
             else if (upcomingSessions.Count == 1 && endDate > upcomingSessions[0])
             {
@@ -248,14 +248,14 @@ public class CoachScheduleReminderBackgroundService : BackgroundService
                     // RED ALERT: Only 1 session left, happening today or tomorrow, nothing after
                     needsReminder = true;
                     severity = "URGENT";
-                    reminderMessage = $"[Hệ thống FitSocial] Học viên {traineeName} chỉ còn 1 buổi tập vào ngày {nextSession:dd/MM/yyyy} và chưa có buổi tiếp theo {packageRemainingInfo}. Vui lòng lên lịch gối đầu gấp!";
+                    reminderMessage = $"[FitConnect System] Trainee {traineeName} only has 1 workout session scheduled on {nextSession:dd/MM/yyyy} and no further sessions {packageRemainingInfo}. Please schedule upcoming sessions promptly!";
                 }
                 else if (daysUntilSession <= 3)
                 {
                     // YELLOW ALERT: 1 session left within 2-3 days, buffer is running low
                     needsReminder = true;
                     severity = "WARNING";
-                    reminderMessage = $"[Hệ thống FitSocial] Học viên {traineeName} có buổi tập tiếp theo vào ngày {nextSession:dd/MM/yyyy} {packageRemainingInfo}. Sau buổi này chưa có lịch mới, vui lòng chuẩn bị trước 2 ngày.";
+                    reminderMessage = $"[FitConnect System] Trainee {traineeName} has their next workout session on {nextSession:dd/MM/yyyy} {packageRemainingInfo}. No further sessions are scheduled after this date; please schedule at least 2 days in advance.";
                 }
             }
 
@@ -288,7 +288,7 @@ public class CoachScheduleReminderBackgroundService : BackgroundService
 
                     try
                     {
-                        string title = severity == "URGENT" ? "Hệ thống FitSocial: Cảnh báo khẩn lịch tập" : "Hệ thống FitSocial: Nhắc nhở lên lịch tập";
+                        string title = severity == "URGENT" ? "FitConnect System: Urgent Workout Schedule Alert" : "FitConnect System: Workout Schedule Reminder";
                         await notifier.SendNotificationAsync(plan.CoachId, title, notif.Description);
                     }
                     catch (Exception ex)

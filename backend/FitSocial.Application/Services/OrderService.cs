@@ -277,12 +277,12 @@ public class OrderService : IOrderService
             if (plan == null)
             {
                 dto.WorkoutScheduleStatus = "NO_PLAN";
-                dto.WorkoutScheduleStatusText = "Chưa tạo giáo án";
+                dto.WorkoutScheduleStatusText = "No workout plan created";
             }
             else if (string.Equals(plan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
             {
                 dto.WorkoutScheduleStatus = "NO_PLAN";
-                dto.WorkoutScheduleStatusText = "Bản nháp (DRAFT)";
+                dto.WorkoutScheduleStatusText = "Draft plan (DRAFT)";
             }
             else if (plan.StartDate.HasValue && plan.EndDate.HasValue)
             {
@@ -307,7 +307,7 @@ public class OrderService : IOrderService
                     if (remainingSessions <= 0)
                     {
                         dto.WorkoutScheduleStatus = "COMPLETED";
-                        dto.WorkoutScheduleStatusText = $"Đã lên đủ {scheduledDates.Count}/{maxSessions.Value} buổi";
+                        dto.WorkoutScheduleStatusText = $"Fully scheduled: {scheduledDates.Count}/{maxSessions.Value} sessions";
                     }
                     else
                     {
@@ -317,7 +317,7 @@ public class OrderService : IOrderService
                         if (upcomingSessions.Count == 0)
                         {
                             dto.WorkoutScheduleStatus = "URGENT";
-                            dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Chưa có lịch tiếp theo";
+                            dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - No upcoming session";
                         }
                         else if (upcomingSessions.Count == 1)
                         {
@@ -326,23 +326,23 @@ public class OrderService : IOrderService
                             if (daysUntil <= 1)
                             {
                                 dto.WorkoutScheduleStatus = "URGENT";
-                                dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Hết bài sau {next:dd/MM}";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - Last session: {next:dd/MM}";
                             }
                             else if (daysUntil <= 3)
                             {
                                 dto.WorkoutScheduleStatus = "WARNING";
-                                dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Buổi tới: {next:dd/MM}";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - Next: {next:dd/MM}";
                             }
                             else
                             {
                                 dto.WorkoutScheduleStatus = "SAFE";
-                                dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Buổi tới: {next:dd/MM}";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - Next: {next:dd/MM}";
                             }
                         }
                         else
                         {
                             dto.WorkoutScheduleStatus = "SAFE";
-                            dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Buổi tới: {upcomingSessions[0]:dd/MM}";
+                            dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - Next: {upcomingSessions[0]:dd/MM}";
                         }
                     }
                 }
@@ -351,7 +351,7 @@ public class OrderService : IOrderService
                     if (remainingDays <= 0)
                     {
                         dto.WorkoutScheduleStatus = "COMPLETED";
-                        dto.WorkoutScheduleStatusText = "Gói tập đã hết hạn";
+                        dto.WorkoutScheduleStatusText = "Package expired";
                     }
                     else
                     {
@@ -361,7 +361,7 @@ public class OrderService : IOrderService
                         if (upcomingSessions.Count == 0)
                         {
                             dto.WorkoutScheduleStatus = "URGENT";
-                            dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Chưa có lịch tiếp theo";
+                            dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - No upcoming session";
                         }
                         else if (upcomingSessions.Count == 1)
                         {
@@ -370,23 +370,23 @@ public class OrderService : IOrderService
                             if (daysUntil <= 1)
                             {
                                 dto.WorkoutScheduleStatus = "URGENT";
-                                dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Hết bài sau {next:dd/MM}";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - Last session: {next:dd/MM}";
                             }
                             else if (daysUntil <= 3)
                             {
                                 dto.WorkoutScheduleStatus = "WARNING";
-                                dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Buổi tới: {next:dd/MM}";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - Next: {next:dd/MM}";
                             }
                             else
                             {
                                 dto.WorkoutScheduleStatus = "SAFE";
-                                dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Buổi tới: {next:dd/MM}";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - Next: {next:dd/MM}";
                             }
                         }
                         else
                         {
                             dto.WorkoutScheduleStatus = "SAFE";
-                            dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Buổi tới: {upcomingSessions[0]:dd/MM}";
+                            dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - Next: {upcomingSessions[0]:dd/MM}";
                         }
                     }
                 }
@@ -399,12 +399,12 @@ public class OrderService : IOrderService
             if (mealPlan == null)
             {
                 dto.MealScheduleStatus = "NO_PLAN";
-                dto.MealScheduleStatusText = "Chưa tạo thực đơn";
+                dto.MealScheduleStatusText = "No meal plan created";
             }
             else if (string.Equals(mealPlan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
             {
                 dto.MealScheduleStatus = "NO_PLAN";
-                dto.MealScheduleStatusText = "Bản nháp (DRAFT)";
+                dto.MealScheduleStatusText = "Draft plan (DRAFT)";
             }
             else if (mealPlan.StartDate.HasValue && mealPlan.EndDate.HasValue)
             {
@@ -415,7 +415,7 @@ public class OrderService : IOrderService
                 if (twoDaysAhead > endDate)
                 {
                     dto.MealScheduleStatus = "SAFE";
-                    dto.MealScheduleStatusText = "Thực đơn hoàn tất";
+                    dto.MealScheduleStatusText = "Meal plan completed through expiration";
                 }
                 else
                 {
@@ -426,12 +426,12 @@ public class OrderService : IOrderService
                     if (hasMealTwoDaysAhead)
                     {
                         dto.MealScheduleStatus = "SAFE";
-                        dto.MealScheduleStatusText = "Thực đơn đầy đủ (>= 2 ngày)";
+                        dto.MealScheduleStatusText = "Meal plan ready (>= 2 days)";
                     }
                     else
                     {
                         dto.MealScheduleStatus = "WARNING";
-                        dto.MealScheduleStatusText = $"Thiếu thực đơn ngày {twoDaysAhead:dd/MM}";
+                        dto.MealScheduleStatusText = $"Missing meals for {twoDaysAhead:dd/MM}";
                     }
                 }
             }

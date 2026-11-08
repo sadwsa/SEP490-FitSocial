@@ -53,7 +53,7 @@
                     </button>
                 </div>
             }
-            else if (mealPlan == null || !mealPlan.Weeks.Any())
+            else if (mealPlan == null || mealPlan.Status == "DRAFT" || !mealPlan.Weeks.Any())
             {
                 <!-- Empty / Pending Meal Plan State -->
                 <div class="bg-white rounded-2xl p-12 shadow-xs border border-gray-100 flex flex-col items-center text-center">

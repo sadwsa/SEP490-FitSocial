@@ -5,6 +5,7 @@ using FitSocial.Client.Services.Http;
 using Microsoft.AspNetCore.Components.Forms;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -90,8 +91,17 @@ public class TrainingPackageService : ITrainingPackageService
 
             foreach (var file in fileList)
             {
-                var stream = file.OpenReadStream(10 * 1024 * 1024); // max 10MB/file
-                content.Add(new StreamContent(stream), "files", file.Name);
+                using var ms = new MemoryStream();
+                await using var stream = file.OpenReadStream(10 * 1024 * 1024); // max 10MB/file
+                await stream.CopyToAsync(ms);
+                var bytes = ms.ToArray();
+
+                var byteContent = new ByteArrayContent(bytes);
+                if (!string.IsNullOrWhiteSpace(file.ContentType))
+                {
+                    byteContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+                }
+                content.Add(byteContent, "files", file.Name);
             }
 
             var response = await _httpClient.PostAsync("upload/package-media", content);

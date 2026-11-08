@@ -294,7 +294,8 @@ public class MealPlanService : IMealPlanService
         if (!string.IsNullOrWhiteSpace(dto.Status))
         {
             existingPlan.Status = dto.Status;
-            if (string.Equals(dto.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && !existingPlan.PublishedAt.HasValue)
+            if ((string.Equals(dto.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(dto.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase)) && !existingPlan.PublishedAt.HasValue)
             {
                 existingPlan.PublishedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
             }

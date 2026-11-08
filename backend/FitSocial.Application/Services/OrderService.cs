@@ -199,6 +199,7 @@ public class OrderService : IOrderService
                 var traineePhone = buyer?.PhoneNumber;
                 var traineeAvatar = buyer?.AvatarUrl;
 
+                var today = DateTime.UtcNow.Date;
                 var packages = new List<CoachTraineePackageOrderDto>();
 
                 foreach (var order in group)
@@ -217,7 +218,7 @@ public class OrderService : IOrderService
                         var mealPlan = detail.MealPlans?.FirstOrDefault();
                         var thumbnailUrl = pkg?.Media?.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).FirstOrDefault();
 
-                        packages.Add(new CoachTraineePackageOrderDto
+                        var pkgDto = new CoachTraineePackageOrderDto
                         {
                             OrderId = order.OrderId,
                             OrderDetailsId = detail.OrderDetailsId,
@@ -236,7 +237,10 @@ public class OrderService : IOrderService
                             PlanStatus = plan?.Status,
                             MealPlanId = mealPlan?.MealPlanId,
                             MealPlanStatus = mealPlan?.Status
-                        });
+                        };
+
+                        ComputeScheduleHealth(pkgDto, plan, mealPlan, today);
+                        packages.Add(pkgDto);
                     }
                 }
 
@@ -259,6 +263,179 @@ public class OrderService : IOrderService
             .Where(g => g.PurchasedPackages.Count > 0)
             .OrderByDescending(g => g.LatestPurchasedAt)
             .ToList();
+    }
+
+    private static void ComputeScheduleHealth(
+        CoachTraineePackageOrderDto dto,
+        TrainingPlan? plan,
+        MealPlan? mealPlan,
+        DateTime today)
+    {
+        // 1. Workout Schedule Health
+        if (dto.PackageType != "MEAL")
+        {
+            if (plan == null)
+            {
+                dto.WorkoutScheduleStatus = "NO_PLAN";
+                dto.WorkoutScheduleStatusText = "Chưa tạo giáo án";
+            }
+            else if (string.Equals(plan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
+            {
+                dto.WorkoutScheduleStatus = "NO_PLAN";
+                dto.WorkoutScheduleStatusText = "Bản nháp (DRAFT)";
+            }
+            else if (plan.StartDate.HasValue && plan.EndDate.HasValue)
+            {
+                var startDate = plan.StartDate.Value.Date;
+                var endDate = plan.EndDate.Value.Date;
+                int remainingDays = Math.Max(0, (endDate - today).Days);
+                dto.RemainingDays = remainingDays;
+
+                var scheduledDates = plan.TrainingPlanExercises
+                    .Where(e => !string.IsNullOrWhiteSpace(e.ExerciseName))
+                    .Select(e => TrainingPlanService.GetSessionDate(startDate, e.WeekNumber ?? 1, e.DayNumber ?? 1).Date)
+                    .Distinct()
+                    .OrderBy(d => d)
+                    .ToList();
+
+                var maxSessions = dto.SessionCount;
+                if (maxSessions.HasValue && maxSessions.Value > 0)
+                {
+                    int remainingSessions = maxSessions.Value - scheduledDates.Count;
+                    dto.RemainingSessions = remainingSessions;
+
+                    if (remainingSessions <= 0)
+                    {
+                        dto.WorkoutScheduleStatus = "COMPLETED";
+                        dto.WorkoutScheduleStatusText = $"Đã lên đủ {scheduledDates.Count}/{maxSessions.Value} buổi";
+                    }
+                    else
+                    {
+                        var upcomingSessions = scheduledDates.Where(d => d >= today).ToList();
+                        dto.NextWorkoutDate = upcomingSessions.FirstOrDefault();
+
+                        if (upcomingSessions.Count == 0)
+                        {
+                            dto.WorkoutScheduleStatus = "URGENT";
+                            dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Chưa có lịch tiếp theo";
+                        }
+                        else if (upcomingSessions.Count == 1)
+                        {
+                            var next = upcomingSessions[0];
+                            int daysUntil = (next - today).Days;
+                            if (daysUntil <= 1)
+                            {
+                                dto.WorkoutScheduleStatus = "URGENT";
+                                dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Hết bài sau {next:dd/MM}";
+                            }
+                            else if (daysUntil <= 3)
+                            {
+                                dto.WorkoutScheduleStatus = "WARNING";
+                                dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Buổi tới: {next:dd/MM}";
+                            }
+                            else
+                            {
+                                dto.WorkoutScheduleStatus = "SAFE";
+                                dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Buổi tới: {next:dd/MM}";
+                            }
+                        }
+                        else
+                        {
+                            dto.WorkoutScheduleStatus = "SAFE";
+                            dto.WorkoutScheduleStatusText = $"Còn {remainingSessions} buổi - Buổi tới: {upcomingSessions[0]:dd/MM}";
+                        }
+                    }
+                }
+                else // Flexible package (SessionCount == null)
+                {
+                    if (remainingDays <= 0)
+                    {
+                        dto.WorkoutScheduleStatus = "COMPLETED";
+                        dto.WorkoutScheduleStatusText = "Gói tập đã hết hạn";
+                    }
+                    else
+                    {
+                        var upcomingSessions = scheduledDates.Where(d => d >= today).ToList();
+                        dto.NextWorkoutDate = upcomingSessions.FirstOrDefault();
+
+                        if (upcomingSessions.Count == 0)
+                        {
+                            dto.WorkoutScheduleStatus = "URGENT";
+                            dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Chưa có lịch tiếp theo";
+                        }
+                        else if (upcomingSessions.Count == 1)
+                        {
+                            var next = upcomingSessions[0];
+                            int daysUntil = (next - today).Days;
+                            if (daysUntil <= 1)
+                            {
+                                dto.WorkoutScheduleStatus = "URGENT";
+                                dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Hết bài sau {next:dd/MM}";
+                            }
+                            else if (daysUntil <= 3)
+                            {
+                                dto.WorkoutScheduleStatus = "WARNING";
+                                dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Buổi tới: {next:dd/MM}";
+                            }
+                            else
+                            {
+                                dto.WorkoutScheduleStatus = "SAFE";
+                                dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Buổi tới: {next:dd/MM}";
+                            }
+                        }
+                        else
+                        {
+                            dto.WorkoutScheduleStatus = "SAFE";
+                            dto.WorkoutScheduleStatusText = $"Còn {remainingDays} ngày - Buổi tới: {upcomingSessions[0]:dd/MM}";
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Meal Schedule Health
+        if (dto.PackageType != "WORKOUT")
+        {
+            if (mealPlan == null)
+            {
+                dto.MealScheduleStatus = "NO_PLAN";
+                dto.MealScheduleStatusText = "Chưa tạo thực đơn";
+            }
+            else if (string.Equals(mealPlan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
+            {
+                dto.MealScheduleStatus = "NO_PLAN";
+                dto.MealScheduleStatusText = "Bản nháp (DRAFT)";
+            }
+            else if (mealPlan.StartDate.HasValue && mealPlan.EndDate.HasValue)
+            {
+                var startDate = mealPlan.StartDate.Value.Date;
+                var endDate = mealPlan.EndDate.Value.Date;
+                var twoDaysAhead = today.AddDays(2);
+
+                if (twoDaysAhead > endDate)
+                {
+                    dto.MealScheduleStatus = "SAFE";
+                    dto.MealScheduleStatusText = "Thực đơn hoàn tất";
+                }
+                else
+                {
+                    bool hasMealTwoDaysAhead = mealPlan.MealPlanItems.Any(i =>
+                        !string.IsNullOrWhiteSpace(i.FoodDescription) &&
+                        MealPlanService.GetSessionDate(startDate, i.WeekNumber ?? 1, i.DayNumber ?? 1).Date == twoDaysAhead);
+
+                    if (hasMealTwoDaysAhead)
+                    {
+                        dto.MealScheduleStatus = "SAFE";
+                        dto.MealScheduleStatusText = "Thực đơn đầy đủ (>= 2 ngày)";
+                    }
+                    else
+                    {
+                        dto.MealScheduleStatus = "WARNING";
+                        dto.MealScheduleStatusText = $"Thiếu thực đơn ngày {twoDaysAhead:dd/MM}";
+                    }
+                }
+            }
+        }
     }
 
     private static OrderDto MapToOrderDto(Order o)
@@ -290,7 +467,4 @@ public class OrderService : IOrderService
             }).ToList()
         };
     }
-
-  
-
 }

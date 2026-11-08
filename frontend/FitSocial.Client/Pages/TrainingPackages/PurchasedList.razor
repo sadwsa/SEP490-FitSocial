@@ -78,17 +78,36 @@
                                             {
                                                 <span class="bg-gray-100 px-2 py-1 rounded">@($"{pkg.SessionCount} Sessions")</span>
                                             }
+                                            else
+                                            {
+                                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-bold border border-emerald-100">Flexible Sessions</span>
+                                            }
                                             @if (pkg.PackageType == "WORKOUT")
                                             {
-                                                <span class="bg-blue-50 text-blue-700 px-2 py-1 rounded font-bold border border-blue-100">🏋️‍♂️ Workout Only</span>
+                                                <span class="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded font-bold border border-blue-100">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20M6 7v10M18 7v10M2 10v4M22 10v4" />
+                                                    </svg>
+                                                    Workout Only
+                                                </span>
                                             }
                                             else if (pkg.PackageType == "MEAL")
                                             {
-                                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-bold border border-emerald-100">🥗 Meal Plan Only</span>
+                                                <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-bold border border-emerald-100">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 2v20M6 2v7a3 3 0 006 0V2M9 9v13" />
+                                                    </svg>
+                                                    Meal Plan Only
+                                                </span>
                                             }
                                             else
                                             {
-                                                <span class="bg-orange-50 text-[#FF5500] px-2 py-1 rounded font-bold border border-orange-100">🌟 Workout + Nutrition</span>
+                                                <span class="inline-flex items-center gap-1 bg-orange-50 text-[#FF5500] px-2 py-1 rounded font-bold border border-orange-100">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                                    </svg>
+                                                    Workout + Nutrition
+                                                </span>
                                             }
                                             <span class="bg-orange-50 text-[#FF5500] px-2 py-1 rounded font-bold">@($"{pkg.Price:N0} đ")</span>
                                         </div>
@@ -245,16 +264,42 @@
             <!-- Package Inclusions -->
             <div class="mb-4 p-3 rounded-xl border flex items-center justify-between gap-2 @(selectedDetailPackage.PackageType == "WORKOUT" ? "bg-blue-50/50 border-blue-100 text-blue-900" : selectedDetailPackage.PackageType == "MEAL" ? "bg-emerald-50/50 border-emerald-100 text-emerald-900" : "bg-orange-50/50 border-orange-100 text-orange-900")">
                 <span class="text-xs font-bold uppercase tracking-wider">Service Inclusions:</span>
-                <span class="text-xs font-black">
-                    @(selectedDetailPackage.PackageType == "WORKOUT" ? "🏋️‍♂️ Workout Plan Only" : selectedDetailPackage.PackageType == "MEAL" ? "🥗 Meal Plan Only" : "🌟 Full Coaching (Workout + Meal Plan)")
+                <span class="text-xs font-black inline-flex items-center gap-1.5">
+                    @if (selectedDetailPackage.PackageType == "WORKOUT")
+                    {
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20M6 7v10M18 7v10M2 10v4M22 10v4" />
+                        </svg>
+                        <span>Workout Plan Only</span>
+                    }
+                    else if (selectedDetailPackage.PackageType == "MEAL")
+                    {
+                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 2v20M6 2v7a3 3 0 006 0V2M9 9v13" />
+                        </svg>
+                        <span>Meal Plan Only</span>
+                    }
+                    else
+                    {
+                        <svg class="w-4 h-4 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <span>Full Coaching (Workout + Meal Plan)</span>
+                    }
                 </span>
             </div>
 
             @if (!string.IsNullOrWhiteSpace(selectedDetailPackage.TargetAudience))
             {
                 <div class="mb-4 bg-orange-50/50 border border-orange-100 rounded-xl p-3 flex items-start gap-2 text-xs">
-                    <span class="font-bold text-orange-800 flex-shrink-0">Target Audience:</span>
-                    <span class="text-orange-900">@selectedDetailPackage.TargetAudience</span>
+                    <svg class="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9" stroke-width="2" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v3m0 12v3m-9-9h3m12 0h3m-6 0a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <div>
+                        <span class="font-bold text-orange-800">Target Audience:</span>
+                        <span class="text-orange-900 ml-1">@selectedDetailPackage.TargetAudience</span>
+                    </div>
                 </div>
             }
 

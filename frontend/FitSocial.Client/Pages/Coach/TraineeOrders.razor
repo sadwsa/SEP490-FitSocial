@@ -134,7 +134,7 @@
                             </div>
 
                             <!-- Thống kê -->
-                            <div class="flex items-center gap-3 pt-3 mb-4 border-t border-gray-100 flex-wrap">
+                            <div class="flex items-center gap-3 pt-3 mb-3 border-t border-gray-100 flex-wrap">
                                 <div class="flex items-center gap-1.5">
                                     <AppIcon Name="doc" Size="16" Class="text-gray-400 flex-shrink-0" />
                                     <span class="font-semibold text-gray-800 text-sm">@t.TotalOrdersCount <span class="text-gray-500 font-normal text-xs">@(t.TotalOrdersCount > 1 ? "packages" : "package")</span></span>
@@ -144,6 +144,41 @@
                                     <span class="font-semibold text-gray-800 text-sm">@t.TotalSpent.ToString("N0") <span class="text-gray-500 font-normal text-xs">VND</span></span>
                                 </div>
                             </div>
+
+                            <!-- Trạng thái lịch tập / thực đơn -->
+                            @if (t.PurchasedPackages != null && t.PurchasedPackages.Any())
+                            {
+                                var activePkg = t.PurchasedPackages.FirstOrDefault();
+                                @if (activePkg != null && (!string.IsNullOrWhiteSpace(activePkg.WorkoutScheduleStatusText) || !string.IsNullOrWhiteSpace(activePkg.MealScheduleStatusText)))
+                                {
+                                    <div class="mb-3.5 p-2.5 rounded-xl border border-gray-100 bg-gray-50/70 flex flex-col gap-1.5 text-xs">
+                                        @if (activePkg.PackageType != "MEAL" && !string.IsNullOrWhiteSpace(activePkg.WorkoutScheduleStatusText))
+                                        {
+                                            <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                                                <span class="text-gray-500 font-medium flex items-center gap-1">
+                                                    <AppIcon Name="dumbbell" Size="13" Class="text-gray-400" />
+                                                    <span>Lịch tập:</span>
+                                                </span>
+                                                <span class="px-2 py-0.5 rounded-md text-[11px] font-bold @GetStatusBadgeClass(activePkg.WorkoutScheduleStatus)">
+                                                    @activePkg.WorkoutScheduleStatusText
+                                                </span>
+                                            </div>
+                                        }
+                                        @if (activePkg.PackageType != "WORKOUT" && !string.IsNullOrWhiteSpace(activePkg.MealScheduleStatusText))
+                                        {
+                                            <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                                                <span class="text-gray-500 font-medium flex items-center gap-1">
+                                                    <AppIcon Name="meal" Size="13" Class="text-gray-400" />
+                                                    <span>Thực đơn:</span>
+                                                </span>
+                                                <span class="px-2 py-0.5 rounded-md text-[11px] font-bold @GetStatusBadgeClass(activePkg.MealScheduleStatus)">
+                                                    @activePkg.MealScheduleStatusText
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
 
                             <!-- Nút -->
                             <div class="grid grid-cols-2 gap-2">
@@ -321,4 +356,13 @@
             StateHasChanged();
         }
     }
+
+    private string GetStatusBadgeClass(string? status) => status switch
+    {
+        "COMPLETED" => "bg-blue-50 text-blue-700 border border-blue-200",
+        "SAFE" => "bg-emerald-50 text-emerald-700 border border-emerald-200",
+        "WARNING" => "bg-amber-50 text-amber-800 border border-amber-200",
+        "URGENT" => "bg-red-50 text-red-700 border border-red-200 font-bold",
+        _ => "bg-gray-100 text-gray-600 border border-gray-200"
+    };
 }

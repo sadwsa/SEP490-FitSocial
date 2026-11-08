@@ -51,6 +51,7 @@ namespace FitSocial.Application.Services
 
         public async Task<TrainingPackageResponseDto> CreatePackageAsync(Guid currentUserId, CreateTrainingPackageDto dto)
         {
+            var normalizedType = string.IsNullOrWhiteSpace(dto.PackageType) ? "BOTH" : dto.PackageType.Trim().ToUpperInvariant();
             var package = new TrainingPackage
             {
                 PackageId = Guid.NewGuid(),
@@ -59,10 +60,10 @@ namespace FitSocial.Application.Services
                 Description = dto.Description,
                 Price = dto.Price,
                 DurationDays = dto.DurationDays,
-                SessionCount = dto.SessionCount,
+                SessionCount = normalizedType == "MEAL" ? null : dto.SessionCount,
                 MinAge = dto.MinAge,
                 TargetAudience = dto.TargetAudience,
-                PackageType = string.IsNullOrWhiteSpace(dto.PackageType) ? "BOTH" : dto.PackageType.Trim().ToUpperInvariant(),
+                PackageType = normalizedType,
                 IsActive = dto.IsActive,
                 CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
             };
@@ -103,10 +104,10 @@ namespace FitSocial.Application.Services
             if (dto.Description != null) package.Description = dto.Description;
             if (dto.Price.HasValue) package.Price = dto.Price.Value;
             if (dto.DurationDays.HasValue) package.DurationDays = dto.DurationDays.Value;
-            package.SessionCount = dto.SessionCount;
+            if (!string.IsNullOrWhiteSpace(dto.PackageType)) package.PackageType = dto.PackageType.Trim().ToUpperInvariant();
+            package.SessionCount = package.PackageType == "MEAL" ? null : dto.SessionCount;
             if (dto.MinAge.HasValue) package.MinAge = dto.MinAge.Value;
             if (dto.TargetAudience != null) package.TargetAudience = dto.TargetAudience;
-            if (!string.IsNullOrWhiteSpace(dto.PackageType)) package.PackageType = dto.PackageType.Trim().ToUpperInvariant();
             if (dto.IsActive.HasValue) package.IsActive = dto.IsActive.Value;
 
             if (dto.ImageUrls != null)

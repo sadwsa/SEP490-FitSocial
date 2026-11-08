@@ -67,7 +67,7 @@
                     </button>
                 </div>
             }
-            else if (workoutPlan == null || workoutPlan.PlanStatus == "PENDING_COACH" || !workoutPlan.Weeks.Any())
+            else if (workoutPlan == null || workoutPlan.PlanStatus == "PENDING_COACH" || workoutPlan.PlanStatus == "DRAFT" || !workoutPlan.Weeks.Any())
             {
                 <!-- Empty / Pending State -->
                 <div class="bg-white rounded-2xl p-12 shadow-xs border border-gray-100 flex flex-col items-center text-center">

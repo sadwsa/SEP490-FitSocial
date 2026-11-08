@@ -302,7 +302,8 @@ public class TrainingPlanService : ITrainingPlanService
         if (dto.Status != null)
         {
             existingPlan.Status = dto.Status;
-            if (string.Equals(dto.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && existingPlan.PublishedAt == null)
+            if ((string.Equals(dto.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(dto.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase)) && existingPlan.PublishedAt == null)
             {
                 existingPlan.PublishedAt = now;
             }
@@ -1061,12 +1062,13 @@ public class TrainingPlanService : ITrainingPlanService
         }
 
         // Session count constraint:
-        // "đối với các training package có số lượng ngày quá lớn cho những chương trình dài hạn thì cho phép họ để null sessions như là flexible"
+        // Coach can schedule phase-by-phase (e.g. upload first week only without needing to upload full upfront).
+        // Total scheduled workout sessions must not exceed the package session count.
         if (sessionCount.HasValue && sessionCount.Value > 0 && exerciseList.Count > 0)
         {
-            if (scheduledSessionsCount != sessionCount.Value)
+            if (scheduledSessionsCount > sessionCount.Value)
             {
-                throw new ValidationException($"The number of scheduled workout sessions ({scheduledSessionsCount}) must match the package session count ({sessionCount.Value} sessions).");
+                throw new ValidationException($"The number of scheduled workout sessions ({scheduledSessionsCount}) cannot exceed the package session count ({sessionCount.Value} sessions).");
             }
         }
     }

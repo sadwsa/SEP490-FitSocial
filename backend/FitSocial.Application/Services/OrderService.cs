@@ -199,6 +199,7 @@ public class OrderService : IOrderService
                 var traineePhone = buyer?.PhoneNumber;
                 var traineeAvatar = buyer?.AvatarUrl;
 
+                var today = DateTime.UtcNow.Date;
                 var packages = new List<CoachTraineePackageOrderDto>();
 
                 foreach (var order in group)
@@ -217,7 +218,7 @@ public class OrderService : IOrderService
                         var mealPlan = detail.MealPlans?.FirstOrDefault();
                         var thumbnailUrl = pkg?.Media?.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).FirstOrDefault();
 
-                        packages.Add(new CoachTraineePackageOrderDto
+                        var pkgDto = new CoachTraineePackageOrderDto
                         {
                             OrderId = order.OrderId,
                             OrderDetailsId = detail.OrderDetailsId,
@@ -236,7 +237,10 @@ public class OrderService : IOrderService
                             PlanStatus = plan?.Status,
                             MealPlanId = mealPlan?.MealPlanId,
                             MealPlanStatus = mealPlan?.Status
-                        });
+                        };
+
+                        ComputeScheduleHealth(pkgDto, plan, mealPlan, today);
+                        packages.Add(pkgDto);
                     }
                 }
 
@@ -259,6 +263,179 @@ public class OrderService : IOrderService
             .Where(g => g.PurchasedPackages.Count > 0)
             .OrderByDescending(g => g.LatestPurchasedAt)
             .ToList();
+    }
+
+    private static void ComputeScheduleHealth(
+        CoachTraineePackageOrderDto dto,
+        TrainingPlan? plan,
+        MealPlan? mealPlan,
+        DateTime today)
+    {
+        // 1. Workout Schedule Health
+        if (dto.PackageType != "MEAL")
+        {
+            if (plan == null)
+            {
+                dto.WorkoutScheduleStatus = "NO_PLAN";
+                dto.WorkoutScheduleStatusText = "No workout plan created";
+            }
+            else if (string.Equals(plan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
+            {
+                dto.WorkoutScheduleStatus = "NO_PLAN";
+                dto.WorkoutScheduleStatusText = "Draft plan (DRAFT)";
+            }
+            else if (plan.StartDate.HasValue && plan.EndDate.HasValue)
+            {
+                var startDate = plan.StartDate.Value.Date;
+                var endDate = plan.EndDate.Value.Date;
+                int remainingDays = Math.Max(0, (endDate - today).Days);
+                dto.RemainingDays = remainingDays;
+
+                var scheduledDates = plan.TrainingPlanExercises
+                    .Where(e => !string.IsNullOrWhiteSpace(e.ExerciseName))
+                    .Select(e => TrainingPlanService.GetSessionDate(startDate, e.WeekNumber ?? 1, e.DayNumber ?? 1).Date)
+                    .Distinct()
+                    .OrderBy(d => d)
+                    .ToList();
+
+                var maxSessions = dto.SessionCount;
+                if (maxSessions.HasValue && maxSessions.Value > 0)
+                {
+                    int remainingSessions = maxSessions.Value - scheduledDates.Count;
+                    dto.RemainingSessions = remainingSessions;
+
+                    if (remainingSessions <= 0)
+                    {
+                        dto.WorkoutScheduleStatus = "COMPLETED";
+                        dto.WorkoutScheduleStatusText = $"Fully scheduled: {scheduledDates.Count}/{maxSessions.Value} sessions";
+                    }
+                    else
+                    {
+                        var upcomingSessions = scheduledDates.Where(d => d >= today).ToList();
+                        dto.NextWorkoutDate = upcomingSessions.FirstOrDefault();
+
+                        if (upcomingSessions.Count == 0)
+                        {
+                            dto.WorkoutScheduleStatus = "URGENT";
+                            dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - No upcoming session";
+                        }
+                        else if (upcomingSessions.Count == 1)
+                        {
+                            var next = upcomingSessions[0];
+                            int daysUntil = (next - today).Days;
+                            if (daysUntil <= 1)
+                            {
+                                dto.WorkoutScheduleStatus = "URGENT";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - Last session: {next:dd/MM}";
+                            }
+                            else if (daysUntil <= 3)
+                            {
+                                dto.WorkoutScheduleStatus = "WARNING";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - Next: {next:dd/MM}";
+                            }
+                            else
+                            {
+                                dto.WorkoutScheduleStatus = "SAFE";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - Next: {next:dd/MM}";
+                            }
+                        }
+                        else
+                        {
+                            dto.WorkoutScheduleStatus = "SAFE";
+                            dto.WorkoutScheduleStatusText = $"Remaining: {remainingSessions} sessions - Next: {upcomingSessions[0]:dd/MM}";
+                        }
+                    }
+                }
+                else // Flexible package (SessionCount == null)
+                {
+                    if (remainingDays <= 0)
+                    {
+                        dto.WorkoutScheduleStatus = "COMPLETED";
+                        dto.WorkoutScheduleStatusText = "Package expired";
+                    }
+                    else
+                    {
+                        var upcomingSessions = scheduledDates.Where(d => d >= today).ToList();
+                        dto.NextWorkoutDate = upcomingSessions.FirstOrDefault();
+
+                        if (upcomingSessions.Count == 0)
+                        {
+                            dto.WorkoutScheduleStatus = "URGENT";
+                            dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - No upcoming session";
+                        }
+                        else if (upcomingSessions.Count == 1)
+                        {
+                            var next = upcomingSessions[0];
+                            int daysUntil = (next - today).Days;
+                            if (daysUntil <= 1)
+                            {
+                                dto.WorkoutScheduleStatus = "URGENT";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - Last session: {next:dd/MM}";
+                            }
+                            else if (daysUntil <= 3)
+                            {
+                                dto.WorkoutScheduleStatus = "WARNING";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - Next: {next:dd/MM}";
+                            }
+                            else
+                            {
+                                dto.WorkoutScheduleStatus = "SAFE";
+                                dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - Next: {next:dd/MM}";
+                            }
+                        }
+                        else
+                        {
+                            dto.WorkoutScheduleStatus = "SAFE";
+                            dto.WorkoutScheduleStatusText = $"Remaining: {remainingDays} days - Next: {upcomingSessions[0]:dd/MM}";
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Meal Schedule Health
+        if (dto.PackageType != "WORKOUT")
+        {
+            if (mealPlan == null)
+            {
+                dto.MealScheduleStatus = "NO_PLAN";
+                dto.MealScheduleStatusText = "No meal plan created";
+            }
+            else if (string.Equals(mealPlan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
+            {
+                dto.MealScheduleStatus = "NO_PLAN";
+                dto.MealScheduleStatusText = "Draft plan (DRAFT)";
+            }
+            else if (mealPlan.StartDate.HasValue && mealPlan.EndDate.HasValue)
+            {
+                var startDate = mealPlan.StartDate.Value.Date;
+                var endDate = mealPlan.EndDate.Value.Date;
+                var twoDaysAhead = today.AddDays(2);
+
+                if (twoDaysAhead > endDate)
+                {
+                    dto.MealScheduleStatus = "SAFE";
+                    dto.MealScheduleStatusText = "Meal plan completed through expiration";
+                }
+                else
+                {
+                    bool hasMealTwoDaysAhead = mealPlan.MealPlanItems.Any(i =>
+                        !string.IsNullOrWhiteSpace(i.FoodDescription) &&
+                        MealPlanService.GetSessionDate(startDate, i.WeekNumber ?? 1, i.DayNumber ?? 1).Date == twoDaysAhead);
+
+                    if (hasMealTwoDaysAhead)
+                    {
+                        dto.MealScheduleStatus = "SAFE";
+                        dto.MealScheduleStatusText = "Meal plan ready (>= 2 days)";
+                    }
+                    else
+                    {
+                        dto.MealScheduleStatus = "WARNING";
+                        dto.MealScheduleStatusText = $"Missing meals for {twoDaysAhead:dd/MM}";
+                    }
+                }
+            }
+        }
     }
 
     private static OrderDto MapToOrderDto(Order o)
@@ -290,7 +467,4 @@ public class OrderService : IOrderService
             }).ToList()
         };
     }
-
-  
-
 }

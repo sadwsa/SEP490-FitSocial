@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Blazored.LocalStorage;
 using FitSocial.Client;
 using FitSocial.Client.Layout;
+using FitSocial.Client.Services;
 using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Http;
 using FitSocial.Client.Services.Posts;
@@ -41,6 +42,7 @@ var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7200/
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
 
 // Core Services
+builder.Services.AddScoped<LoadingService>();
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 // Shared state giữa AppShellLayout (topbar + 2 sidebar) và các page (tìm kiếm, nội dung sidebar)

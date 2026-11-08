@@ -10,6 +10,7 @@ using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Files;
 using FitSocial.Client.Services.Users;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Forms;
 
 namespace FitSocial.Client.Pages.Admin;
@@ -38,6 +39,8 @@ public partial class Profile : ComponentBase, IDisposable
     private string? inputPhoneNumber;
     private string? inputDobString;
     private string? inputGender;
+
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
 
     // Validation errors
     private string? fullNameError;
@@ -429,6 +432,17 @@ public partial class Profile : ComponentBase, IDisposable
                 ShowSuccessMessage(!string.IsNullOrWhiteSpace(response.Message)
                     ? response.Message
                     : "Profile updated successfully!", 10000);
+
+                try { await AuthService.RefreshTokenAsync(); } catch { }
+                try
+                {
+                    var token = await AuthService.GetTokenAsync();
+                    if (!string.IsNullOrWhiteSpace(token) && AuthStateProvider is CustomAuthenticationStateProvider custom)
+                    {
+                        custom.NotifyUserAuthentication(token);
+                    }
+                }
+                catch { }
             }
             else
             {

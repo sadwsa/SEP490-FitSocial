@@ -8,9 +8,9 @@ using FitSocial.Client.Models.Locations;
 using FitSocial.Client.Models.Coaches;
 using FitSocial.Client.Components.Posts;
 
-namespace FitSocial.Client.Pages;
+namespace FitSocial.Client.Pages.Home;
 
-public partial class Home : ComponentBase, IDisposable
+public partial class Home : ComponentBase
 {
     // Page state
     private List<PostDto>? posts;

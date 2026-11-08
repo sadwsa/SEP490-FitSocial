@@ -1,7 +1,6 @@
 @page "/home"
-@namespace FitSocial.Client.Pages
 @attribute [Authorize(Roles = "TRAINEE,COACH")]
-@implements IDisposable
+
 @inject IPostService PostService
 @inject ICoachService CoachService
 @inject ILocationService LocationService

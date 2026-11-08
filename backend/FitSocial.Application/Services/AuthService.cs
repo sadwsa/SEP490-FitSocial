@@ -371,6 +371,15 @@ public class AuthService : IAuthService
 
         var responseData = await _tokenService.CreateSessionAsync(newUser);
 
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return ApiResponseDto<AuthResponseDto>.Fail("Could not create the account. The email or phone number may already be in use.");
+        }
+
         return ApiResponseDto<AuthResponseDto>.Ok(responseData, "Trainee account registered successfully!");
     }
 

@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Auth;
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
@@ -114,7 +114,6 @@ public class RegisterTraineeServiceTests
     [MemberData(nameof(TestCases))]
     public async Task RegisterTraineeAccountTest(RegisterTraineeTestCase tc)
     {
-        // Reset used mocks
         _users.Reset();
         _unitOfWork.Reset();
         _otp.Reset();
@@ -123,38 +122,68 @@ public class RegisterTraineeServiceTests
         _passwordHasher.Reset();
         _tokenService.Reset();
 
-        // Defaults
         _passwordHasher.Setup(h => h.HashPassword(It.IsAny<string>())).Returns("hashed");
         _tokenService.Setup(t => t.CreateSessionAsync(It.IsAny<User>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
                      .ReturnsAsync(new AuthResponseDto());
         _users.Setup(u => u.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _agreements.Setup(a => a.AddAsync(It.IsAny<UserAgreement>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-        _users.Setup(u => u.ExistsByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(tc.EmailExists);
+        var expectedNormalizedEmail = tc.Email.Trim().ToLower();
+        _users.Setup(u => u.ExistsByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string email, CancellationToken ct) =>
+                Task.FromResult(
+                    email == expectedNormalizedEmail
+                        ? tc.EmailExists
+                        : !tc.EmailExists
+                ));
 
         var phone = (tc.PhoneRaw == "NULL" || string.IsNullOrWhiteSpace(tc.PhoneRaw)) ? null : tc.PhoneRaw.Trim();
         if (phone != null)
         {
-            _users.Setup(u => u.ExistsByPhoneAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(tc.PhoneExists);
+            var expectedNormalizedPhone = tc.PhoneRaw.Trim();
+            _users.Setup(u => u.ExistsByPhoneAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+                .Returns((string phoneNumber, Guid? excludingUserId, CancellationToken ct) =>
+                    Task.FromResult(
+                        phoneNumber == expectedNormalizedPhone
+                            ? tc.PhoneExists
+                            : !tc.PhoneExists
+                    ));
         }
 
         Guid? termId = ParseTermId(tc.TermRaw);
         if (termId.HasValue && termId.Value != Guid.Empty)
         {
+            var expectedTermId = termId.Value;
             if (tc.TermExists)
             {
-                _terms.Setup(t => t.GetByIdAsync(termId.Value, It.IsAny<CancellationToken>()))
-                      .ReturnsAsync(new TermsAndPolicy { TermId = termId.Value });
+                _terms.Setup(t => t.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                    .Returns((Guid id, CancellationToken ct) =>
+                        Task.FromResult<TermsAndPolicy?>(
+                            id == expectedTermId
+                                ? new TermsAndPolicy { TermId = id }
+                                : null
+                        ));
             }
             else
             {
-                _terms.Setup(t => t.GetByIdAsync(termId.Value, It.IsAny<CancellationToken>()))
-                      .ReturnsAsync((TermsAndPolicy?)null);
+                _terms.Setup(t => t.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                    .Returns((Guid id, CancellationToken ct) =>
+                        Task.FromResult<TermsAndPolicy?>(
+                            id == expectedTermId
+                                ? null
+                                : new TermsAndPolicy { TermId = id }
+                        ));
             }
         }
 
+        var expectedTrimmedOtp = (tc.OtpCode ?? "").Trim();
         _otp.Setup(o => o.ValidateOtpAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((tc.OtpValid, tc.OtpValid ? "OTP verified." : tc.OtpMessage));
+            .Returns((string email, string otpCode, string purpose) =>
+                Task.FromResult(
+                    otpCode == expectedTrimmedOtp
+                        ? (tc.OtpValid, tc.OtpValid ? "OTP verified." : tc.OtpMessage)
+                        : (false, "Invalid or expired OTP code.")
+                ));
 
         if (tc.SaveChangesThrows)
         {
@@ -166,7 +195,7 @@ public class RegisterTraineeServiceTests
         }
 
         DateOnly? dob = null;
-        if (!string.IsNullOrWhiteSpace(tc.DobRaw) && !string.Equals(tc.DobRaw, "EMPTY", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(tc.DobRaw) && !string.Equals(tc.DobRaw, "EMPTY", StringComparison.OrdinalIgnoreCase) && !string.Equals(tc.DobRaw, "NULL", StringComparison.OrdinalIgnoreCase))
         {
             dob = DateOnly.Parse(tc.DobRaw);
         }
@@ -178,7 +207,7 @@ public class RegisterTraineeServiceTests
             Password = tc.Password,
             ConfirmPassword = tc.ConfirmPassword,
             OtpCode = tc.OtpCode,
-            PhoneNumber = tc.PhoneRaw == "NULL" ? null : tc.PhoneRaw,
+            PhoneNumber = phone,
             Gender = (tc.GenderRaw == "NULL" || string.IsNullOrWhiteSpace(tc.GenderRaw)) ? null : tc.GenderRaw,
             DateOfBirth = dob,
             TermId = termId
@@ -187,19 +216,30 @@ public class RegisterTraineeServiceTests
         var sut = CreateSut();
         var result = await sut.RegisterTraineeAsync(request);
 
-        Assert.True(result.Success == tc.ExpectedSuccess && result.Message == tc.ExpectedMessage,
-            $"{tc.UtcId} ({tc.Type}): expected Success={tc.ExpectedSuccess}, Message=\"{tc.ExpectedMessage}\" but got Success={result.Success}, Message=\"{result.Message}\"");
+        Assert.NotNull(result);
+        Assert.Equal(tc.ExpectedSuccess, result!.Success);
+        Assert.Equal(tc.ExpectedMessage, result.Message);
+        if (tc.ExpectedSuccess)
+        {
+            Assert.NotNull(result.Data);
+            Assert.IsType<AuthResponseDto>(result.Data);
+        }
+        else
+        {
+            Assert.Null(result.Data);
+        }
     }
 
     private static Guid? ParseTermId(string value)
     {
         var v = value?.Trim();
-        if (string.IsNullOrWhiteSpace(v) || string.Equals(v, "EMPTY", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(v) || string.Equals(v, "EMPTY", StringComparison.OrdinalIgnoreCase) || string.Equals(v, "NULL", StringComparison.OrdinalIgnoreCase))
             return null;
         if (string.Equals(v, "EMPTYGUID", StringComparison.OrdinalIgnoreCase))
             return Guid.Empty;
         return Guid.Parse(v);
     }
+
     public class RegisterTraineeTestCase
     {
         public string UtcId { get; set; } = string.Empty;

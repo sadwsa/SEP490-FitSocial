@@ -121,18 +121,26 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponseDto<bool>> VerifyOtpAsync(VerifyOtpRequestDto request)
     {
+        if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.OtpCode))
+        {
+            return ApiResponseDto<bool>.Fail("Email and OTP code are required.");
+        }
+
         var normalizedEmail = request.Email.Trim().ToLower();
-        var purpose = string.IsNullOrWhiteSpace(request.Purpose) ? OtpConstants.PurposeRegisterTrainee : request.Purpose;
+        var purpose = string.IsNullOrWhiteSpace(request.Purpose)
+            ? OtpConstants.PurposeRegisterTrainee
+            : request.Purpose;
+
         var (ok, msg) = await _otpService.CheckOtpAsync(normalizedEmail, request.OtpCode.Trim(), purpose);
-        if (!ok) return ApiResponseDto<bool>.Fail(msg);
+
+        if (!ok)
+        {
+            return ApiResponseDto<bool>.Fail(msg);
+        }
+
         return ApiResponseDto<bool>.Ok(true, "OTP verified.");
     }
 
-    /// <summary>
-    /// Server-side sign-out (UC_03): puts the access token ID on the Redis
-    /// blacklist until its natural expiry, and revokes the refresh token.
-    /// The JWT middleware rejects the access token afterwards.
-    /// </summary>
     public async Task<ApiResponseDto<bool>> LogoutAsync(string? jti, DateTime? expiresAtUtc, string? refreshToken = null)
     {
         if (!string.IsNullOrWhiteSpace(jti) && expiresAtUtc.HasValue)
@@ -152,11 +160,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, "Signed out successfully.");
     }
 
-    /// <summary>
-    /// Email + password sign-in shared by all roles (Trainee, Coach, ...).
-    /// The role travels in the JWT (ClaimTypes.Role) and AuthResponse.User.
-    /// Coach with Pending Approval is blocked with a specific message per FitConnect spec.
-    /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> LoginAsync(LoginRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -190,10 +193,8 @@ public class AuthService : IAuthService
                 };
             }
 
-            // Coach pending approval: specific message per spec Step 5 abnormal flow
             if (string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
             {
-                // Unpaid coach (locked + no active subscription): allow login to complete payment
                 var hasActiveSubscription = false;
                 if (_coachUpgrades != null)
                 {
@@ -241,10 +242,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<AuthResponseDto>.Ok(loginResponse, "Signed in successfully!");
     }
 
-    /// <summary>
-    /// Back-office sign-in for Staff/Admin only (UC_28 Management Portal).
-    /// Same credentials flow as client login, but Trainee/Coach are rejected here.
-    /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> AdminLoginAsync(LoginRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -297,9 +294,7 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("Passwords do not match.");
         }
 
-        var emailExists = await _users.ExistsByEmailAsync(normalizedEmail);
-
-        if (emailExists)
+        if (await _users.ExistsByEmailAsync(normalizedEmail))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("This email is already in use.");
         }
@@ -316,8 +311,7 @@ public class AuthService : IAuthService
         }
 
         var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-        if (normalizedPhone != null &&
-            await _users.ExistsByPhoneAsync(normalizedPhone))
+        if (normalizedPhone != null && await _users.ExistsByPhoneAsync(normalizedPhone))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("This phone number is already in use.");
         }
@@ -333,13 +327,14 @@ public class AuthService : IAuthService
         }
 
         var now = DateTime.UtcNow;
+
         var newUser = new User
         {
             UserId = Guid.NewGuid(),
             Email = normalizedEmail,
             FullName = request.FullName.Trim(),
             PasswordHash = _passwordHasher.HashPassword(request.Password),
-            PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
+            PhoneNumber = normalizedPhone,
             Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
             DateOfBirth = request.DateOfBirth,
             RoleCode = RoleConstants.Trainee,
@@ -351,7 +346,6 @@ public class AuthService : IAuthService
 
         await _users.AddAsync(newUser);
 
-        // Record agreement (same as Coach flow, without IP)
         await _agreements.AddAsync(new UserAgreement
         {
             AgreementId = Guid.NewGuid(),
@@ -359,15 +353,6 @@ public class AuthService : IAuthService
             TermId = term.TermId,
             AcceptedAt = now
         });
-
-        try
-        {
-            await _unitOfWork.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            return ApiResponseDto<AuthResponseDto>.Fail("Could not create the account. The email or phone number may already be in use.");
-        }
 
         var responseData = await _tokenService.CreateSessionAsync(newUser);
 
@@ -383,10 +368,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<AuthResponseDto>.Ok(responseData, "Trainee account registered successfully!");
     }
 
-    /// <summary>
-    /// Register a Coach account (pending, locked until payment). Creates User (locked), CoachProfile PENDING,
-    /// eKYC verification, certificates, and terms agreement. Used by the 5-step coach flow before payment.
-    /// </summary>
     public async Task<ApiResponseDto<User>> RegisterCoachAsync(RegisterCoachRequestDto request, string? ipAddress = null)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -429,7 +410,6 @@ public class AuthService : IAuthService
         if (!ekycResult.Success)
             return ApiResponseDto<User>.Fail(ekycResult.Error ?? "ID verification failed.");
 
-        // 1 person = 1 CCCD: block if this IdCardNumber already belongs to another coach
         if (await _ekycs.ExistsByIdCardNumberAsync(ekycResult.Result.IdCardNumber, existing?.UserId))
             return ApiResponseDto<User>.Fail("This ID card has already been used for another coach.");
 
@@ -485,7 +465,6 @@ public class AuthService : IAuthService
         profile.IdentityCardUrl = request.FrontCardUrl!.Trim();
         profile.UpdatedAt = now;
 
-        // Replace old eKYC/certificates on retry (each person has only 1 CCCD)
         if (existing != null)
         {
             var oldEkycs = await _ekycs.ListByCoachIdAsync(user.UserId);
@@ -592,11 +571,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<User>.Ok(user);
     }
 
-    /// <summary>
-    /// OAuth2 authorization-code flow (popup, no FedCM): exchanges the code for tokens
-    /// server-side, then signs the user in with the same link-or-create rules as ID-token login.
-    /// Works in Guest/Incognito windows where the FedCM button flow is blocked.
-    /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> GoogleCodeLoginAsync(GoogleCodeRequestDto request)
     {
         var clientId = _configuration["Google:ClientId"];
@@ -756,18 +730,11 @@ public class AuthService : IAuthService
         }
     }
 
-    /// <summary>
-    /// Exchanges a valid refresh token for a brand-new session (rotation).
-    /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> RefreshAsync(RefreshRequestDto request)
     {
         return await _tokenService.RefreshSessionAsync(request.RefreshToken);
     }
 
-    /// <summary>
-    /// Step 1 of UC_04: send a password-reset OTP to the email.
-    /// Always returns success to avoid revealing which emails are registered.
-    /// </summary>
     public async Task<ApiResponseDto<bool>> ForgotPasswordAsync(ForgotPasswordRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -808,11 +775,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, genericOk);
     }
 
-    /// <summary>
-    /// Step 2 of UC_04: verify the OTP and set the new password.
-    /// Bumps TokenVersion so every existing session/token dies immediately.
-    /// Also works for Google-created accounts (gives them a usable password).
-    /// </summary>
     public async Task<ApiResponseDto<bool>> ResetPasswordAsync(ResetPasswordRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -860,12 +822,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, "Password reset successfully. Please sign in with your new password.");
     }
 
-    /// <summary>
-    /// UC_05.2: change password while signed in. Requires the current password
-    /// (except passwordless Google accounts, which may set one directly).
-    /// Bumps TokenVersion so every other session/token dies immediately;
-    /// the client signs out locally and asks for a fresh sign-in.
-    /// </summary>
     public async Task<ApiResponseDto<bool>> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request)
     {
         if (request.NewPassword != request.ConfirmPassword)
@@ -904,9 +860,6 @@ public class AuthService : IAuthService
             return ApiResponseDto<bool>.Fail("Could not change the password. Please try again.");
         }
 
-        // Staff/Admin (and any other signed-in account) changing its own password
-        // is a sensitive action and is always traced. Password values are never
-        // logged - only the resulting token version that invalidates old sessions.
         await WriteAuditAsync(
             action: "CHANGE_PASSWORD",
             entityId: user.UserId,
@@ -922,10 +875,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, "Password changed successfully. Please sign in again.");
     }
 
-    /// <summary>
-    /// Writes to the shared "AuditLogs" table. Actor (Staff/Admin), role and IP are
-    /// auto-resolved from the current request by IAuditLogService.
-    /// </summary>
     private async Task WriteAuditAsync(
         string action,
         Guid entityId,
@@ -936,7 +885,7 @@ public class AuthService : IAuthService
         try
         {
             await _auditLogService.LogAsync(
-                actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                actorAccountId: null,
                 action: action,
                 entityType: "User",
                 entityId: entityId.ToString(),

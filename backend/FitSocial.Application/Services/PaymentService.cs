@@ -720,17 +720,26 @@ public class PaymentService : IPaymentService
             return (buyer, package, "This training package is no longer active or open for enrollment. Please refresh your cart.");
         }
 
-        // 20.0.E4 Already Purchased: 1 trainee = 1 enrollment.
-        // History stays viewable in My Packages, so rebuying the same package would duplicate it.
+        // 20.0.E4 Already Purchased check: Only block repurchasing if trainee currently has an active ongoing enrollment (within duration).
+        // Completed / expired packages can be repurchased.
         var buyerOrders = await _orders.GetOrdersByBuyerIdAsync(buyerId, ct);
-        var paidStatuses = new[] { PaymentConstants.OrderStatusPaid, PaymentConstants.OrderStatusCompleted, "ACTIVE" };
-        var alreadyPurchased = buyerOrders.Any(o =>
+        var activePaidStatuses = new[] { PaymentConstants.OrderStatusPaid, PaymentConstants.OrderStatusCompleted, "ACTIVE" };
+        var now = DateTime.UtcNow;
+
+        var hasActiveEnrollment = buyerOrders.Any(o =>
             o.OrderStatus != null &&
-            paidStatuses.Contains(o.OrderStatus, StringComparer.OrdinalIgnoreCase) &&
-            o.OrderDetails.Any(od => od.PackageId == packageId));
-        if (alreadyPurchased)
+            activePaidStatuses.Contains(o.OrderStatus, StringComparer.OrdinalIgnoreCase) &&
+            o.OrderDetails.Any(od =>
+            {
+                if (od.PackageId != packageId) return false;
+                var duration = od.PackageDurationDays ?? od.Package?.DurationDays ?? 30;
+                var startDate = od.CreatedAt ?? o.CreatedAt ?? DateTime.UtcNow;
+                var expirationDate = startDate.AddDays(duration);
+                return now < expirationDate;
+            }));
+        if (hasActiveEnrollment)
         {
-            return (buyer, package, "You have already purchased this training package. You can review it anytime in My Packages.");
+            return (buyer, package, "You currently have an active enrollment for this training package. You can review it anytime in My Packages.");
         }
 
         return (buyer, package, null);

@@ -3,6 +3,7 @@
 @inject ITrainingPackageService PackageService
 @inject ICartService CartService
 @inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
+@inject FitSocial.Client.Services.Conversations.IConversationService ConversationService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
@@ -78,9 +79,21 @@
                                 <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                                 <div class="absolute bottom-4 left-6 right-6 text-white">
                                     <h1 class="text-2xl sm:text-3xl font-extrabold mb-1 drop-shadow-md">@package.Title</h1>
-                                    <p class="text-orange-200 font-medium text-sm sm:text-base">
-                                        Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-400 hover:text-white transition">@package.CoachName</a>
-                                    </p>
+                                    <div class="flex items-center gap-3 flex-wrap">
+                                        <p class="text-orange-200 font-medium text-sm sm:text-base">
+                                            Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-400 hover:text-white transition">@package.CoachName</a>
+                                        </p>
+                                        @if (!isOwnPackage)
+                                        {
+                                            <button type="button" @onclick="ContactCoach"
+                                                    class="inline-flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1 rounded-lg backdrop-blur-xs transition cursor-pointer">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                                <span>Contact Coach</span>
+                                            </button>
+                                        }
+                                    </div>
                                 </div>
                             </div>
 
@@ -107,7 +120,19 @@
                                 <svg class="w-40 h-40" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
                             </div>
                             <h1 class="text-3xl font-extrabold text-white mb-2 relative z-10">@package.Title</h1>
-                            <p class="text-orange-50 font-medium text-lg relative z-10">Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-300 hover:text-white transition">@package.CoachName</a></p>
+                            <div class="flex items-center justify-center gap-3 flex-wrap relative z-10">
+                                <p class="text-orange-50 font-medium text-lg">Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-300 hover:text-white transition">@package.CoachName</a></p>
+                                @if (!isOwnPackage)
+                                {
+                                    <button type="button" @onclick="ContactCoach"
+                                            class="inline-flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1 rounded-lg backdrop-blur-xs transition cursor-pointer">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
+                                        <span>Contact Coach</span>
+                                    </button>
+                                }
+                            </div>
                         </div>
                     }
                     
@@ -132,8 +157,8 @@
 
                             <div class="bg-orange-50/60 p-4 rounded-xl border border-orange-100 text-center">
                                 <h6 class="text-[11px] uppercase tracking-wider text-orange-600 font-bold mb-1">Sessions</h6>
-                                <p class="text-2xl font-black text-gray-800">@(package.SessionCount.HasValue ? package.SessionCount.Value.ToString() : "--")</p>
-                                <span class="text-xs text-gray-500 font-medium">Sessions</span>
+                                <p class="@(package.SessionCount.HasValue ? "text-2xl" : "text-base sm:text-lg") font-black text-gray-800">@(package.SessionCount.HasValue ? package.SessionCount.Value.ToString() : "Flexible")</p>
+                                <span class="text-xs text-gray-500 font-medium">@(package.SessionCount.HasValue ? "Sessions" : "Linh hoạt")</span>
                             </div>
 
                             <div class="bg-orange-50/60 p-4 rounded-xl border border-orange-100 text-center">
@@ -152,7 +177,26 @@
                         <!-- Package Service Inclusions Banner -->
                         <div class="mb-6 p-4 rounded-xl border flex items-center justify-between gap-3 @(package.PackageType == "WORKOUT" ? "bg-blue-50/70 border-blue-200 text-blue-900" : package.PackageType == "MEAL" ? "bg-emerald-50/70 border-emerald-200 text-emerald-900" : "bg-orange-50/70 border-orange-200 text-orange-900")">
                             <div class="flex items-center gap-3">
-                                <span class="text-2xl">@(package.PackageType == "WORKOUT" ? "🏋️‍♂️" : package.PackageType == "MEAL" ? "🥗" : "🌟")</span>
+                                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 @(package.PackageType == "WORKOUT" ? "bg-blue-100 text-blue-600" : package.PackageType == "MEAL" ? "bg-emerald-100 text-emerald-600" : "bg-orange-100 text-[#FF5500]")">
+                                    @if (package.PackageType == "WORKOUT")
+                                    {
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20M6 7v10M18 7v10M2 10v4M22 10v4" />
+                                        </svg>
+                                    }
+                                    else if (package.PackageType == "MEAL")
+                                    {
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 2v20M6 2v7a3 3 0 006 0V2M9 9v13" />
+                                        </svg>
+                                    }
+                                    else
+                                    {
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                        </svg>
+                                    }
+                                </div>
                                 <div>
                                     <p class="text-xs uppercase font-bold tracking-wider opacity-75">Service Inclusions</p>
                                     <p class="text-sm font-black">
@@ -168,26 +212,21 @@
                         @if (!string.IsNullOrWhiteSpace(package.TargetAudience))
                         {
                             <div class="mb-6 flex items-center gap-3 p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 text-blue-900 text-sm">
-                                <span class="font-bold flex-shrink-0 text-blue-600">🎯 Target Audience:</span>
-                                <span>@package.TargetAudience</span>
+                                <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="9" stroke-width="2" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v3m0 12v3m-9-9h3m12 0h3m-6 0a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <span class="font-bold text-blue-700">Target Audience:</span>
+                                    <span class="ml-1 text-gray-800">@package.TargetAudience</span>
+                                </div>
                             </div>
                         }
 
                         @if (isOwnPackage)
                         {
-                            <!-- Coach is owner: cannot buy own package -->
-                            <div class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div class="flex items-center gap-2.5">
-                                    <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span class="font-medium">You created this training package. Coaches cannot purchase their own packages.</span>
-                                </div>
-                                <a href="/training-packages/edit/@package.PackageId" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs transition shadow-xs text-center flex-shrink-0">
-                                    Edit Package
-                                </a>
-                            </div>
-
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <a href="/training-packages/edit/@package.PackageId" class="flex-1 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white py-3.5 rounded-xl font-bold text-base hover:shadow-lg text-center transition flex items-center justify-center gap-2">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -234,25 +273,6 @@
                                     </div>
                                 </div>
                             }
-
-                            <!-- Single Trainee Enrollment Policy (1 Package Max 1) -->
-                            <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/70 p-4 rounded-xl border border-gray-100">
-                                <div>
-                                    <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-0.5">Quantity</h6>
-                                    <p class="text-xs text-gray-400">1-on-1 coaching package applies to a single trainee</p>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <div class="inline-flex items-center gap-2 bg-white border border-gray-200 px-3.5 py-2 rounded-xl shadow-xs">
-                                        <svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                                        </svg>
-                                        <span class="text-xs font-bold text-gray-800">1 Package (Max 1)</span>
-                                    </div>
-                                    <span class="text-xs text-gray-500">
-                                        Total: <span class="font-bold text-[#FF5500]">@(package.Price.ToString("N0")) VND</span>
-                                    </span>
-                                </div>
-                            </div>
 
                             <div class="flex flex-col gap-3">
                                 <div class="flex flex-col sm:flex-row gap-3">
@@ -872,15 +892,56 @@
             var ordersRes = await CheckoutService.GetMyOrdersAsync();
             if (ordersRes.Success && ordersRes.Data != null)
             {
+                // Only block repurchasing if trainee currently has an active ongoing enrollment (within duration).
+                // Trainees whose package duration has expired / completed can repurchase it.
+                var activePaidStatuses = new[] { "PAID", "COMPLETED", "ACTIVE" };
+                var now = DateTime.UtcNow;
                 hasPurchased = ordersRes.Data.Any(o =>
                     !string.IsNullOrWhiteSpace(o.OrderStatus) &&
-                    (string.Equals(o.OrderStatus, "PAID", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(o.OrderStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(o.OrderStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase)) &&
-                    o.Details.Any(d => d.PackageId == package.PackageId));
+                    activePaidStatuses.Contains(o.OrderStatus, StringComparer.OrdinalIgnoreCase) &&
+                    o.Details.Any(d =>
+                    {
+                        if (d.PackageId != package.PackageId) return false;
+                        var duration = d.PackageDurationDays ?? package.DurationDays;
+                        var start = d.CreatedAt ?? o.CreatedAt ?? DateTime.UtcNow;
+                        return now < start.AddDays(duration);
+                    }));
             }
         }
         catch { }
+    }
+
+    private bool isOpeningChat = false;
+    private async Task ContactCoach()
+    {
+        if (package == null || isOpeningChat) return;
+        if (!isAuthenticated)
+        {
+            Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
+            return;
+        }
+
+        isOpeningChat = true;
+        try
+        {
+            var res = await ConversationService.GetOrCreateDirectConversationAsync(package.CoachId);
+            if (res.Success && res.Data != null)
+            {
+                Navigation.NavigateTo($"messages/{res.Data.ConversationId}");
+            }
+            else
+            {
+                Navigation.NavigateTo("messages");
+            }
+        }
+        catch
+        {
+            Navigation.NavigateTo("messages");
+        }
+        finally
+        {
+            isOpeningChat = false;
+        }
     }
 
     private async Task HandleAddToCart()

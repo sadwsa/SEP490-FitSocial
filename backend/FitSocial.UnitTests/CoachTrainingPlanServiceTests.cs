@@ -523,7 +523,48 @@ public class CoachTrainingPlanServiceTests
     }
 
     [Fact]
-    public async Task CreateTrainingPlanAsync_WhenSessionCountDoesNotMatchPackage_ShouldThrowValidationException()
+    public async Task CreateTrainingPlanAsync_WhenSessionCountExceedsPackage_ShouldThrowValidationException()
+    {
+        // Arrange
+        var coachId = Guid.NewGuid();
+        var orderDetailsId = Guid.NewGuid();
+        var purchaseDate = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var orderDetail = new OrderDetail
+        {
+            OrderDetailsId = orderDetailsId,
+            PackageDurationDays = 30,
+            Order = new Order { CoachId = coachId, CreatedAt = purchaseDate },
+            Package = new TrainingPackage { CoachId = coachId, DurationDays = 30, SessionCount = 2 }
+        };
+
+        _mockPlanRepo
+            .Setup(r => r.GetOrderDetailWithOrderAndPackageAsync(orderDetailsId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orderDetail);
+
+        var dto = new CreateTrainingPlanDto
+        {
+            OrderDetailsId = orderDetailsId,
+            Title = "Kế hoạch vượt quá số buổi",
+            StartDate = purchaseDate,
+            EndDate = purchaseDate.AddDays(28),
+            // 3 sessions scheduled while package only has 2
+            Exercises = new List<TrainingPlanExerciseDto>
+            {
+                new() { ExerciseName = "Bài 1", WeekNumber = 1, DayNumber = 1 },
+                new() { ExerciseName = "Bài 2", WeekNumber = 1, DayNumber = 2 },
+                new() { ExerciseName = "Bài 3", WeekNumber = 1, DayNumber = 3 }
+            }
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.CreateTrainingPlanAsync(coachId, dto));
+        Assert.Contains("cannot exceed the package session count", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateTrainingPlanAsync_WhenSchedulingFirstWeekOnly_ShouldSucceed()
     {
         // Arrange
         var coachId = Guid.NewGuid();
@@ -545,22 +586,19 @@ public class CoachTrainingPlanServiceTests
         var dto = new CreateTrainingPlanDto
         {
             OrderDetailsId = orderDetailsId,
-            Title = "Kế hoạch chưa đủ 12 buổi",
+            Title = "Kế hoạch tuần 1 (2 buổi trên tổng 12 buổi)",
             StartDate = purchaseDate,
             EndDate = purchaseDate.AddDays(28),
-            // Only 2 sessions scheduled instead of required 12
             Exercises = new List<TrainingPlanExerciseDto>
             {
                 new() { ExerciseName = "Bài 1", WeekNumber = 1, DayNumber = 1 },
-                new() { ExerciseName = "Bài 2", WeekNumber = 1, DayNumber = 1 }, // same day, 1 session
-                new() { ExerciseName = "Bài 3", WeekNumber = 1, DayNumber = 2 }  // second session
+                new() { ExerciseName = "Bài 2", WeekNumber = 1, DayNumber = 2 }
             }
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.CreateTrainingPlanAsync(coachId, dto));
-        Assert.Contains("must match the package session count", ex.Message);
+        var result = await _service.CreateTrainingPlanAsync(coachId, dto);
+        Assert.NotNull(result);
     }
 
     [Fact]

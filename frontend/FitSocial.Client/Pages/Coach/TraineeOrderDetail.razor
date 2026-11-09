@@ -243,7 +243,7 @@
                                 <div class="flex items-center gap-3 min-w-0">
                                     <AppIcon Name="doc" Size="20" Class="text-gray-500 flex-shrink-0" />
                                     <div>
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
                                             <p class="font-bold text-xs text-gray-900">Custom Training Plan</p>
                                             @if (pkg.TrainingPlanId.HasValue)
                                             {
@@ -257,6 +257,12 @@
                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
                                                     <AppIcon Name="warning" Size="12" Class="text-amber-600" />
                                                     <span>No Plan Created</span>
+                                                </span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(pkg.WorkoutScheduleStatusText))
+                                            {
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold @GetStatusBadgeClass(pkg.WorkoutScheduleStatus)">
+                                                    @pkg.WorkoutScheduleStatusText
                                                 </span>
                                             }
                                         </div>
@@ -302,7 +308,7 @@
                                         <AppIcon Name="meal" Size="20" Class="text-emerald-600" />
                                     </div>
                                     <div>
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
                                             <p class="font-bold text-xs text-gray-900">Custom Meal Plan</p>
                                             @if (pkg.MealPlanId.HasValue)
                                             {
@@ -316,6 +322,12 @@
                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
                                                     <AppIcon Name="warning" Size="12" Class="text-amber-600" />
                                                     <span>No Plan Created</span>
+                                                </span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(pkg.MealScheduleStatusText))
+                                            {
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold @GetStatusBadgeClass(pkg.MealScheduleStatus)">
+                                                    @pkg.MealScheduleStatusText
                                                 </span>
                                             }
                                         </div>
@@ -582,4 +594,13 @@
         showMealPlanModal = false;
         await LoadTraineeDetailAsync();
     }
+
+    private string GetStatusBadgeClass(string? status) => status switch
+    {
+        "COMPLETED" => "bg-blue-50 text-blue-700 border border-blue-200",
+        "SAFE" => "bg-emerald-50 text-emerald-700 border border-emerald-200",
+        "WARNING" => "bg-amber-50 text-amber-800 border border-amber-200",
+        "URGENT" => "bg-red-50 text-red-700 border border-red-200 font-bold",
+        _ => "bg-gray-100 text-gray-600 border border-gray-200"
+    };
 }

@@ -308,7 +308,6 @@ public class SystemOperationsService : ISystemOperationsService
                 planDescription = plan.Description
             };
 
-            // 33.3.E1: preserve financial audit logs — never hard-delete referenced plans.
             var (upgrades, details) = await _planRepository.CountReferencesAsync(planId, cancellationToken);
             if (upgrades > 0 || details > 0)
             {
@@ -337,9 +336,9 @@ public class SystemOperationsService : ISystemOperationsService
                             },
                             cancellationToken: cancellationToken);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Non-fatal
+                        _logger.LogWarning(ex, "Failed to log delete/deactivate subscription plan audit log for {PlanId}", planId);
                     }
                 }
 
@@ -364,9 +363,9 @@ public class SystemOperationsService : ISystemOperationsService
                         newValue: null,
                         cancellationToken: cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal
+                    _logger.LogWarning(ex, "Failed to log delete/deactivate subscription plan audit log for {PlanId}", planId);
                 }
             }
 

@@ -18,7 +18,7 @@ public class PaymentService : IPaymentService
     private readonly IOrderRepository _orders;
     private readonly IPaymentRepository _payments;
     private readonly ICoachUpgradeRepository _coachUpgrades;
-    private readonly ITrainingPackageRepository _packages;
+    private readonly ITrainingPackageRepository? _packages;
     private readonly ICartRepository _carts;
     private readonly ITrainingPlanRepository _trainingPlans;
     private readonly INotificationRepository _notifications;
@@ -51,7 +51,7 @@ public class PaymentService : IPaymentService
         _tokenService = tokenService;
         _paymentGateway = paymentGateway;
         _authService = authService;
-        _packages = packages!;
+        _packages = packages;
         _carts = carts!;
         _trainingPlans = trainingPlans!;
         _notifications = notifications!;

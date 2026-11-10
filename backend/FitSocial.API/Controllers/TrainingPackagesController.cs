@@ -136,7 +136,7 @@ namespace FitSocial.API.Controllers
         }
         // 2. Trainee gửi đánh giá cho gói tập
         [HttpPost("{id}/reviews")]
-        [Authorize(Roles = "TRAINEE")]
+        [Authorize]
         public async Task<IActionResult> SubmitPackageReview(Guid id, [FromBody] CreatePackageReviewDto dto, CancellationToken cancellationToken)
         {
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

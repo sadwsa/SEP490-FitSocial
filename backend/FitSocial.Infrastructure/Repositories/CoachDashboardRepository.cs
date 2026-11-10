@@ -125,7 +125,7 @@ public class CoachDashboardRepository : ICoachDashboardRepository
 
     public async Task<(decimal TotalRevenue, int TotalOrders, double RetentionRate)> GetAnalyticsSummaryAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, Domain.Constants.PaymentConstants.OrderStatusActive, Domain.Constants.PaymentConstants.OrderStatusCompleted };
 
         var baseQuery = _context.Orders
             .AsNoTracking()
@@ -161,7 +161,7 @@ public class CoachDashboardRepository : ICoachDashboardRepository
 
     public async Task<List<(int Year, int Month, decimal Revenue, int TotalOrders)>> GetMonthlyStatsAsync(Guid coachId, DateTime startDate, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, Domain.Constants.PaymentConstants.OrderStatusActive, Domain.Constants.PaymentConstants.OrderStatusCompleted };
 
         var stats = await _context.Orders
             .AsNoTracking()
@@ -184,7 +184,7 @@ public class CoachDashboardRepository : ICoachDashboardRepository
 
     public async Task<List<(Guid TraineeId, string TraineeName, decimal TotalSpent, int TotalOrders)>> GetTopTraineesAsync(Guid coachId, int limit, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, Domain.Constants.PaymentConstants.OrderStatusActive, Domain.Constants.PaymentConstants.OrderStatusCompleted };
 
         var topTrainees = await _context.Orders
             .AsNoTracking()

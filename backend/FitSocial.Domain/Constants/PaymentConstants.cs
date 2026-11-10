@@ -8,6 +8,7 @@ public static class PaymentConstants
     public const string OrderTypePackage = "PACKAGE";
     public const string OrderStatusPending = "PENDING";
     public const string OrderStatusPaid = "PAID";
+    public const string OrderStatusActive = "ACTIVE";
     // UC-20: package orders are marked Completed on PayOS confirmation
     // (PAID is kept as alias for backward-compat with dashboards/reports).
     public const string OrderStatusCompleted = "COMPLETED";

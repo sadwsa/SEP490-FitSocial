@@ -55,7 +55,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
 
     public async Task<bool> HasSoldTrainingPackageAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, Domain.Constants.PaymentConstants.OrderStatusActive, Domain.Constants.PaymentConstants.OrderStatusCompleted };
 
         return await DbSet
             .AsNoTracking()
@@ -69,7 +69,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
 
     public async Task<List<Order>> GetOrdersByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, Domain.Constants.PaymentConstants.OrderStatusActive, Domain.Constants.PaymentConstants.OrderStatusCompleted };
 
         return await DbSet
             .Include(o => o.Buyer)
@@ -94,7 +94,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
 
     public Task<List<Order>> GetCompletedOrdersByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
+        var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, Domain.Constants.PaymentConstants.OrderStatusActive, Domain.Constants.PaymentConstants.OrderStatusCompleted };
 
         return DbSet
             .Where(o => o.CoachId == coachId

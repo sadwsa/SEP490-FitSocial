@@ -21,6 +21,7 @@ public partial class Review
 
     public DateTime? UpdatedAt { get; set; }
     public Guid? PackageId { get; set; }
+    public Guid? OrderId { get; set; }
     public bool? IsEdited { get; set; } = false;
 
 
@@ -29,4 +30,5 @@ public partial class Review
     public virtual User Trainee { get; set; } = null!;
 
     public virtual TrainingPackage? Package { get; set; }
+    public virtual Order? Order { get; set; }
 }

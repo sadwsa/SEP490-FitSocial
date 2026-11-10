@@ -7,6 +7,9 @@ namespace FitSocial.Application.DTOs.TrainingPackage;
 public class CreatePackageReviewDto
 {
     [Required]
+    public Guid OrderId { get; set; }
+
+    [Required]
     [Range(1, 5, ErrorMessage = "Rating must be between 1 and 5.")]
     public int Rating { get; set; } = 5;
 

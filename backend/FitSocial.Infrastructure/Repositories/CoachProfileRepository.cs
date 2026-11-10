@@ -29,7 +29,7 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
             .Where(cp => (cp.Coach.IsLocked == null || cp.Coach.IsLocked == false)
                       && cp.Coach.RoleCode != null
                       && cp.Coach.RoleCode.ToUpper() == RoleConstants.Coach
-                      && (cp.ApprovalStatus == null || cp.ApprovalStatus.ToUpper() == "APPROVED"))
+                      && (cp.ApprovalStatus == null || cp.ApprovalStatus.ToUpper() == CoachConstants.ApprovalStatusApproved))
             .Select(cp => new CoachRatingSummary
             {
                 CoachId = cp.CoachId,
@@ -47,18 +47,28 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IEnumerable<CoachProfile>> GetAllCoachesWithDetailsAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, CancellationToken cancellationToken = default)
+    public async Task<(List<CoachProfile> Items, int TotalCount)> GetAllCoachesWithDetailsAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, int pageNumber = 1, int pageSize = 6, CancellationToken cancellationToken = default)
     {
+        if (pageNumber < 1) pageNumber = 1;
+        if (pageSize < 1) pageSize = 10;
+        if (pageSize > 100) pageSize = 100;
+
         var query = DbSet
             .Include(c => c.Coach)
             .Include(c => c.Locations)
-            .AsQueryable();
+            .Include(c => c.Reviews)
+            .Where(c => c.Coach != null
+                      && (c.Coach.IsLocked == null || c.Coach.IsLocked == false)
+                      && c.Coach.RoleCode != null
+                      && c.Coach.RoleCode.ToUpper() == RoleConstants.Coach
+                      && (c.ApprovalStatus == null || c.ApprovalStatus.ToUpper() == CoachConstants.ApprovalStatusApproved));
+           
         // 1. Tìm kiếm theo tên / giới thiệu
         if (!string.IsNullOrWhiteSpace(searchKeyword))
         {
             var keyword = searchKeyword.ToLower().Trim();
-            query = query.Where(c => (c.Coach.FullName != null && c.Coach.FullName.ToLower().Contains(keyword)) ||
-                                     (c.Bio != null && c.Bio.ToLower().Contains(keyword)));
+            query = query.Where(c => c.Coach != null && ((c.Coach.FullName != null && c.Coach.FullName.ToLower().Contains(keyword)) ||
+                                     (c.Bio != null && c.Bio.ToLower().Contains(keyword))));
         }
         // 2. Lọc theo năm kinh nghiệm tối thiểu
         if (minExperience.HasValue && minExperience.Value > 0)
@@ -82,7 +92,14 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
             // Mặc định nếu không truyền gì thì xếp kinh nghiệm từ cao xuống thấp
             query = query.OrderByDescending(c => c.ExperienceYears);
         }
-        return await query.AsNoTracking().ToListAsync(cancellationToken);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.AsNoTracking()
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
     }
 
     public async Task<(List<CoachProfile> Items, int TotalCount)> GetPagedCoachApplicationsAsync(

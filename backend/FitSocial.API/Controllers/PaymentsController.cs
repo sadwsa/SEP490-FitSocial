@@ -106,6 +106,26 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Anonymous regeneration of a coach activation payment link by email.
+    /// Used when an unpaid, locked coach tries to sign in (no session is issued).
+    /// </summary>
+    [HttpPost("coach-activation/regenerate-by-email")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponseDto<ActivationLinkDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RegenerateCoachActivationByEmail([FromQuery] string email, [FromQuery] string? originUrl = null)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return BadRequest(ApiResponseDto<ActivationLinkDto>.Fail("Email is required."));
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _paymentService.RegenerateCoachActivationByEmailAsync(email, originUrl ?? string.Empty, ipAddress);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
     [HttpPost("coach-activation/complete")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]

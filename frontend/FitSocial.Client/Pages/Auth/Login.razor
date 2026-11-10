@@ -243,6 +243,11 @@
                     : (result.Message ?? "Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.");
                 _showBlockedModal = true;
             }
+            else if (result.Message != null && result.Message.Contains("Payment required", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo($"/coach-activation?email={Uri.EscapeDataString(loginModel.Email.Trim())}", forceLoad: true);
+                return;
+            }
             else
             {
                 errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";

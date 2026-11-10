@@ -35,6 +35,7 @@ public class LoginServiceTests
     private readonly Mock<ICoachEkycVerificationRepository> _ekycs = new();
     private readonly Mock<ICoachCertificateRepository> _certificates = new();
     private readonly Mock<ICoachProfileRepository> _coachProfiles = new();
+    private readonly Mock<ICoachUpgradeRepository> _coachUpgrades = new();
     private readonly Mock<IEkycService> _ekycService = new();
     private readonly Mock<IEncryptionService> _encryptionService = new();
     private readonly Mock<IAppealService> _appealService = new();
@@ -75,14 +76,17 @@ public class LoginServiceTests
                     UserRole = CsvTestHelper.Get(row, index, "UserRole"),
                     CoachApproval = CsvTestHelper.Get(row, index, "CoachApproval"),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
-                    ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
+                    ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage"),
+                    CoachUpgradesNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "CoachUpgradesNull")),
+                    LatestUpgradeStatus = CsvTestHelper.Get(row, index, "LatestUpgradeStatus"),
+                    SessionUserPresent = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SessionUserPresent"))
                 });
             }
             return data;
         }
     }
 
-    private AuthService CreateSut()
+    private AuthService CreateSut(ICoachUpgradeRepository? coachUpgrades = null)
     {
         return new AuthService(
             _users.Object,
@@ -102,7 +106,8 @@ public class LoginServiceTests
             _ekycService.Object,
             _encryptionService.Object,
             _appealService.Object,
-            _auditLogService.Object);
+            _auditLogService.Object,
+            coachUpgrades);
     }
 
     [Theory]
@@ -112,6 +117,7 @@ public class LoginServiceTests
         _users.Reset();
         _unitOfWork.Reset();
         _coachProfiles.Reset();
+        _coachUpgrades.Reset();
         _passwordHasher.Reset();
         _tokenService.Reset();
 
@@ -134,13 +140,41 @@ public class LoginServiceTests
                 FullName = "Test User"
             };
         }
-        _users.Setup(u => u.FindByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(user);
+
+        var expectedNormalizedEmail = tc.Email.Trim().ToLower();
+        _users.Setup(u => u.FindByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string email, CancellationToken ct) =>
+                Task.FromResult(email == expectedNormalizedEmail ? user : null));
 
         if (tc.UserExists && tc.IsLocked && string.Equals(tc.UserRole, "COACH", StringComparison.OrdinalIgnoreCase))
         {
             FitSocial.Domain.Entities.CoachProfile? profile = null;
             if (string.Equals(tc.CoachApproval, "NULL", StringComparison.OrdinalIgnoreCase)) { profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = null }; } else if (!string.Equals(tc.CoachApproval, "EMPTY", StringComparison.OrdinalIgnoreCase)) { profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = tc.CoachApproval }; }
-            _coachProfiles.Setup(c => c.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(profile);
+
+            var expectedUserId = user!.UserId;
+            _coachProfiles.Setup(c => c.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .Returns((Guid id, CancellationToken ct) =>
+                    Task.FromResult(id == expectedUserId ? profile : null));
+        }
+
+        if (!tc.CoachUpgradesNull)
+        {
+            var expectedUserId = tc.UserExists ? (user?.UserId ?? Guid.Empty) : Guid.Empty;
+            _coachUpgrades.Setup(c => c.GetLatestFinishedByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .Returns((Guid id, CancellationToken ct) =>
+                {
+                    if (id != expectedUserId)
+                        return Task.FromResult<FitSocial.Domain.Entities.CoachUpgrade?>(null);
+
+                    if (string.Equals(tc.LatestUpgradeStatus, "NULL", StringComparison.OrdinalIgnoreCase))
+                        return Task.FromResult<FitSocial.Domain.Entities.CoachUpgrade?>(null);
+
+                    return Task.FromResult<FitSocial.Domain.Entities.CoachUpgrade?>(
+                        new FitSocial.Domain.Entities.CoachUpgrade
+                        {
+                            Status = string.IsNullOrWhiteSpace(tc.LatestUpgradeStatus) ? null : tc.LatestUpgradeStatus
+                        });
+                });
         }
 
         var request = new LoginRequestDto
@@ -151,7 +185,7 @@ public class LoginServiceTests
             RememberMe = tc.RememberMe
         };
 
-        var sut = CreateSut();
+        var sut = CreateSut(tc.CoachUpgradesNull ? null : _coachUpgrades.Object);
         var result = await sut.LoginAsync(request);
 
         Assert.True(result.Success == tc.ExpectedSuccess && result.Message == tc.ExpectedMessage,
@@ -172,6 +206,9 @@ public class LoginServiceTests
         public int WarningCount { get; set; }
         public string UserRole { get; set; } = string.Empty;
         public string CoachApproval { get; set; } = string.Empty;
+        public bool CoachUpgradesNull { get; set; }
+        public string LatestUpgradeStatus { get; set; } = string.Empty;
+        public bool SessionUserPresent { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
 

@@ -38,6 +38,7 @@ public interface IPaymentService
     Task<ApiResponse<CoachSubscriptionStatus>> GetCurrentCoachSubscriptionAsync();
     Task<ApiResponse<ActivationLink>> RenewCoachSubscriptionAsync(Guid planId);
     Task<ApiResponse<ActivationLink>> RegenerateCoachActivationAsync();
+    Task<ApiResponse<ActivationLink>> RegenerateCoachActivationByEmailAsync(string email);
 }
 
 public class PaymentApiService : IPaymentService
@@ -199,6 +200,21 @@ public class PaymentApiService : IPaymentService
                 _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             }
             var response = await _httpClient.PostAsync("payments/coach-activation/regenerate", null);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<ActivationLink>>();
+            if (result != null) return result;
+            return new ApiResponse<ActivationLink> { Success = false, Message = "Could not create payment link." };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ActivationLink> { Success = false, Message = $"Connection error: {ex.Message}" };
+        }
+    }
+
+    public async Task<ApiResponse<ActivationLink>> RegenerateCoachActivationByEmailAsync(string email)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"payments/coach-activation/regenerate-by-email?email={Uri.EscapeDataString(email)}", null);
             var result = await response.Content.ReadFromJsonAsync<ApiResponse<ActivationLink>>();
             if (result != null) return result;
             return new ApiResponse<ActivationLink> { Success = false, Message = "Could not create payment link." };

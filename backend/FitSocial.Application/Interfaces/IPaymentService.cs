@@ -18,6 +18,11 @@ public interface IPaymentService
     Task<ApiResponseDto<ActivationLinkDto>> RenewCoachSubscriptionAsync(Guid coachId, Guid planId, string originUrl, string? ipAddress = null);
     Task<ApiResponseDto<ActivationLinkDto>> RegenerateCoachActivationAsync(Guid coachId, string originUrl, string? ipAddress = null);
 
+    /// <summary>
+    /// Anonymous regeneration for a locked, unpaid coach identified by email.
+    /// </summary>
+    Task<ApiResponseDto<ActivationLinkDto>> RegenerateCoachActivationByEmailAsync(string email, string originUrl, string? ipAddress = null);
+
     Task<ApiResponseDto<CoachSubscriptionStatusDto>> GetCurrentCoachSubscriptionAsync(Guid coachId);
 
     Task<ApiResponseDto<AuthResponseDto>> CompleteActivationAsync(long orderCode);

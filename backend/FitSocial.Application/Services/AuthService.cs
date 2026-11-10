@@ -7,6 +7,7 @@ using FitSocial.Domain.Interfaces;
 using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Net.Http;
 
 namespace FitSocial.Application.Services;
@@ -32,6 +33,7 @@ public class AuthService : IAuthService
     private readonly IEncryptionService _encryptionService;
     private readonly IAppealService _appealService;
     private readonly IAuditLogService _auditLogService;
+    private readonly ILogger<AuthService>? _logger;
 
     public AuthService(
         IUserRepository users,
@@ -52,7 +54,8 @@ public class AuthService : IAuthService
         IEncryptionService encryptionService,
         IAppealService appealService,
         IAuditLogService auditLogService,
-        ICoachUpgradeRepository? coachUpgrades = null)
+        ICoachUpgradeRepository? coachUpgrades = null,
+        ILogger<AuthService>? logger = null)
     {
         _users = users;
         _unitOfWork = unitOfWork;
@@ -73,6 +76,7 @@ public class AuthService : IAuthService
         _encryptionService = encryptionService;
         _appealService = appealService;
         _auditLogService = auditLogService;
+        _logger = logger;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
@@ -174,7 +178,6 @@ public class AuthService : IAuthService
 
         if (user.IsLocked == true)
         {
-            // Blocked due to reports threshold
             if (user.WarningCount >= 3)
             {
                 var appealToken = _appealService.GenerateAppealToken(user);
@@ -203,13 +206,7 @@ public class AuthService : IAuthService
                 }
                 if (!hasActiveSubscription)
                 {
-                    user.LastActiveAt = DateTime.UtcNow;
-                    user.UpdatedAt = DateTime.UtcNow;
-                    var paymentPendingResponse = await _tokenService.CreateSessionAsync(user, null, request.RememberMe);
-                    paymentPendingResponse.User = paymentPendingResponse.User ?? new UserDto();
-                    paymentPendingResponse.IsPaymentPending = true;
-                    await _unitOfWork.SaveChangesAsync();
-                    return ApiResponseDto<AuthResponseDto>.Ok(paymentPendingResponse, "Payment required to activate your coach account.");
+                    return ApiResponseDto<AuthResponseDto>.Fail("Payment required to activate your coach account.");
                 }
 
                 var profile = await _coachProfiles.GetByIdAsync(user.UserId);
@@ -229,7 +226,7 @@ public class AuthService : IAuthService
         }
 
         if (!string.IsNullOrWhiteSpace(request.RoleCode) &&
-            !string.Equals(user.RoleCode?.Trim(), request.RoleCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            !string.Equals(user.RoleCode!.Trim(), request.RoleCode.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
         }
@@ -893,9 +890,9 @@ public class AuthService : IAuthService
                 oldValue: oldValue,
                 newValue: newValue);
         }
-        catch
+        catch (Exception ex)
         {
-            // Audit log failure is non-fatal - the business operation already succeeded.
+            _logger?.LogWarning(ex, "Audit log failed for action {Action} on entity {EntityId}", action, entityId);
         }
     }
 

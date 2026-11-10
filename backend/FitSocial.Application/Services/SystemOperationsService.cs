@@ -42,30 +42,7 @@ public class SystemOperationsService : ISystemOperationsService
     {
         try
         {
-            var allPlans = await _planRepository.GetAllPlansAsync(cancellationToken);
-            var query = allPlans.AsQueryable();
-
-            if (isActive.HasValue)
-            {
-                query = query.Where(p => p.IsActive == isActive.Value);
-            }
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var s = search.Trim().ToLower();
-                query = query.Where(p => 
-                    (p.Currency != null && p.Currency.ToLower().Contains(s)) || 
-                    (p.Amount.HasValue && p.Amount.Value.ToString().Contains(s)) || 
-                    (p.Description != null && p.Description.ToLower().Contains(s)));
-            }
-
-            var totalPlans = query.Count();
-            var activePlansCount = allPlans.Count(p => p.IsActive == true);
-            var pagedPlans = query
-                .OrderByDescending(p => p.CreatedAt)
-                .Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100))
-                .Take(Math.Clamp(pageSize, 1, 100))
-                .ToList();
+            var (pagedPlans, totalPlans, activePlansCount) = await _planRepository.GetPlansAsync(isActive, search, page, pageSize, cancellationToken);
 
             var planIds = pagedPlans.Select(p => p.CoachSubscriptionPlansId).ToList();
             var countDict = await _upgrades.GetCountsByPriceIdsAsync(planIds, cancellationToken);

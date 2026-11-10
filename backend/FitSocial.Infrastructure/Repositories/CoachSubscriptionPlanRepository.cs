@@ -33,6 +33,43 @@ public class CoachSubscriptionPlanRepository : Repository<CoachSubscriptionPlan>
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<(List<CoachSubscriptionPlan> Items, int TotalCount, int ActiveCount)> GetPlansAsync(
+        bool? isActive,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = DbSet.AsNoTracking().AsQueryable();
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(p => p.IsActive == isActive.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(p =>
+                (p.Currency != null && p.Currency.ToLower().Contains(s)) ||
+                (p.Description != null && p.Description.ToLower().Contains(s)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var activeCount = await DbSet.CountAsync(p => p.IsActive == true, cancellationToken);
+
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 100);
+
+        var items = await query
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip((safePage - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount, activeCount);
+    }
+
     public Task<CoachSubscriptionPlan?> GetActivePlanByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return DbSet

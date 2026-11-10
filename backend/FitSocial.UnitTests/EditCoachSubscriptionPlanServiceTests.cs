@@ -55,7 +55,7 @@ public class EditCoachSubscriptionPlanServiceTests
                 {
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
-                    PlanExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PlanExists")),
+                    Result_PlanExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_PlanExists")),
                     Amount = amount,
                     Currency = CsvTestHelper.Get(row, index, "Currency"),
                     Description = CsvTestHelper.Get(row, index, "Description"),
@@ -63,9 +63,9 @@ public class EditCoachSubscriptionPlanServiceTests
                     SubscriptionDuration = int.TryParse(CsvTestHelper.Get(row, index, "SubscriptionDuration"), out var sd) ? (int?)sd : null,
                     TrainingPackageDuration = int.TryParse(CsvTestHelper.Get(row, index, "TrainingPackageDuration"), out var tpd) ? (int?)tpd : null,
                     IsActive = isActive,
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
-                    AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditThrows")),
-                    AuditLogsNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditLogsNull")),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
+                    Result_AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_AuditThrows")),
+                    Result_AuditLogsNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_AuditLogsNull")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -74,9 +74,9 @@ public class EditCoachSubscriptionPlanServiceTests
         }
     }
 
-    private SystemOperationsService CreateSut()
+    private SystemOperationsService CreateSut(bool auditLogsNull = false)
     {
-        return new SystemOperationsService(_planRepo.Object, _upgrades.Object, _unitOfWork.Object, _logger.Object, _auditLog.Object);
+        return new SystemOperationsService(_planRepo.Object, _upgrades.Object, _unitOfWork.Object, _logger.Object, auditLogsNull ? null : _auditLog.Object);
     }
 
     [Theory]
@@ -87,7 +87,7 @@ public class EditCoachSubscriptionPlanServiceTests
         _unitOfWork.Reset();
 
         var planId = Guid.NewGuid();
-        if (tc.PlanExists)
+        if (tc.Result_PlanExists)
         {
             _planRepo.Setup(p => p.GetByIdAsync(planId, It.IsAny<CancellationToken>())).ReturnsAsync(new CoachSubscriptionPlan
             {
@@ -103,7 +103,7 @@ public class EditCoachSubscriptionPlanServiceTests
             _planRepo.Setup(p => p.GetByIdAsync(planId, It.IsAny<CancellationToken>())).ReturnsAsync((CoachSubscriptionPlan?)null);
         }
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("boom"));
         }
@@ -123,7 +123,16 @@ public class EditCoachSubscriptionPlanServiceTests
             IsActive = tc.IsActive
         };
 
-        var sut = CreateSut();
+        if (tc.Result_AuditThrows)
+        {
+            _auditLog.Setup(a => a.AddAsync(It.IsAny<AuditLog>(), It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("audit boom"));
+        }
+        else
+        {
+            _auditLog.Setup(a => a.AddAsync(It.IsAny<AuditLog>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        }
+
+        var sut = CreateSut(tc.Result_AuditLogsNull);
         var result = await sut.UpdatePlanAsync(planId, dto);
 
         Assert.True(result.Success == tc.ExpectedSuccess && result.Message == tc.ExpectedMessage,
@@ -134,7 +143,7 @@ public class EditCoachSubscriptionPlanServiceTests
     {
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public bool PlanExists { get; set; }
+        public bool Result_PlanExists { get; set; }
         public decimal? Amount { get; set; }
         public string Currency { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
@@ -142,9 +151,9 @@ public class EditCoachSubscriptionPlanServiceTests
         public int? SubscriptionDuration { get; set; }
         public int? TrainingPackageDuration { get; set; }
         public bool? IsActive { get; set; }
-        public bool SaveChangesThrows { get; set; }
-        public bool AuditThrows { get; set; }
-        public bool AuditLogsNull { get; set; }
+        public bool Result_SaveChangesThrows { get; set; }
+        public bool Result_AuditThrows { get; set; }
+        public bool Result_AuditLogsNull { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

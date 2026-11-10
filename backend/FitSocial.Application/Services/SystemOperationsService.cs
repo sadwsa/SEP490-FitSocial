@@ -209,7 +209,7 @@ public class SystemOperationsService : ISystemOperationsService
 
             plan.Amount = dto.Amount;
             plan.Currency = string.IsNullOrWhiteSpace(dto.Currency) ? plan.Currency : dto.Currency.Trim().ToUpper();
-            plan.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+            plan.Description = dto.Description!.Trim();
             plan.ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
             if (dto.IsActive.HasValue) plan.IsActive = dto.IsActive.Value;
             if (dto.SubscriptionDuration.HasValue) plan.SubscriptionDuration = dto.SubscriptionDuration.Value;

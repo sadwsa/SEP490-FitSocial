@@ -54,9 +54,15 @@ public class ProcessCoachPayoutServiceTests
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
                     PayoutExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PayoutExists")),
+                    PayoutStatus = CsvTestHelper.Get(row, index, "PayoutStatus"),
+                    FutureCycle = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "FutureCycle")),
+                    UnresolvedReports = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "UnresolvedReports")),
+                    AmountNonPositive = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AmountNonPositive")),
                     HasUnpaid = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "HasUnpaid")),
                     HasRefunded = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "HasRefunded")),
                     GatewaySuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "GatewaySuccess")),
+                    GatewayThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "GatewayThrows")),
+                    AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditThrows")),
                     GuardFail = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "GuardFail")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
@@ -69,7 +75,6 @@ public class ProcessCoachPayoutServiceTests
     private PayoutService CreateSut(bool guardFail)
     {
         _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
-        _reports.Setup(r => r.CountUnresolvedAgainstUserAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
         if (guardFail)
         {
             _banks.Setup(b => b.ListActiveByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<CoachBankAccount>());
@@ -102,9 +107,9 @@ public class ProcessCoachPayoutServiceTests
             {
                 PayoutId = Guid.NewGuid(),
                 CoachId = _coachId,
-                PayoutMonth = 1,
-                PayoutYear = DateTime.UtcNow.Year,
-                Status = "PENDING",
+                PayoutMonth = tc.FutureCycle ? 12 : DateTime.UtcNow.Month,
+                PayoutYear = tc.FutureCycle ? 2099 : DateTime.UtcNow.Year,
+                Status = string.IsNullOrWhiteSpace(tc.PayoutStatus) ? "PENDING" : tc.PayoutStatus,
                 CreatedAt = DateTime.UtcNow
             };
             if (tc.HasUnpaid)
@@ -119,8 +124,8 @@ public class ProcessCoachPayoutServiceTests
                     CommissionAmount = 15000m,
                     RefundAdjustment = 0,
                     TaxAmount = 0,
-                    NetAmount = 85000m,
-                    Status = "PENDING",
+                    NetAmount = tc.AmountNonPositive ? 0m : 85000m,
+                    Status = string.IsNullOrWhiteSpace(tc.PayoutStatus) ? "PENDING" : tc.PayoutStatus,
                     CreatedAt = DateTime.UtcNow,
                     Order = new Order { OrderStatus = tc.HasRefunded ? PaymentConstants.OrderStatusRefunded : PaymentConstants.OrderStatusPaid }
                 };
@@ -135,7 +140,7 @@ public class ProcessCoachPayoutServiceTests
                     PayoutId = payout.PayoutId,
                     OrderId = Guid.NewGuid(),
                     GrossAmount = 100000m,
-                    NetAmount = 85000m,
+                    NetAmount = tc.AmountNonPositive ? 0m : 85000m,
                     Status = "PROCESSED",
                     CreatedAt = DateTime.UtcNow,
                     Order = new Order { OrderStatus = PaymentConstants.OrderStatusPaid }
@@ -145,7 +150,11 @@ public class ProcessCoachPayoutServiceTests
 
             _payouts.Setup(p => p.GetByIdWithDetailsAsync(payout.PayoutId, It.IsAny<CancellationToken>())).ReturnsAsync(payout);
 
-            if (tc.GatewaySuccess)
+            if (tc.GatewayThrows)
+            {
+                _gateway.Setup(g => g.CreateTransferAsync(It.IsAny<BankTransferRequest>(), It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("gateway boom"));
+            }
+            else if (tc.GatewaySuccess)
             {
                 _gateway.Setup(g => g.CreateTransferAsync(It.IsAny<BankTransferRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(new CreatedTransfer(true, "gw-1", true, "SUCCESS", null, "TX-1"));
             }
@@ -153,6 +162,17 @@ public class ProcessCoachPayoutServiceTests
             {
                 _gateway.Setup(g => g.CreateTransferAsync(It.IsAny<BankTransferRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(new CreatedTransfer(true, "gw-1", false, "FAILED", "fail", null));
             }
+
+            if (tc.AuditThrows)
+            {
+                _auditLogs.Setup(a => a.AddAsync(It.IsAny<AuditLog>(), It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("audit boom"));
+            }
+            else
+            {
+                _auditLogs.Setup(a => a.AddAsync(It.IsAny<AuditLog>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            }
+
+            _reports.Setup(r => r.CountUnresolvedAgainstUserAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(tc.UnresolvedReports ? 1 : 0);
 
             var sut = CreateSut(tc.GuardFail);
             var result = await sut.ProcessPayoutAsync(payout.PayoutId, _staffId);
@@ -174,9 +194,15 @@ public class ProcessCoachPayoutServiceTests
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public bool PayoutExists { get; set; }
+        public string PayoutStatus { get; set; } = string.Empty;
+        public bool FutureCycle { get; set; }
+        public bool UnresolvedReports { get; set; }
+        public bool AmountNonPositive { get; set; }
         public bool HasUnpaid { get; set; }
         public bool HasRefunded { get; set; }
         public bool GatewaySuccess { get; set; }
+        public bool GatewayThrows { get; set; }
+        public bool AuditThrows { get; set; }
         public bool GuardFail { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;

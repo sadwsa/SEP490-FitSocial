@@ -725,10 +725,6 @@ public class PayoutService : IPayoutService
             string.Equals(item.Order.OrderStatus, PaymentConstants.OrderStatusRefunded, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Pay-all: transfers the REMAINING balance (unpaid tranches minus
-    /// unconsumed refund adjustments) in one transfer.
-    /// </summary>
     public async Task<ApiResponseDto<ProcessPayoutResultDto>> ProcessPayoutAsync(
         Guid payoutId, Guid staffId, string? ipAddress = null, CancellationToken cancellationToken = default)
     {
@@ -762,7 +758,6 @@ public class PayoutService : IPayoutService
                 "Payout is already fully paid.");
         }
 
-        // Mutual Consistency: refunded orders require regeneration first.
         if (unpaid.Any(IsOrderRefunded))
         {
             await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, payout.Status,

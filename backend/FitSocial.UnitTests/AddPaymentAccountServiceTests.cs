@@ -45,12 +45,13 @@ public class AddPaymentAccountServiceTests
                 {
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
-                    HasExistingActiveSameChannel = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "HasExistingActiveSameChannel")),
+                    Result_HasExistingActiveSameChannel = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_HasExistingActiveSameChannel")),
                     IsPayout = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "IsPayout")),
                     DtoNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "DtoNull")),
                     WebhookUrl = CsvTestHelper.Get(row, index, "WebhookUrl"),
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
-                    ConfigsNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ConfigsNull")),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
+                    Result_ConfigsNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_ConfigsNull")),
+                    Result_AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_AuditThrows")),
                     ExpectedThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage"),
@@ -78,11 +79,11 @@ public class AddPaymentAccountServiceTests
         _encryption.Setup(e => e.Encrypt(It.IsAny<string>(), It.IsAny<bool>())).Returns(new byte[] { 1, 2, 3 });
         _configRepo.Setup(c => c.AddAsync(It.IsAny<PaymentGatewayConfig>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-        if (tc.ConfigsNull)
+        if (tc.Result_ConfigsNull)
         {
             _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync((List<PaymentGatewayConfig>?)null);
         }
-        else if (tc.HasExistingActiveSameChannel)
+        else if (tc.Result_HasExistingActiveSameChannel)
         {
             _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<PaymentGatewayConfig>
             {
@@ -94,7 +95,7 @@ public class AddPaymentAccountServiceTests
             _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<PaymentGatewayConfig>());
         }
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("boom"));
         }
@@ -113,6 +114,15 @@ public class AddPaymentAccountServiceTests
             IsPayout = tc.IsPayout,
             WebhookUrl = (tc.WebhookUrl == "NULL" || string.IsNullOrWhiteSpace(tc.WebhookUrl)) ? null : tc.WebhookUrl
         };
+
+        if (tc.Result_AuditThrows)
+        {
+            _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("audit boom"));
+        }
+        else
+        {
+            _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new FitSocial.Domain.Entities.AuditLog());
+        }
 
         var sut = CreateSut();
         Exception? thrown = null;
@@ -152,12 +162,13 @@ public class AddPaymentAccountServiceTests
     {
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public bool HasExistingActiveSameChannel { get; set; }
+        public bool Result_HasExistingActiveSameChannel { get; set; }
         public bool IsPayout { get; set; }
         public string WebhookUrl { get; set; } = string.Empty;
-        public bool ConfigsNull { get; set; }
+        public bool Result_ConfigsNull { get; set; }
+        public bool Result_AuditThrows { get; set; }
         public bool DtoNull { get; set; }
-        public bool SaveChangesThrows { get; set; }
+        public bool Result_SaveChangesThrows { get; set; }
         public bool ExpectedThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;

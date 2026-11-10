@@ -45,6 +45,7 @@ public class CreateCoachSubscriptionPlansServiceTests
                 {
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
+                    DtoNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "DtoNull")),
                     Amount = decimal.TryParse(CsvTestHelper.Get(row, index, "Amount"), out var amt) ? amt : 0m,
                     Currency = CsvTestHelper.Get(row, index, "Currency"),
                     IsActive = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "IsActive")),
@@ -52,7 +53,7 @@ public class CreateCoachSubscriptionPlansServiceTests
                     Description = CsvTestHelper.Get(row, index, "Description"),
                     SubscriptionDuration = int.TryParse(CsvTestHelper.Get(row, index, "SubscriptionDuration"), out var sd) ? (int?)sd : null,
                     TrainingPackageDuration = int.TryParse(CsvTestHelper.Get(row, index, "TrainingPackageDuration"), out var tpd) ? (int?)tpd : null,
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -74,7 +75,7 @@ public class CreateCoachSubscriptionPlansServiceTests
         _unitOfWork.Reset();
 
         _planRepo.Setup(p => p.AddAsync(It.IsAny<CoachSubscriptionPlan>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("boom"));
         }
@@ -95,7 +96,9 @@ public class CreateCoachSubscriptionPlansServiceTests
         };
 
         var sut = CreateSut();
-        var result = await sut.CreatePlanAsync(dto);
+        var result = tc.DtoNull
+            ? await sut.CreatePlanAsync(null!)
+            : await sut.CreatePlanAsync(dto);
 
         Assert.True(result.Success == tc.ExpectedSuccess && result.Message == tc.ExpectedMessage,
             $"{tc.UtcId} ({tc.Type}): expected Success={tc.ExpectedSuccess}, Message=\"{tc.ExpectedMessage}\" but got Success={result.Success}, Message=\"{result.Message}\"");
@@ -105,6 +108,7 @@ public class CreateCoachSubscriptionPlansServiceTests
     {
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
+        public bool DtoNull { get; set; }
         public decimal Amount { get; set; }
         public string Currency { get; set; } = string.Empty;
         public bool IsActive { get; set; }
@@ -112,7 +116,7 @@ public class CreateCoachSubscriptionPlansServiceTests
         public string Description { get; set; } = string.Empty;
         public int? SubscriptionDuration { get; set; }
         public int? TrainingPackageDuration { get; set; }
-        public bool SaveChangesThrows { get; set; }
+        public bool Result_SaveChangesThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

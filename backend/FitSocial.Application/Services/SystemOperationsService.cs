@@ -108,6 +108,11 @@ public class SystemOperationsService : ISystemOperationsService
 
     public async Task<ApiResponseDto<CoachSubscriptionPlanDto>> CreatePlanAsync(CreateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken = default)
     {
+        if (dto == null)
+        {
+            return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Subscription plan data is required.");
+        }
+
         try
         {
             var plan = new FitSocial.Domain.Entities.CoachSubscriptionPlan

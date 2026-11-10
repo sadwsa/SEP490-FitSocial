@@ -1,5 +1,8 @@
-UTCID,Type,PlanExists,Upgrades,OrderDetails,SaveChangesThrows,ExpectedSuccess,ExpectedMessage
-UTCID01,A,FALSE,0,0,FALSE,FALSE,Subscription plan not found.
-UTCID02,N,TRUE,2,1,FALSE,TRUE,"Plan has 3 linked subscription record(s); it was deactivated instead of deleted to preserve billing history."
-UTCID03,N,TRUE,0,0,FALSE,TRUE,Subscription plan deleted successfully.
-UTCID04,A,TRUE,0,0,TRUE,FALSE,Could not delete subscription plan.
+UTCID,Type,Result_PlanExists,Result_Upgrades,Result_OrderDetails,Result_SaveChangesThrows,Result_AuditThrows,Result_AuditLogServiceNull,ExpectedSuccess,ExpectedMessage
+UTCID01,A,FALSE,0,0,FALSE,FALSE,FALSE,FALSE,Subscription plan not found.
+UTCID02,N,TRUE,2,1,FALSE,FALSE,FALSE,TRUE,"Plan has 3 linked subscription record(s); it was deactivated instead of deleted to preserve billing history."
+UTCID03,N,TRUE,0,0,FALSE,FALSE,FALSE,TRUE,Subscription plan deleted successfully.
+UTCID04,A,TRUE,0,0,TRUE,FALSE,FALSE,FALSE,Could not delete subscription plan.
+UTCID05,N,TRUE,2,1,TRUE,FALSE,FALSE,FALSE,Could not delete subscription plan.
+UTCID06,N,TRUE,0,0,FALSE,TRUE,FALSE,TRUE,Subscription plan deleted successfully.
+UTCID07,N,TRUE,0,0,FALSE,FALSE,TRUE,TRUE,Subscription plan deleted successfully.

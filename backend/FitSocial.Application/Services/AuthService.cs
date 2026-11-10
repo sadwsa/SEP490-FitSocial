@@ -370,29 +370,61 @@ public class AuthService : IAuthService
         var normalizedEmail = request.Email.Trim().ToLower();
 
         if (request.Password != request.ConfirmPassword)
+        {
             return ApiResponseDto<User>.Fail("Passwords do not match.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.FrontCardUrl) || string.IsNullOrWhiteSpace(request.BackCardUrl))
+        {
             return ApiResponseDto<User>.Fail("Front and back ID card images are required.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.FaceImageUrl))
+        {
             return ApiResponseDto<User>.Fail("Live face image is required.");
-        if (request.TermId == null || request.TermId == Guid.Empty)
+        }
+
+        if (request.TermId.GetValueOrDefault() == Guid.Empty)
+        {
             return ApiResponseDto<User>.Fail("You must agree to the Terms and Privacy Policy.");
+        }
 
         var term = await _terms.GetByIdAsync(request.TermId.Value);
         if (term == null)
+        {
             return ApiResponseDto<User>.Fail("Selected terms version is not valid.");
-
+        }
+            
         var existing = await _users.FindByEmailAsync(normalizedEmail);
-        if (existing != null && existing.IsLocked != true)
+        if (existing != null)
+        {
+            if (existing.IsLocked == true)
+            {
+                var hasActiveSubscription = false;
+                if (_coachUpgrades != null)
+                {
+                    var latestUpgrade = await _coachUpgrades.GetLatestFinishedByCoachIdAsync(existing.UserId);
+                    hasActiveSubscription = latestUpgrade != null && latestUpgrade.Status == "ACTIVE";
+                }
+                if (!hasActiveSubscription)
+                {
+                    return ApiResponseDto<User>.Fail("This email is already registered but payment is pending. Please sign in to complete payment.");
+                }
+            }
             return ApiResponseDto<User>.Fail("This email is already in use.");
+        }
 
         var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-        if (normalizedPhone != null && await _users.ExistsByPhoneAsync(normalizedPhone, existing?.UserId))
+        if (normalizedPhone != null && await _users.ExistsByPhoneAsync(normalizedPhone, null))
+        {
             return ApiResponseDto<User>.Fail("This phone number is already in use.");
+        }   
 
         var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(normalizedEmail, request.OtpCode.Trim(), OtpConstants.PurposeRegisterCoach);
         if (!otpValid)
+        {
             return ApiResponseDto<User>.Fail(otpMessage);
+        }
 
         var ekycResult = await _ekycService.VerifyAsync(new FitSocial.Application.DTOs.Coach.EkycVerificationDto
         {
@@ -404,54 +436,37 @@ public class AuthService : IAuthService
             FaceImageTopUrl = request.FaceImageTopUrl,
             FaceImageBottomUrl = request.FaceImageBottomUrl
         });
-        if (!ekycResult.Success)
+        var ekycOk = ekycResult.Success;
+        if (!ekycOk)
+        {
             return ApiResponseDto<User>.Fail(ekycResult.Error ?? "ID verification failed.");
+        }
 
-        if (await _ekycs.ExistsByIdCardNumberAsync(ekycResult.Result.IdCardNumber, existing?.UserId))
+        if (await _ekycs.ExistsByIdCardNumberAsync(ekycResult.Result.IdCardNumber, null))
+        {
             return ApiResponseDto<User>.Fail("This ID card has already been used for another coach.");
+        }
 
         var now = DateTime.UtcNow;
-        User user;
-        CoachProfile? profile;
-        if (existing == null)
+        var user = new User
         {
-            user = new User
-            {
-                UserId = Guid.NewGuid(),
-                Email = normalizedEmail,
-                FullName = request.FullName.Trim(),
-                PasswordHash = _passwordHasher.HashPassword(request.Password),
-                PhoneNumber = normalizedPhone,
-                Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
-                DateOfBirth = request.DateOfBirth,
-                RoleCode = RoleConstants.Coach,
-                IsInternal = false,
-                IsLocked = true,
-                CreatedAt = now,
-                UpdatedAt = now,
-                CoachProfileCoach = new CoachProfile { ApprovalStatus = "PENDING", Status = "ACTIVE", UpdatedAt = now }
-            };
-            user.CoachProfileCoach.CoachId = user.UserId;
-            await _users.AddAsync(user);
-            profile = user.CoachProfileCoach;
-        }
-        else
-        {
-            user = existing;
-            user.FullName = request.FullName.Trim();
-            user.PasswordHash = _passwordHasher.HashPassword(request.Password);
-            user.PhoneNumber = normalizedPhone;
-            user.Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim();
-            user.DateOfBirth = request.DateOfBirth;
-            user.IsLocked = true;
-            user.UpdatedAt = now;
-            profile = await _coachProfiles.GetByIdAsync(user.UserId);
-            if (profile == null)
-            {
-                profile = new CoachProfile { CoachId = user.UserId };
-                await _coachProfiles.AddAsync(profile);
-            }
-        }
+            UserId = Guid.NewGuid(),
+            Email = normalizedEmail,
+            FullName = request.FullName.Trim(),
+            PasswordHash = _passwordHasher.HashPassword(request.Password),
+            PhoneNumber = normalizedPhone,
+            Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
+            DateOfBirth = request.DateOfBirth,
+            RoleCode = RoleConstants.Coach,
+            IsInternal = false,
+            IsLocked = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+            CoachProfileCoach = new CoachProfile { ApprovalStatus = "PENDING", Status = "ACTIVE", UpdatedAt = now }
+        };
+        user.CoachProfileCoach.CoachId = user.UserId;
+        await _users.AddAsync(user);
+        var profile = user.CoachProfileCoach;
 
         profile.ApprovalStatus = "PENDING";
         profile.Status = "ACTIVE";
@@ -462,13 +477,7 @@ public class AuthService : IAuthService
         profile.IdentityCardUrl = request.FrontCardUrl!.Trim();
         profile.UpdatedAt = now;
 
-        if (existing != null)
-        {
-            var oldEkycs = await _ekycs.ListByCoachIdAsync(user.UserId);
-            if (oldEkycs.Any()) _ekycs.RemoveRange(oldEkycs);
-            var oldCerts = await _certificates.ListByCoachIdAsync(user.UserId);
-            if (oldCerts.Any()) _certificates.RemoveRange(oldCerts);
-        }
+
 
         await _ekycs.AddAsync(new CoachEkycVerification
         {
@@ -497,10 +506,10 @@ public class AuthService : IAuthService
             DocumentType = ekycResult.Result.DocumentType,
             LivenessScore = ekycResult.Result.LivenessScore,
             FaceMatchConfidence = ekycResult.Result.FaceMatchConfidence,
-            EncryptedRawInformationJson = _encryptionService.Encrypt(ekycResult.Result.RawInformationJson ?? ""),
+            EncryptedRawInformationJson = _encryptionService.Encrypt(string.IsNullOrEmpty(ekycResult.Result.RawInformationJson) ? "" : ekycResult.Result.RawInformationJson),
             FrontCardUrl = request.FrontCardUrl!.Trim(),
             BackCardUrl = request.BackCardUrl!.Trim(),
-            FaceImageUrl = request.FaceImageUrl?.Trim(),
+            FaceImageUrl = request.FaceImageUrl!.Trim(),
             VerificationStatus = ekycResult.Result.VerificationStatus,
             FailureReason = ekycResult.Result.FailureReason,
             CreatedAt = now,

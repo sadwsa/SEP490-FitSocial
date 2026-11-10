@@ -68,18 +68,18 @@ public class LoginServiceTests
                     Password = CsvTestHelper.Get(row, index, "Password"),
                     RoleCode = CsvTestHelper.Get(row, index, "RoleCode"),
                     RememberMe = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "RememberMe")),
-                    UserExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "UserExists")),
-                    PasswordHash = CsvTestHelper.Get(row, index, "PasswordHash"),
-                    PasswordCorrect = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PasswordCorrect")),
-                    IsLocked = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "IsLocked")),
-                    WarningCount = int.TryParse(CsvTestHelper.Get(row, index, "WarningCount"), out var wc) ? wc : 0,
-                    UserRole = CsvTestHelper.Get(row, index, "UserRole"),
-                    CoachApproval = CsvTestHelper.Get(row, index, "CoachApproval"),
+                    Result_UserExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_UserExists")),
+                    Result_PasswordHash = CsvTestHelper.Get(row, index, "Result_PasswordHash"),
+                    Result_PasswordCorrect = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_PasswordCorrect")),
+                    Result_IsLocked = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_IsLocked")),
+                    Result_WarningCount = int.TryParse(CsvTestHelper.Get(row, index, "Result_WarningCount"), out var wc) ? wc : 0,
+                    Result_UserRole = CsvTestHelper.Get(row, index, "Result_UserRole"),
+                    Result_CoachApproval = CsvTestHelper.Get(row, index, "Result_CoachApproval"),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage"),
-                    CoachUpgradesNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "CoachUpgradesNull")),
-                    LatestUpgradeStatus = CsvTestHelper.Get(row, index, "LatestUpgradeStatus"),
-                    SessionUserPresent = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SessionUserPresent"))
+                    Result_CoachUpgradesNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_CoachUpgradesNull")),
+                    Result_LatestUpgradeStatus = CsvTestHelper.Get(row, index, "Result_LatestUpgradeStatus"),
+                    Result_SessionUserPresent = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SessionUserPresent"))
                 });
             }
             return data;
@@ -121,22 +121,22 @@ public class LoginServiceTests
         _passwordHasher.Reset();
         _tokenService.Reset();
 
-        _passwordHasher.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>())).Returns(tc.PasswordCorrect);
+        _passwordHasher.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>())).Returns(tc.Result_PasswordCorrect);
         _tokenService.Setup(t => t.CreateSessionAsync(It.IsAny<User>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
                      .ReturnsAsync(new AuthResponseDto());
         _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         User? user = null;
-        if (tc.UserExists)
+        if (tc.Result_UserExists)
         {
             user = new User
             {
                 UserId = Guid.NewGuid(),
                 Email = tc.Email.Trim().ToLower(),
-                PasswordHash = string.Equals(tc.PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
-                RoleCode = tc.UserRole == "NULL" ? null : tc.UserRole,
-                IsLocked = tc.IsLocked,
-                WarningCount = tc.WarningCount,
+                PasswordHash = string.Equals(tc.Result_PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
+                RoleCode = tc.Result_UserRole == "NULL" ? null : tc.Result_UserRole,
+                IsLocked = tc.Result_IsLocked,
+                WarningCount = tc.Result_WarningCount,
                 FullName = "Test User"
             };
         }
@@ -146,10 +146,10 @@ public class LoginServiceTests
             .Returns((string email, CancellationToken ct) =>
                 Task.FromResult(email == expectedNormalizedEmail ? user : null));
 
-        if (tc.UserExists && tc.IsLocked && string.Equals(tc.UserRole, "COACH", StringComparison.OrdinalIgnoreCase))
+        if (tc.Result_UserExists && tc.Result_IsLocked && string.Equals(tc.Result_UserRole, "COACH", StringComparison.OrdinalIgnoreCase))
         {
             FitSocial.Domain.Entities.CoachProfile? profile = null;
-            if (string.Equals(tc.CoachApproval, "NULL", StringComparison.OrdinalIgnoreCase)) { profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = null }; } else if (!string.Equals(tc.CoachApproval, "EMPTY", StringComparison.OrdinalIgnoreCase)) { profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = tc.CoachApproval }; }
+            if (string.Equals(tc.Result_CoachApproval, "NULL", StringComparison.OrdinalIgnoreCase)) { profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = null }; } else if (!string.Equals(tc.Result_CoachApproval, "EMPTY", StringComparison.OrdinalIgnoreCase)) { profile = new FitSocial.Domain.Entities.CoachProfile { ApprovalStatus = tc.Result_CoachApproval }; }
 
             var expectedUserId = user!.UserId;
             _coachProfiles.Setup(c => c.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
@@ -157,22 +157,22 @@ public class LoginServiceTests
                     Task.FromResult(id == expectedUserId ? profile : null));
         }
 
-        if (!tc.CoachUpgradesNull)
+        if (!tc.Result_CoachUpgradesNull)
         {
-            var expectedUserId = tc.UserExists ? (user?.UserId ?? Guid.Empty) : Guid.Empty;
+            var expectedUserId = tc.Result_UserExists ? (user?.UserId ?? Guid.Empty) : Guid.Empty;
             _coachUpgrades.Setup(c => c.GetLatestFinishedByCoachIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .Returns((Guid id, CancellationToken ct) =>
                 {
                     if (id != expectedUserId)
                         return Task.FromResult<FitSocial.Domain.Entities.CoachUpgrade?>(null);
 
-                    if (string.Equals(tc.LatestUpgradeStatus, "NULL", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(tc.Result_LatestUpgradeStatus, "NULL", StringComparison.OrdinalIgnoreCase))
                         return Task.FromResult<FitSocial.Domain.Entities.CoachUpgrade?>(null);
 
                     return Task.FromResult<FitSocial.Domain.Entities.CoachUpgrade?>(
                         new FitSocial.Domain.Entities.CoachUpgrade
                         {
-                            Status = string.IsNullOrWhiteSpace(tc.LatestUpgradeStatus) ? null : tc.LatestUpgradeStatus
+                            Status = string.IsNullOrWhiteSpace(tc.Result_LatestUpgradeStatus) ? null : tc.Result_LatestUpgradeStatus
                         });
                 });
         }
@@ -185,7 +185,7 @@ public class LoginServiceTests
             RememberMe = tc.RememberMe
         };
 
-        var sut = CreateSut(tc.CoachUpgradesNull ? null : _coachUpgrades.Object);
+        var sut = CreateSut(tc.Result_CoachUpgradesNull ? null : _coachUpgrades.Object);
         var result = await sut.LoginAsync(request);
 
         Assert.True(result.Success == tc.ExpectedSuccess && result.Message == tc.ExpectedMessage,
@@ -199,16 +199,16 @@ public class LoginServiceTests
         public string Password { get; set; } = string.Empty;
         public string RoleCode { get; set; } = string.Empty;
         public bool RememberMe { get; set; }
-        public bool UserExists { get; set; }
-        public string PasswordHash { get; set; } = string.Empty;
-        public bool PasswordCorrect { get; set; }
-        public bool IsLocked { get; set; }
-        public int WarningCount { get; set; }
-        public string UserRole { get; set; } = string.Empty;
-        public string CoachApproval { get; set; } = string.Empty;
-        public bool CoachUpgradesNull { get; set; }
-        public string LatestUpgradeStatus { get; set; } = string.Empty;
-        public bool SessionUserPresent { get; set; }
+        public bool Result_UserExists { get; set; }
+        public string Result_PasswordHash { get; set; } = string.Empty;
+        public bool Result_PasswordCorrect { get; set; }
+        public bool Result_IsLocked { get; set; }
+        public int Result_WarningCount { get; set; }
+        public string Result_UserRole { get; set; } = string.Empty;
+        public string Result_CoachApproval { get; set; } = string.Empty;
+        public bool Result_CoachUpgradesNull { get; set; }
+        public string Result_LatestUpgradeStatus { get; set; } = string.Empty;
+        public bool Result_SessionUserPresent { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
 

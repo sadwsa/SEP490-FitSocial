@@ -1,4 +1,4 @@
-UTCID,Type,Email,Password,RoleCode,RememberMe,UserExists,PasswordHash,PasswordCorrect,IsLocked,WarningCount,UserRole,CoachApproval,ExpectedSuccess,ExpectedMessage,CoachUpgradesNull,LatestUpgradeStatus,SessionUserPresent
+UTCID,Type,Email,Password,RoleCode,RememberMe,Result_UserExists,Result_PasswordHash,Result_PasswordCorrect,Result_IsLocked,Result_WarningCount,Result_UserRole,Result_CoachApproval,ExpectedSuccess,ExpectedMessage,Result_CoachUpgradesNull,Result_LatestUpgradeStatus,Result_SessionUserPresent
 UTCID01,N,john@example.com,Password123,,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!,TRUE,,FALSE
 UTCID02,N,john@example.com,Password123,TRAINEE,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!,TRUE,,FALSE
 UTCID03,N,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,FALSE,0,COACH,EMPTY,TRUE,Signed in successfully!,TRUE,,FALSE
@@ -28,3 +28,5 @@ UTCID26,N,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,COACH,
 UTCID27,N,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,COACH,EMPTY,FALSE,Payment required to activate your coach account.,FALSE,NULL,TRUE
 UTCID28,A,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,3,COACH,EMPTY,FALSE,Your account has been blocked due to multiple reports. You can submit an appeal if you believe this decision is incorrect.,TRUE,,FALSE
 UTCID29,A,john@example.com,Password123,COACH,TRUE,TRUE,hashed,TRUE,TRUE,1,COACH, pending ,FALSE,Your account application is currently under credential verification. Please check back later.,FALSE,ACTIVE,FALSE
+UTCID30,N,  john@example.com  ,Password123,TRAINEE,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!,FALSE,,TRUE
+UTCID31,N,john@example.com,Password123,  TRAINEE  ,TRUE,TRUE,hashed,TRUE,FALSE,0,TRAINEE,EMPTY,TRUE,Signed in successfully!,FALSE,,TRUE

@@ -73,12 +73,12 @@ public class RegisterTraineeServiceTests
                     GenderRaw = CsvTestHelper.Get(row, index, "Gender"),
                     DobRaw = CsvTestHelper.Get(row, index, "DateOfBirth"),
                     TermRaw = CsvTestHelper.Get(row, index, "TermId"),
-                    EmailExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "EmailExists")),
-                    TermExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "TermExists")),
-                    PhoneExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PhoneExists")),
-                    OtpValid = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "OtpValid")),
-                    OtpMessage = string.IsNullOrWhiteSpace(CsvTestHelper.Get(row, index, "OtpMessage")) ? "Invalid or expired OTP code." : CsvTestHelper.Get(row, index, "OtpMessage"),
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    Result_EmailExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_EmailExists")),
+                    Result_TermExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_TermExists")),
+                    Result_PhoneExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_PhoneExists")),
+                    Result_OtpValid = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_OtpValid")),
+                    Result_OtpMessage = string.IsNullOrWhiteSpace(CsvTestHelper.Get(row, index, "Result_OtpMessage")) ? "Invalid or expired OTP code." : CsvTestHelper.Get(row, index, "Result_OtpMessage"),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -133,8 +133,8 @@ public class RegisterTraineeServiceTests
             .Returns((string email, CancellationToken ct) =>
                 Task.FromResult(
                     email == expectedNormalizedEmail
-                        ? tc.EmailExists
-                        : !tc.EmailExists
+                        ? tc.Result_EmailExists
+                        : !tc.Result_EmailExists
                 ));
 
         var phone = (tc.PhoneRaw == "NULL" || string.IsNullOrWhiteSpace(tc.PhoneRaw)) ? null : tc.PhoneRaw.Trim();
@@ -145,8 +145,8 @@ public class RegisterTraineeServiceTests
                 .Returns((string phoneNumber, Guid? excludingUserId, CancellationToken ct) =>
                     Task.FromResult(
                         phoneNumber == expectedNormalizedPhone
-                            ? tc.PhoneExists
-                            : !tc.PhoneExists
+                            ? tc.Result_PhoneExists
+                            : !tc.Result_PhoneExists
                     ));
         }
 
@@ -154,7 +154,7 @@ public class RegisterTraineeServiceTests
         if (termId.HasValue && termId.Value != Guid.Empty)
         {
             var expectedTermId = termId.Value;
-            if (tc.TermExists)
+            if (tc.Result_TermExists)
             {
                 _terms.Setup(t => t.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                     .Returns((Guid id, CancellationToken ct) =>
@@ -181,11 +181,11 @@ public class RegisterTraineeServiceTests
             .Returns((string email, string otpCode, string purpose) =>
                 Task.FromResult(
                     otpCode == expectedTrimmedOtp
-                        ? (tc.OtpValid, tc.OtpValid ? "OTP verified." : tc.OtpMessage)
+                        ? (tc.Result_OtpValid, tc.Result_OtpValid ? "OTP verified." : tc.Result_OtpMessage)
                         : (false, "Invalid or expired OTP code.")
                 ));
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new DbUpdateException("db fail"));
         }
@@ -253,12 +253,12 @@ public class RegisterTraineeServiceTests
         public string GenderRaw { get; set; } = string.Empty;
         public string DobRaw { get; set; } = string.Empty;
         public string TermRaw { get; set; } = string.Empty;
-        public bool EmailExists { get; set; }
-        public bool TermExists { get; set; }
-        public bool PhoneExists { get; set; }
-        public bool OtpValid { get; set; }
-        public string OtpMessage { get; set; } = string.Empty;
-        public bool SaveChangesThrows { get; set; }
+        public bool Result_EmailExists { get; set; }
+        public bool Result_TermExists { get; set; }
+        public bool Result_PhoneExists { get; set; }
+        public bool Result_OtpValid { get; set; }
+        public string Result_OtpMessage { get; set; } = string.Empty;
+        public bool Result_SaveChangesThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

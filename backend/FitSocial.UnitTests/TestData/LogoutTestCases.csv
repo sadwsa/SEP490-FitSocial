@@ -4,3 +4,10 @@ UTCID02,N,,,refresh123,TRUE,Signed out successfully.
 UTCID03,N,token123,2026-12-31T00:00:00Z,,TRUE,Signed out successfully.
 UTCID04,B,token123,2020-01-01T00:00:00Z,refresh123,TRUE,Signed out successfully.
 UTCID05,B,,, ,TRUE,Signed out successfully.
+UTCID06,B,token123,,refresh123,TRUE,Signed out successfully.
+UTCID07,B,,2026-12-31T00:00:00Z,refresh123,TRUE,Signed out successfully.
+UTCID08,B,   ,2026-12-31T00:00:00Z,refresh123,TRUE,Signed out successfully.
+UTCID09,B,token123,2020-01-01T00:00:00Z,,TRUE,Signed out successfully.
+UTCID10,B,,,   ,TRUE,Signed out successfully.
+UTCID11,B,,2026-12-31T00:00:00Z,refresh123,TRUE,Signed out successfully.
+UTCID12,B,token123,2026-12-31T00:00:00Z,   ,TRUE,Signed out successfully.

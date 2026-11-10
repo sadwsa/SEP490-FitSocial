@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace FitSocial.Application.Services
 {
@@ -271,7 +272,7 @@ namespace FitSocial.Application.Services
                     TraineeId = r.TraineeId,
                     TraineeName = r.Trainee?.FullName ?? "FitConnect Member",
                     TraineeAvatarUrl = r.Trainee?.AvatarUrl,
-                    Rating = r.Rating ?? 5,
+                    Rating = r.Rating ?? 0,
                     Comment = r.Comment,
                     Reply = r.Reply,
                     CoachName = r.Coach?.Coach?.FullName,
@@ -288,21 +289,34 @@ namespace FitSocial.Application.Services
         {
             var package = await _repository.GetByIdAsync(packageId, cancellationToken);
             if (package == null) throw new NotFoundException("Training package not found.");
-            // Kiểm tra xem Trainee đã mua gói này và thanh toán thành công chưa
-            var orders = await _orderRepository.GetOrdersByBuyerIdAsync(traineeId, cancellationToken);
-            var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
-            bool hasPurchased = orders.Any(o =>
-                o.OrderStatus != null &&
-                paidStatuses.Contains(o.OrderStatus.ToUpper()) &&
-                o.OrderDetails.Any(od => od.PackageId == packageId));
-            if (!hasPurchased)
+
+            
+            var coachProfile = package.Coach;
+            if (coachProfile == null || coachProfile.ApprovalStatus?.Trim().ToUpperInvariant() != Domain.Constants.CoachConstants.ApprovalStatusApproved
+                || (coachProfile.Status != null && coachProfile.Status.Trim().ToUpperInvariant() != Domain.Constants.CoachConstants.StatusActive))
             {
-                throw new ValidationException("You can only review a package that you have successfully purchased.");
+                throw new ValidationException("Coach of this package is not available for review.");
             }
-            // Nếu học viên đã từng đánh giá gói tập này thì Update, nếu chưa thì Thêm mới
-            var existingReview = await _reviewRepository.GetReviewByPackageAndTraineeAsync(packageId, traineeId, cancellationToken);
+
+         
+            // Validate OrderId
+            if (dto.OrderId == Guid.Empty)
+                throw new ValidationException("OrderId is required to submit a review.");
+
+            // Validate order: must belong to trainee, paid, and contain this package
+            var order = await _orderRepository.GetOrderByIdWithDetailsAsync(dto.OrderId, cancellationToken);
+            if (order == null || order.BuyerId != traineeId)
+                throw new ValidationException("Order not found or does not belong to you.");
+            var paidStatuses = new[] { Domain.Constants.PaymentConstants.OrderStatusPaid, Domain.Constants.PaymentConstants.OrderStatusActive, Domain.Constants.PaymentConstants.OrderStatusCompleted };
+            if (order.OrderStatus == null || !paidStatuses.Contains(order.OrderStatus.ToUpper()))
+                throw new ValidationException("You can only review a package from a paid order.");
+            if (!order.OrderDetails.Any(od => od.PackageId == packageId))
+                throw new ValidationException("This order does not contain the specified package.");
+          
+            var existingReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
             if (existingReview != null)
             {
+                // Cho phép sửa không giới hạn (không còn edit-once)
                 if (existingReview.IsEdited == true)
                 {
                     throw new ValidationException("This review has been edited once and cannot be edited further.");
@@ -319,6 +333,7 @@ namespace FitSocial.Application.Services
                 {
                     ReviewId = Guid.NewGuid(),
                     PackageId = packageId,
+                    OrderId = dto.OrderId,
                     CoachId = package.CoachId,
                     TraineeId = traineeId,
                     Rating = dto.Rating,
@@ -329,9 +344,39 @@ namespace FitSocial.Application.Services
                 };
                 await _reviewRepository.AddAsync(review);
             }
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            {
+                // Race condition: another request inserted a review concurrently.
+                // Fetch the existing review and apply edit logic if allowed.
+                var concurrentReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
+                if (concurrentReview == null)
+                    throw;
+                if (concurrentReview.IsEdited == true)
+                    throw new ValidationException("This review has been edited once and cannot be edited further.");
+                concurrentReview.Rating = dto.Rating;
+                concurrentReview.Comment = dto.Comment;
+                concurrentReview.UpdatedAt = DateTime.UtcNow;
+                concurrentReview.IsEdited = true;
+                _reviewRepository.Update(concurrentReview);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
             return ApiResponseDto<bool>.Ok(true, "Review submitted successfully.");
         }
+        private static bool IsUniqueConstraintViolation(Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            // PostgreSQL unique violation SQLSTATE 23505
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            return msg.Contains("23505", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("unique", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("duplicate", StringComparison.OrdinalIgnoreCase);
+        }
+
         public async Task<ApiResponseDto<bool>> ReplyToReviewAsync(Guid packageId, Guid reviewId, Guid coachId, ReplyReviewDto dto, CancellationToken cancellationToken = default)
         {
             var package = await _repository.GetByIdAsync(packageId, cancellationToken);

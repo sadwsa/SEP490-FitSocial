@@ -477,8 +477,6 @@ public class AuthService : IAuthService
         profile.IdentityCardUrl = request.FrontCardUrl!.Trim();
         profile.UpdatedAt = now;
 
-
-
         await _ekycs.AddAsync(new CoachEkycVerification
         {
             EkycId = Guid.NewGuid(),

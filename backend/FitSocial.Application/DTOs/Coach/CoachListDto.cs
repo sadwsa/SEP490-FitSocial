@@ -12,5 +12,7 @@ public class CoachListDto
     public string? CertificateUrl { get; set; }
     public string? Status { get; set; }
     public string? ApprovalStatus { get; set; }
+    public double Rating { get; set; }
+    public int TotalReviews { get; set; }
     public System.Collections.Generic.List<string> Locations { get; set; } = new();
 }

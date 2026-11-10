@@ -4,6 +4,7 @@ using FitSocial.Client.Services.Http;
 using System;
 using System.Collections.Generic;
 using System.Net.Http.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FitSocial.Client.Services.Coaches;
@@ -18,7 +19,7 @@ public class CoachService : ICoachService
         _apiClient = apiClient;
     }
 
-    public async Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null)
+    public async Task<ApiResponse<PagedResult<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, int pageNumber = 1, int pageSize = 6, CancellationToken cancellationToken = default)
     {
         var queryParts = new List<string>();
         if (!string.IsNullOrWhiteSpace(searchKeyword))
@@ -30,17 +31,16 @@ public class CoachService : ICoachService
         if (!string.IsNullOrWhiteSpace(sortBy))
             queryParts.Add($"sortBy={Uri.EscapeDataString(sortBy)}");
 
-        var queryString = queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "";
-        return await _apiClient.GetAsync<IEnumerable<CoachListDto>>($"{BaseEndpoint}{queryString}");
+        queryParts.Add($"pageNumber={pageNumber}");
+        queryParts.Add($"pageSize={pageSize}");
+
+        var queryString = "?" + string.Join("&", queryParts);
+        return await _apiClient.GetAsync<PagedResult<CoachListDto>>($"{BaseEndpoint}{queryString}", cancellationToken);
     }
 
     public async Task<ApiResponse<List<TopCoachDto>>> GetTopCoachesAsync(int count = 5)
     {
         return await _apiClient.GetAsync<List<TopCoachDto>>($"{BaseEndpoint}/top?count={count}");
-    }
-    public async Task<FitSocial.Client.Models.Common.ApiResponse<bool>> SubmitReviewAsync(Guid coachId, FitSocial.Client.Models.Coaches.CreateReviewDto dto)
-    {
-        return await _apiClient.PostAsync<FitSocial.Client.Models.Coaches.CreateReviewDto, bool>($"{BaseEndpoint}/{coachId}/reviews", dto);
     }
     public async Task<FitSocial.Client.Models.Common.ApiResponse<bool>> UpdateReviewAsync(Guid reviewId, FitSocial.Client.Models.Coaches.UpdateReviewDto dto)
     {

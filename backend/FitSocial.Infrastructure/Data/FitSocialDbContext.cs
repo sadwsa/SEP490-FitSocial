@@ -1191,6 +1191,7 @@ public partial class FitSocialDbContext : DbContext
 
             // THÊM 1: Map cột PackageID
             entity.Property(e => e.PackageId).HasColumnName("PackageID");
+            entity.Property(e => e.OrderId).HasColumnName("OrderID");
             entity.Property(e => e.IsEdited).HasColumnName("IsEdited").HasDefaultValue(false);
 
 
@@ -1218,6 +1219,17 @@ public partial class FitSocialDbContext : DbContext
                 .HasForeignKey(d => d.PackageId)
                 .HasConstraintName("Reviews_PackageID_fkey")
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Unique: một trainee chỉ được review 1 lần cho 1 order
+            entity.HasIndex(e => new { e.OrderId, e.TraineeId }, "Reviews_OrderID_TraineeID_key")
+                .IsUnique()
+                .HasFilter("\"OrderID\" IS NOT NULL");
+
+            // FK to Order
+            entity.HasOne(d => d.Order).WithMany()
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("Reviews_OrderID_fkey")
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
 

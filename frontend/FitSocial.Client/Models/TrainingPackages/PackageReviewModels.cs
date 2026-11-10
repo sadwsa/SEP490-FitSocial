@@ -5,6 +5,7 @@ namespace FitSocial.Client.Models.TrainingPackages;
 
 public class CreatePackageReviewDto
 {
+    public Guid OrderId { get; set; }
     public int Rating { get; set; } = 5;
     public string? Comment { get; set; }
 }

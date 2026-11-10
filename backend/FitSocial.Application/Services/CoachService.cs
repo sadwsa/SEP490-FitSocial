@@ -79,22 +79,32 @@ public class CoachService : ICoachService
         return ApiResponseDto<List<TopCoachDto>>.Ok(dtoList, "Top coaches retrieved successfully.");
     }
 
-    public async Task<IEnumerable<CoachListDto>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null)
+    public async Task<PagedResultDto<CoachListDto>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, int pageNumber = 1, int pageSize = 6, CancellationToken cancellationToken = default)
     {
-        var coaches = await _coachProfiles.GetAllCoachesWithDetailsAsync(searchKeyword, minExperience, sortBy);
+        var (items, totalCount) = await _coachProfiles.GetAllCoachesWithDetailsAsync(searchKeyword, minExperience, sortBy, pageNumber, pageSize, cancellationToken);
 
-        return coaches.Select(c => new CoachListDto
+        var dtos = items.Select(c =>
         {
-            CoachId = c.CoachId,
-            FullName = c.Coach?.FullName ?? "Unknown Coach",
-            AvatarUrl = c.Coach?.AvatarUrl,
-            ExperienceYears = c.ExperienceYears,
-            Bio = c.Bio,
-            CertificateUrl = c.CertificateUrl,
-            Status = c.Status,
-            ApprovalStatus = c.ApprovalStatus,
-            Locations = c.Locations.Select(l => l.LocationName).ToList()
-        });
+            var validReviews = c.Reviews?.Where(r => r.Rating != null).ToList() ?? new List<Domain.Entities.Review>();
+            var avgRating = validReviews.Any() ? validReviews.Average(r => (double)r.Rating!.Value) : 0.0;
+
+            return new CoachListDto
+            {
+                CoachId = c.CoachId,
+                FullName = c.Coach?.FullName ?? "Unknown Coach",
+                AvatarUrl = c.Coach?.AvatarUrl,
+                ExperienceYears = c.ExperienceYears,
+                Bio = c.Bio,
+                CertificateUrl = c.CertificateUrl,
+                Status = c.Status,
+                ApprovalStatus = c.ApprovalStatus,
+                Rating = Math.Round(avgRating, 1),
+                TotalReviews = validReviews.Count,
+                Locations = (c.Locations ?? new List<Domain.Entities.Location>()).Select(l => l.LocationName).ToList()
+            };
+        }).ToList();
+
+        return PagedResultDto<CoachListDto>.Create(dtos, totalCount, pageNumber, pageSize);
     }
 
     public async Task<ApiResponseDto<CoachDetailDto>> GetCoachDetailsAsync(Guid coachId, CancellationToken cancellationToken = default)
@@ -208,41 +218,6 @@ public class CoachService : ICoachService
         return await GetCoachDetailsAsync(coachId, cancellationToken);
     }
 
-    public async Task<ApiResponseDto<bool>> SubmitReviewAsync(Guid coachId, Guid traineeId, CreateReviewDto dto, CancellationToken cancellationToken = default)
-    {
-        // 1. Kiểm tra xem Coach có tồn tại không
-        var coach = await _coachProfiles.GetByIdAsync(coachId, cancellationToken);
-        if (coach == null) throw new NotFoundException("Coach not found.");
-
-        // 2. Lấy danh sách các đơn hàng của Trainee này
-        var orders = await _orderRepository.GetOrdersByBuyerIdAsync(traineeId, cancellationToken);
-
-        // 3. Kiểm tra xem có đơn hàng nào mua của Coach này và đã thanh toán (PAID/COMPLETED/ACTIVE) hay chưa
-        var paidStatuses = new[] { FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid, "PAID", "ACTIVE", "COMPLETED" };
-        bool hasPurchased = orders.Any(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
-            && o.OrderStatus != null
-            && paidStatuses.Contains(o.OrderStatus.ToUpper()));
-        if (!hasPurchased)
-        {
-            throw new ValidationException("You can only review a coach if you have purchased their training package.");
-        }
-
-        // 4. Tạo Review
-        var review = new FitSocial.Domain.Entities.Review
-        {
-            ReviewId = Guid.NewGuid(),
-            CoachId = coachId,
-            TraineeId = traineeId,
-            Rating = dto.Rating,
-            Comment = dto.Comment,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        await _reviewRepository.AddAsync(review);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return ApiResponseDto<bool>.Ok(true, "Review submitted successfully.");
-    }
     public async Task<ApiResponseDto<bool>> UpdateReviewAsync(Guid reviewId, Guid traineeId, FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto, CancellationToken cancellationToken = default)
     {
         var review = await _reviewRepository.GetByIdAsync(reviewId, cancellationToken);

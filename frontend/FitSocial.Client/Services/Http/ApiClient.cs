@@ -151,21 +151,21 @@ public class ApiClient
         catch { }
     }
 
-    public async Task<ApiResponse<T>> GetAsync<T>(string endpoint)
+    public async Task<ApiResponse<T>> GetAsync<T>(string endpoint, CancellationToken cancellationToken = default)
     {
         try
         {
             await AttachBearerTokenAsync();
-            var response = await _http.GetAsync(endpoint);
+            var response = await _http.GetAsync(endpoint, cancellationToken);
             if (response.StatusCode == HttpStatusCode.Unauthorized &&
                 await TryRefreshOnceAsync(endpoint, response.StatusCode))
             {
                 await AttachBearerTokenAsync();
-                response = await _http.GetAsync(endpoint);
+                response = await _http.GetAsync(endpoint, cancellationToken);
             }
             if (response.IsSuccessStatusCode)
             {
-                var json = await response.Content.ReadAsStringAsync();
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 try
                 {
@@ -190,8 +190,12 @@ public class ApiClient
 
             try
             {
-                var errorJson = await response.Content.ReadAsStringAsync();
+                var errorJson = await response.Content.ReadAsStringAsync(cancellationToken);
                 return ErrorFrom<T>(errorJson, response.StatusCode);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -201,6 +205,10 @@ public class ApiClient
                     Message = $"API Error: {response.StatusCode}"
                 };
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

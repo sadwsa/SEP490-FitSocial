@@ -10,4 +10,5 @@ public interface IReviewRepository : IRepository<Review>
 {
     Task<List<Review>> GetReviewsByPackageIdAsync(Guid packageId, CancellationToken cancellationToken = default);
     Task<Review?> GetReviewByPackageAndTraineeAsync(Guid packageId, Guid traineeId, CancellationToken cancellationToken = default);
+    Task<Review?> GetReviewByOrderIdAndTraineeAsync(Guid orderId, Guid traineeId, CancellationToken cancellationToken = default);
 }

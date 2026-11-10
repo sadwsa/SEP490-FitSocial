@@ -338,7 +338,7 @@ public class SystemOperationsService : ISystemOperationsService
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to log delete/deactivate subscription plan audit log for {PlanId}", planId);
+                        _logger.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", "UPDATE_COACH_SUBSCRIPTION_PLAN", planId);
                     }
                 }
 
@@ -365,7 +365,7 @@ public class SystemOperationsService : ISystemOperationsService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to log delete/deactivate subscription plan audit log for {PlanId}", planId);
+                    _logger.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", "DELETE_COACH_SUBSCRIPTION_PLAN", planId);
                 }
             }
 

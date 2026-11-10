@@ -1,4 +1,5 @@
-UTCID,Type,ConfigExists,SaveChangesThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage
-UTCID01,N,TRUE,FALSE,FALSE,TRUE,Payment gateway config deactivated successfully.
-UTCID02,A,FALSE,FALSE,TRUE,FALSE,Payment gateway config not found.
-UTCID03,A,TRUE,TRUE,TRUE,FALSE,
+UTCID,Type,Result_ConfigExists,Result_SaveChangesThrows,Result_AuditThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,N,TRUE,FALSE,FALSE,FALSE,TRUE,Payment gateway config deactivated successfully.
+UTCID02,A,FALSE,FALSE,FALSE,TRUE,FALSE,Payment gateway config not found.
+UTCID03,A,TRUE,TRUE,FALSE,TRUE,FALSE,
+UTCID04,N,TRUE,FALSE,TRUE,FALSE,TRUE,Payment gateway config deactivated successfully.

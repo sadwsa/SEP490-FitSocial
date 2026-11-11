@@ -479,6 +479,7 @@
         try
         {
             isLoading = true;
+            LoadingService.Show("Loading locations...");
             errorMessage = null;
             currentPage = page;
 
@@ -501,6 +502,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -642,6 +644,7 @@
         try
         {
             isSaving = true;
+            LoadingService.Show("Creating location...");
             var requestDto = new CreateLocationDto
             {
                 LocationName = trimmedName,
@@ -670,6 +673,7 @@
         finally
         {
             isSaving = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -759,6 +763,7 @@
         try
         {
             isSavingEdit = true;
+            LoadingService.Show("Updating location...");
             var requestDto = new UpdateLocationDto
             {
                 LocationName = trimmedName,
@@ -786,6 +791,7 @@
         finally
         {
             isSavingEdit = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -830,6 +836,7 @@
         try
         {
             isDeleting = true;
+            LoadingService.Show("Deleting location...");
             deleteErrorMessage = null;
 
             var res = await LocationService.DeleteLocationAsync(targetLocation.LocationId);
@@ -875,6 +882,7 @@
         finally
         {
             isDeleting = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }

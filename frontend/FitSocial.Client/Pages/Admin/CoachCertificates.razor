@@ -526,6 +526,7 @@
     private async Task LoadCertificatesAsync()
     {
         isLoading = true;
+        LoadingService.Show("Loading certificates...");
         try
         {
             var query = new GetCoachCertificatesQueryModel
@@ -555,6 +556,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -623,6 +625,7 @@
 
     private async Task OpenDetailModalAsync(Guid certificateId)
     {
+        LoadingService.Show("Loading certificate details...");
         try
         {
             var response = await CertificateService.GetCertificateByIdAsync(certificateId);
@@ -639,6 +642,10 @@
         catch (Exception ex)
         {
             ShowToast($"Error loading details: {ex.Message}", "error");
+        }
+        finally
+        {
+            LoadingService.Hide();
         }
     }
 
@@ -677,6 +684,7 @@
         if (targetCertificate == null) return;
 
         isProcessing = true;
+        LoadingService.Show("Approving certificate...");
         try
         {
             var response = await CertificateService.ApproveCertificateAsync(targetCertificate.CertificateId);
@@ -709,6 +717,7 @@
         finally
         {
             isProcessing = false;
+            LoadingService.Hide();
         }
     }
 
@@ -724,6 +733,7 @@
 
         rejectionValidationFailed = false;
         isProcessing = true;
+        LoadingService.Show("Rejecting certificate...");
         try
         {
             var req = new RejectCoachCertificateModel { Reason = rejectionReason.Trim() };
@@ -756,6 +766,7 @@
         finally
         {
             isProcessing = false;
+            LoadingService.Hide();
         }
     }
 

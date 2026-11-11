@@ -713,6 +713,11 @@
             isReloading = !isSilent;
         }
 
+        if (!isSilent)
+        {
+            LoadingService.Show("Loading refund requests...");
+        }
+
         try
         {
             var query = new GetRefundRequestsQuery
@@ -743,6 +748,10 @@
         {
             isLoading = false;
             isReloading = false;
+            if (!isSilent)
+            {
+                LoadingService.Hide();
+            }
             StateHasChanged();
         }
     }
@@ -868,6 +877,7 @@
         isProcessingAction = true;
         processingActionType = "APPROVE";
         processingTitle = "Processing & Disbursing Refund...";
+        LoadingService.Show("Processing & disbursing refund...");
         var amountStr = FormatCurrency(selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount ?? 0);
         var bankTarget = !string.IsNullOrWhiteSpace(selectedRefund.BankName)
             ? $"to {selectedRefund.BankName} ({selectedRefund.MaskedAccountNumber})"
@@ -924,6 +934,7 @@
             isProcessing = false;
             isProcessingAction = false;
             selectedRefund = null;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -976,6 +987,7 @@
         isProcessingAction = true;
         processingActionType = "REJECT";
         processingTitle = "Processing Refund Rejection...";
+        LoadingService.Show("Processing refund rejection...");
         processingDescription = $"Recording rejection reason and sending notification to trainee {selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail}...";
         processingSubtext = "Please wait a moment...";
         StateHasChanged();
@@ -1024,6 +1036,7 @@
             isProcessing = false;
             isProcessingAction = false;
             selectedRefund = null;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }

@@ -194,6 +194,7 @@
     private async Task LoadAsync()
     {
         isLoading = true;
+        LoadingService.Show("Loading money movements...");
         try
         {
             var res = await MoneyService.GetMoneyMovementsAsync(
@@ -223,6 +224,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 

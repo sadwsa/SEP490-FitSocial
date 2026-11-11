@@ -611,6 +611,7 @@
     {
         isLoading = true;
         errorMessage = null;
+        LoadingService.Show("Loading system logs...");
 
         try
         {
@@ -648,6 +649,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 

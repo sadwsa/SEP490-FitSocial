@@ -378,6 +378,7 @@
     private async Task LoadAppealsAsync()
     {
         isLoading = true;
+        LoadingService.Show("Loading appeals...");
         try
         {
             var res = await ReportService.GetAppealsAsync(
@@ -410,6 +411,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -480,12 +482,17 @@
         selectedAppeal = appeal;
         reviewNote = "";
         showReviewModal = true;
+        LoadingService.Show("Loading appeal details...");
         try
         {
             var res = await ReportService.GetReportByIdAsync(appeal.ReportId);
             if (res.Success && res.Data != null) selectedAppeal = res.Data;
         }
         catch { }
+        finally
+        {
+            LoadingService.Hide();
+        }
     }
 
     private void CloseReviewModal()
@@ -500,6 +507,7 @@
     {
         if (selectedAppeal == null || isProcessing) return;
         isProcessing = true;
+        LoadingService.Show("Submitting appeal decision...");
         try
         {
             var request = new ReviewAppealRequest
@@ -538,6 +546,7 @@
         finally
         {
             isProcessing = false;
+            LoadingService.Hide();
         }
     }
 

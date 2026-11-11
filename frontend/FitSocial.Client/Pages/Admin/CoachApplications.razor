@@ -624,6 +624,7 @@
     private async Task LoadApplicationsAsync()
     {
         isLoading = true;
+        LoadingService.Show("Loading coach applications...");
         try
         {
             int? minExp = null;
@@ -684,6 +685,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -788,6 +790,7 @@
     private async Task OpenDetailModal(Guid coachId)
     {
         isLoading = true;
+        LoadingService.Show("Loading application details...");
         try
         {
             var res = await CoachService.GetCoachApplicationDetailsAsync(coachId);
@@ -810,6 +813,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -908,6 +912,7 @@
     {
         if (isProcessingAction) return;
         isProcessingAction = true;
+        LoadingService.Show("Approving application...");
         try
         {
             var request = new ApproveCoachApplicationRequestModel
@@ -946,6 +951,7 @@
         finally
         {
             isProcessingAction = false;
+            LoadingService.Hide();
         }
     }
 
@@ -953,6 +959,7 @@
     {
         if (isProcessingAction) return;
         isProcessingAction = true;
+        LoadingService.Show("Rejecting application...");
         try
         {
             var request = new RejectCoachApplicationRequestModel
@@ -991,6 +998,7 @@
         finally
         {
             isProcessingAction = false;
+            LoadingService.Hide();
         }
         await SetBodyScrollLockAsync(false);
     }

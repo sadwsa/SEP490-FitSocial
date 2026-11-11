@@ -125,7 +125,15 @@
 
     private async Task HandleLogout()
     {
-        await AuthService.LogoutAsync();
-        Navigation.NavigateTo("/admin/login");
+        LoadingService.Show("Signing out...");
+        try
+        {
+            await AuthService.LogoutAsync();
+            Navigation.NavigateTo("/admin/login");
+        }
+        finally
+        {
+            LoadingService.Hide();
+        }
     }
 }

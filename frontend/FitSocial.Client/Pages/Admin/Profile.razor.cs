@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Users;
+using FitSocial.Client.Services;
 using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Files;
 using FitSocial.Client.Services.Users;
@@ -68,6 +69,7 @@ public partial class Profile : ComponentBase, IDisposable
     {
         isLoading = true;
         errorMessage = null;
+        LoadingService.Show("Loading profile...");
         StateHasChanged();
 
         try
@@ -91,6 +93,7 @@ public partial class Profile : ComponentBase, IDisposable
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -329,6 +332,7 @@ public partial class Profile : ComponentBase, IDisposable
         }
 
         isUploadingAvatar = true;
+        LoadingService.Show("Uploading avatar...");
         StateHasChanged();
 
         try
@@ -353,6 +357,7 @@ public partial class Profile : ComponentBase, IDisposable
         finally
         {
             isUploadingAvatar = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -384,6 +389,7 @@ public partial class Profile : ComponentBase, IDisposable
         }
 
         isSaving = true;
+        LoadingService.Show("Saving profile changes...");
         StateHasChanged();
 
         try
@@ -458,6 +464,7 @@ public partial class Profile : ComponentBase, IDisposable
         finally
         {
             isSaving = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -499,6 +506,7 @@ public partial class Profile : ComponentBase, IDisposable
         }
 
         isChangingPassword = true;
+        LoadingService.Show("Updating password...");
         try
         {
             var result = await AuthService.ChangePasswordAsync(pwdModel);
@@ -518,6 +526,7 @@ public partial class Profile : ComponentBase, IDisposable
         finally
         {
             isChangingPassword = false;
+            LoadingService.Hide();
         }
     }
 }

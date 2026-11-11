@@ -618,6 +618,7 @@
     private async Task LoadReportsAsync()
     {
         isLoadingReports = true;
+        LoadingService.Show("Loading reports...");
         try
         {
             var res = await ReportService.GetReportsAsync(
@@ -651,6 +652,7 @@
         finally
         {
             isLoadingReports = false;
+            LoadingService.Hide();
         }
     }
 
@@ -745,6 +747,7 @@
     {
         selectedReport = report;
         showDetailsModal = true;
+        LoadingService.Show("Loading report details...");
         try
         {
             var res = await ReportService.GetReportByIdAsync(report.ReportId);
@@ -756,6 +759,10 @@
         catch
         {
             // Fallback to list item data
+        }
+        finally
+        {
+            LoadingService.Hide();
         }
     }
 
@@ -786,6 +793,7 @@
         if (selectedReport == null || string.IsNullOrWhiteSpace(pendingActionCode)) return;
 
         isProcessingAction = true;
+        LoadingService.Show("Processing violation report...");
         try
         {
             var req = new ProcessViolationReportRequest
@@ -819,6 +827,7 @@
         finally
         {
             isProcessingAction = false;
+            LoadingService.Hide();
         }
     }
 
@@ -849,6 +858,7 @@
 
         deletePostReasonError = null;
         isProcessingAction = true;
+        LoadingService.Show("Deleting post...");
         try
         {
             var req = new ProcessViolationReportRequest
@@ -881,6 +891,7 @@
         finally
         {
             isProcessingAction = false;
+            LoadingService.Hide();
         }
     }
 

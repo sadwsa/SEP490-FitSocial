@@ -645,6 +645,7 @@
     {
         isLoading = true;
         errorMessage = null;
+        LoadingService.Show("Loading subscription plans...");
         try
         {
             bool? isActive = statusFilter switch { "active" => true, "inactive" => false, _ => null };
@@ -653,7 +654,11 @@
             else errorMessage = res.Message ?? "Failed to load plans.";
         }
         catch (Exception ex) { errorMessage = ex.Message; }
-        finally { isLoading = false; }
+        finally
+        {
+            isLoading = false;
+            LoadingService.Hide();
+        }
     }
 
     private async Task LoadGlobalPriceHistoryCountAsync()
@@ -731,6 +736,7 @@
         if (createImageUrl != null && createImageUrl.Length > 2048) { createError = "Image URL must not exceed 2048 characters."; return; }
         if (createDescription != null && createDescription.Length > 500) { createError = "Description must not exceed 500 characters."; return; }
         isCreating = true;
+        LoadingService.Show("Creating subscription plan...");
         try
         {
             var req = new CreatePlanRequest
@@ -755,7 +761,11 @@
             else createError = res.Message ?? "Failed to create plan.";
         }
         catch (Exception ex) { createError = ex.Message; }
-        finally { isCreating = false; }
+        finally
+        {
+            isCreating = false;
+            LoadingService.Hide();
+        }
     }
 
     private void OpenDeleteConfirm(CoachSubscriptionPlanDto plan)
@@ -779,6 +789,7 @@
         deleteError = null;
         if (deletePlanId == Guid.Empty) { deleteError = "No plan selected."; return; }
         isDeleting = true;
+        LoadingService.Show("Deleting subscription plan...");
         try
         {
             var res = await SystemOps.DeletePlanAsync(deletePlanId);
@@ -793,7 +804,11 @@
             else deleteError = res.Message ?? "Failed to delete plan.";
         }
         catch (Exception ex) { deleteError = ex.Message; }
-        finally { isDeleting = false; }
+        finally
+        {
+            isDeleting = false;
+            LoadingService.Hide();
+        }
     }
 
     private void OpenEditForm(CoachSubscriptionPlanDto plan)
@@ -826,6 +841,7 @@
         if (editDescription!.Length > 500) { editError = "Description must not exceed 500 characters."; return; }
         if (editImageUrl != null && editImageUrl.Length > 2048) { editError = "Image URL must not exceed 2048 characters."; return; }
         isSaving = true;
+        LoadingService.Show("Updating subscription plan...");
         try
         {
             var req = new UpdatePlanRequest
@@ -850,7 +866,11 @@
             else editError = res.Message ?? "Failed to update plan.";
         }
         catch (Exception ex) { editError = ex.Message; }
-        finally { isSaving = false; }
+        finally
+        {
+            isSaving = false;
+            LoadingService.Hide();
+        }
     }
 
     // Price History Methods
@@ -858,6 +878,7 @@
     {
         isLoadingHistory = true;
         historyPageIndex = page;
+        LoadingService.Show("Loading price history...");
         try
         {
             var req = new GetPriceHistoryFilterRequest
@@ -891,6 +912,7 @@
         finally
         {
             isLoadingHistory = false;
+            LoadingService.Hide();
         }
     }
 
@@ -974,6 +996,7 @@
         showPlanHistoryModal = true;
         isLoadingModalHistory = true;
         modalPlanHistoryResult = null;
+        LoadingService.Show("Loading plan price history...");
 
         try
         {
@@ -996,6 +1019,7 @@
         finally
         {
             isLoadingModalHistory = false;
+            LoadingService.Hide();
         }
     }
 

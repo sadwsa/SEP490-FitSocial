@@ -692,6 +692,7 @@
         }
 
         isSubmitting = true;
+        LoadingService.Show("Creating staff account...");
         try
         {
             var res = await UserService.CreateStaffAccountAsync(newStaffModel);
@@ -728,6 +729,7 @@
         finally
         {
             isSubmitting = false;
+            LoadingService.Hide();
         }
     }
 
@@ -997,6 +999,7 @@
         }
 
         isSubmittingEdit = true;
+        LoadingService.Show("Updating staff account...");
         try
         {
             var res = await UserService.UpdateStaffAccountAsync(editingStaffId, editStaffModel);
@@ -1032,12 +1035,14 @@
         finally
         {
             isSubmittingEdit = false;
+            LoadingService.Hide();
         }
     }
 
     private async Task LoadStaffAsync()
     {
         isLoadingStaff = true;
+        LoadingService.Show("Loading staff accounts...");
         try
         {
             bool? isLocked = staffStatusFilter switch { "active" => false, "locked" => true, _ => null };
@@ -1055,7 +1060,11 @@
             else if (!string.IsNullOrEmpty(res.Message)) toastMessage = res.Message;
         }
         catch (Exception ex) { toastMessage = $"Failed to load staff accounts: {ex.Message}"; }
-        finally { isLoadingStaff = false; }
+        finally
+        {
+            isLoadingStaff = false;
+            LoadingService.Hide();
+        }
     }
 
     private async Task SetStaffStatusFilterAsync(string status)
@@ -1107,6 +1116,7 @@
     {
         isLockingStaff = true;
         lockingStaffId = staff.UserId;
+        LoadingService.Show(locked ? "Locking staff account..." : "Unlocking staff account...");
         try
         {
             var res = await UserService.SetUserLockStatusAsync(staff.UserId, locked);
@@ -1128,6 +1138,7 @@
         {
             isLockingStaff = false;
             lockingStaffId = null;
+            LoadingService.Hide();
         }
     }
 

@@ -143,50 +143,11 @@
                 </table>
             </div>
 
-            @if (payouts.Count > 0)
-            {
-                var totalPages = Math.Max(1, (int)Math.Ceiling(payouts.Count / (double)pageSize));
-                var start = (pageIndex - 1) * pageSize + 1;
-                var end = Math.Min(pageIndex * pageSize, payouts.Count);
-                <div class="pagination-container">
-                    <div class="pagination-info">
-                        <span>Showing <strong>@start–@end</strong> of <strong>@payouts.Count</strong> payouts</span>
-                    </div>
-
-                    @if (totalPages > 1)
-                    {
-                        <div class="pagination-controls">
-                            <button type="button" class="page-btn" disabled="@(pageIndex <= 1)" @onclick="() => GoToPage(pageIndex - 1)">‹ Prev</button>
-                            @for (int i = 1; i <= totalPages; i++)
-                            {
-                                var pNum = i;
-                                if (pNum == 1 || pNum == totalPages || Math.Abs(pNum - pageIndex) <= 1)
-                                {
-                                    <button type="button" class="page-btn @(pNum == pageIndex ? "active" : "")" @onclick="() => GoToPage(pNum)">@pNum</button>
-                                }
-                                else if (pNum == 2 && pageIndex > 3)
-                                {
-                                    <span class="page-dots">…</span>
-                                }
-                                else if (pNum == totalPages - 1 && pageIndex < totalPages - 2)
-                                {
-                                    <span class="page-dots">…</span>
-                                }
-                            }
-                            <button type="button" class="page-btn" disabled="@(pageIndex >= totalPages)" @onclick="() => GoToPage(pageIndex + 1)">Next ›</button>
-                        </div>
-                    }
-
-                    <div class="page-size-selector">
-                        <span>Per page:</span>
-                        <select value="@pageSize" @onchange="OnPageSizeChanged" class="page-size-select">
-                            <option value="5">5 / page</option>
-                            <option value="10">10 / page</option>
-                            <option value="20">20 / page</option>
-                        </select>
-                    </div>
-                </div>
-            }
+            <CommonPagination CurrentPage="@pageIndex"
+                              PageSize="@pageSize"
+                              TotalCount="@payouts.Count"
+                              PageChanged="GoToPage"
+                              ItemName="payouts" />
         }
 
         <!-- Processing Modal -->

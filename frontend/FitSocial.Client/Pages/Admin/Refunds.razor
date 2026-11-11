@@ -1,4 +1,4 @@
-﻿@page "/admin/refunds"
+@page "/admin/refunds"
 @layout AdminLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
 @using FitSocial.Client.Models.Common
@@ -223,43 +223,11 @@
             </div>
 
             <!-- Pagination Bar -->
-            <div class="pagination-bar">
-                <div class="pagination-info">
-                    Showing @(((pagedRefunds.PageNumber - 1) * pagedRefunds.PageSize) + 1) to
-                    @(Math.Min(pagedRefunds.PageNumber * pagedRefunds.PageSize, pagedRefunds.TotalCount)) of @pagedRefunds.TotalCount requests
-                </div>
-
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedRefunds.HasPreviousPage)" @onclick="() => ChangePageAsync(pagedRefunds.PageNumber - 1)">
-                        Previous
-                    </button>
-
-                    @for (int i = 1; i <= pagedRefunds.TotalPages; i++)
-                    {
-                        var pageIndex = i;
-                        if (i == 1 || i == pagedRefunds.TotalPages || (i >= pagedRefunds.PageNumber - 2 && i <= pagedRefunds.PageNumber + 2))
-                        {
-                            <button type="button" class="page-btn @(pagedRefunds.PageNumber == pageIndex ? "active" : "")" @onclick="() => ChangePageAsync(pageIndex)">
-                                @pageIndex
-                            </button>
-                        }
-                        else if (i == pagedRefunds.PageNumber - 3 || i == pagedRefunds.PageNumber + 3)
-                        {
-                            <span class="page-ellipsis">…</span>
-                        }
-                    }
-
-                    <button type="button" class="page-btn" disabled="@(!pagedRefunds.HasNextPage)" @onclick="() => ChangePageAsync(pagedRefunds.PageNumber + 1)">
-                        Next
-                    </button>
-
-                    <select class="page-size-select" value="@pageSize" @onchange="OnPageSizeChangedAsync">
-                        <option value="10">10 / page</option>
-                        <option value="20">20 / page</option>
-                        <option value="50">50 / page</option>
-                    </select>
-                </div>
-            </div>
+            <CommonPagination CurrentPage="@pagedRefunds.PageNumber"
+                              PageSize="@pagedRefunds.PageSize"
+                              TotalCount="@pagedRefunds.TotalCount"
+                              PageChanged="ChangePageAsync"
+                              ItemName="requests" />
         }
 
         <!-- DETAIL MODAL -->

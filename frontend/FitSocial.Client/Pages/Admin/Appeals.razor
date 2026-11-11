@@ -175,40 +175,11 @@
         </div>
 
         <!-- Pagination -->
-        <div class="pagination-container">
-            <div class="pagination-info">
-                @if (pagedAppeals.TotalCount > 0)
-                {
-                    var start = (currentPage - 1) * pageSize + 1;
-                    var end = Math.Min(currentPage * pageSize, pagedAppeals.TotalCount);
-                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedAppeals.TotalCount</strong> appeals</span>
-                }
-                else
-                {
-                    <span>0 appeals</span>
-                }
-            </div>
-            @if (pagedAppeals.TotalPages > 1)
-            {
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedAppeals.HasPreviousPage)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Prev</button>
-                    @foreach (var p in GetVisiblePageNumbers())
-                    {
-                        if (p == -1) { <span class="page-dots">…</span> }
-                        else { var pn = p; <button type="button" class="page-btn @(pn == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pn)">@pn</button> }
-                    }
-                    <button type="button" class="page-btn" disabled="@(!pagedAppeals.HasNextPage)" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
-                </div>
-            }
-            <div class="page-size-selector">
-                <span>Per page:</span>
-                <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
-                    <option value="10">10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                </select>
-            </div>
-        </div>
+        <CommonPagination CurrentPage="@currentPage"
+                          PageSize="@pageSize"
+                          TotalCount="@pagedAppeals.TotalCount"
+                          PageChanged="GoToPageAsync"
+                          ItemName="appeals" />
 
         <!-- ======= REVIEW MODAL ======= -->
         @if (showReviewModal && selectedAppeal != null)

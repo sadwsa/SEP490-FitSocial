@@ -1,4 +1,4 @@
-UTCID,Type,Email,Password,RememberMe,UserExists,PasswordHash,PasswordCorrect,IsLocked,UserRole,AuditThrows,ExpectedSuccess,ExpectedMessage
+UTCID,Type,Email,Password,RememberMe,Result_UserExists,Result_PasswordHash,Result_PasswordCorrect,Result_IsLocked,Result_UserRole,Result_AuditThrows,ExpectedSuccess,ExpectedMessage
 UTCID01,N,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,ADMIN,TRUE,TRUE,Welcome to the Management Portal!
 UTCID02,N,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,FALSE,TRUE,Welcome to the Management Portal!
 UTCID03,N,john@example.com,Password123,FALSE,TRUE,hashed,TRUE,FALSE,ADMIN,FALSE,TRUE,Welcome to the Management Portal!
@@ -11,3 +11,4 @@ UTCID09,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,COACH,FALSE,F
 UTCID10,B,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,STAFF,FALSE,TRUE,Welcome to the Management Portal!
 UTCID11,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,,FALSE,FALSE,Invalid email or password.
 UTCID12,A,john@example.com,Password123,TRUE,TRUE,hashed,TRUE,FALSE,NULL,FALSE,FALSE,Invalid email or password.
+UTCID13,N,john@example.com,Password123,TRUE,TRUE,EMPTY,FALSE,FALSE,ADMIN,FALSE,FALSE,Invalid email or password.

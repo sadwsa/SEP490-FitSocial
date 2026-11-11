@@ -55,6 +55,7 @@ public class PurchaseTrainingPackageServiceTests
                 {
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
+                    PackagesNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PackagesNull")),
                     BuyerIdEmpty = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "BuyerIdEmpty")),
                     PackageIdEmpty = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PackageIdEmpty")),
                     BuyerExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "BuyerExists")),
@@ -72,12 +73,12 @@ public class PurchaseTrainingPackageServiceTests
         }
     }
 
-    private PaymentService CreateSut()
+    private PaymentService CreateSut(bool packagesNull = false)
     {
         return new PaymentService(
             _users.Object, _plans.Object, _orders.Object, _payments.Object, _coachUpgrades.Object,
             _unitOfWork.Object, _tokenService.Object, _paymentGateway.Object, _authService.Object,
-            _packages.Object, _carts.Object, _trainingPlans.Object, _notifications.Object);
+            packagesNull ? null : _packages.Object, _carts.Object, _trainingPlans.Object, _notifications.Object);
     }
 
     [Theory]
@@ -151,7 +152,7 @@ public class PurchaseTrainingPackageServiceTests
             _orders.Setup(o => o.GetOrdersByBuyerIdAsync(buyerId, It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order>());
         }
 
-        var sut = CreateSut();
+        var sut = CreateSut(tc.PackagesNull);
         var result = await sut.PreparePackagePurchaseAsync(buyerId, packageId);
 
         Assert.True(result.Success == tc.ExpectedSuccess && result.Message == tc.ExpectedMessage,
@@ -162,6 +163,7 @@ public class PurchaseTrainingPackageServiceTests
     {
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
+        public bool PackagesNull { get; set; }
         public bool BuyerIdEmpty { get; set; }
         public bool PackageIdEmpty { get; set; }
         public bool BuyerExists { get; set; }

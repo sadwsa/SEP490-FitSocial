@@ -61,12 +61,12 @@ public class AdminLoginServiceTests
                     Email = CsvTestHelper.Get(row, index, "Email"),
                     Password = CsvTestHelper.Get(row, index, "Password"),
                     RememberMe = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "RememberMe")),
-                    UserExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "UserExists")),
-                    PasswordHash = CsvTestHelper.Get(row, index, "PasswordHash"),
-                    PasswordCorrect = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PasswordCorrect")),
-                    IsLocked = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "IsLocked")),
-                    UserRole = CsvTestHelper.Get(row, index, "UserRole"),
-                    AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditThrows")),
+                    Result_UserExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_UserExists")),
+                    Result_PasswordHash = CsvTestHelper.Get(row, index, "Result_PasswordHash"),
+                    Result_PasswordCorrect = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_PasswordCorrect")),
+                    Result_IsLocked = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_IsLocked")),
+                    Result_UserRole = CsvTestHelper.Get(row, index, "Result_UserRole"),
+                    Result_AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_AuditThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -94,7 +94,7 @@ public class AdminLoginServiceTests
         _auditLogService.Reset();
         _tokenService.Reset();
 
-        if (tc.AuditThrows)
+        if (tc.Result_AuditThrows)
         {
             _auditLogService.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("audit fail"));
         }
@@ -103,21 +103,21 @@ public class AdminLoginServiceTests
             _auditLogService.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new AuditLog());
         }
 
-        _passwordHasher.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>())).Returns(tc.PasswordCorrect);
+        _passwordHasher.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>())).Returns(tc.Result_PasswordCorrect);
         _tokenService.Setup(t => t.CreateSessionAsync(It.IsAny<User>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(new AuthResponseDto());
         _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         User? user = null;
-        if (tc.UserExists)
+        if (tc.Result_UserExists)
         {
             user = new User
             {
                 UserId = Guid.NewGuid(),
                 Email = tc.Email.Trim().ToLower(),
-                PasswordHash = string.Equals(tc.PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
-                RoleCode = tc.UserRole == "NULL" ? null : tc.UserRole,
-                IsLocked = tc.IsLocked,
-                FullName = tc.AuditThrows ? null : "Admin User"
+                PasswordHash = string.Equals(tc.Result_PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
+                RoleCode = tc.Result_UserRole == "NULL" ? null : tc.Result_UserRole,
+                IsLocked = tc.Result_IsLocked,
+                FullName = tc.Result_AuditThrows ? null : "Admin User"
             };
         }
         _users.Setup(u => u.FindByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(user);
@@ -142,12 +142,12 @@ public class AdminLoginServiceTests
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public bool RememberMe { get; set; }
-        public bool UserExists { get; set; }
-        public string PasswordHash { get; set; } = string.Empty;
-        public bool PasswordCorrect { get; set; }
-        public bool IsLocked { get; set; }
-        public string UserRole { get; set; } = string.Empty;
-        public bool AuditThrows { get; set; }
+        public bool Result_UserExists { get; set; }
+        public string Result_PasswordHash { get; set; } = string.Empty;
+        public bool Result_PasswordCorrect { get; set; }
+        public bool Result_IsLocked { get; set; }
+        public string Result_UserRole { get; set; } = string.Empty;
+        public bool Result_AuditThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

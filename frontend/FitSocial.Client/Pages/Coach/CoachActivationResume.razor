@@ -94,12 +94,23 @@
         }
     }
 
+    [SupplyParameterFromQuery(Name = "email")]
+    public string? Email { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         isLoading = true;
         try
         {
-            var res = await PaymentService.RegenerateCoachActivationAsync();
+            ApiResponse<ActivationLink>? res;
+            if (!string.IsNullOrWhiteSpace(Email))
+            {
+                res = await PaymentService.RegenerateCoachActivationByEmailAsync(Email);
+            }
+            else
+            {
+                res = await PaymentService.RegenerateCoachActivationAsync();
+            }
             if (res.Success && res.Data != null)
             {
                 activation = res.Data;

@@ -54,17 +54,18 @@ public class RenewCoachSubscriptionServiceTests
                 {
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
-                    PlanExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PlanExists")),
-                    PlanActive = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PlanActive")),
-                    CoachExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "CoachExists")),
+                    PlanAmountNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PlanAmountNull")),
+                    Result_PlanExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_PlanExists")),
+                    Result_PlanActive = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_PlanActive")),
+                    Result_CoachExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_CoachExists")),
                     PlanCurrency = CsvTestHelper.Get(row, index, "PlanCurrency"),
                     PlanDescription = CsvTestHelper.Get(row, index, "PlanDescription"),
                     PlanSubscriptionDuration = int.TryParse(CsvTestHelper.Get(row, index, "PlanSubscriptionDuration"), out var psd) ? (int?)psd : null,
                     PlanTrainingPackageDuration = int.TryParse(CsvTestHelper.Get(row, index, "PlanTrainingPackageDuration"), out var ptpd) ? (int?)ptpd : null,
-                    HasStaleOrders = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "HasStaleOrders")),
+                    Result_HasStaleOrders = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_HasStaleOrders")),
                     OriginUrl = CsvTestHelper.Get(row, index, "OriginUrl"),
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
-                    PaymentLinkThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PaymentLinkThrows")),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
+                    Result_PaymentLinkThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_PaymentLinkThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -95,17 +96,17 @@ public class RenewCoachSubscriptionServiceTests
         var planId = Guid.NewGuid();
         var coachId = Guid.NewGuid();
 
-        if (tc.PlanExists)
+        if (tc.Result_PlanExists)
         {
             _plans.Setup(p => p.GetByIdAsync(planId, It.IsAny<CancellationToken>())).ReturnsAsync(new CoachSubscriptionPlan
             {
                 CoachSubscriptionPlansId = planId,
-                IsActive = tc.PlanActive,
+                IsActive = tc.Result_PlanActive,
                 Currency = string.IsNullOrWhiteSpace(tc.PlanCurrency) ? null : tc.PlanCurrency,
                 Description = string.IsNullOrWhiteSpace(tc.PlanDescription) ? null : tc.PlanDescription,
                 SubscriptionDuration = tc.PlanSubscriptionDuration,
                 TrainingPackageDuration = tc.PlanTrainingPackageDuration,
-                Amount = 100000
+                Amount = tc.PlanAmountNull ? null : 100000
             });
         }
         else
@@ -113,7 +114,7 @@ public class RenewCoachSubscriptionServiceTests
             _plans.Setup(p => p.GetByIdAsync(planId, It.IsAny<CancellationToken>())).ReturnsAsync((CoachSubscriptionPlan?)null);
         }
 
-        if (tc.CoachExists)
+        if (tc.Result_CoachExists)
         {
             _users.Setup(u => u.GetByIdAsync(coachId, It.IsAny<CancellationToken>())).ReturnsAsync(new User { UserId = coachId, FullName = string.IsNullOrWhiteSpace(tc.PlanDescription) ? null : "Coach", Email = "coach@example.com" });
         }
@@ -122,9 +123,9 @@ public class RenewCoachSubscriptionServiceTests
             _users.Setup(u => u.GetByIdAsync(coachId, It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
         }
 
-        if (tc.HasStaleOrders) { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order> { new Order { OrderStatus = PaymentConstants.OrderStatusPending, OrderDetails = new List<OrderDetail> { new OrderDetail { PackageId = planId } } } }); } else { if (tc.HasStaleOrders) { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order> { new Order { OrderStatus = PaymentConstants.OrderStatusPending, OrderDetails = new List<OrderDetail> { new OrderDetail { PackageId = planId } } } }); } else { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order>()); } }
+        if (tc.Result_HasStaleOrders) { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order> { new Order { OrderStatus = PaymentConstants.OrderStatusPending, OrderDetails = new List<OrderDetail> { new OrderDetail { PackageId = planId } } } }); } else { if (tc.Result_HasStaleOrders) { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order> { new Order { OrderStatus = PaymentConstants.OrderStatusPending, OrderDetails = new List<OrderDetail> { new OrderDetail { PackageId = planId } } } }); } else { _orders.Setup(o => o.ListPendingActivationByUserAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<Order>()); } }
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new DbUpdateException("boom"));
         }
@@ -133,7 +134,7 @@ public class RenewCoachSubscriptionServiceTests
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         }
 
-        if (tc.PaymentLinkThrows)
+        if (tc.Result_PaymentLinkThrows)
         {
             _paymentGateway.Setup(g => g.CreatePaymentLinkAsync(It.IsAny<long>(), It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).ThrowsAsync(new Exception("boom"));
         }
@@ -156,17 +157,18 @@ public class RenewCoachSubscriptionServiceTests
     {
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public bool PlanExists { get; set; }
-        public bool PlanActive { get; set; }
-        public bool CoachExists { get; set; }
+        public bool PlanAmountNull { get; set; }
+        public bool Result_PlanExists { get; set; }
+        public bool Result_PlanActive { get; set; }
+        public bool Result_CoachExists { get; set; }
         public string PlanCurrency { get; set; } = string.Empty;
         public string PlanDescription { get; set; } = string.Empty;
         public int? PlanSubscriptionDuration { get; set; }
         public int? PlanTrainingPackageDuration { get; set; }
-        public bool HasStaleOrders { get; set; }
+        public bool Result_HasStaleOrders { get; set; }
         public string OriginUrl { get; set; } = string.Empty;
-        public bool SaveChangesThrows { get; set; }
-        public bool PaymentLinkThrows { get; set; }
+        public bool Result_SaveChangesThrows { get; set; }
+        public bool Result_PaymentLinkThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

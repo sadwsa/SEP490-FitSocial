@@ -42,30 +42,7 @@ public class SystemOperationsService : ISystemOperationsService
     {
         try
         {
-            var allPlans = await _planRepository.GetAllPlansAsync(cancellationToken);
-            var query = allPlans.AsQueryable();
-
-            if (isActive.HasValue)
-            {
-                query = query.Where(p => p.IsActive == isActive.Value);
-            }
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var s = search.Trim().ToLower();
-                query = query.Where(p => 
-                    (p.Currency != null && p.Currency.ToLower().Contains(s)) || 
-                    (p.Amount.HasValue && p.Amount.Value.ToString().Contains(s)) || 
-                    (p.Description != null && p.Description.ToLower().Contains(s)));
-            }
-
-            var totalPlans = query.Count();
-            var activePlansCount = allPlans.Count(p => p.IsActive == true);
-            var pagedPlans = query
-                .OrderByDescending(p => p.CreatedAt)
-                .Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100))
-                .Take(Math.Clamp(pageSize, 1, 100))
-                .ToList();
+            var (pagedPlans, totalPlans, activePlansCount) = await _planRepository.GetPlansAsync(isActive, search, page, pageSize, cancellationToken);
 
             var planIds = pagedPlans.Select(p => p.CoachSubscriptionPlansId).ToList();
             var countDict = await _upgrades.GetCountsByPriceIdsAsync(planIds, cancellationToken);
@@ -131,6 +108,11 @@ public class SystemOperationsService : ISystemOperationsService
 
     public async Task<ApiResponseDto<CoachSubscriptionPlanDto>> CreatePlanAsync(CreateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken = default)
     {
+        if (dto == null)
+        {
+            return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Subscription plan data is required.");
+        }
+
         try
         {
             var plan = new FitSocial.Domain.Entities.CoachSubscriptionPlan
@@ -227,7 +209,7 @@ public class SystemOperationsService : ISystemOperationsService
 
             plan.Amount = dto.Amount;
             plan.Currency = string.IsNullOrWhiteSpace(dto.Currency) ? plan.Currency : dto.Currency.Trim().ToUpper();
-            plan.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+            plan.Description = dto.Description!.Trim();
             plan.ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
             if (dto.IsActive.HasValue) plan.IsActive = dto.IsActive.Value;
             if (dto.SubscriptionDuration.HasValue) plan.SubscriptionDuration = dto.SubscriptionDuration.Value;
@@ -326,7 +308,6 @@ public class SystemOperationsService : ISystemOperationsService
                 planDescription = plan.Description
             };
 
-            // 33.3.E1: preserve financial audit logs — never hard-delete referenced plans.
             var (upgrades, details) = await _planRepository.CountReferencesAsync(planId, cancellationToken);
             if (upgrades > 0 || details > 0)
             {
@@ -355,9 +336,9 @@ public class SystemOperationsService : ISystemOperationsService
                             },
                             cancellationToken: cancellationToken);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Non-fatal
+                        _logger.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", "UPDATE_COACH_SUBSCRIPTION_PLAN", planId);
                     }
                 }
 
@@ -382,9 +363,9 @@ public class SystemOperationsService : ISystemOperationsService
                         newValue: null,
                         cancellationToken: cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal
+                    _logger.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", "DELETE_COACH_SUBSCRIPTION_PLAN", planId);
                 }
             }
 

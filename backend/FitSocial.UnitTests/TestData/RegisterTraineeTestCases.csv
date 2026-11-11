@@ -1,4 +1,4 @@
-﻿UTCID,Type,FullName,Email,Password,ConfirmPassword,OtpCode,PhoneNumber,Gender,DateOfBirth,TermId,EmailExists,TermExists,PhoneExists,OtpValid,OtpMessage,SaveChangesThrows,ExpectedSuccess,ExpectedMessage
+UTCID,Type,FullName,Email,Password,ConfirmPassword,OtpCode,PhoneNumber,Gender,DateOfBirth,TermId,Result_EmailExists,Result_TermExists,Result_PhoneExists,Result_OtpValid,Result_OtpMessage,Result_SaveChangesThrows,ExpectedSuccess,ExpectedMessage
 UTCID01,N,John Doe,john@example.com,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
 UTCID02,N,John Doe,john@example.com,Password123,Password123,123456,,FEMALE,,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!
 UTCID03,N,  John  ,  JOHN@Example.com  ,Password123,Password123,123456,0901234567,MALE,1990-01-01,11111111-2222-3333-4444-555555555555,FALSE,TRUE,FALSE,TRUE,,FALSE,TRUE,Trainee account registered successfully!

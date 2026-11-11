@@ -57,7 +57,7 @@ public class ViewCoachSubscriptionPlansServiceTests
                     Search = CsvTestHelper.Get(row, index, "Search"),
                     Page = page,
                     PageSize = pageSize,
-                    Exception = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Exception")),
+                    Result_Exception = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_Exception")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage"),
                     ExpectedPlanCount = int.TryParse(CsvTestHelper.Get(row, index, "ExpectedPlanCount"), out var epc) ? epc : 0,
@@ -88,13 +88,15 @@ public class ViewCoachSubscriptionPlansServiceTests
             new() { CoachSubscriptionPlansId = Guid.NewGuid(), Description = "Pro Plan", Amount = 1000000, IsActive = true, CreatedAt = DateTime.UtcNow }
         };
 
-        if (tc.Exception)
+        if (tc.Result_Exception)
         {
-            _planRepo.Setup(p => p.GetAllPlansAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("boom"));
+            _planRepo.Setup(p => p.GetPlansAsync(It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("boom"));
         }
         else
         {
-            _planRepo.Setup(p => p.GetAllPlansAsync(It.IsAny<CancellationToken>())).ReturnsAsync(plans);
+            var pagedPlans = plans.Take(tc.ExpectedPlanCount).ToList();
+            _planRepo.Setup(p => p.GetPlansAsync(It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((pagedPlans, tc.ExpectedTotalPlans, tc.ExpectedActivePlansCount));
         }
         _upgrades.Setup(u => u.GetCountsByPriceIdsAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<Guid, (int Total, int Active)>());
@@ -121,7 +123,7 @@ public class ViewCoachSubscriptionPlansServiceTests
         public string Search { get; set; } = string.Empty;
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 20;
-        public bool Exception { get; set; }
+        public bool Result_Exception { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public int ExpectedPlanCount { get; set; }

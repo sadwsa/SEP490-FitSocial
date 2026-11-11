@@ -18,7 +18,7 @@ public class PaymentService : IPaymentService
     private readonly IOrderRepository _orders;
     private readonly IPaymentRepository _payments;
     private readonly ICoachUpgradeRepository _coachUpgrades;
-    private readonly ITrainingPackageRepository _packages;
+    private readonly ITrainingPackageRepository? _packages;
     private readonly ICartRepository _carts;
     private readonly ITrainingPlanRepository _trainingPlans;
     private readonly INotificationRepository _notifications;
@@ -51,7 +51,7 @@ public class PaymentService : IPaymentService
         _tokenService = tokenService;
         _paymentGateway = paymentGateway;
         _authService = authService;
-        _packages = packages!;
+        _packages = packages;
         _carts = carts!;
         _trainingPlans = trainingPlans!;
         _notifications = notifications!;
@@ -498,6 +498,29 @@ public class PaymentService : IPaymentService
     }
 
     /// <summary>
+    public async Task<ApiResponseDto<ActivationLinkDto>> RegenerateCoachActivationByEmailAsync(string email, string originUrl, string? ipAddress = null)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return ApiResponseDto<ActivationLinkDto>.Fail("Email is required.");
+
+        var normalizedEmail = email.Trim().ToLower();
+        var user = await _users.FindByEmailAsync(normalizedEmail);
+        if (user == null)
+            return ApiResponseDto<ActivationLinkDto>.Fail("Account not found.");
+
+        if (!string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
+            return ApiResponseDto<ActivationLinkDto>.Fail("Account not found.");
+
+        if (user.IsLocked != true)
+            return ApiResponseDto<ActivationLinkDto>.Fail("Account is already active. Please sign in.");
+
+        var activeUpgrade = await _coachUpgrades.GetLatestFinishedByCoachIdAsync(user.UserId);
+        if (activeUpgrade != null && activeUpgrade.Status == "ACTIVE")
+            return ApiResponseDto<ActivationLinkDto>.Fail("Your coach account is already activated.");
+
+        return await RegenerateCoachActivationAsync(user.UserId, originUrl, ipAddress);
+    }
+
     /// Verify the PayOS payment by order code, then unlock the account and sign the coach in.
     /// Idempotent: already-paid orders simply sign the user in again.
     /// Also stores GatewayResponseRaw on success.

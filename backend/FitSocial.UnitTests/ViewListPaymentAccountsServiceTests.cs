@@ -46,6 +46,9 @@ public class ViewListPaymentAccountsServiceTests
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
                     ConfigCount = int.TryParse(CsvTestHelper.Get(row, index, "ConfigCount"), out var c) ? c : 0,
+                    NullApiKey = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "NullApiKey")),
+                    NullChecksumKey = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "NullChecksumKey")),
+                    Result_DecryptThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_DecryptThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage"),
                     ExpectedConfigCount = int.TryParse(CsvTestHelper.Get(row, index, "ExpectedConfigCount"), out var ec) ? ec : 0
@@ -75,15 +78,22 @@ public class ViewListPaymentAccountsServiceTests
                 GatewayId = Guid.NewGuid(),
                 GatewayName = $"Gateway {i}",
                 ClientId = "client",
-                EncryptedApiKey = new byte[] { 1 },
-                EncryptedChecksumKey = new byte[] { 2 },
+                EncryptedApiKey = tc.NullApiKey ? null : new byte[] { 1 },
+                EncryptedChecksumKey = tc.NullChecksumKey ? null : new byte[] { 2 },
                 IsActive = true,
                 IsPayout = false,
                 UpdatedAt = DateTime.UtcNow
             });
         }
         _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(configs);
-        _encryption.Setup(e => e.Decrypt(It.IsAny<byte[]>())).Returns("secret");
+        if (tc.Result_DecryptThrows)
+        {
+            _encryption.Setup(e => e.Decrypt(It.IsAny<byte[]>())).Throws(new Exception("decrypt boom"));
+        }
+        else
+        {
+            _encryption.Setup(e => e.Decrypt(It.IsAny<byte[]>())).Returns("secret");
+        }
 
         var sut = CreateSut();
         var result = await sut.GetAllConfigsAsync();
@@ -102,6 +112,9 @@ public class ViewListPaymentAccountsServiceTests
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public int ConfigCount { get; set; }
+        public bool NullApiKey { get; set; }
+        public bool NullChecksumKey { get; set; }
+        public bool Result_DecryptThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public int ExpectedConfigCount { get; set; }

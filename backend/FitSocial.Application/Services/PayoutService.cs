@@ -6,6 +6,7 @@ using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FitSocial.Application.Services;
 
@@ -25,6 +26,7 @@ public class PayoutService : IPayoutService
     private readonly IEmailService _emailService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserContext? _currentUserContext;
+    private readonly ILogger<PayoutService>? _logger;
 
     /// <summary>
     /// Serializes cycle generation: two concurrent Generate clicks must not
@@ -43,7 +45,8 @@ public class PayoutService : IPayoutService
         INotificationRepository notifications,
         IUnitOfWork unitOfWork,
         IEmailService? emailService = null,
-        ICurrentUserContext? currentUserContext = null)
+        ICurrentUserContext? currentUserContext = null,
+        ILogger<PayoutService>? logger = null)
     {
         _payouts = payouts;
         _users = users;
@@ -56,6 +59,7 @@ public class PayoutService : IPayoutService
         _emailService = emailService!;
         _unitOfWork = unitOfWork;
         _currentUserContext = currentUserContext;
+        _logger = logger;
     }
 
     private static (DateTime from, DateTime to) CycleRange(int month, int year)
@@ -725,10 +729,6 @@ public class PayoutService : IPayoutService
             string.Equals(item.Order.OrderStatus, PaymentConstants.OrderStatusRefunded, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Pay-all: transfers the REMAINING balance (unpaid tranches minus
-    /// unconsumed refund adjustments) in one transfer.
-    /// </summary>
     public async Task<ApiResponseDto<ProcessPayoutResultDto>> ProcessPayoutAsync(
         Guid payoutId, Guid staffId, string? ipAddress = null, CancellationToken cancellationToken = default)
     {
@@ -762,7 +762,6 @@ public class PayoutService : IPayoutService
                 "Payout is already fully paid.");
         }
 
-        // Mutual Consistency: refunded orders require regeneration first.
         if (unpaid.Any(IsOrderRefunded))
         {
             await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, payout.Status,
@@ -1165,8 +1164,9 @@ public class PayoutService : IPayoutService
             }, ct);
             await _unitOfWork.SaveChangesAsync(ct);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger?.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", action, payout?.PayoutId);
             // Audit failures must not break the payout flow itself
         }
     }

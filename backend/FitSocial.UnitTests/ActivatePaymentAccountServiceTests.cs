@@ -45,11 +45,11 @@ public class ActivatePaymentAccountServiceTests
                 {
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
-                    ConfigExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ConfigExists")),
-                    OtherActiveExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "OtherActiveExists")),
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    Result_ConfigExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_ConfigExists")),
+                    Result_OtherActiveExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_OtherActiveExists")),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
                     IsPayout = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "IsPayout")),
-                    AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "AuditThrows")),
+                    Result_AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_AuditThrows")),
                     ExpectedThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
@@ -73,12 +73,12 @@ public class ActivatePaymentAccountServiceTests
         _unitOfWork.Reset();
 
         var id = Guid.NewGuid();
-        if (tc.ConfigExists)
+        if (tc.Result_ConfigExists)
         {
             var config = new PaymentGatewayConfig { GatewayId = id, GatewayName = "Gateway", IsActive = false, IsPayout = tc.IsPayout };
             _configRepo.Setup(c => c.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(config);
 
-            if (tc.OtherActiveExists)
+            if (tc.Result_OtherActiveExists)
             {
                 var other = new PaymentGatewayConfig { GatewayId = Guid.NewGuid(), GatewayName = "Other", IsActive = true, IsPayout = tc.IsPayout };
                 _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<PaymentGatewayConfig> { config, other });
@@ -93,7 +93,7 @@ public class ActivatePaymentAccountServiceTests
             _configRepo.Setup(c => c.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync((PaymentGatewayConfig?)null);
         }
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("boom"));
         }
@@ -135,10 +135,10 @@ public class ActivatePaymentAccountServiceTests
     {
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public bool ConfigExists { get; set; }
-        public bool OtherActiveExists { get; set; }
-        public bool SaveChangesThrows { get; set; }
-        public bool AuditThrows { get; set; }
+        public bool Result_ConfigExists { get; set; }
+        public bool Result_OtherActiveExists { get; set; }
+        public bool Result_SaveChangesThrows { get; set; }
+        public bool Result_AuditThrows { get; set; }
         public bool IsPayout { get; set; }
         public bool ExpectedThrows { get; set; }
         public bool ExpectedSuccess { get; set; }

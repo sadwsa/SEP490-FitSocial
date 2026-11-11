@@ -1,0 +1,274 @@
+BR-01
+User passwords must be at least 8 characters long, including uppercase letters, lowercase letters, numbers, and special characters, without utilizing an interface strength bar.
+BR-02
+The system strictly separates standard user interfaces (Trainee, Coach) from the dedicated management portal reserved for staff members and administrators (Staff, Admin).
+BR-03
+New passwords established during password changes or resets must differ from the old password currently stored in the database.
+BR-04
+Trainee accounts are permitted to register free of charge either directly via email OTP verification forms or through the Google quick sign-up feature.
+BR-05
+Coach accounts must successfully complete registration and partnership fee payment transactions via integrated payment gateways (VietQR, MoMo) in order to activate the account.
+BR-06
+Email verification OTP codes must consist of 6 digits and automatically expire after a limited timeframe.
+BR-07
+Only authenticated users holding the Trainee or Coach role are permitted to create community posts. 
+BR-08
+Post classification is strictly enforced by user role: Trainees can only create Normal or Find Coach posts; Coaches can create Normal, Find Coach, or Find Trainee posts. 
+BR-09
+Post text content must not exceed five thousand characters. 
+BR-10
+Selecting a location is mandatory for every post. 
+BR-11
+A post can contain at most ten media items in total, calculated as the sum of retained existing media items and newly added media items.
+BR-12
+Duplicate media files are automatically identified and excluded during file selection. 
+BR-13
+Users with locked accounts are strictly prohibited from editing posts.
+BR-14
+Only the original author can edit their post.
+BR-15
+A post cannot be edited or deleted if it has been marked as deleted.
+BR-16
+Content is required for edited posts and cannot be empty or whitespace only.
+BR-17
+A confirmation dialog is required before finalizing deletion.
+BR-18
+Package Title is required and must not exceed a predefined maximum length (e.g., 100 characters).
+BR-19
+Price (VNĐ) must be a non-negative numerical value (Price >= 0). A price of 0 indicates a free package.
+BR-20
+ BR-03: Duration (Days) must be a positive integer strictly greater than zero (Duration > 0).
+BR-21
+Package Title is required.
+BR-22
+Price (VNĐ) must be a non-negative numerical value (Price >= 0).
+BR-23
+Duration (Days) must be a positive integer strictly greater than zero (Duration > 0).
+BR-24
+ Updating the Price or Duration will only apply to trainees who purchase the package from this point forward; it does not affect the invoices or progress of trainees who previously purchased the package (transaction history logic).
+ 
+BR-25
+Data Integrity Validation: A training package cannot be hard-deleted if there are existing transaction histories, invoices, or active Trainee enrollments associated with it. In such cases, the system must enforce a "soft delete" (marking a deleted flag in the database) or instruct the Coach to set the status to "Inactive".
+BR-26
+Ownership Validation: A Coach can only delete training packages where the CoachId matches their authenticated user ID.
+BR-27
+All active JWT/session tokens must be immediately revoked and invalidated upon logout to prevent token reuse.
+BR-28
+The application must disable caching on sensitive management pages so that using the browser's "Back" button after logging out will not display cached restricted data.
+BR-29
+Package Title is required and must not exceed a predefined maximum length (e.g., 100 characters).
+BR-30
+Price (VNĐ) must be a non-negative numerical value (Price≥0). A price of 0 indicates a free package.
+BR-31
+Duration (Days) must be a positive integer strictly greater than zero (Duration>0).
+BR-32
+Both Staff and Admin have full read and creation access to view and add coach subscription plans within their management privileges.
+BR-33
+All subscription plan prices must be formatted and displayed in Vietnamese Dong (VND) by default.
+BR-34
+Only authenticated users with Staff or Admin roles have permission to access, view, search, and filter user account records in the Management Portal.
+BR-35
+The user account list must display accounts ordered by registration date in descending order (CreatedAt DESC) and support multi-criteria filtering (role: Trainee, Coach, Staff, Admin; status: Active, Locked, All) with pagination (default 10, 20, 50 records per page).
+BR-36
+Both Staff and Admin have full management privileges (Read, Create, Update, Delete) for Locations in the platform catalog.
+BR-37
+Location Name is required, must not be empty or consist solely of whitespace, and must not exceed 200 characters in length.
+BR-38
+Location Name must be unique within the system (case-insensitive validation). No two locations can share the same name.
+BR-39
+Location Address is optional; if provided, it must not exceed 200 characters in length.
+BR-40
+Data Integrity Constraint: A Location cannot be deleted if it is currently associated with any existing posts or coach profiles (CoachLocations). The system must enforce referential integrity and reject deletion if active references exist.
+BR-41
+Deleting a Location requires an explicit confirmation step via a confirmation dialog before executing the permanent removal.
+BR-42
+Users (Trainee, Coach) are strictly permitted to view and update only their own profile information. Accounts with a "Locked" status are prohibited from editing profile details.
+BR-43
+Profile Full Name is mandatory, must not be empty or whitespace only, and must not exceed 100 characters. Phone number, if provided, must adhere to a valid phone format. Date of birth must reflect an age of at least 15 years old.
+BR-44
+Profile avatar uploads must be in valid image formats (JPEG, JPG, PNG, WEBP) and must not exceed 5 MB in file size.
+BR-45
+Coach profile updates: Years of experience must be a non-negative integer ( 0), biography must not exceed 1,000 characters, and coaches can select up to 5 operating locations and specialty sports from the platform catalog.
+BR-46
+System Audit Logs are strictly immutable (read-only). No user, including Staff and Admin, is permitted to edit, alter, or delete audit log entries through the interface.
+BR-47
+Only authenticated Staff and Admin members are permitted to view system audit logs, which record the Actor ID/name, action type, entity type, entity ID, old/new state values, client IP address, and UTC timestamp.
+BR-48
+Only authenticated Staff and Admin accounts have permissions to review, evaluate, approve, or reject Coach application requests submitted by applicants.
+BR-49
+Approving a coach application updates ApprovalStatus to "APPROVED", binds the reviewer's ID (ApprovedBy), and activates coach capabilities (publishing training packages, acquiring trainees, receiving client bookings).
+BR-50
+Rejecting a coach application requires a mandatory rejection reason to be selected/entered, updating ApprovalStatus to "REJECTED" and notifying the applicant of the decision.
+BR-51
+Only authenticated users with the Administrator (ADMIN) role are permitted to view, create, edit, lock, and unlock Staff accounts. Staff members (STAFF role) are prohibited from managing other staff or admin accounts.
+BR-52
+Creating a Staff account requires a unique email address, adherence to password complexity requirements (BR-01), mandatory full name, and explicitly sets the internal flag (IsInternal = true) with role STAFF.
+BR-53
+Locking a Staff account immediately invalidates their active JWT/session tokens (BR-27) and blocks access to the Management Portal.
+BR-54
+Administrators are strictly prevented from locking their own currently logged-in account to avoid complete administrative lockout.
+BR-55
+Only authenticated Trainees and Coaches with active (unlocked) accounts are permitted to react to posts.
+BR-56
+A post cannot receive reactions or be unreacted if it has been marked as deleted in the system.
+BR-57
+Reaction operates as a binary toggle: a user can maintain at most one active reaction on a post. Clicking the reaction button likes the post, and clicking it again removes the reaction (unlike). 
+BR-58
+Only authenticated Trainees and Coaches with active accounts can report posts. Users are strictly prohibited from reporting their own posts.
+BR-59
+A post cannot be reported if it has been marked as deleted or is no longer accessible.
+BR-60
+A user is permitted to submit only one report per post while their previous report for that specific post remains in "Pending" status.
+BR-61
+A report submission must select exactly one valid predefined reason.If "Other" is selected, an additional explanation is mandatory and must not exceed 500 characters.
+BR-62
+Submitting a post report does not automatically delete, hide, or alter the post. The system records the report with a "Pending" status and queues it for administrative review by Staff and Admin members in the Management Portal.
+BR-63
+Meal Plan Assignment & Dietary Bounds: A Meal Plan must be linked to a valid Coach and an active Order Detail. Meal types must be Breakfast, Lunch, Dinner, or Snack. Daily calories must be between 500 and 6,000 kcal.
+BR-64
+Training Plan Structure & Exercise Bounds: A Training Plan must follow structured weeks (1..N) and days (1..7). Sets must be 1..20, Reps 1..100, Duration 1..180 mins. Attached tutorial videos must belong to the coach's video library or platform-approved media.
+BR-65
+Plan Publishing & Audit Immutability: Once a plan is marked as "Published", any structural updates require an explicit update log and automatic push notification dispatched to the assigned trainee.
+BR-66
+Communication Eligibility: Users can initiate direct chat if they have an active coach-trainee training contract, mutual friendship, or coach consultation inquiry status.
+BR-67
+Chat Blocking Constraint: When User A blocks User B (userBlocks), neither user can send messages to the other in that direct conversation. Historical messages remain read-only for both until unblocked.
+BR-68
+Conversation Deletion Scope: Deleting a conversation applies as a soft deletion for the requesting participant only (HistoryDeletedAt = Now). The conversation remains intact for the other participant.
+BR-69
+Real-Time SignalR Fallback: If the recipient is active on ChatHub, messages must be delivered instantly (< 500ms). If offline, the message is stored with IsRead = false and a push notification is queued.
+BR-70
+Coach Dashboard Metric Isolation: Dashboard statistics (Total Trainees, Active Orders, Gross Revenue, Retention Rate) only aggregate completed orders (OrderStatus = 'Completed') belonging to the logged-in coach.
+BR-71
+Subscription Price Tier Immutability: Existing coach subscription price records (Price table) cannot be updated if linked to previous purchases. Price adjustments require creating a new active price tier and deactivating the old one.
+BR-72
+Platform Revenue Analytics Calculation: Net System Revenue = (Platform Commission on Package Orders + Coach Upgrade Subscription Fees) - Processed Refunds. Only finalized payments are included.
+BR-73
+Refund Eligibility Window & Progress Condition: A Trainee can only submit a refund request within 72 hours (3 days) of purchase, AND less than 10% of total workout days in the package have been logged as completed.
+BR-74
+Refund Reason & Evidence Completeness: A refund request must contain a valid reason code (Coach Unresponsive, Incorrect Information, Medical Issue) and a detailed justification of at least 20 characters.
+BR-75
+Single Pending Refund State: An order can have only one pending refund request at any given time. Once a refund is requested, training plan access for that order is frozen pending staff review.
+BR-76
+Order Data Confidentiality: A Coach can only view purchase orders, payment status, and buyer profiles directly associated with their own training packages (Orders.CoachID == CurrentCoachID).
+BR-77
+Message Content & Attachment Limits: Message content length is capped between 1 and 300 characters. Attachments cannot exceed 20MB and must belong to allowed mime types (JPEG, PNG, MP4, PDF).
+BR-78
+Refund Payout Adjustment Link: Any approved refund deduction will be logged as a RefundAdjustment in the respective coach's next upcoming monthly payout cycle (PayoutItems).
+BR-79
+Only authenticated Trainees and Coaches with active (unlocked) accounts are permitted to view and manage their personal shopping cart. Adding a training package created by the user themselves (own package) into their cart is strictly prohibited.
+BR-80
+Only training packages currently marked as Active and open for enrollment by the Coach can be added to the cart or processed during checkout. Deactivated packages in the cart are flagged as unavailable.
+BR-81
+Training packages in the cart represent unique individual enrollment contracts; each training package can only exist once per user cart without multiplying enrollment seats.
+BR-82
+A Trainee can submit a formal complaint against a Coach with whom they have interacted or contracted. Users are strictly prohibited from submitting complaints against themselves.
+BR-83
+A coach complaint submission requires selecting a valid violation category (Unprofessional Conduct, Inappropriate Content, Service Non-delivery, Policy Violation) accompanied by a mandatory description explaining the incident (between 20 and 1,000 characters).
+BR-84
+A Trainee is permitted to maintain at most one complaint per Coach while their previous complaint against that specific Coach remains in "Pending" status pending administrative investigation.
+BR-85 
+Data Encryption & Privacy Protection (Decree 13/2023/NĐ-CP): All sensitive personal data captured via Viettel eKYC (CCCD number, ID card image files, biometric face data) must be encrypted (BYTEA) before database storage in compliance with Vietnamese Decree 13/2023/NĐ-CP. Temporary unverified registration records are subject to automated deletion after 30 days.
+BR-86 
+PayOS Webhook & Payment Transaction Integrity: Coach application fee payments are finalized only upon receiving an authentic webhook notification from PayOS verified via HMAC checksum. Transactions that time out or are cancelled will abort the registration workflow without granting Pending Approval status.
+BR-87
+Only authenticated users with an authorized role (Trainee or Coach) are permitted to submit replies to comments. 
+BR-88 
+Violation Penalty Threshold: Users accumulating more than 2 approved violation reports face severe account restrictions. Standard Trainees and Coaches with no sold packages are permanently Locked. Coaches with a history of sold packages are Suspended. A Suspended status blocks the creation of new posts and new sales but permits login access solely to manage existing active trainees.
+BR-89
+Violating Content Deletion: Any post confirmed as violating platform policies via an approved report must be immediately deleted from the platform by the system.
+BR-90
+Violation Warning Tier: Users accumulating 2 or fewer approved violation reports receive a formal system warning without facing account locks or suspensions.
+BR-100 
+Only approved, active coaches with the coach role are displayed.
+BR-101
+Search matches a coach's name or biography, ignoring letter case.
+BR-102
+The minimum experience filter applies only when a positive value is provided.
+BR-103
+The trainee must have a paid, active, or completed order for a package from the coach.
+BR-104
+Each successful submission creates a new coach-level review; no duplicate-review restriction is currently enforced.
+BR-105
+The system rejects the request because the token is missing or invalid.
+BR-106
+The current coach-level review update does not enforce a one-edit limit.
+BR-107
+Replying does not change the trainee’s rating or comment.
+BR-108
+Only active training packages are returned and displayed; deactivated packages are excluded from both the package catalog and coach profiles.
+BR-109
+The "Training Packages" tab on a user profile is displayed only when the profile owner holds the Coach role.
+BR-110
+If a coach has one or more expired certificates, the system displays a warning banner advising users to review qualifications before purchasing.
+BR-111
+Unauthenticated users can browse, search, filter, and sort the package catalog, but must sign in before adding a package to the cart.
+BR-112
+A coach cannot add or purchase their own training package; the purchase action is replaced with a "Your Package" link.
+BR-113
+Each package enrollment is limited to a quantity of one, and packages already in the cart or already purchased cannot be added again.
+BR-114
+Only active, non-deleted posts are fetched and displayed on the feed. 
+BR-115
+Valid post types are strictly constrained to: Normal, FindCoach, and FindTrainee.
+BR-116
+Only accounts possessing the Staff or Admin role are permitted to view the administrative profile. 
+BR-117
+Locked accounts are strictly forbidden from viewing or loading profile data. 
+BR-118
+The Email address serves as the non-editable system identifier and is displayed in read-only format. 
+BR-119
+Locked accounts are strictly prohibited from viewing or loading profile data. 
+BR-120
+For Coach users, expired or unapproved certificates are hidden from the active certificate listing; only approved and unexpired certificates are presented. 
+BR-121
+The Email address serves as the permanent system identifier and is displayed in read-only format. 
+BR-122
+
+
+Keyword matching is case-insensitive and checks against the full body text of posts. 
+BR-123
+Only active, non-deleted posts are eligible for retrieval in search and filter queries. 
+BR-124
+Valid post type filter options are strictly constrained to: Normal, Find Coach, and Find Trainee. 
+BR-125
+A post must contain either non-empty text content or at least one media item; submitting an entirely blank post is prohibited. 
+BR-126
+Only image and video media formats are accepted; each media item must possess a valid storage address and media classification. 
+BR-127
+All media items designated for removal must strictly belong to the post being edited; deleting media items belonging to other posts or non-existent identifiers is prohibited.
+BR-128
+The default sort order is by years of experience from highest to lowest.
+BR-129
+Users with locked accounts are strictly prohibited from deleting posts. 
+BR-130
+A post can only be deleted by its original author.
+BR-131
+Upon successful deletion, the system broadcasts a realtime event to all active clients viewing the feed to immediately remove the post from their display without requiring a page refresh. 
+BR-132
+If concurrent reaction requests occur for the same user and post, the system gracefully recovers by resolving to the current database state without throwing an application error. 
+BR-133
+
+
+Users with locked accounts are strictly prohibited from publishing comments or replying to existing comments 
+BR-134
+Comment content is mandatory and must not exceed five hundred characters; submitting empty comments or whitespace only is strictly prohibited. 
+BR-135
+A reply comment must reference a valid parent comment that belongs strictly to the same target post; referencing parent comments across different posts is prohibited. 
+BR-136
+Only authenticated users possessing the Trainee or Coach role are permitted to publish comments and replies on community posts. 
+BR-137
+A post cannot receive new comments or replies if it has been marked as deleted in the system. 
+BR-138
+Reply content is mandatory, cannot consist solely of whitespace, and must not exceed a maximum length of 500 characters. 
+BR-139
+Users with locked or suspended accounts are prohibited from creating comments or replies across the platform. 
+BR-140
+Every reply must link directly to an existing, valid parent comment that belongs to the active, non-deleted target post. 
+BR-141
+Only authenticated users possessing an active session token and an unlocked account with an authorized role (Trainee or Coach) are permitted to access their personal profile. If an account is locked or suspended, the system strictly denies access and displays an error message prompting the user to contact customer support.
+BR-142
+The content and presentation of the user profile vary strictly depending on the actor's assigned role.
+BR-143
+When generating moderation options for reported users, if the reported user is a Coach, the system automatically checks whether the coach has active sold training packages. If the coach has sold packages, irreversible locking actions (LOCK) are withheld from the default available actions list (retaining BLOCK or warning actions instead) to protect trainees' ongoing training package investments. 
+

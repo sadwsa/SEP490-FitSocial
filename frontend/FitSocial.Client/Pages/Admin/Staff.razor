@@ -122,40 +122,11 @@
             </table>
         </div>
 
-        <div class="pagination-container">
-            <div class="pagination-info">
-                @if (pagedStaff.TotalCount > 0)
-                {
-                    var start = (staffCurrentPage - 1) * staffPageSize + 1;
-                    var end = Math.Min(staffCurrentPage * staffPageSize, pagedStaff.TotalCount);
-                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedStaff.TotalCount</strong> staff accounts</span>
-                }
-                else
-                {
-                    <span>0 staff accounts</span>
-                }
-            </div>
-            @if (pagedStaff.TotalPages > 1)
-            {
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedStaff.HasPreviousPage)" @onclick="() => GoToStaffPageAsync(staffCurrentPage - 1)">‹ Previous</button>
-                    @foreach (var p in GetVisibleStaffPageNumbers())
-                    {
-                        if (p == -1) { <span class="page-dots">…</span> }
-                        else { var pageNum = p; <button type="button" class="page-btn @(pageNum == staffCurrentPage ? "active" : "")" @onclick="() => GoToStaffPageAsync(pageNum)">@pageNum</button> }
-                    }
-                    <button type="button" class="page-btn" disabled="@(!pagedStaff.HasNextPage)" @onclick="() => GoToStaffPageAsync(staffCurrentPage + 1)">Next ›</button>
-                </div>
-            }
-            <div class="page-size-selector">
-                <span>Per page:</span>
-                <select value="@staffPageSize" @onchange="OnStaffPageSizeChangedAsync" class="page-size-select">
-                    <option value="10">10 / page</option>
-                    <option value="20">20 / page</option>
-                    <option value="50">50 / page</option>
-                </select>
-            </div>
-        </div>
+        <CommonPagination CurrentPage="@staffCurrentPage"
+                          PageSize="@staffPageSize"
+                          TotalCount="@pagedStaff.TotalCount"
+                          PageChanged="GoToStaffPageAsync"
+                          ItemName="staff accounts" />
 
         @if (showCreateStaffModal)
         {
@@ -721,6 +692,7 @@
         }
 
         isSubmitting = true;
+        LoadingService.Show("Creating staff account...");
         try
         {
             var res = await UserService.CreateStaffAccountAsync(newStaffModel);
@@ -757,6 +729,7 @@
         finally
         {
             isSubmitting = false;
+            LoadingService.Hide();
         }
     }
 
@@ -1026,6 +999,7 @@
         }
 
         isSubmittingEdit = true;
+        LoadingService.Show("Updating staff account...");
         try
         {
             var res = await UserService.UpdateStaffAccountAsync(editingStaffId, editStaffModel);
@@ -1061,12 +1035,14 @@
         finally
         {
             isSubmittingEdit = false;
+            LoadingService.Hide();
         }
     }
 
     private async Task LoadStaffAsync()
     {
         isLoadingStaff = true;
+        LoadingService.Show("Loading staff accounts...");
         try
         {
             bool? isLocked = staffStatusFilter switch { "active" => false, "locked" => true, _ => null };
@@ -1084,7 +1060,11 @@
             else if (!string.IsNullOrEmpty(res.Message)) toastMessage = res.Message;
         }
         catch (Exception ex) { toastMessage = $"Failed to load staff accounts: {ex.Message}"; }
-        finally { isLoadingStaff = false; }
+        finally
+        {
+            isLoadingStaff = false;
+            LoadingService.Hide();
+        }
     }
 
     private async Task SetStaffStatusFilterAsync(string status)
@@ -1136,6 +1116,7 @@
     {
         isLockingStaff = true;
         lockingStaffId = staff.UserId;
+        LoadingService.Show(locked ? "Locking staff account..." : "Unlocking staff account...");
         try
         {
             var res = await UserService.SetUserLockStatusAsync(staff.UserId, locked);
@@ -1157,6 +1138,7 @@
         {
             isLockingStaff = false;
             lockingStaffId = null;
+            LoadingService.Hide();
         }
     }
 

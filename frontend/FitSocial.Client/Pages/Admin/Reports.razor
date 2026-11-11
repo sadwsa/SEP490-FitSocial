@@ -13,15 +13,6 @@
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
-        @if (!string.IsNullOrEmpty(toastMessage))
-        {
-            <div class="auth-alert @toastType" role="alert">
-                <AppIcon Name="@(toastType == "error" ? "warning" : "info")" />
-                <span class="flex-1">@toastMessage</span>
-                <button type="button" class="ml-2 font-bold cursor-pointer opacity-70 hover:opacity-100" @onclick="() => toastMessage = null">✕</button>
-            </div>
-        }
-
         <h2 class="view-title">Reports</h2>
         <p class="view-sub">Manage and review reports submitted by users</p>
 
@@ -206,49 +197,11 @@
         </div>
 
         <!-- Pagination Controls -->
-        <div class="pagination-container">
-            <div class="pagination-info">
-                @if (pagedReports.TotalCount > 0)
-                {
-                    var start = (currentPage - 1) * pageSize + 1;
-                    var end = Math.Min(currentPage * pageSize, pagedReports.TotalCount);
-                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedReports.TotalCount</strong> reports</span>
-                }
-                else
-                {
-                    <span>0 reports</span>
-                }
-            </div>
-
-            @if (pagedReports.TotalPages > 1)
-            {
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedReports.HasPreviousPage)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Previous</button>
-                    @foreach (var p in GetVisiblePageNumbers())
-                    {
-                        if (p == -1)
-                        {
-                            <span class="page-dots">…</span>
-                        }
-                        else
-                        {
-                            var pageNum = p;
-                            <button type="button" class="page-btn @(pageNum == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pageNum)">@pageNum</button>
-                        }
-                    }
-                    <button type="button" class="page-btn" disabled="@(!pagedReports.HasNextPage)" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
-                </div>
-            }
-
-            <div class="page-size-selector">
-                <span>Per page:</span>
-                <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
-                    <option value="10">10 / page</option>
-                    <option value="20">20 / page</option>
-                    <option value="50">50 / page</option>
-                </select>
-            </div>
-        </div>
+        <CommonPagination CurrentPage="@currentPage"
+                          PageSize="@pageSize"
+                          TotalCount="@pagedReports.TotalCount"
+                          PageChanged="GoToPageAsync"
+                          ItemName="reports" />
 
         <!-- Report Details Modal -->
         @if (showDetailsModal && selectedReport != null)
@@ -620,8 +573,6 @@
 </AuthorizeView>
 
 @code {
-    private string? toastMessage;
-    private string toastType = "info";
     private string searchTerm = "";
     private string statusFilter = "";
     private string targetTypeFilter = "";
@@ -656,6 +607,7 @@
     private async Task LoadReportsAsync()
     {
         isLoadingReports = true;
+        LoadingService.Show("Loading reports...");
         try
         {
             var res = await ReportService.GetReportsAsync(
@@ -677,18 +629,17 @@
             }
             else if (!string.IsNullOrEmpty(res.Message))
             {
-                toastMessage = res.Message;
-                toastType = "error";
+                ToastService.ShowError(res.Message);
             }
         }
         catch (Exception ex)
         {
-            toastMessage = $"Unable to load reports. Please try again. ({ex.Message})";
-            toastType = "error";
+            ToastService.ShowError($"Unable to load reports. Please try again. ({ex.Message})");
         }
         finally
         {
             isLoadingReports = false;
+            LoadingService.Hide();
         }
     }
 
@@ -783,6 +734,7 @@
     {
         selectedReport = report;
         showDetailsModal = true;
+        LoadingService.Show("Loading report details...");
         try
         {
             var res = await ReportService.GetReportByIdAsync(report.ReportId);
@@ -794,6 +746,10 @@
         catch
         {
             // Fallback to list item data
+        }
+        finally
+        {
+            LoadingService.Hide();
         }
     }
 
@@ -824,6 +780,7 @@
         if (selectedReport == null || string.IsNullOrWhiteSpace(pendingActionCode)) return;
 
         isProcessingAction = true;
+        LoadingService.Show("Processing violation report...");
         try
         {
             var req = new ProcessViolationReportRequest
@@ -836,27 +793,25 @@
             if (res.Success && res.Data != null)
             {
                 selectedReport = res.Data;
-                toastMessage = $"Report #{ShortId(selectedReport.ReportId)} processed successfully with action: {pendingActionCode}.";
-                toastType = "info";
+                ToastService.ShowSuccess($"Report #{ShortId(selectedReport.ReportId)} processed successfully with action: {pendingActionCode}.");
                 showConfirmModal = false;
                 await LoadReportsAsync();
             }
             else
             {
-                toastMessage = res.Message ?? "Failed to process report.";
-                toastType = "error";
+                ToastService.ShowError(res.Message ?? "Failed to process report.");
                 showConfirmModal = false;
             }
         }
         catch (Exception ex)
         {
-            toastMessage = $"Error processing report: {ex.Message}";
-            toastType = "error";
+            ToastService.ShowError($"Error processing report: {ex.Message}");
             showConfirmModal = false;
         }
         finally
         {
             isProcessingAction = false;
+            LoadingService.Hide();
         }
     }
 
@@ -887,6 +842,7 @@
 
         deletePostReasonError = null;
         isProcessingAction = true;
+        LoadingService.Show("Deleting post...");
         try
         {
             var req = new ProcessViolationReportRequest
@@ -900,25 +856,23 @@
             if (res.Success && res.Data != null)
             {
                 selectedReport = res.Data;
-                toastMessage = $"Post deleted and report #{ShortId(selectedReport.ReportId)} resolved successfully.";
-                toastType = "info";
+                ToastService.ShowSuccess($"Post deleted and report #{ShortId(selectedReport.ReportId)} resolved successfully.");
                 showDeletePostModal = false;
                 await LoadReportsAsync();
             }
             else
             {
-                toastMessage = res.Message ?? "Failed to delete post.";
-                toastType = "error";
+                ToastService.ShowError(res.Message ?? "Failed to delete post.");
             }
         }
         catch (Exception ex)
         {
-            toastMessage = $"Error deleting post: {ex.Message}";
-            toastType = "error";
+            ToastService.ShowError($"Error deleting post: {ex.Message}");
         }
         finally
         {
             isProcessingAction = false;
+            LoadingService.Hide();
         }
     }
 

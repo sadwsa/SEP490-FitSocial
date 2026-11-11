@@ -109,40 +109,11 @@
             </table>
         </div>
 
-        <div class="pagination-container">
-            <div class="pagination-info">
-                @if (pagedUsers.TotalCount > 0)
-                {
-                    var start = (userCurrentPage - 1) * userPageSize + 1;
-                    var end = Math.Min(userCurrentPage * userPageSize, pagedUsers.TotalCount);
-                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedUsers.TotalCount</strong> accounts</span>
-                }
-                else
-                {
-                    <span>0 accounts</span>
-                }
-            </div>
-            @if (pagedUsers.TotalPages > 1)
-            {
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedUsers.HasPreviousPage)" @onclick="() => GoToUserPageAsync(userCurrentPage - 1)">‹ Previous</button>
-                    @foreach (var p in GetVisibleUserPageNumbers())
-                    {
-                        if (p == -1) { <span class="page-dots">…</span> }
-                        else { var pageNum = p; <button type="button" class="page-btn @(pageNum == userCurrentPage ? "active" : "")" @onclick="() => GoToUserPageAsync(pageNum)">@pageNum</button> }
-                    }
-                    <button type="button" class="page-btn" disabled="@(!pagedUsers.HasNextPage)" @onclick="() => GoToUserPageAsync(userCurrentPage + 1)">Next ›</button>
-                </div>
-            }
-            <div class="page-size-selector">
-                <span>Per page:</span>
-                <select value="@userPageSize" @onchange="OnUserPageSizeChangedAsync" class="page-size-select">
-                    <option value="10">10 / page</option>
-                    <option value="20">20 / page</option>
-                    <option value="50">50 / page</option>
-                </select>
-            </div>
-        </div>
+        <CommonPagination CurrentPage="@userCurrentPage"
+                          PageSize="@userPageSize"
+                          TotalCount="@pagedUsers.TotalCount"
+                          PageChanged="GoToUserPageAsync"
+                          ItemName="accounts" />
     </Authorized>
     <NotAuthorized>
         <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>You do not have access to this page.</span></div>
@@ -184,6 +155,7 @@
     private async Task LoadUsersAsync()
     {
         isLoadingUsers = true;
+        LoadingService.Show("Loading users...");
         try
         {
             bool? isLocked = userStatusFilter switch { "active" => false, "locked" => true, _ => null };
@@ -201,7 +173,11 @@
             else if (!string.IsNullOrEmpty(res.Message)) toastMessage = res.Message;
         }
         catch (Exception ex) { toastMessage = $"Failed to load users: {ex.Message}"; }
-        finally { isLoadingUsers = false; }
+        finally
+        {
+            isLoadingUsers = false;
+            LoadingService.Hide();
+        }
     }
 
     private async Task SetUserStatusFilterAsync(string status)
@@ -259,6 +235,7 @@
     private async Task SetLockedAsync(AdminUserDto user, bool locked)
     {
         isLockingUser = true;
+        LoadingService.Show(locked ? "Locking account..." : "Unlocking account...");
         try
         {
             var res = await UserService.SetUserLockStatusAsync(user.UserId, locked);
@@ -266,7 +243,11 @@
             else toastMessage = res.Message ?? "Failed to update user lock status.";
         }
         catch (Exception ex) { toastMessage = $"Error: {ex.Message}"; }
-        finally { isLockingUser = false; }
+        finally
+        {
+            isLockingUser = false;
+            LoadingService.Hide();
+        }
     }
 
     private void TriggerToastTimer(int durationMs = 10000)

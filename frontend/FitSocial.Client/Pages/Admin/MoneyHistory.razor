@@ -158,47 +158,11 @@
             </div>
 
             <!-- Pagination -->
-            <div class="pagination-container">
-                <div class="pagination-info">
-                    @if (summary.TotalCount > 0)
-                    {
-                        var start = (currentPage - 1) * pageSize + 1;
-                        var end = Math.Min(currentPage * pageSize, summary.TotalCount);
-                        <span>Showing <strong>@start–@end</strong> of <strong>@summary.TotalCount</strong> movements</span>
-                    }
-                    else
-                    {
-                        <span>0 movements</span>
-                    }
-                </div>
-                @if (TotalPages > 1)
-                {
-                    <div class="pagination-controls">
-                        <button type="button" class="page-btn" disabled="@(currentPage <= 1)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Prev</button>
-                        @foreach (var p in PageNumbers())
-                        {
-                            if (p == -1)
-                            {
-                                <span class="page-dots">…</span>
-                            }
-                            else
-                            {
-                                var pn = p;
-                                <button type="button" class="page-btn @(pn == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pn)">@pn</button>
-                            }
-                        }
-                        <button type="button" class="page-btn" disabled="@(currentPage >= TotalPages)" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
-                    </div>
-                }
-                <div class="page-size-selector">
-                    <span>Per page:</span>
-                    <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
-                        <option value="10">10</option>
-                        <option value="20">20</option>
-                        <option value="50">50</option>
-                    </select>
-                </div>
-            </div>
+            <CommonPagination CurrentPage="@currentPage"
+                              PageSize="@pageSize"
+                              TotalCount="@summary.TotalCount"
+                              PageChanged="GoToPageAsync"
+                              ItemName="movements" />
         }
     </Authorized>
 </AuthorizeView>
@@ -230,6 +194,7 @@
     private async Task LoadAsync()
     {
         isLoading = true;
+        LoadingService.Show("Loading money movements...");
         try
         {
             var res = await MoneyService.GetMoneyMovementsAsync(
@@ -259,6 +224,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 

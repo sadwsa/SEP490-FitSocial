@@ -1,0 +1,151 @@
+@namespace FitSocial.Client.Components
+
+<div class="common-pagination-container @Class" @attributes="AdditionalAttributes">
+    <div class="pagination-info">
+        @if (TotalCount > 0)
+        {
+            <span>Showing <strong>@StartIndex–@EndIndex</strong> of <strong>@TotalCount</strong> @ItemName</span>
+        }
+        else
+        {
+            <span>Showing <strong>0–0</strong> of <strong>0</strong> @ItemName</span>
+        }
+    </div>
+
+    <div class="pagination-controls">
+        <button type="button"
+                class="page-btn page-btn-nav"
+                disabled="@IsPreviousDisabled"
+                @onclick="OnPreviousClicked"
+                title="Previous page"
+                aria-label="Previous page">
+            ‹ Previous
+        </button>
+
+        @foreach (var pageNumber in GetVisiblePageNumbers())
+        {
+            if (pageNumber == -1)
+            {
+                <span class="page-dots" aria-hidden="true">…</span>
+            }
+            else
+            {
+                var targetPage = pageNumber;
+                var isActive = targetPage == CurrentPage;
+                <button type="button"
+                        class="page-btn @(isActive ? "active" : "")"
+                        disabled="@(TotalCount == 0)"
+                        @onclick="() => OnPageClicked(targetPage)"
+                        aria-current="@(isActive ? "page" : null)"
+                        aria-label="@($"Page {targetPage}")">
+                    @targetPage
+                </button>
+            }
+        }
+
+        <button type="button"
+                class="page-btn page-btn-nav"
+                disabled="@IsNextDisabled"
+                @onclick="OnNextClicked"
+                title="Next page"
+                aria-label="Next page">
+            Next ›
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int CurrentPage { get; set; } = 1;
+    [Parameter] public int PageSize { get; set; } = 10;
+    [Parameter] public int TotalCount { get; set; } = 0;
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+    [Parameter] public string ItemName { get; set; } = "entries";
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private int EffectivePageSize => PageSize > 0 ? PageSize : 10;
+
+    public int TotalPages => (EffectivePageSize > 0 && TotalCount > 0)
+        ? (int)Math.Ceiling((double)TotalCount / EffectivePageSize)
+        : 0;
+
+    private int StartIndex => TotalCount == 0 ? 0 : ((CurrentPage - 1) * EffectivePageSize + 1);
+    private int EndIndex => TotalCount == 0 ? 0 : Math.Min(CurrentPage * EffectivePageSize, TotalCount);
+
+    private bool IsPreviousDisabled => CurrentPage <= 1 || TotalCount == 0;
+    private bool IsNextDisabled => CurrentPage >= TotalPages || TotalCount == 0;
+
+    private async Task OnPageClicked(int page)
+    {
+        if (page == CurrentPage || page < 1 || page > TotalPages || TotalCount == 0)
+            return;
+
+        if (PageChanged.HasDelegate)
+        {
+            await PageChanged.InvokeAsync(page);
+        }
+    }
+
+    private async Task OnPreviousClicked()
+    {
+        if (!IsPreviousDisabled)
+        {
+            await OnPageClicked(CurrentPage - 1);
+        }
+    }
+
+    private async Task OnNextClicked()
+    {
+        if (!IsNextDisabled)
+        {
+            await OnPageClicked(CurrentPage + 1);
+        }
+    }
+
+    private IEnumerable<int> GetVisiblePageNumbers()
+    {
+        if (TotalPages <= 1)
+        {
+            return new[] { 1 };
+        }
+
+        if (TotalPages <= 7)
+        {
+            return Enumerable.Range(1, TotalPages);
+        }
+
+        var pages = new List<int> { 1 };
+        var start = Math.Max(2, CurrentPage - 1);
+        var end = Math.Min(TotalPages - 1, CurrentPage + 1);
+
+        if (CurrentPage <= 3)
+        {
+            start = 2;
+            end = 4;
+        }
+        else if (CurrentPage >= TotalPages - 2)
+        {
+            start = TotalPages - 3;
+            end = TotalPages - 1;
+        }
+
+        if (start > 2)
+        {
+            pages.Add(-1);
+        }
+
+        for (int i = start; i <= end; i++)
+        {
+            pages.Add(i);
+        }
+
+        if (end < TotalPages - 1)
+        {
+            pages.Add(-1);
+        }
+
+        pages.Add(TotalPages);
+        return pages;
+    }
+}
+

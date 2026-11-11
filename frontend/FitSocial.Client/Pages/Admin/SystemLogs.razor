@@ -326,37 +326,11 @@
                 </div>
 
                 <!-- Pagination Bar -->
-                <div class="pagination-bar">
-                    <div class="pagination-info">
-                        Showing <strong>@GetStartIndex()</strong> to <strong>@GetEndIndex()</strong> of <strong>@pagedLogs.TotalCount</strong> activities
-                    </div>
-
-                    <div class="pagination-controls">
-                        <div class="page-size-selector">
-                            <label for="auditPageSize">Rows per page:</label>
-                            <select id="auditPageSize" value="@pageSize" @onchange="OnPageSizeChanged">
-                                <option value="10">10</option>
-                                <option value="20">20</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
-                        </div>
-
-                        <div class="page-buttons">
-                            <button type="button" class="page-btn" disabled="@(!pagedLogs.HasPreviousPage)" @onclick="() => GoToPageAsync(currentPage - 1)">
-                                ‹ Previous
-                            </button>
-
-                            <span class="page-indicator">
-                                Page <strong>@currentPage</strong> of <strong>@Math.Max(1, pagedLogs.TotalPages)</strong>
-                            </span>
-
-                            <button type="button" class="page-btn" disabled="@(!pagedLogs.HasNextPage)" @onclick="() => GoToPageAsync(currentPage + 1)">
-                                Next ›
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <CommonPagination CurrentPage="@currentPage"
+                                  PageSize="@pageSize"
+                                  TotalCount="@pagedLogs.TotalCount"
+                                  PageChanged="GoToPageAsync"
+                                  ItemName="activities" />
             }
 
             <!-- 3.5 Activity Details Drawer / Modal (Before & After) -->
@@ -637,6 +611,7 @@
     {
         isLoading = true;
         errorMessage = null;
+        LoadingService.Show("Loading system logs...");
 
         try
         {
@@ -674,6 +649,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 

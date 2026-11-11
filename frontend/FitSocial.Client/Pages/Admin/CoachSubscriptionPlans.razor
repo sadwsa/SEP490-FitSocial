@@ -277,51 +277,11 @@
                 </div>
 
                 <!-- Plans Pagination Controls -->
-                @if (data != null && data.TotalPlans > 0)
-                {
-                    var plansTotalPages = Math.Max(1, (int)Math.Ceiling(data.TotalPlans / (double)plansPageSize));
-                    var plansStart = (plansPageIndex - 1) * plansPageSize + 1;
-                    var plansEnd = Math.Min(plansPageIndex * plansPageSize, data.TotalPlans);
-                    <div class="pagination-container" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:14px;">
-                        <div class="pagination-info" style="font-size:0.8rem; color:#64748b;">
-                            <span>Showing <strong>@plansStart–@plansEnd</strong> of <strong>@data.TotalPlans</strong> plans</span>
-                        </div>
-
-                        @if (plansTotalPages > 1)
-                        {
-                            <div class="pagination-controls" style="display:flex; align-items:center; gap:5px;">
-                                <button type="button" class="page-btn" disabled="@(plansPageIndex <= 1)" @onclick="() => GoToPlansPageAsync(plansPageIndex - 1)">‹ Prev</button>
-                                @for (int i = 1; i <= plansTotalPages; i++)
-                                {
-                                    var pNum = i;
-                                    if (pNum == 1 || pNum == plansTotalPages || Math.Abs(pNum - plansPageIndex) <= 1)
-                                    {
-                                        <button type="button" class="page-btn @(pNum == plansPageIndex ? "active" : "")" @onclick="() => GoToPlansPageAsync(pNum)">@pNum</button>
-                                    }
-                                    else if (pNum == 2 && plansPageIndex > 3)
-                                    {
-                                        <span class="page-dots">…</span>
-                                    }
-                                    else if (pNum == plansTotalPages - 1 && plansPageIndex < plansTotalPages - 2)
-                                    {
-                                        <span class="page-dots">…</span>
-                                    }
-                                }
-                                <button type="button" class="page-btn" disabled="@(plansPageIndex >= plansTotalPages)" @onclick="() => GoToPlansPageAsync(plansPageIndex + 1)">Next ›</button>
-                            </div>
-                        }
-
-                        <div class="page-size-selector" style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#64748b;">
-                            <span>Per page:</span>
-                            <select value="@plansPageSize" @onchange="OnPlansPageSizeChangedAsync" class="page-size-select" style="padding:4px 8px; border-radius:6px; border:1px solid #cbd5e1;">
-                                <option value="5">5 / page</option>
-                                <option value="10">10 / page</option>
-                                <option value="20">20 / page</option>
-                                <option value="50">50 / page</option>
-                            </select>
-                        </div>
-                    </div>
-                }
+                <CommonPagination CurrentPage="@plansPageIndex"
+                                  PageSize="@plansPageSize"
+                                  TotalCount="@(data?.TotalPlans ?? 0)"
+                                  PageChanged="GoToPlansPageAsync"
+                                  ItemName="plans" />
             }
         }
         else if (activeTab == "price-history")
@@ -487,57 +447,11 @@
                 </div>
 
                 <!-- Pagination Controls -->
-                <div class="pagination-container" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:14px;">
-                    <div class="pagination-info" style="font-size:0.8rem; color:#64748b;">
-                        @if (priceHistoryResult != null && priceHistoryResult.TotalCount > 0)
-                        {
-                            var start = (historyPageIndex - 1) * historyPageSize + 1;
-                            var end = Math.Min(historyPageIndex * historyPageSize, priceHistoryResult.TotalCount);
-                            <span>Showing <strong>@start–@end</strong> of <strong>@priceHistoryResult.TotalCount</strong> records</span>
-                            @if (selectedPlanIdFilter.HasValue || !string.IsNullOrWhiteSpace(historyKeyword) || historyFromDate.HasValue || historyToDate.HasValue)
-                            {
-                                <span class="ms-1 text-muted">(filtered from @totalGlobalPriceChangesCount total)</span>
-                            }
-                        }
-                        else
-                        {
-                            <span>0 records@(selectedPlanIdFilter.HasValue || !string.IsNullOrWhiteSpace(historyKeyword) || historyFromDate.HasValue || historyToDate.HasValue ? $" (filtered from {totalGlobalPriceChangesCount} total)" : "")</span>
-                        }
-                    </div>
-
-                    @if (priceHistoryResult != null && priceHistoryResult.TotalPages > 1)
-                    {
-                        <div class="pagination-controls" style="display:flex; align-items:center; gap:5px;">
-                            <button type="button" class="page-btn" disabled="@(!priceHistoryResult.HasPreviousPage)" @onclick="() => GoToHistoryPageAsync(historyPageIndex - 1)">‹ Prev</button>
-                            @for (int i = 1; i <= priceHistoryResult.TotalPages; i++)
-                            {
-                                var pNum = i;
-                                if (pNum == 1 || pNum == priceHistoryResult.TotalPages || Math.Abs(pNum - historyPageIndex) <= 1)
-                                {
-                                    <button type="button" class="page-btn @(pNum == historyPageIndex ? "active" : "")" @onclick="() => GoToHistoryPageAsync(pNum)">@pNum</button>
-                                }
-                                else if (pNum == 2 && historyPageIndex > 3)
-                                {
-                                    <span class="page-dots">…</span>
-                                }
-                                else if (pNum == priceHistoryResult.TotalPages - 1 && historyPageIndex < priceHistoryResult.TotalPages - 2)
-                                {
-                                    <span class="page-dots">…</span>
-                                }
-                            }
-                            <button type="button" class="page-btn" disabled="@(!priceHistoryResult.HasNextPage)" @onclick="() => GoToHistoryPageAsync(historyPageIndex + 1)">Next ›</button>
-                        </div>
-                    }
-
-                    <div class="page-size-selector" style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#64748b;">
-                        <span>Per page:</span>
-                        <select value="@historyPageSize" @onchange="OnHistoryPageSizeChangedAsync" class="page-size-select" style="padding:4px 8px; border-radius:6px; border:1px solid #cbd5e1;">
-                            <option value="10">10 / page</option>
-                            <option value="20">20 / page</option>
-                            <option value="50">50 / page</option>
-                        </select>
-                    </div>
-                </div>
+                <CommonPagination CurrentPage="@historyPageIndex"
+                                  PageSize="@historyPageSize"
+                                  TotalCount="@(priceHistoryResult?.TotalCount ?? 0)"
+                                  PageChanged="GoToHistoryPageAsync"
+                                  ItemName="records" />
             }
         }
 
@@ -731,6 +645,7 @@
     {
         isLoading = true;
         errorMessage = null;
+        LoadingService.Show("Loading subscription plans...");
         try
         {
             bool? isActive = statusFilter switch { "active" => true, "inactive" => false, _ => null };
@@ -739,7 +654,11 @@
             else errorMessage = res.Message ?? "Failed to load plans.";
         }
         catch (Exception ex) { errorMessage = ex.Message; }
-        finally { isLoading = false; }
+        finally
+        {
+            isLoading = false;
+            LoadingService.Hide();
+        }
     }
 
     private async Task LoadGlobalPriceHistoryCountAsync()
@@ -817,6 +736,7 @@
         if (createImageUrl != null && createImageUrl.Length > 2048) { createError = "Image URL must not exceed 2048 characters."; return; }
         if (createDescription != null && createDescription.Length > 500) { createError = "Description must not exceed 500 characters."; return; }
         isCreating = true;
+        LoadingService.Show("Creating subscription plan...");
         try
         {
             var req = new CreatePlanRequest
@@ -841,7 +761,11 @@
             else createError = res.Message ?? "Failed to create plan.";
         }
         catch (Exception ex) { createError = ex.Message; }
-        finally { isCreating = false; }
+        finally
+        {
+            isCreating = false;
+            LoadingService.Hide();
+        }
     }
 
     private void OpenDeleteConfirm(CoachSubscriptionPlanDto plan)
@@ -865,6 +789,7 @@
         deleteError = null;
         if (deletePlanId == Guid.Empty) { deleteError = "No plan selected."; return; }
         isDeleting = true;
+        LoadingService.Show("Deleting subscription plan...");
         try
         {
             var res = await SystemOps.DeletePlanAsync(deletePlanId);
@@ -879,7 +804,11 @@
             else deleteError = res.Message ?? "Failed to delete plan.";
         }
         catch (Exception ex) { deleteError = ex.Message; }
-        finally { isDeleting = false; }
+        finally
+        {
+            isDeleting = false;
+            LoadingService.Hide();
+        }
     }
 
     private void OpenEditForm(CoachSubscriptionPlanDto plan)
@@ -912,6 +841,7 @@
         if (editDescription!.Length > 500) { editError = "Description must not exceed 500 characters."; return; }
         if (editImageUrl != null && editImageUrl.Length > 2048) { editError = "Image URL must not exceed 2048 characters."; return; }
         isSaving = true;
+        LoadingService.Show("Updating subscription plan...");
         try
         {
             var req = new UpdatePlanRequest
@@ -936,7 +866,11 @@
             else editError = res.Message ?? "Failed to update plan.";
         }
         catch (Exception ex) { editError = ex.Message; }
-        finally { isSaving = false; }
+        finally
+        {
+            isSaving = false;
+            LoadingService.Hide();
+        }
     }
 
     // Price History Methods
@@ -944,6 +878,7 @@
     {
         isLoadingHistory = true;
         historyPageIndex = page;
+        LoadingService.Show("Loading price history...");
         try
         {
             var req = new GetPriceHistoryFilterRequest
@@ -977,6 +912,7 @@
         finally
         {
             isLoadingHistory = false;
+            LoadingService.Hide();
         }
     }
 
@@ -1060,6 +996,7 @@
         showPlanHistoryModal = true;
         isLoadingModalHistory = true;
         modalPlanHistoryResult = null;
+        LoadingService.Show("Loading plan price history...");
 
         try
         {
@@ -1082,6 +1019,7 @@
         finally
         {
             isLoadingModalHistory = false;
+            LoadingService.Hide();
         }
     }
 

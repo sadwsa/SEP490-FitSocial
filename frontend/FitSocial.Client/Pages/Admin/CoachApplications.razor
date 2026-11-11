@@ -208,47 +208,11 @@
         </div>
 
         <!-- Pagination Controls -->
-        <div class="pagination-container">
-            <div class="pagination-info">
-                @if (pagedApplications.TotalCount > 0)
-                {
-                    var start = (currentPage - 1) * pageSize + 1;
-                    var end = Math.Min(currentPage * pageSize, pagedApplications.TotalCount);
-                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedApplications.TotalCount</strong> applications</span>
-                }
-                else
-                {
-                    <span>0 applications</span>
-                }
-            </div>
-
-            <div class="pagination-controls">
-                <button type="button" class="page-btn" disabled="@(!pagedApplications.HasPreviousPage || currentPage <= 1)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Previous</button>
-                @foreach (var p in GetVisiblePageNumbers())
-                {
-                    if (p == -1)
-                    {
-                        <span class="page-dots">…</span>
-                    }
-                    else
-                    {
-                        var pageNum = p;
-                        <button type="button" class="page-btn @(pageNum == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pageNum)">@pageNum</button>
-                    }
-                }
-                <button type="button" class="page-btn" disabled="@(!pagedApplications.HasNextPage || currentPage >= Math.Max(1, pagedApplications.TotalPages))" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
-            </div>
-
-            <div class="page-size-selector">
-                <span>Per page:</span>
-                <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
-                    <option value="5">5 / page</option>
-                    <option value="10">10 / page</option>
-                    <option value="20">20 / page</option>
-                    <option value="50">50 / page</option>
-                </select>
-            </div>
-        </div>
+        <CommonPagination CurrentPage="@currentPage"
+                          PageSize="@pageSize"
+                          TotalCount="@pagedApplications.TotalCount"
+                          PageChanged="GoToPageAsync"
+                          ItemName="applications" />
 
         <!-- Read-Only Review / Details Modal -->
         @if (selectedDetail != null)
@@ -660,6 +624,7 @@
     private async Task LoadApplicationsAsync()
     {
         isLoading = true;
+        LoadingService.Show("Loading coach applications...");
         try
         {
             int? minExp = null;
@@ -720,6 +685,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -824,6 +790,7 @@
     private async Task OpenDetailModal(Guid coachId)
     {
         isLoading = true;
+        LoadingService.Show("Loading application details...");
         try
         {
             var res = await CoachService.GetCoachApplicationDetailsAsync(coachId);
@@ -846,6 +813,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -944,6 +912,7 @@
     {
         if (isProcessingAction) return;
         isProcessingAction = true;
+        LoadingService.Show("Approving application...");
         try
         {
             var request = new ApproveCoachApplicationRequestModel
@@ -982,6 +951,7 @@
         finally
         {
             isProcessingAction = false;
+            LoadingService.Hide();
         }
     }
 
@@ -989,6 +959,7 @@
     {
         if (isProcessingAction) return;
         isProcessingAction = true;
+        LoadingService.Show("Rejecting application...");
         try
         {
             var request = new RejectCoachApplicationRequestModel
@@ -1027,6 +998,7 @@
         finally
         {
             isProcessingAction = false;
+            LoadingService.Hide();
         }
         await SetBodyScrollLockAsync(false);
     }

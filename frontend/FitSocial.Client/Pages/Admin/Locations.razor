@@ -142,74 +142,11 @@
                 </div>
 
                 <!-- Pagination footer -->
-                <div class="pagination-container">
-                    <div class="pagination-info">
-                        @if (pagedResult.TotalCount > 0)
-                        {
-                            var start = (currentPage - 1) * pageSize + 1;
-                            var end = Math.Min(currentPage * pageSize, pagedResult.TotalCount);
-                            <span>Showing <strong>@start - @end</strong> of <strong>@pagedResult.TotalCount</strong> locations</span>
-                        }
-                        else
-                        {
-                            <span>Showing <strong>0</strong> locations</span>
-                        }
-                    </div>
-
-                    <!-- Pagination Controls: Always visible -->
-                    <div class="pagination-controls">
-                        <button type="button"
-                                class="page-btn"
-                                disabled="@(!pagedResult.HasPreviousPage || currentPage <= 1)"
-                                @onclick="() => GoToPageAsync(currentPage - 1)"
-                                title="Previous page">
-                            &lt;
-                        </button>
-
-                        @if (pagedResult.TotalPages <= 1)
-                        {
-                            <button type="button" class="page-btn active">1</button>
-                        }
-                        else
-                        {
-                            @foreach (var p in GetVisiblePageNumbers())
-                            {
-                                if (p == -1)
-                                {
-                                    <span class="page-ellipsis">...</span>
-                                }
-                                else
-                                {
-                                    var pageNumber = p;
-                                    <button type="button"
-                                            class="page-btn @(pageNumber == currentPage ? "active" : "")"
-                                            @onclick="() => GoToPageAsync(pageNumber)">
-                                        @pageNumber
-                                    </button>
-                                }
-                            }
-                        }
-
-                        <button type="button"
-                                class="page-btn"
-                                disabled="@(!pagedResult.HasNextPage || currentPage >= pagedResult.TotalPages)"
-                                @onclick="() => GoToPageAsync(currentPage + 1)"
-                                title="Next page">
-                            &gt;
-                        </button>
-                    </div>
-
-                    <!-- Page Size Selector -->
-                    <div class="page-size-selector">
-                        <span>Per page:</span>
-                        <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
-                            <option value="5">5 / page</option>
-                            <option value="6">6 / page</option>
-                            <option value="10">10 / page</option>
-                            <option value="20">20 / page</option>
-                        </select>
-                    </div>
-                </div>
+                <CommonPagination CurrentPage="@currentPage"
+                                  PageSize="@pageSize"
+                                  TotalCount="@pagedResult.TotalCount"
+                                  PageChanged="GoToPageAsync"
+                                  ItemName="locations" />
 
         <!-- ============================================== -->
         <!-- Add New Location Modal (UC_35.1)               -->
@@ -542,6 +479,7 @@
         try
         {
             isLoading = true;
+            LoadingService.Show("Loading locations...");
             errorMessage = null;
             currentPage = page;
 
@@ -564,6 +502,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -705,6 +644,7 @@
         try
         {
             isSaving = true;
+            LoadingService.Show("Creating location...");
             var requestDto = new CreateLocationDto
             {
                 LocationName = trimmedName,
@@ -733,6 +673,7 @@
         finally
         {
             isSaving = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -822,6 +763,7 @@
         try
         {
             isSavingEdit = true;
+            LoadingService.Show("Updating location...");
             var requestDto = new UpdateLocationDto
             {
                 LocationName = trimmedName,
@@ -849,6 +791,7 @@
         finally
         {
             isSavingEdit = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -893,6 +836,7 @@
         try
         {
             isDeleting = true;
+            LoadingService.Show("Deleting location...");
             deleteErrorMessage = null;
 
             var res = await LocationService.DeleteLocationAsync(targetLocation.LocationId);
@@ -938,6 +882,7 @@
         finally
         {
             isDeleting = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }

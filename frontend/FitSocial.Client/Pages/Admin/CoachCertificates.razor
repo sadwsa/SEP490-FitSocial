@@ -13,16 +13,6 @@
 
 <AuthorizeView Roles="STAFF,ADMIN">
     <Authorized>
-        <!-- Toast / Alert Message -->
-        @if (!string.IsNullOrEmpty(toastMessage))
-        {
-            <div class="auth-alert @(toastType == "error" ? "error" : "info")" role="alert">
-                <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
-                <span class="alert-text">@toastMessage</span>
-                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
-            </div>
-        }
-
         <!-- Page Header -->
         <div class="view-header">
             <div class="title-with-badge">
@@ -213,43 +203,11 @@
             </div>
 
             <!-- Pagination Bar -->
-            <div class="pagination-bar">
-                <div class="pagination-info">
-                    Showing @(((pagedCertificates.PageNumber - 1) * pagedCertificates.PageSize) + 1) to
-                    @(Math.Min(pagedCertificates.PageNumber * pagedCertificates.PageSize, pagedCertificates.TotalCount)) of @pagedCertificates.TotalCount certificates
-                </div>
-
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedCertificates.HasPreviousPage)" @onclick="() => ChangePageAsync(pagedCertificates.PageNumber - 1)">
-                        Previous
-                    </button>
-
-                    @for (int i = 1; i <= pagedCertificates.TotalPages; i++)
-                    {
-                        var pageIndex = i;
-                        if (i == 1 || i == pagedCertificates.TotalPages || (i >= pagedCertificates.PageNumber - 2 && i <= pagedCertificates.PageNumber + 2))
-                        {
-                            <button type="button" class="page-btn @(pagedCertificates.PageNumber == pageIndex ? "active" : "")" @onclick="() => ChangePageAsync(pageIndex)">
-                                @pageIndex
-                            </button>
-                        }
-                        else if (i == pagedCertificates.PageNumber - 3 || i == pagedCertificates.PageNumber + 3)
-                        {
-                            <span class="page-ellipsis">…</span>
-                        }
-                    }
-
-                    <button type="button" class="page-btn" disabled="@(!pagedCertificates.HasNextPage)" @onclick="() => ChangePageAsync(pagedCertificates.PageNumber + 1)">
-                        Next
-                    </button>
-
-                    <select class="page-size-select" value="@pageSize" @onchange="OnPageSizeChangedAsync">
-                        <option value="10">10 / page</option>
-                        <option value="20">20 / page</option>
-                        <option value="50">50 / page</option>
-                    </select>
-                </div>
-            </div>
+            <CommonPagination CurrentPage="@pagedCertificates.PageNumber"
+                              PageSize="@pagedCertificates.PageSize"
+                              TotalCount="@pagedCertificates.TotalCount"
+                              PageChanged="ChangePageAsync"
+                              ItemName="certificates" />
         }
 
         <!-- DETAIL MODAL -->
@@ -529,8 +487,6 @@
 
     private bool isLoading = true;
     private bool isProcessing = false;
-    private string? toastMessage;
-    private string toastType = "info";
 
     // Modals
     private CoachCertificateDetailModel? selectedDetail;
@@ -558,6 +514,7 @@
     private async Task LoadCertificatesAsync()
     {
         isLoading = true;
+        LoadingService.Show("Loading certificates...");
         try
         {
             var query = new GetCoachCertificatesQueryModel
@@ -587,6 +544,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -655,6 +613,7 @@
 
     private async Task OpenDetailModalAsync(Guid certificateId)
     {
+        LoadingService.Show("Loading certificate details...");
         try
         {
             var response = await CertificateService.GetCertificateByIdAsync(certificateId);
@@ -671,6 +630,10 @@
         catch (Exception ex)
         {
             ShowToast($"Error loading details: {ex.Message}", "error");
+        }
+        finally
+        {
+            LoadingService.Hide();
         }
     }
 
@@ -709,12 +672,13 @@
         if (targetCertificate == null) return;
 
         isProcessing = true;
+        LoadingService.Show("Approving certificate...");
         try
         {
             var response = await CertificateService.ApproveCertificateAsync(targetCertificate.CertificateId);
             if (response.Success)
             {
-                ShowToast("Coach certificate approved successfully.", "info");
+                ToastService.ShowSuccess("Coach certificate approved successfully.");
                 isApproveModalOpen = false;
 
                 // Update detail view if open
@@ -731,16 +695,17 @@
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to approve certificate.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to approve certificate.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error: {ex.Message}", "error");
+            ToastService.ShowError($"Error: {ex.Message}");
         }
         finally
         {
             isProcessing = false;
+            LoadingService.Hide();
         }
     }
 
@@ -756,13 +721,14 @@
 
         rejectionValidationFailed = false;
         isProcessing = true;
+        LoadingService.Show("Rejecting certificate...");
         try
         {
             var req = new RejectCoachCertificateModel { Reason = rejectionReason.Trim() };
             var response = await CertificateService.RejectCertificateAsync(targetCertificate.CertificateId, req);
             if (response.Success)
             {
-                ShowToast("Coach certificate rejected successfully.", "info");
+                ToastService.ShowWarning("Coach certificate rejected successfully.");
                 isRejectModalOpen = false;
 
                 if (selectedDetail != null && selectedDetail.CertificateId == targetCertificate.CertificateId && response.Data != null)
@@ -778,16 +744,17 @@
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to reject certificate.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to reject certificate.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error: {ex.Message}", "error");
+            ToastService.ShowError($"Error: {ex.Message}");
         }
         finally
         {
             isProcessing = false;
+            LoadingService.Hide();
         }
     }
 
@@ -815,8 +782,22 @@
 
     private void ShowToast(string message, string type)
     {
-        toastMessage = message;
-        toastType = type;
+        switch (type?.ToLowerInvariant())
+        {
+            case "success":
+                ToastService.ShowSuccess(message);
+                break;
+            case "error":
+                ToastService.ShowError(message);
+                break;
+            case "warning":
+                ToastService.ShowWarning(message);
+                break;
+            case "info":
+            default:
+                ToastService.ShowInfo(message);
+                break;
+        }
     }
 
     private static string FormatDate(DateTime? dt) => dt.HasValue ? dt.Value.ToString("dd/MM/yyyy") : "—";

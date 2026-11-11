@@ -526,6 +526,7 @@
     {
         isLoading = true;
         toastMessage = null;
+        LoadingService.Show("Loading revenue analytics...");
         try
         {
             var res = await RevenueService.GetRevenueOverviewAsync(filter);
@@ -547,6 +548,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -632,6 +634,7 @@
     {
         isExporting = true;
         toastMessage = null;
+        LoadingService.Show("Exporting revenue CSV...");
         try
         {
             var success = await RevenueService.ExportRevenueCsvAsync(filter);
@@ -654,6 +657,7 @@
         finally
         {
             isExporting = false;
+            LoadingService.Hide();
         }
     }
 

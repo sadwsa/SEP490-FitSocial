@@ -90,20 +90,31 @@
     {
         isLoading = true;
         errorMessage = null;
+        LoadingService.Show("Signing in to portal...");
 
-        await TokenStorage.SetRememberMeAsync(rememberMe);
-
-        loginModel.RememberMe = rememberMe;
-        var result = await AuthService.AdminLoginAsync(loginModel);
-        if (result.Success)
+        try
         {
-            Navigation.NavigateTo("/admin");
-        }
-        else
-        {
-            errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";
-        }
+            await TokenStorage.SetRememberMeAsync(rememberMe);
 
-        isLoading = false;
+            loginModel.RememberMe = rememberMe;
+            var result = await AuthService.AdminLoginAsync(loginModel);
+            if (result.Success)
+            {
+                Navigation.NavigateTo("/admin");
+            }
+            else
+            {
+                errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Sign-in error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            LoadingService.Hide();
+        }
     }
 }

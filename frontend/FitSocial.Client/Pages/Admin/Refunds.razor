@@ -1,4 +1,4 @@
-﻿@page "/admin/refunds"
+@page "/admin/refunds"
 @layout AdminLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
 @using FitSocial.Client.Models.Common
@@ -11,15 +11,6 @@
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
-        @if (!string.IsNullOrEmpty(toastMessage))
-        {
-            <div class="auth-alert @toastType" role="alert">
-                <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
-                <span class="alert-text">@toastMessage</span>
-                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
-            </div>
-        }
-
         <div class="header-container">
             <div>
                 <h2 class="view-title">Refund Requests</h2>
@@ -223,43 +214,11 @@
             </div>
 
             <!-- Pagination Bar -->
-            <div class="pagination-bar">
-                <div class="pagination-info">
-                    Showing @(((pagedRefunds.PageNumber - 1) * pagedRefunds.PageSize) + 1) to
-                    @(Math.Min(pagedRefunds.PageNumber * pagedRefunds.PageSize, pagedRefunds.TotalCount)) of @pagedRefunds.TotalCount requests
-                </div>
-
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedRefunds.HasPreviousPage)" @onclick="() => ChangePageAsync(pagedRefunds.PageNumber - 1)">
-                        Previous
-                    </button>
-
-                    @for (int i = 1; i <= pagedRefunds.TotalPages; i++)
-                    {
-                        var pageIndex = i;
-                        if (i == 1 || i == pagedRefunds.TotalPages || (i >= pagedRefunds.PageNumber - 2 && i <= pagedRefunds.PageNumber + 2))
-                        {
-                            <button type="button" class="page-btn @(pagedRefunds.PageNumber == pageIndex ? "active" : "")" @onclick="() => ChangePageAsync(pageIndex)">
-                                @pageIndex
-                            </button>
-                        }
-                        else if (i == pagedRefunds.PageNumber - 3 || i == pagedRefunds.PageNumber + 3)
-                        {
-                            <span class="page-ellipsis">…</span>
-                        }
-                    }
-
-                    <button type="button" class="page-btn" disabled="@(!pagedRefunds.HasNextPage)" @onclick="() => ChangePageAsync(pagedRefunds.PageNumber + 1)">
-                        Next
-                    </button>
-
-                    <select class="page-size-select" value="@pageSize" @onchange="OnPageSizeChangedAsync">
-                        <option value="10">10 / page</option>
-                        <option value="20">20 / page</option>
-                        <option value="50">50 / page</option>
-                    </select>
-                </div>
-            </div>
+            <CommonPagination CurrentPage="@pagedRefunds.PageNumber"
+                              PageSize="@pagedRefunds.PageSize"
+                              TotalCount="@pagedRefunds.TotalCount"
+                              PageChanged="ChangePageAsync"
+                              ItemName="requests" />
         }
 
         <!-- DETAIL MODAL -->
@@ -705,10 +664,6 @@
     private int pageSize = 10;
     private int currentPage = 1;
 
-    // Toast alert
-    private string? toastMessage;
-    private string toastType = "info";
-
     // Modals
     private RefundRequestItem? selectedRefund;
     private bool isDetailModalOpen = false;
@@ -745,6 +700,11 @@
             isReloading = !isSilent;
         }
 
+        if (!isSilent)
+        {
+            LoadingService.Show("Loading refund requests...");
+        }
+
         try
         {
             var query = new GetRefundRequestsQuery
@@ -775,6 +735,10 @@
         {
             isLoading = false;
             isReloading = false;
+            if (!isSilent)
+            {
+                LoadingService.Hide();
+            }
             StateHasChanged();
         }
     }
@@ -900,6 +864,7 @@
         isProcessingAction = true;
         processingActionType = "APPROVE";
         processingTitle = "Processing & Disbursing Refund...";
+        LoadingService.Show("Processing & disbursing refund...");
         var amountStr = FormatCurrency(selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount ?? 0);
         var bankTarget = !string.IsNullOrWhiteSpace(selectedRefund.BankName)
             ? $"to {selectedRefund.BankName} ({selectedRefund.MaskedAccountNumber})"
@@ -940,22 +905,23 @@
 
                 await LoadRefundRequestsAsync(isSilent: true);
 
-                ShowToast("Refund request approved and disbursed successfully.", "success");
+                ToastService.ShowSuccess("Refund request approved and disbursed successfully.");
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to approve refund request.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to approve refund request.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error processing refund approval: {ex.Message}", "error");
+            ToastService.ShowError($"Error processing refund approval: {ex.Message}");
         }
         finally
         {
             isProcessing = false;
             isProcessingAction = false;
             selectedRefund = null;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -1008,6 +974,7 @@
         isProcessingAction = true;
         processingActionType = "REJECT";
         processingTitle = "Processing Refund Rejection...";
+        LoadingService.Show("Processing refund rejection...");
         processingDescription = $"Recording rejection reason and sending notification to trainee {selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail}...";
         processingSubtext = "Please wait a moment...";
         StateHasChanged();
@@ -1040,30 +1007,45 @@
 
                 await LoadRefundRequestsAsync(isSilent: true);
 
-                ShowToast("Refund request rejected.", "info");
+                ToastService.ShowWarning("Refund request rejected.");
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to reject refund request.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to reject refund request.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error rejecting refund request: {ex.Message}", "error");
+            ToastService.ShowError($"Error rejecting refund request: {ex.Message}");
         }
         finally
         {
             isProcessing = false;
             isProcessingAction = false;
             selectedRefund = null;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
 
     private void ShowToast(string message, string type)
     {
-        toastMessage = message;
-        toastType = type;
+        switch (type?.ToLowerInvariant())
+        {
+            case "success":
+                ToastService.ShowSuccess(message);
+                break;
+            case "error":
+                ToastService.ShowError(message);
+                break;
+            case "warning":
+                ToastService.ShowWarning(message);
+                break;
+            case "info":
+            default:
+                ToastService.ShowInfo(message);
+                break;
+        }
     }
 
     private static string FormatReferenceCode(RefundRequestItem? r)

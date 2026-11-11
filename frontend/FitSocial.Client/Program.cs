@@ -24,6 +24,7 @@ using FitSocial.Client.Services.SystemOperations;
 using FitSocial.Client.Services.Reports;
 using FitSocial.Client.Services.SubscriptionPriceHistory;
 using FitSocial.Client.Services.Analytics;
+using FitSocial.Client.Services.Toast;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -43,6 +44,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseU
 
 // Core Services
 builder.Services.AddScoped<LoadingService>();
+builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 // Shared state giữa AppShellLayout (topbar + 2 sidebar) và các page (tìm kiếm, nội dung sidebar)

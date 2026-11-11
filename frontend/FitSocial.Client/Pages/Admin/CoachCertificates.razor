@@ -13,16 +13,6 @@
 
 <AuthorizeView Roles="STAFF,ADMIN">
     <Authorized>
-        <!-- Toast / Alert Message -->
-        @if (!string.IsNullOrEmpty(toastMessage))
-        {
-            <div class="auth-alert @(toastType == "error" ? "error" : "info")" role="alert">
-                <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
-                <span class="alert-text">@toastMessage</span>
-                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
-            </div>
-        }
-
         <!-- Page Header -->
         <div class="view-header">
             <div class="title-with-badge">
@@ -497,8 +487,6 @@
 
     private bool isLoading = true;
     private bool isProcessing = false;
-    private string? toastMessage;
-    private string toastType = "info";
 
     // Modals
     private CoachCertificateDetailModel? selectedDetail;
@@ -690,7 +678,7 @@
             var response = await CertificateService.ApproveCertificateAsync(targetCertificate.CertificateId);
             if (response.Success)
             {
-                ShowToast("Coach certificate approved successfully.", "info");
+                ToastService.ShowSuccess("Coach certificate approved successfully.");
                 isApproveModalOpen = false;
 
                 // Update detail view if open
@@ -707,12 +695,12 @@
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to approve certificate.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to approve certificate.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error: {ex.Message}", "error");
+            ToastService.ShowError($"Error: {ex.Message}");
         }
         finally
         {
@@ -740,7 +728,7 @@
             var response = await CertificateService.RejectCertificateAsync(targetCertificate.CertificateId, req);
             if (response.Success)
             {
-                ShowToast("Coach certificate rejected successfully.", "info");
+                ToastService.ShowWarning("Coach certificate rejected successfully.");
                 isRejectModalOpen = false;
 
                 if (selectedDetail != null && selectedDetail.CertificateId == targetCertificate.CertificateId && response.Data != null)
@@ -756,12 +744,12 @@
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to reject certificate.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to reject certificate.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error: {ex.Message}", "error");
+            ToastService.ShowError($"Error: {ex.Message}");
         }
         finally
         {
@@ -794,8 +782,22 @@
 
     private void ShowToast(string message, string type)
     {
-        toastMessage = message;
-        toastType = type;
+        switch (type?.ToLowerInvariant())
+        {
+            case "success":
+                ToastService.ShowSuccess(message);
+                break;
+            case "error":
+                ToastService.ShowError(message);
+                break;
+            case "warning":
+                ToastService.ShowWarning(message);
+                break;
+            case "info":
+            default:
+                ToastService.ShowInfo(message);
+                break;
+        }
     }
 
     private static string FormatDate(DateTime? dt) => dt.HasValue ? dt.Value.ToString("dd/MM/yyyy") : "—";

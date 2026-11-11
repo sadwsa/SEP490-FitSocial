@@ -11,15 +11,6 @@
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
-        @if (!string.IsNullOrEmpty(toastMessage))
-        {
-            <div class="auth-alert @toastType" role="alert">
-                <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
-                <span class="alert-text">@toastMessage</span>
-                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
-            </div>
-        }
-
         <div class="header-container">
             <div>
                 <h2 class="view-title">Refund Requests</h2>
@@ -673,10 +664,6 @@
     private int pageSize = 10;
     private int currentPage = 1;
 
-    // Toast alert
-    private string? toastMessage;
-    private string toastType = "info";
-
     // Modals
     private RefundRequestItem? selectedRefund;
     private bool isDetailModalOpen = false;
@@ -918,16 +905,16 @@
 
                 await LoadRefundRequestsAsync(isSilent: true);
 
-                ShowToast("Refund request approved and disbursed successfully.", "success");
+                ToastService.ShowSuccess("Refund request approved and disbursed successfully.");
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to approve refund request.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to approve refund request.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error processing refund approval: {ex.Message}", "error");
+            ToastService.ShowError($"Error processing refund approval: {ex.Message}");
         }
         finally
         {
@@ -1020,16 +1007,16 @@
 
                 await LoadRefundRequestsAsync(isSilent: true);
 
-                ShowToast("Refund request rejected.", "info");
+                ToastService.ShowWarning("Refund request rejected.");
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to reject refund request.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to reject refund request.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error rejecting refund request: {ex.Message}", "error");
+            ToastService.ShowError($"Error rejecting refund request: {ex.Message}");
         }
         finally
         {
@@ -1043,8 +1030,22 @@
 
     private void ShowToast(string message, string type)
     {
-        toastMessage = message;
-        toastType = type;
+        switch (type?.ToLowerInvariant())
+        {
+            case "success":
+                ToastService.ShowSuccess(message);
+                break;
+            case "error":
+                ToastService.ShowError(message);
+                break;
+            case "warning":
+                ToastService.ShowWarning(message);
+                break;
+            case "info":
+            default:
+                ToastService.ShowInfo(message);
+                break;
+        }
     }
 
     private static string FormatReferenceCode(RefundRequestItem? r)

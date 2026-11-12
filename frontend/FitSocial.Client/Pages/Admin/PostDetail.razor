@@ -1,0 +1,116 @@
+@page "/admin/posts/{PostId:guid}"
+@layout AdminLayout
+@attribute [Authorize(Roles = "ADMIN,STAFF")]
+@using FitSocial.Client.Components.Posts
+@using FitSocial.Client.Models.Posts
+@using FitSocial.Client.Services.Posts
+@inject IPostService PostService
+@inject NavigationManager Navigation
+
+<PageTitle>Post Details - FitConnect Admin Console</PageTitle>
+
+<AuthorizeView Roles="ADMIN,STAFF">
+    <Authorized>
+        <div class="max-w-3xl mx-auto">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="text-xl font-extrabold text-slate-800 m-0">Reported Post Preview</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Post ID: <code>@PostId</code></p>
+                </div>
+                <button type="button"
+                        @onclick="GoBackToReports"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:border-[#FF5500] hover:text-[#FF5500] transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                    <span>Back to Reports</span>
+                </button>
+            </div>
+
+            @if (isLoading)
+            {
+                <div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
+                    Loading post details...
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(errorMessage) || post == null)
+            {
+                <div class="bg-white rounded-xl border border-red-200 p-8 text-center">
+                    <div class="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-3">
+                        <AppIcon Name="warning" />
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 mb-1">Post Unavailable</h3>
+                    <p class="text-xs text-slate-600 mb-4">
+                        @(errorMessage ?? "This post no longer exists or has been deleted.")
+                    </p>
+                    <button type="button"
+                            @onclick="GoBackToReports"
+                            class="px-4 py-2 text-xs font-semibold text-white bg-[#FF5500] hover:bg-[#e04b00] rounded-lg transition cursor-pointer">
+                        Return to Reports
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4">
+                    <PostCard Post="@post" />
+                </div>
+            }
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            You do not have permission to view this page.
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter]
+    public Guid PostId { get; set; }
+
+    private PostDto? post;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadPostAsync();
+    }
+
+    private async Task LoadPostAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        post = null;
+
+        try
+        {
+            var res = await PostService.GetPostByIdAsync(PostId);
+            if (res.Success && res.Data != null)
+            {
+                post = res.Data;
+            }
+            else
+            {
+                errorMessage = string.IsNullOrWhiteSpace(res.Message)
+                    ? "This post no longer exists or has been deleted."
+                    : res.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unable to load post details: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void GoBackToReports()
+    {
+        Navigation.NavigateTo("/admin/reports");
+    }
+}
+

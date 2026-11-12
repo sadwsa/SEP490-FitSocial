@@ -939,6 +939,7 @@ public class ReportService : IReportService
             ReportedPostContent = r.ReportedPost?.Content,
             ReportedPostAuthorId = r.ReportedPost?.AuthorId,
             ReportedPostAuthorName = r.ReportedPost?.Author?.FullName ?? r.ReportedPost?.Author?.Email,
+            ReportedPostIsDeleted = r.ReportedPost?.IsDeleted == true,
 
             Type = r.Type,
             Reason = r.Reason,

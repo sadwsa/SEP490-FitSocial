@@ -38,4 +38,28 @@ public class TransactionService : ITransactionService
 
         return null;
     }
+
+    public async Task<PagedResult<TransactionHistoryDto>?> GetCoachPayoutHistoryAsync(TransactionFilterDto filter)
+    {
+        var sb = new StringBuilder("coach/training-plans/payout-history?");
+        sb.Append($"PageIndex={filter.PageIndex}&PageSize={filter.PageSize}");
+
+        if (filter.FromDate.HasValue)
+            sb.Append($"&FromDate={filter.FromDate.Value:yyyy-MM-dd}");
+
+        if (filter.ToDate.HasValue)
+            sb.Append($"&ToDate={filter.ToDate.Value:yyyy-MM-dd}");
+
+        if (!string.IsNullOrWhiteSpace(filter.Type))
+            sb.Append($"&Type={filter.Type}");
+
+        var response = await _apiClient.GetAsync<PagedResult<TransactionHistoryDto>>(sb.ToString());
+
+        if (response != null && response.Success)
+        {
+            return response.Data;
+        }
+
+        return null;
+    }
 }

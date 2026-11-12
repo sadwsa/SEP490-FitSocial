@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPlan;
+using FitSocial.Application.DTOs.Transactions;
 using FitSocial.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -23,13 +24,16 @@ namespace FitSocial.API.Controllers;
 public class CoachTrainingPlansController : ControllerBase
 {
     private readonly ITrainingPlanService _trainingPlanService;
+    private readonly ITransactionService _transactionService;
     private readonly ILogger<CoachTrainingPlansController> _logger;
 
     public CoachTrainingPlansController(
         ITrainingPlanService trainingPlanService,
+        ITransactionService transactionService,
         ILogger<CoachTrainingPlansController> logger)
     {
         _trainingPlanService = trainingPlanService;
+        _transactionService = transactionService;
         _logger = logger;
     }
 
@@ -178,6 +182,35 @@ public class CoachTrainingPlansController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "[CoachTrainingPlans] Error getting progress for order detail {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// View Payout History: Lịch sử tiền hệ thống gửi coach (payout) và tiền bị trừ khi hoàn tiền (refund deducted).
+    /// Chỉ role COACH mới xem được.
+    /// </summary>
+    [HttpGet("payout-history")]
+    [ProducesResponseType(typeof(ApiResponseDto<PagedResultDto<TransactionHistoryDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetCoachPayoutHistory(
+        [FromQuery] TransactionFilterDto filter,
+        CancellationToken cancellationToken = default)
+    {
+        var coachId = GetCurrentCoachId();
+        if (coachId == Guid.Empty)
+        {
+            return Unauthorized(ApiResponseDto<PagedResultDto<TransactionHistoryDto>>.Fail("Unauthorized: Invalid coach identity."));
+        }
+
+        try
+        {
+            var result = await _transactionService.GetCoachPayoutHistoryAsync(coachId, filter);
+            return Ok(ApiResponseDto<PagedResultDto<TransactionHistoryDto>>.Ok(result, "Coach payout history retrieved successfully."));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CoachTrainingPlans] Error getting payout history for coach {CoachId}: {Message}", coachId, ex.Message);
             throw;
         }
     }

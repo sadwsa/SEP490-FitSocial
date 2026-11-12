@@ -74,6 +74,10 @@
                                     <div class="min-w-0 flex-1">
                                         <h3 class="text-base sm:text-lg font-bold text-gray-800 hover:text-orange-600 transition line-clamp-2 break-words" title="@pkg.Title">@pkg.Title</h3>
                                         <p class="text-xs sm:text-sm text-gray-500 mb-2 truncate">Coach: <span class="font-semibold text-gray-700">@pkg.CoachName</span></p>
+                                        @if (pkg.OrderCreatedAt.HasValue)
+                                        {
+                                            <p class="text-xs text-gray-400 mb-2">Purchased on @pkg.OrderCreatedAt.Value.ToString("dd/MM/yyyy HH:mm")</p>
+                                        }
                                         <div class="flex flex-wrap gap-2 text-xs font-semibold text-gray-500">
                                             <span class="bg-gray-100 px-2 py-1 rounded">@($"{pkg.DurationDays} Days")</span>
                                             @if (pkg.SessionCount.HasValue)
@@ -216,6 +220,19 @@
                         </div>
                 }
                 </div>
+
+                @if (totalPages > 1)
+                {
+                    <div class="flex items-center justify-center gap-2 pt-2">
+                        <button class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                disabled="@(currentPage <= 1)"
+                                @onclick="PreviousPage">Previous</button>
+                        <span class="text-sm text-gray-600">Page @currentPage of @totalPages (@totalCount packages)</span>
+                        <button class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                disabled="@(currentPage >= totalPages)"
+                                @onclick="NextPage">Next</button>
+                    </div>
+                }
             }
         </div>
 
@@ -335,6 +352,17 @@
                     <p class="text-xs text-gray-600 italic">
                         @(string.IsNullOrWhiteSpace(selectedDetailPackage.UserComment) ? "You gave this package a star rating." : $"\"{selectedDetailPackage.UserComment}\"")
                     </p>
+                    @if (selectedDetailPackage.UserReviewImageUrls != null && selectedDetailPackage.UserReviewImageUrls.Any())
+                    {
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            @foreach (var url in selectedDetailPackage.UserReviewImageUrls)
+                            {
+                                <a href="@url" target="_blank" class="block w-14 h-14 rounded-lg overflow-hidden border border-gray-200 hover:opacity-90 transition">
+                                    <img src="@url" alt="review photo" class="w-full h-full object-cover" />
+                                </a>
+                            }
+                        </div>
+                    }
                     @if (!selectedDetailPackage.IsReviewEdited)
                     {
                         <div class="mt-2 text-right">
@@ -430,13 +458,25 @@
                     <InputTextArea @bind-Value="reviewDto.Comment" rows="4" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none text-sm" placeholder="Tell us how effective this package was for your training..."></InputTextArea>
                 </div>
 
-                <!-- Nhập URL ảnh (tối đa 5, cách bằng dấu phẩy) -->
+                <!-- Upload ảnh từ máy (tối đa 5) -->
                 <div class="mb-6">
-                    <label class="block text-xs font-bold text-gray-700 mb-1">Photo URLs (optional, max 5, comma-separated):</label>
-                    <textarea @bind="imageUrlsText" rows="2" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 text-sm" placeholder="https://example.com/photo1.jpg, https://example.com/photo2.jpg"></textarea>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">Photos (optional, max 5):</label>
+                    <InputFile OnChange="HandleReviewImageSelected" multiple accept="image/*"
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer" />
+                    @if (isUploadingReviewImages)
+                    {
+                        <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                            <span class="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></span>
+                            Uploading images...
+                        </p>
+                    }
+                    @if (!string.IsNullOrEmpty(reviewImageUploadError))
+                    {
+                        <p class="text-xs text-red-600 mt-1">@reviewImageUploadError</p>
+                    }
                     @if (reviewImageUrls.Count > 0)
                     {
-                        <p class="text-xs text-gray-500 mt-1">@reviewImageUrls.Count image(s) already attached to this review.</p>
+                        <p class="text-xs text-gray-500 mt-1">@reviewImageUrls.Count image(s) attached.</p>
                     }
                 </div>
 
@@ -448,8 +488,10 @@
                         <div class="flex flex-wrap gap-2">
                             @foreach (var url in reviewImageUrls)
                             {
-                                <div class="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200">
+                                <div class="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 group">
                                     <img src="@url" class="w-full h-full object-cover" alt="review photo" />
+                                    <button type="button" @onclick="() => RemoveReviewImage(url)"
+                                            class="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition cursor-pointer">✕</button>
                                 </div>
                             }
                         </div>
@@ -753,9 +795,15 @@
 }
 
 @code {
-    private IEnumerable<TrainingPackageResponseDto> packages = new List<TrainingPackageResponseDto>();
+    private List<TrainingPackageResponseDto> packages = new List<TrainingPackageResponseDto>();
     private bool isLoading = true;
     private string? errorMessage;
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalCount = 0;
+    private int totalPages = 0;
 
     // --- Các biến và hàm cho Modal Xem Chi Tiết Gói Đã Mua ---
     private bool isDetailModalOpen = false;
@@ -796,7 +844,8 @@
     private string selectedPackageTitle = string.Empty;
     private CreatePackageReviewDto reviewDto = new CreatePackageReviewDto();
     private List<string> reviewImageUrls = new();
-    private string imageUrlsText = string.Empty;
+    private bool isUploadingReviewImages = false;
+    private string? reviewImageUploadError;
     private bool isSubmittingReview = false;
     private string? reviewErrorMessage;
     private string? toastSuccessMessage;
@@ -814,19 +863,47 @@
         Shell.Reset();
     }
 
-    private async Task LoadPurchasedPackagesAsync()
+    private async Task LoadPurchasedPackagesAsync(int page = 1)
     {
         isLoading = true;
-        var response = await PackageService.GetPurchasedPackagesAsync();
+        errorMessage = null;
+
+        var response = await PackageService.GetPurchasedPackagesAsync(page, pageSize);
         if (response.Success && response.Data != null)
         {
-            packages = response.Data;
+            // Nếu trang hiện tại vượt quá tổng số trang (ví dụ sau khi dữ liệu thay đổi), tải lại trang cuối.
+            if (response.Data.TotalPages > 0 && page > response.Data.TotalPages)
+            {
+                await LoadPurchasedPackagesAsync(response.Data.TotalPages);
+                return;
+            }
+
+            packages = response.Data.Items;
+            currentPage = response.Data.PageNumber;
+            totalCount = response.Data.TotalCount;
+            totalPages = response.Data.TotalPages;
         }
         else
         {
+            packages = new List<TrainingPackageResponseDto>();
+            totalCount = 0;
+            totalPages = 0;
             errorMessage = response.Message ?? "Failed to load purchased packages.";
         }
+
         isLoading = false;
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage <= 1) return;
+        await LoadPurchasedPackagesAsync(currentPage - 1);
+    }
+
+    private async Task NextPage()
+    {
+        if (currentPage >= totalPages) return;
+        await LoadPurchasedPackagesAsync(currentPage + 1);
     }
 
     private void ViewDetails(Guid id)
@@ -842,8 +919,7 @@
         isEditingMode = false;
         reviewDto = new CreatePackageReviewDto { Rating = 5, Comment = "", ImageUrls = new() };
         reviewImageUrls = new();
-        imageUrlsText = string.Empty;
-        reviewErrorMessage = null;
+        reviewImageUploadError = null;
         isReviewModalOpen = true;
     }
 
@@ -857,17 +933,59 @@
         {
             Rating = pkg.UserRating ?? 5,
             Comment = pkg.UserComment ?? "",
-            ImageUrls = pkg.Media?.Select(m => m.MediaUrl).ToList() ?? new()
+            ImageUrls = new()
         };
-        reviewImageUrls = reviewDto.ImageUrls;
-        imageUrlsText = string.Join(", ", reviewImageUrls);
-        reviewErrorMessage = null;
+        // Giữ lại ảnh review hiện có để người dùng thấy; khi submit, backend thay thế toàn bộ.
+        reviewImageUrls = new List<string>(pkg.UserReviewImageUrls ?? new());
+        reviewImageUploadError = null;
         isReviewModalOpen = true;
     }
 
     private void CloseReviewModal()
     {
         isReviewModalOpen = false;
+    }
+
+    private async Task HandleReviewImageSelected(InputFileChangeEventArgs e)
+    {
+        reviewImageUploadError = null;
+        var files = e.GetMultipleFiles(5).ToArray();
+        if (files.Length == 0) return;
+
+        if (reviewImageUrls.Count + files.Length > 5)
+        {
+            reviewImageUploadError = "Tối đa 5 ảnh cho mỗi đánh giá.";
+            return;
+        }
+
+        isUploadingReviewImages = true;
+        try
+        {
+            var uploaded = await PackageService.UploadReviewImagesAsync(selectedPackageId, files);
+            if (uploaded.Success && uploaded.Data != null && uploaded.Data.Count > 0)
+            {
+                reviewImageUrls.AddRange(uploaded.Data);
+                if (reviewImageUrls.Count > 5)
+                    reviewImageUrls = reviewImageUrls.Take(5).ToList();
+            }
+            else
+            {
+                reviewImageUploadError = uploaded.Message ?? "Tải ảnh thất bại.";
+            }
+        }
+        catch (Exception ex)
+        {
+            reviewImageUploadError = $"Lỗi tải ảnh: {ex.Message}";
+        }
+        finally
+        {
+            isUploadingReviewImages = false;
+        }
+    }
+
+    private void RemoveReviewImage(string url)
+    {
+        reviewImageUrls.Remove(url);
     }
 
     private async Task SubmitReview()
@@ -877,20 +995,15 @@
 
         reviewDto.OrderId = selectedOrderId;
 
-        // Parse image URLs from text input
-        if (!string.IsNullOrWhiteSpace(imageUrlsText))
+        if (selectedOrderId == Guid.Empty)
         {
-            reviewDto.ImageUrls = imageUrlsText
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(u => u.Trim())
-                .Where(u => u.Length > 0)
-                .Take(5)
-                .ToList();
+            reviewErrorMessage = "Không tìm thấy đơn hàng hợp lệ để đánh giá.";
+            isSubmittingReview = false;
+            return;
         }
-        else
-        {
-            reviewDto.ImageUrls = new List<string>();
-        }
+
+        // Gửi danh sách ảnh đã upload (Cloudinary URLs)
+        reviewDto.ImageUrls = reviewImageUrls.ToList();
 
         var response = await PackageService.SubmitPackageReviewAsync(selectedPackageId, reviewDto);
         if (response.Success)
@@ -899,7 +1012,7 @@
             toastSuccessMessage = isEditingMode 
                 ? "Review updated successfully!" 
                 : "Your review has been submitted successfully!";
-            await LoadPurchasedPackagesAsync();
+            await LoadPurchasedPackagesAsync(currentPage);
             _ = Task.Run(async () =>
             {
                 await Task.Delay(3500);
@@ -1167,7 +1280,7 @@
             {
                 isRefundModalOpen = false;
                 toastSuccessMessage = "Refund request has been submitted successfully and is pending review!";
-                await LoadPurchasedPackagesAsync();
+                await LoadPurchasedPackagesAsync(currentPage);
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(4000);

@@ -32,6 +32,7 @@ namespace FitSocial.Application.DTOs.TrainingPackage
         public bool IsReviewEdited { get; set; }
         public int? UserRating { get; set; }
         public string? UserComment { get; set; }
+        public List<string> UserReviewImageUrls { get; set; } = new();
 
         // Training Plan, Meal Plan & Order Details state
         public Guid? OrderDetailsId { get; set; }

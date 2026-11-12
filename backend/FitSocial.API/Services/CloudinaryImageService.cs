@@ -48,7 +48,7 @@ public class CloudinaryImageService : IImageService
 
             var uploadResult = await _cloudinary.UploadAsync(uploadParams);
 
-            if (uploadResult.Status == "ok")
+            if (uploadResult.SecureUrl != null)
             {
                 uploadedUrls.Add(uploadResult.SecureUrl.AbsoluteUri);
             }

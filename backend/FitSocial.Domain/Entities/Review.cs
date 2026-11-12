@@ -24,7 +24,7 @@ public partial class Review
     public Guid? OrderId { get; set; }
     public bool? IsEdited { get; set; } = false;
 
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public byte[]? RowVersion { get; set; }
 
 
     public virtual CoachProfile Coach { get; set; } = null!;

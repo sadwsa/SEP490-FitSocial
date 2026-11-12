@@ -255,12 +255,42 @@
                             @if (string.Equals(selectedReport.TargetType, "POST", StringComparison.OrdinalIgnoreCase))
                             {
                                 <div class="space-y-3">
-                                    <div class="flex items-center justify-between text-xs">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
                                         <span class="text-gray-500">Post ID: <code>@(selectedReport.ReportedPostId?.ToString() ?? "N/A")</code></span>
-                                        <span class="font-medium text-gray-700">Author: <strong>@(selectedReport.ReportedPostAuthorName ?? "Unknown")</strong></span>
+                                        <span class="font-medium text-gray-700">
+                                            Author:
+                                            @if (selectedReport.ReportedPostAuthorId.HasValue && selectedReport.ReportedPostAuthorId.Value != Guid.Empty)
+                                            {
+                                                <a href="/profile/@selectedReport.ReportedPostAuthorId.Value" class="text-[#FF5500] hover:underline font-bold">
+                                                    @(selectedReport.ReportedPostAuthorName ?? "Unknown")
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <strong>@(selectedReport.ReportedPostAuthorName ?? "Unknown")</strong>
+                                            }
+                                        </span>
                                     </div>
                                     <div class="content-quote">
                                         @(string.IsNullOrWhiteSpace(selectedReport.ReportedPostContent) ? "No text content in post." : selectedReport.ReportedPostContent)
+                                    </div>
+                                    <div class="pt-1">
+                                        @if (selectedReport.ReportedPostId.HasValue && selectedReport.ReportedPostId.Value != Guid.Empty && !selectedReport.ReportedPostIsDeleted)
+                                        {
+                                            <a href="/admin/posts/@selectedReport.ReportedPostId.Value" class="post-view-link">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                                </svg>
+                                                <span>View Original Post</span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <div class="post-unavailable-note">
+                                                <AppIcon Name="warning" />
+                                                <span>This post has been deleted or is no longer accessible.</span>
+                                            </div>
+                                        }
                                     </div>
                                 </div>
                             }
@@ -377,6 +407,70 @@
                                 }
                             </div>
                         </div>
+
+                        <!-- Evidence Images (Only for Report User) -->
+                        @if (string.Equals(selectedReport.TargetType, "USER", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var evidenceImages = GetEvidenceImages(selectedReport);
+                            <div class="info-card">
+                                <div class="info-card-title justify-between">
+                                    <span class="flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                        </svg>
+                                        <span>Evidence Images</span>
+                                    </span>
+                                    @if (evidenceImages.Count > 0)
+                                    {
+                                        <span class="evidence-count-badge">@evidenceImages.Count @(evidenceImages.Count == 1 ? "image" : "images")</span>
+                                    }
+                                </div>
+
+                                @if (evidenceImages.Count == 0)
+                                {
+                                    <div class="evidence-empty-state">
+                                        No evidence images provided
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="evidence-grid">
+                                        @for (int i = 0; i < evidenceImages.Count; i++)
+                                        {
+                                            var item = evidenceImages[i];
+                                            var isValid = IsValidMediaUrl(item.MediaUrl) && !failedEvidenceMediaIds.Contains(item.MediaId);
+
+                                            if (isValid)
+                                            {
+                                                <button type="button"
+                                                        class="evidence-item"
+                                                        @onclick="() => OpenEvidenceLightbox(evidenceImages, item.MediaId)"
+                                                        title="Click to preview image">
+                                                    <img src="@item.MediaUrl"
+                                                         alt="Evidence image @(i + 1)"
+                                                         loading="lazy"
+                                                         @onerror="() => MarkEvidenceImageFailed(item.MediaId)" />
+                                                    <span class="evidence-zoom-hint">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path>
+                                                        </svg>
+                                                    </span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <div class="evidence-item-error" title="Unable to load image">
+                                                    <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                    </svg>
+                                                    <span>Image unavailable</span>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
 
                         <!-- Actions Section -->
                         <div class="modal-actions-box">
@@ -559,6 +653,69 @@
                 </div>
             </div>
         }
+
+        <!-- Evidence Image Lightbox Modal -->
+        @if (isLightboxOpen && lightboxImages.Count > 0)
+        {
+            <div class="report-lightbox-overlay" @onclick="CloseLightbox">
+                <div class="report-lightbox-dialog" @onclick:stopPropagation="true">
+                    <div class="report-lightbox-topbar">
+                        <div class="report-lightbox-info">
+                            <span>Evidence Image</span>
+                            @if (lightboxImages.Count > 1)
+                            {
+                                <span class="report-lightbox-counter">(@(lightboxIndex + 1) / @lightboxImages.Count)</span>
+                            }
+                        </div>
+                        <button type="button" class="report-lightbox-close-btn" @onclick="CloseLightbox" title="Close">✕</button>
+                    </div>
+
+                    <div class="report-lightbox-main">
+                        @if (lightboxImages.Count > 1)
+                        {
+                            <button type="button"
+                                    class="report-lightbox-arrow prev"
+                                    @onclick="PrevLightboxImage"
+                                    disabled="@(lightboxIndex <= 0)"
+                                    title="Previous image">
+                                ‹
+                            </button>
+                        }
+
+                        <div class="report-lightbox-img-stage">
+                            <img src="@lightboxImages[lightboxIndex]"
+                                 alt="Evidence image @(lightboxIndex + 1)"
+                                 class="report-lightbox-img" />
+                        </div>
+
+                        @if (lightboxImages.Count > 1)
+                        {
+                            <button type="button"
+                                    class="report-lightbox-arrow next"
+                                    @onclick="NextLightboxImage"
+                                    disabled="@(lightboxIndex >= lightboxImages.Count - 1)"
+                                    title="Next image">
+                                ›
+                            </button>
+                        }
+                    </div>
+
+                    @if (lightboxImages.Count > 1)
+                    {
+                        <div class="report-lightbox-strip">
+                            @for (int k = 0; k < lightboxImages.Count; k++)
+                            {
+                                var stripIdx = k;
+                                <img src="@lightboxImages[stripIdx]"
+                                     alt="Thumbnail @(stripIdx + 1)"
+                                     class="report-lightbox-strip-item @(stripIdx == lightboxIndex ? "active" : "")"
+                                     @onclick="() => lightboxIndex = stripIdx" />
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
     </Authorized>
 
     <NotAuthorized>
@@ -733,6 +890,8 @@
     private async Task OpenReportDetails(ReportListItemDto report)
     {
         selectedReport = report;
+        failedEvidenceMediaIds.Clear();
+        CloseLightbox();
         showDetailsModal = true;
         LoadingService.Show("Loading report details...");
         try
@@ -755,8 +914,85 @@
 
     private void CloseDetailsModal()
     {
+        CloseLightbox();
+        failedEvidenceMediaIds.Clear();
         showDetailsModal = false;
         selectedReport = null;
+    }
+
+    // Evidence Images & Lightbox State
+    private readonly HashSet<Guid> failedEvidenceMediaIds = new();
+    private bool isLightboxOpen = false;
+    private List<string> lightboxImages = new();
+    private int lightboxIndex = 0;
+
+    private static List<ReportMediaItemDto> GetEvidenceImages(ReportListItemDto report)
+    {
+        if (report.Media == null || report.Media.Count == 0)
+        {
+            return new List<ReportMediaItemDto>();
+        }
+
+        return report.Media
+            .Where(m => string.IsNullOrWhiteSpace(m.MediaFor) ||
+                        string.Equals(m.MediaFor, "REPORT", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(m => m.SortOrder ?? short.MaxValue)
+            .ToList();
+    }
+
+    private static bool IsValidMediaUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        var trimmed = url.Trim();
+        if (trimmed.StartsWith("/")) return true;
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private void MarkEvidenceImageFailed(Guid mediaId)
+    {
+        failedEvidenceMediaIds.Add(mediaId);
+    }
+
+    private void OpenEvidenceLightbox(List<ReportMediaItemDto> evidenceImages, Guid clickedMediaId)
+    {
+        var validUrls = new List<string>();
+        var targetIndex = 0;
+
+        foreach (var img in evidenceImages)
+        {
+            if (IsValidMediaUrl(img.MediaUrl) && !failedEvidenceMediaIds.Contains(img.MediaId))
+            {
+                if (img.MediaId == clickedMediaId)
+                {
+                    targetIndex = validUrls.Count;
+                }
+                validUrls.Add(img.MediaUrl!.Trim());
+            }
+        }
+
+        if (validUrls.Count == 0) return;
+
+        lightboxImages = validUrls;
+        lightboxIndex = Math.Clamp(targetIndex, 0, lightboxImages.Count - 1);
+        isLightboxOpen = true;
+    }
+
+    private void CloseLightbox()
+    {
+        isLightboxOpen = false;
+        lightboxImages.Clear();
+        lightboxIndex = 0;
+    }
+
+    private void PrevLightboxImage()
+    {
+        if (lightboxIndex > 0) lightboxIndex--;
+    }
+
+    private void NextLightboxImage()
+    {
+        if (lightboxIndex < lightboxImages.Count - 1) lightboxIndex++;
     }
 
     private void RequestProcessAction(string actionCode, string actionTitle, string actionDescription)

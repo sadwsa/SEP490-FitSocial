@@ -28,6 +28,7 @@ public class ReportListItemDto
     public string? ReportedPostContent { get; set; }
     public Guid? ReportedPostAuthorId { get; set; }
     public string? ReportedPostAuthorName { get; set; }
+    public bool ReportedPostIsDeleted { get; set; }
 
     // Reported User Moderation & Status Details
     public string? ReportedUserRole { get; set; }

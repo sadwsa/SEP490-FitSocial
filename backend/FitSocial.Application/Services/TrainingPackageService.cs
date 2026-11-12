@@ -19,13 +19,29 @@ namespace FitSocial.Application.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IReviewRepository _reviewRepository;
         private readonly IOrderRepository _orderRepository;
+        private readonly IImageService _imageService;
+        private readonly IReviewMediaRepository _reviewMediaRepository;
+        private readonly IUserRepository _userRepository;
+        private readonly INotificationRepository _notificationRepository;
+        private readonly IEmailService _emailService;
 
-        public TrainingPackageService(ITrainingPackageRepository repository, IUnitOfWork unitOfWork, IReviewRepository reviewRepository, IOrderRepository orderRepository)
+        public TrainingPackageService(ITrainingPackageRepository repository, IUnitOfWork unitOfWork, IReviewRepository reviewRepository, IOrderRepository orderRepository, IImageService imageService, IReviewMediaRepository reviewMediaRepository, IUserRepository userRepository, INotificationRepository notificationRepository, IEmailService emailService)
         {
             _repository = repository;
             _unitOfWork = unitOfWork;
             _reviewRepository = reviewRepository;
             _orderRepository = orderRepository;
+            _imageService = imageService;
+            _reviewMediaRepository = reviewMediaRepository;
+            _userRepository = userRepository;
+            _notificationRepository = notificationRepository;
+            _emailService = emailService;
+        }
+
+        // Backward-compatible overload for existing unit tests
+        public TrainingPackageService(ITrainingPackageRepository repository, IUnitOfWork unitOfWork, IReviewRepository reviewRepository, IOrderRepository orderRepository)
+            : this(repository, unitOfWork, reviewRepository, orderRepository, null!, null!, null!, null!, null!)
+        {
         }
 
         public async Task<IEnumerable<TrainingPackageResponseDto>> GetMyPackagesAsync(Guid currentUserId)
@@ -280,6 +296,13 @@ namespace FitSocial.Application.Services
                     CreatedAt = r.CreatedAt.HasValue ? DateTime.SpecifyKind(r.CreatedAt.Value, DateTimeKind.Utc) : null,
                     UpdatedAt = r.UpdatedAt.HasValue ? DateTime.SpecifyKind(r.UpdatedAt.Value, DateTimeKind.Utc) : null,
                     IsEdited = r.IsEdited ?? false,
+                    Media = r.ReviewMedia?.Select(m => new ReviewMediaDto
+                    {
+                        ReviewMediaId = m.ReviewMediaId,
+                        MediaUrl = m.MediaUrl,
+                        MediaType = m.MediaType,
+                        SortOrder = m.SortOrder
+                    }).ToList() ?? new List<ReviewMediaDto>()
 
                 }).ToList();
             }
@@ -312,11 +335,16 @@ namespace FitSocial.Application.Services
                 throw new ValidationException("You can only review a package from a paid order.");
             if (!order.OrderDetails.Any(od => od.PackageId == packageId))
                 throw new ValidationException("This order does not contain the specified package.");
-          
+           
+            // Validate images count (max 5 images)
+            if (dto.ImageUrls != null && dto.ImageUrls.Count > 5)
+                throw new ValidationException("Maximum 5 images allowed per review.");
+
             var existingReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
+            var isNewReview = existingReview == null;
+
             if (existingReview != null)
             {
-                // Cho phép sửa không giới hạn (không còn edit-once)
                 if (existingReview.IsEdited == true)
                 {
                     throw new ValidationException("This review has been edited once and cannot be edited further.");
@@ -351,8 +379,6 @@ namespace FitSocial.Application.Services
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
             {
-                // Race condition: another request inserted a review concurrently.
-                // Fetch the existing review and apply edit logic if allowed.
                 var concurrentReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
                 if (concurrentReview == null)
                     throw;
@@ -364,6 +390,94 @@ namespace FitSocial.Application.Services
                 concurrentReview.IsEdited = true;
                 _reviewRepository.Update(concurrentReview);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+            {
+                var concurrentReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
+                if (concurrentReview == null)
+                    throw;
+                if (concurrentReview.IsEdited == true)
+                    throw new ValidationException("This review has been edited once and cannot be edited further.");
+                throw new ValidationException("Review was modified by another request. Please reload and try again.");
+            }
+
+            // Send notification + email to coach
+            try
+            {
+                var coachUser = await _userRepository.GetByIdAsync(package.CoachId, cancellationToken);
+                var traineeUser = await _userRepository.GetByIdAsync(traineeId, cancellationToken);
+                if (coachUser != null)
+                {
+                    var traineeName = traineeUser?.FullName ?? "A customer";
+                    var packageTitle = package.Title ?? "this package";
+                    var actionText = isNewReview ? "left a new" : "updated their";
+
+                    // Create in-app notification for coach
+                    var notification = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = package.CoachId,
+                        ActorId = traineeId,
+                        ReferenceId = dto.OrderId,
+                        Type = isNewReview ? "NEW_REVIEW" : "REVIEW_UPDATED",
+                        Description = $"{traineeName} {actionText} {dto.Rating}-star review on your package \"{packageTitle}\".",
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _notificationRepository.AddAsync(notification, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    // Send email notification
+                    if (!string.IsNullOrWhiteSpace(coachUser.Email))
+                    {
+                        await _emailService.SendEmailAsync(
+                            coachUser.Email,
+                            "[FitConnect] " + (isNewReview ? "New review" : "Review updated") + " on your training package",
+                            "<div style=\"font-family: Arial, sans-serif;\">" +
+                            "<h2>" + (isNewReview ? "New review received" : "Review updated") + "</h2>" +
+                            "<p>Hi " + (coachUser.FullName ?? "Coach") + ",</p>" +
+                            "<p>" + traineeName + " " + actionText + " " + dto.Rating + "-star review on your package <strong>" + packageTitle + "</strong>:</p>" +
+                            "<blockquote style=\"border-left: 4px solid #FF5500; padding-left: 12px; color: #555;\">" + (dto.Comment ?? "") + "</blockquote>" +
+                            "<p>Log in to FitConnect to view and reply.</p>" +
+                            "</div>");
+                    }
+                }
+            }
+            catch
+            {
+                // Don't fail the whole review if notification/email fails
+            }
+
+            // Save ReviewMedia from uploaded image URLs (frontend uploads images first)
+            if (dto.ImageUrls != null && dto.ImageUrls.Count > 0)
+            {
+                // Get the review that was just created/updated
+                var review = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
+                if (review != null)
+                {
+                    // Delete existing media for this review (if editing)
+                    var existingMedia = await _reviewMediaRepository.GetMediaByReviewIdAsync(review.ReviewId, cancellationToken);
+                    foreach (var media in existingMedia)
+                    {
+                        _reviewMediaRepository.Remove(media);
+                    }
+
+                    // Save image URLs as ReviewMedia
+                    for (int i = 0; i < dto.ImageUrls.Count; i++)
+                    {
+                        await _reviewMediaRepository.AddAsync(new ReviewMedia
+                        {
+                            ReviewMediaId = Guid.NewGuid(),
+                            ReviewId = review.ReviewId,
+                            MediaUrl = dto.ImageUrls[i],
+                            MediaType = "image",
+                            SortOrder = i,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
             }
 
             return ApiResponseDto<bool>.Ok(true, "Review submitted successfully.");
@@ -386,15 +500,83 @@ namespace FitSocial.Application.Services
             {
                 throw new UnauthorizedAccessException("Only the coach who owns this package can reply to its reviews.");
             }
+
+            // Validate reply content not empty
+            if (string.IsNullOrWhiteSpace(dto.Reply))
+            {
+                throw new ValidationException("Reply content cannot be empty.");
+            }
+
             var review = await _reviewRepository.GetByIdAsync(reviewId, cancellationToken);
             if (review == null || review.PackageId != packageId)
             {
                 throw new NotFoundException("Review not found for this package.");
             }
-            review.Reply = dto.Reply?.Trim();
+
+            // Chỉ cho phép reply 1 lần
+            if (!string.IsNullOrWhiteSpace(review.Reply))
+            {
+                throw new ValidationException("This review already has a reply. You cannot reply again.");
+            }
+
+            review.Reply = dto.Reply.Trim();
             review.UpdatedAt = DateTime.UtcNow;
             _reviewRepository.Update(review);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+            {
+                throw new ValidationException("Review was modified by another request. Please reload and try again.");
+            }
+
+            // Send notification + email to trainee
+            try
+            {
+                var trainee = await _userRepository.GetByIdAsync(review.TraineeId, cancellationToken);
+                if (trainee != null)
+                {
+                    // Create in-app notification
+                    var notification = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = review.TraineeId,
+                        ActorId = coachId,
+                        ReferenceId = review.ReviewId,
+                        Type = "REVIEW_REPLY",
+                        Description = $"Coach {coachId} replied to your review on package \"{package.Title}\".",
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _notificationRepository.AddAsync(notification, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    // Send email notification
+                    if (!string.IsNullOrWhiteSpace(trainee.Email))
+                    {
+                        var traineeName = trainee.FullName ?? "Customer";
+                        var packageTitle = package.Title ?? "this package";
+                        var replyText = review.Reply ?? "";
+
+                        await _emailService.SendEmailAsync(
+                            trainee.Email,
+                            "[FitConnect] Coach replied to your review",
+                            "<div style=\"font-family: Arial, sans-serif;\">" +
+                            "<h2>New reply from Coach</h2>" +
+                            "<p>Hi " + traineeName + ",</p>" +
+                            "<p>A coach has replied to your review on package <strong>" + packageTitle + "</strong>:</p>" +
+                            "<blockquote style=\"border-left: 4px solid #FF5500; padding-left: 12px; color: #555;\">" + replyText + "</blockquote>" +
+                            "<p>Log in to FitConnect to view more details.</p>" +
+                            "</div>");
+                    }
+                }
+            }
+            catch
+            {
+                // Don't fail the whole reply if notification/email fails
+            }
+
             return ApiResponseDto<bool>.Ok(true, "Reply posted successfully.");
         }
       

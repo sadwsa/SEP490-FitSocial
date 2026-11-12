@@ -24,6 +24,8 @@ public partial class Review
     public Guid? OrderId { get; set; }
     public bool? IsEdited { get; set; } = false;
 
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+
 
     public virtual CoachProfile Coach { get; set; } = null!;
 
@@ -31,4 +33,6 @@ public partial class Review
 
     public virtual TrainingPackage? Package { get; set; }
     public virtual Order? Order { get; set; }
+
+    public virtual ICollection<ReviewMedia> ReviewMedia { get; set; } = new List<ReviewMedia>();
 }

@@ -22,6 +22,7 @@ public class ReviewRepository : Repository<Review>, IReviewRepository
             .Include(r => r.Trainee)
             .Include(r => r.Coach)
                 .ThenInclude(c => c.Coach)
+            .Include(r => r.ReviewMedia)
             .Where(r => r.PackageId == packageId)
             .OrderByDescending(r => r.CreatedAt)
             .AsNoTracking()

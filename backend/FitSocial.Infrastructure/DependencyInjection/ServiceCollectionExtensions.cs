@@ -120,6 +120,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ISubscriptionPriceHistoryRepository, SubscriptionPriceHistoryRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
+        services.AddScoped<IReviewMediaRepository, ReviewMediaRepository>();
         services.AddScoped<ITransactionRepository, TransactionRepository>();
         services.AddScoped<IMealPlanRepository, MealPlanRepository>();
 

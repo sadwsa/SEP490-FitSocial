@@ -8,6 +8,8 @@
 @inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.TrainingPackages
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Linq
 @using FitSocial.Client.Services.TrainingPackages
 @using FitSocial.Client.Models.Refunds
 @using FitSocial.Client.Models.Coaches
@@ -428,6 +430,32 @@
                     <InputTextArea @bind-Value="reviewDto.Comment" rows="4" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none text-sm" placeholder="Tell us how effective this package was for your training..."></InputTextArea>
                 </div>
 
+                <!-- Nhập URL ảnh (tối đa 5, cách bằng dấu phẩy) -->
+                <div class="mb-6">
+                    <label class="block text-xs font-bold text-gray-700 mb-1">Photo URLs (optional, max 5, comma-separated):</label>
+                    <textarea @bind="imageUrlsText" rows="2" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 text-sm" placeholder="https://example.com/photo1.jpg, https://example.com/photo2.jpg"></textarea>
+                    @if (reviewImageUrls.Count > 0)
+                    {
+                        <p class="text-xs text-gray-500 mt-1">@reviewImageUrls.Count image(s) already attached to this review.</p>
+                    }
+                </div>
+
+                <!-- Hiển thị ảnh đã upload (khi edit) -->
+                @if (reviewImageUrls.Count > 0)
+                {
+                    <div class="mb-6">
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Current photos:</label>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach (var url in reviewImageUrls)
+                            {
+                                <div class="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200">
+                                    <img src="@url" class="w-full h-full object-cover" alt="review photo" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
                 <!-- Nút Cancel / Submit -->
                 <div class="flex justify-end gap-3">
                     <button type="button" @onclick="CloseReviewModal" class="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition cursor-pointer">Cancel</button>
@@ -767,6 +795,8 @@
     private Guid selectedOrderId;
     private string selectedPackageTitle = string.Empty;
     private CreatePackageReviewDto reviewDto = new CreatePackageReviewDto();
+    private List<string> reviewImageUrls = new();
+    private string imageUrlsText = string.Empty;
     private bool isSubmittingReview = false;
     private string? reviewErrorMessage;
     private string? toastSuccessMessage;
@@ -810,7 +840,9 @@
         selectedOrderId = pkg.OrderId ?? Guid.Empty;
         selectedPackageTitle = pkg.Title ?? "Training Package";
         isEditingMode = false;
-        reviewDto = new CreatePackageReviewDto { Rating = 5, Comment = "" };
+        reviewDto = new CreatePackageReviewDto { Rating = 5, Comment = "", ImageUrls = new() };
+        reviewImageUrls = new();
+        imageUrlsText = string.Empty;
         reviewErrorMessage = null;
         isReviewModalOpen = true;
     }
@@ -824,8 +856,11 @@
         reviewDto = new CreatePackageReviewDto
         {
             Rating = pkg.UserRating ?? 5,
-            Comment = pkg.UserComment ?? ""
+            Comment = pkg.UserComment ?? "",
+            ImageUrls = pkg.Media?.Select(m => m.MediaUrl).ToList() ?? new()
         };
+        reviewImageUrls = reviewDto.ImageUrls;
+        imageUrlsText = string.Join(", ", reviewImageUrls);
         reviewErrorMessage = null;
         isReviewModalOpen = true;
     }
@@ -841,6 +876,22 @@
         reviewErrorMessage = null;
 
         reviewDto.OrderId = selectedOrderId;
+
+        // Parse image URLs from text input
+        if (!string.IsNullOrWhiteSpace(imageUrlsText))
+        {
+            reviewDto.ImageUrls = imageUrlsText
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(u => u.Trim())
+                .Where(u => u.Length > 0)
+                .Take(5)
+                .ToList();
+        }
+        else
+        {
+            reviewDto.ImageUrls = new List<string>();
+        }
+
         var response = await PackageService.SubmitPackageReviewAsync(selectedPackageId, reviewDto);
         if (response.Success)
         {

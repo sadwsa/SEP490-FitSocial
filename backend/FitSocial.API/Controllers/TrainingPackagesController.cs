@@ -1,7 +1,10 @@
 ﻿using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPackage;
+using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
+using FitSocial.API.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -15,10 +18,12 @@ namespace FitSocial.API.Controllers
     public class TrainingPackagesController : ControllerBase
     {
         private readonly ITrainingPackageService _service;
+        private readonly CloudinaryImageService _imageService;
 
-        public TrainingPackagesController(ITrainingPackageService service)
+        public TrainingPackagesController(ITrainingPackageService service, CloudinaryImageService imageService)
         {
             _service = service;
+            _imageService = imageService;
         }
 
         [HttpGet]
@@ -147,6 +152,16 @@ namespace FitSocial.API.Controllers
             var result = await _service.SubmitPackageReviewAsync(id, traineeId, dto, cancellationToken);
             return Ok(result);
         }
+
+        // 2.1 Trainee upload ảnh đánh giá lên Cloudinary (trước khi gửi review)
+        [HttpPost("{id}/upload-images")]
+        [Authorize]
+        public async Task<IActionResult> UploadReviewImages(Guid id, IFormFileCollection files, CancellationToken cancellationToken = default)
+        {
+            var uploadedUrls = await _imageService.UploadImagesFromFilesAsync(files, cancellationToken);
+            return Ok(ApiResponseDto<List<string>>.Ok(uploadedUrls, "Images uploaded successfully."));
+        }
+
         // 3. Coach phản hồi lại đánh giá của học viên
         [HttpPost("{id}/reviews/{reviewId}/reply")]
         [Authorize(Roles = "COACH")]
@@ -157,8 +172,19 @@ namespace FitSocial.API.Controllers
             {
                 return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
             }
-            var result = await _service.ReplyToReviewAsync(id, reviewId, coachId, dto, cancellationToken);
-            return Ok(result);
+            try
+            {
+                var result = await _service.ReplyToReviewAsync(id, reviewId, coachId, dto, cancellationToken);
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(403, ApiResponseDto<bool>.Fail(ex.Message));
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(ApiResponseDto<bool>.Fail(ex.Message));
+            }
         }
     }
 }

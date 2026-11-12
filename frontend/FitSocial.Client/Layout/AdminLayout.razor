@@ -15,9 +15,12 @@
         </div>
 
         <nav class="side-nav">
-            <button type="button" class="side-item @(IsActive("/admin", true) ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin")'>
-                <AppIcon Name="chart" /><span>Dashboard</span>
-            </button>
+            @if (isAdmin)
+            {
+                <button type="button" class="side-item @(IsActive("/admin", true) ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin")'>
+                    <AppIcon Name="chart" /><span>Dashboard</span>
+                </button>
+            }
             <button type="button" class="side-item @(IsActive("/admin/users") ? "active" : "")" @onclick='() => Navigation.NavigateTo("/admin/users")'>
                 <AppIcon Name="person" /><span>User Accounts</span>
             </button>

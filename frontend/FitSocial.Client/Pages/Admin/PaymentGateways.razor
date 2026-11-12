@@ -18,17 +18,17 @@
         }
 
         <h2 class="view-title">Payment Gateway Accounts</h2>
-        <p class="view-sub">System payment gateway configurations used for collecting and disbursing (UC-36)</p>
+        <p class="view-sub">System payment gateway configurations used for collecting and disbursing</p>
 
         <div class="cat-tabs">
             <button type="button" class="cat-tab @(channelTab == "all" ? "active" : "")" @onclick='() => SetChannelTab("all")'>
                 All
             </button>
             <button type="button" class="cat-tab @(channelTab == "collect" ? "active" : "")" @onclick='() => SetChannelTab("collect")'>
-                Thu tiền
+                Collections
             </button>
             <button type="button" class="cat-tab @(channelTab == "payout" ? "active" : "")" @onclick='() => SetChannelTab("payout")'>
-                Chi tiền
+                Payouts
             </button>
         </div>
 
@@ -96,11 +96,11 @@
                                 <td>
                                     @if (g.IsPayout)
                                     {
-                                        <span class="status-pill payout">Chi tiền</span>
+                                        <span class="status-pill payout">Payout</span>
                                     }
                                     else
                                     {
-                                        <span class="status-pill collect">Thu tiền</span>
+                                        <span class="status-pill collect">Collect</span>
                                     }
                                 </td>
                                 <td>
@@ -234,8 +234,8 @@
                         <label class="form-field">
                             <span>Channel *</span>
                             <select class="form-input" @bind="addChannel">
-                                <option value="thu">Thu tiền (collection)</option>
-                                <option value="chi">Chi tiền (payout)</option>
+                                <option value="thu">Collection</option>
+                                <option value="chi">Payout</option>
                             </select>
                         </label>
                         <p class="muted-sm">New gateways start as Inactive (only one active gateway per channel). It becomes Active automatically if no other gateway of the same channel is active.</p>
@@ -287,8 +287,8 @@
                         <label class="form-field">
                             <span>Channel *</span>
                             <select class="form-input" @bind="editChannel">
-                                <option value="thu">Thu tiền (collection)</option>
-                                <option value="chi">Chi tiền (payout)</option>
+                                <option value="thu">Collection</option>
+                                <option value="chi">Payout</option>
                             </select>
                         </label>
                         <label class="form-check">

@@ -3,6 +3,7 @@
 @inject IAuthService AuthService
 @inject ITokenStorage TokenStorage
 @inject NavigationManager Navigation
+@using FitSocial.Client.Models.Auth
 
 <PageTitle>Management Portal - FitConnect</PageTitle>
 
@@ -100,7 +101,23 @@
             var result = await AuthService.AdminLoginAsync(loginModel);
             if (result.Success)
             {
-                Navigation.NavigateTo("/admin");
+                var role = result.Data?.User?.RoleCode;
+
+                if (string.Equals(role?.Trim(), AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Admin -> Revenue Analytics dashboard
+                    Navigation.NavigateTo("/admin");
+                }
+                else if (string.Equals(role?.Trim(), AppRoles.Staff, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Staff -> User Accounts (first page)
+                    Navigation.NavigateTo("/admin/users");
+                }
+                else
+                {
+                    // Fallback
+                    Navigation.NavigateTo("/admin");
+                }
             }
             else
             {

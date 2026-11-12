@@ -83,6 +83,7 @@ if (!string.IsNullOrWhiteSpace(cloudName) && !string.IsNullOrWhiteSpace(apiKey) 
 {
     var account = new CloudinaryDotNet.Account(cloudName, apiKey, apiSecret);
     builder.Services.AddSingleton(new CloudinaryDotNet.Cloudinary(account));
+    builder.Services.AddScoped<CloudinaryImageService>();
 }
 
 // JWT Authentication

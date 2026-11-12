@@ -1193,6 +1193,7 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.PackageId).HasColumnName("PackageID");
             entity.Property(e => e.OrderId).HasColumnName("OrderID");
             entity.Property(e => e.IsEdited).HasColumnName("IsEdited").HasDefaultValue(false);
+            entity.Property(e => e.RowVersion).HasColumnName("row_version").IsRowVersion();
 
 
             entity.Property(e => e.Comment).HasColumnType("text");
@@ -1230,6 +1231,29 @@ public partial class FitSocialDbContext : DbContext
                 .HasForeignKey(d => d.OrderId)
                 .HasConstraintName("Reviews_OrderID_fkey")
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // 39b. ReviewMedia
+        modelBuilder.Entity<ReviewMedia>(entity =>
+        {
+            entity.HasKey(e => e.ReviewMediaId).HasName("ReviewMedia_pkey");
+            entity.ToTable("ReviewMedia");
+            entity.Property(e => e.ReviewMediaId)
+                .HasDefaultValueSql("uuid_generate_v4()")
+                .HasColumnName("ReviewMediaID");
+            entity.Property(e => e.ReviewId).HasColumnName("ReviewID");
+            entity.Property(e => e.MediaUrl).HasColumnName("MediaUrl").HasColumnType("text");
+            entity.Property(e => e.MediaType).HasColumnName("MediaType").HasColumnType("character varying(20)");
+            entity.Property(e => e.SortOrder).HasColumnName("SortOrder");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Review).WithMany(p => p.ReviewMedia)
+                .HasForeignKey(d => d.ReviewId)
+                .HasConstraintName("ReviewMedia_ReviewID_fkey")
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
 

@@ -226,12 +226,26 @@ public class CoachService : ICoachService
         // Chặn không cho phép sửa review của người khác
         if (review.TraineeId != traineeId) throw new UnauthorizedAccessException("You can only edit your own review.");
 
+        // Quy tắc: chỉ được sửa 1 lần
+        if (review.IsEdited == true)
+        {
+            throw new ValidationException("This review has been edited once and cannot be edited further.");
+        }
+
         review.Rating = dto.Rating;
         review.Comment = dto.Comment;
         review.UpdatedAt = DateTime.UtcNow;
+        review.IsEdited = true;
 
         _reviewRepository.Update(review);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("Review was modified by another request. Please reload and try again.");
+        }
 
         return ApiResponseDto<bool>.Ok(true, "Review updated successfully.");
     }
@@ -245,7 +259,14 @@ public class CoachService : ICoachService
         if (review.TraineeId != traineeId) throw new UnauthorizedAccessException("You can only delete your own review.");
 
         _reviewRepository.Remove(review);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("Review was modified by another request. Please reload and try again.");
+        }
 
         return ApiResponseDto<bool>.Ok(true, "Review deleted successfully.");
     }

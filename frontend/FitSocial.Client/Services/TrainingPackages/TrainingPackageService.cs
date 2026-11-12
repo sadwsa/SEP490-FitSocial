@@ -134,6 +134,55 @@ public class TrainingPackageService : ITrainingPackageService
         return await _apiClient.GetAsync<PackageReviewSummaryDto>($"{BaseEndpoint}/{packageId}/reviews");
     }
 
+    public async Task<ApiResponse<List<string>>> UploadReviewImagesAsync(Guid packageId, IBrowserFile[] files)
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+
+            if (files != null)
+            {
+                for (int i = 0; i < files.Length; i++)
+                {
+                    var file = files[i];
+                    using var ms = new MemoryStream();
+                    await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+                    var bytes = ms.ToArray();
+
+                    var byteContent = new ByteArrayContent(bytes);
+                    byteContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+                    content.Add(byteContent, "files", file.Name);
+                }
+            }
+
+            var token = await _tokenStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await _httpClient.PostAsync($"{BaseEndpoint}/{packageId}/upload-images", content);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<string>>>();
+
+            if (response.IsSuccessStatusCode && result != null)
+                return result;
+
+            return new ApiResponse<List<string>>
+            {
+                Success = false,
+                Message = result?.Message ?? $"Upload ảnh thất bại (Status code: {response.StatusCode})"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<List<string>>
+            {
+                Success = false,
+                Message = $"Lỗi khi tải ảnh: {ex.Message}"
+            };
+        }
+    }
+
     public async Task<ApiResponse<bool>> SubmitPackageReviewAsync(Guid packageId, CreatePackageReviewDto dto)
     {
         return await _apiClient.PostAsync<CreatePackageReviewDto, bool>($"{BaseEndpoint}/{packageId}/reviews", dto);

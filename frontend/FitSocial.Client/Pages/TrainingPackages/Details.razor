@@ -458,38 +458,6 @@
                                                             @FormatDateTime(review.IsEdited && review.UpdatedAt.HasValue ? review.UpdatedAt : review.CreatedAt)
                                                         </span>
 
-                                                        <!-- THREE DOTS MENU FOR OWN REVIEW -->
-                                                        @if (isMyReview)
-                                                        {
-                                                            <div class="relative">
-                                                                <button type="button" @onclick="() => ToggleMenu(review.ReviewId)"
-                                                                        class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-500 transition cursor-pointer">
-                                                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                                                                    </svg>
-                                                                </button>
-
-                                                                @if (openMenuReviewId == review.ReviewId)
-                                                                {
-                                                                    <div class="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 animate-in fade-in zoom-in-95">
-                                                                        @if (!review.IsEdited)
-                                                                        {
-                                                                            <button type="button" @onclick="() => OpenEditReviewModal(review)"
-                                                                                    class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition flex items-center gap-2 cursor-pointer">
-                                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                                                                                Edit Review
-                                                                            </button>
-                                                                        }
-                                                                        else
-                                                                        {
-                                                                            <div class="px-3.5 py-2 text-[11px] text-gray-400 italic">
-                                                                                Edited once (Cannot edit again)
-                                                                            </div>
-                                                                        }
-                                                                    </div>
-                                                                }
-                                                            </div>
-                                                        }
                                                     </div>
                                                 </div>
 
@@ -597,8 +565,6 @@
     private bool isOwnPackage => currentUserId.HasValue && package != null && package.CoachId == currentUserId.Value;
     private bool inCart = false;
     private bool hasPurchased = false;
-    private Guid reviewOrderId = Guid.Empty;
-    private bool hasReviewed => currentUserId.HasValue && reviewSummary.Reviews.Any(r => r.TraineeId == currentUserId.Value);
     private const int quantity = 1; // Strict single quantity rule
     private bool isAddingToCart = false;
     private int cartCount = 0;
@@ -644,196 +610,6 @@
     private string replyText = string.Empty;
     private bool isSubmittingReply = false;
 
-    // Edit Review state
-    private Guid? openMenuReviewId = null;
-    private bool isEditModalOpen = false;
-    private CreatePackageReviewDto editReviewDto = new CreatePackageReviewDto();
-    private bool isSubmittingEdit = false;
-    private string? editErrorMessage;
-    private List<string> editReviewImageUrls = new();
-    private bool isUploadingEditReviewImages = false;
-    private string? editReviewImageUploadError;
-
-    // New review modal state
-    private bool isReviewModalOpen = false;
-    private CreatePackageReviewDto reviewDto = new CreatePackageReviewDto();
-    private List<string> reviewImageUrls = new();
-    private bool isUploadingReviewImages = false;
-    private string? reviewImageUploadError;
-    private bool isSubmittingReview = false;
-    private string? reviewErrorMessage;
-
-    private void ToggleMenu(Guid reviewId)
-    {
-        openMenuReviewId = (openMenuReviewId == reviewId) ? null : reviewId;
-    }
-
-    private void OpenReviewModal()
-    {
-        reviewDto = new CreatePackageReviewDto { Rating = 5, Comment = "", ImageUrls = new() };
-        reviewImageUrls = new();
-        reviewImageUploadError = null;
-        reviewErrorMessage = null;
-        isReviewModalOpen = true;
-    }
-
-    private void CloseReviewModal()
-    {
-        isReviewModalOpen = false;
-    }
-
-    private async Task HandleReviewImageSelected(InputFileChangeEventArgs e)
-    {
-        reviewImageUploadError = null;
-        var files = e.GetMultipleFiles(5).ToArray();
-        if (files.Length == 0) return;
-
-        if (reviewImageUrls.Count + files.Length > 5)
-        {
-            reviewImageUploadError = "Tối đa 5 ảnh cho mỗi đánh giá.";
-            return;
-        }
-
-        isUploadingReviewImages = true;
-        try
-        {
-            var uploaded = await PackageService.UploadReviewImagesAsync(Id, files);
-            if (uploaded.Success && uploaded.Data != null && uploaded.Data.Count > 0)
-            {
-                reviewImageUrls.AddRange(uploaded.Data);
-                if (reviewImageUrls.Count > 5)
-                    reviewImageUrls = reviewImageUrls.Take(5).ToList();
-            }
-            else
-            {
-                reviewImageUploadError = uploaded.Message ?? "Tải ảnh thất bại.";
-            }
-        }
-        catch (Exception ex)
-        {
-            reviewImageUploadError = $"Lỗi tải ảnh: {ex.Message}";
-        }
-        finally
-        {
-            isUploadingReviewImages = false;
-        }
-    }
-
-    private void RemoveReviewImage(string url)
-    {
-        reviewImageUrls.Remove(url);
-    }
-
-    private async Task SubmitReview()
-    {
-        isSubmittingReview = true;
-        reviewErrorMessage = null;
-
-        reviewDto.OrderId = reviewOrderId;
-
-        if (reviewOrderId == Guid.Empty)
-        {
-            reviewErrorMessage = "Không tìm thấy đơn hàng hợp lệ để đánh giá.";
-            isSubmittingReview = false;
-            return;
-        }
-
-        reviewDto.ImageUrls = reviewImageUrls.ToList();
-
-        var res = await PackageService.SubmitPackageReviewAsync(Id, reviewDto);
-        if (res.Success)
-        {
-            isReviewModalOpen = false;
-            ShowSuccessToast("Your review has been submitted successfully!");
-            await LoadReviewsAsync();
-        }
-        else
-        {
-            reviewErrorMessage = res.Message ?? "Failed to submit review.";
-        }
-        isSubmittingReview = false;
-    }
-
-    private void OpenEditReviewModal(PackageReviewDto review)
-    {
-        openMenuReviewId = null;
-        editReviewDto = new CreatePackageReviewDto
-        {
-            OrderId = review.OrderId ?? Guid.Empty,
-            Rating = review.Rating,
-            Comment = review.Comment
-        };
-        editReviewImageUrls = review.Media?
-            .OrderBy(m => m.SortOrder)
-            .Select(m => m.MediaUrl)
-            .ToList() ?? new List<string>();
-        editReviewImageUploadError = null;
-        editErrorMessage = null;
-        isEditModalOpen = true;
-    }
-
-    private async Task HandleEditReviewImageSelected(InputFileChangeEventArgs e)
-    {
-        editReviewImageUploadError = null;
-        var files = e.GetMultipleFiles(5).ToArray();
-        if (files.Length == 0) return;
-
-        if (editReviewImageUrls.Count + files.Length > 5)
-        {
-            editReviewImageUploadError = "Tối đa 5 ảnh cho mỗi đánh giá.";
-            return;
-        }
-
-        isUploadingEditReviewImages = true;
-        try
-        {
-            var uploaded = await PackageService.UploadReviewImagesAsync(Id, files);
-            if (uploaded.Success && uploaded.Data != null && uploaded.Data.Count > 0)
-            {
-                editReviewImageUrls.AddRange(uploaded.Data);
-                if (editReviewImageUrls.Count > 5)
-                    editReviewImageUrls = editReviewImageUrls.Take(5).ToList();
-            }
-            else
-            {
-                editReviewImageUploadError = uploaded.Message ?? "Tải ảnh thất bại.";
-            }
-        }
-        catch (Exception ex)
-        {
-            editReviewImageUploadError = $"Lỗi tải ảnh: {ex.Message}";
-        }
-        finally
-        {
-            isUploadingEditReviewImages = false;
-        }
-    }
-
-    private void RemoveEditReviewImage(string url)
-    {
-        editReviewImageUrls.Remove(url);
-    }
-
-    private async Task SubmitEditReview()
-    {
-        isSubmittingEdit = true;
-        editErrorMessage = null;
-
-        editReviewDto.ImageUrls = editReviewImageUrls.ToList();
-
-        var res = await PackageService.SubmitPackageReviewAsync(Id, editReviewDto);
-        if (res.Success)
-        {
-            isEditModalOpen = false;
-            ShowSuccessToast("Review updated successfully!");
-            await LoadReviewsAsync();
-        }
-        else
-        {
-            editErrorMessage = res.Message ?? "Failed to update review.";
-        }
-        isSubmittingEdit = false;
-    }
 
     private async Task LoadReviewsAsync()
     {
@@ -1008,7 +784,6 @@
                     o.Details.Any(d => d.PackageId == package.PackageId));
                 if (reviewOrder != null)
                 {
-                    reviewOrderId = reviewOrder.OrderId;
                 }
 
                 hasPurchased = ordersRes.Data.Any(o =>

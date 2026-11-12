@@ -267,7 +267,7 @@
                                     <!-- Exercise Specs -->
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-center gap-2.5 mb-1.5 flex-wrap">
-                                            <h3 class="text-base font-bold text-gray-900 @(ex.IsCompleted ? "line-through text-gray-500" : "")">
+                                            <h3 class="text-base font-bold text-gray-900">
                                                 @ex.ExerciseName
                                             </h3>
                                             @if (ex.IsCompleted)
@@ -337,7 +337,7 @@
                                             </button>
                                         }
 
-                                        <!-- Complete Workout Button (Mark Daily Workout) - One-way only -->
+                                        <!-- Complete Workout Button (Mark Daily Workout) -->
                                         @if (ex.IsCompleted)
                                         {
                                             <span class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 select-none">

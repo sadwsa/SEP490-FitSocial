@@ -92,6 +92,45 @@
                 </div>
             </div>
 
+            <!-- Upload Evidence Images (từ máy) -->
+            <div class="mb-4">
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Attach photos (optional, max 5)
+                </label>
+                <InputFile OnChange="HandleReportImageSelected" multiple accept="image/*"
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer" />
+                @if (isUploadingReportImages)
+                {
+                    <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                        <span class="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></span>
+                        Uploading images...
+                    </p>
+                }
+                @if (!string.IsNullOrEmpty(reportImageUploadError))
+                {
+                    <p class="text-xs text-red-600 mt-1">@reportImageUploadError</p>
+                }
+                @if (reportImageUrls.Count > 0)
+                {
+                    <p class="text-xs text-gray-500 mt-1">@reportImageUrls.Count image(s) attached.</p>
+                }
+
+                <!-- Hiển thị ảnh đã chọn -->
+                @if (reportImageUrls.Count > 0)
+                {
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        @foreach (var url in reportImageUrls)
+                        {
+                            <div class="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 group">
+                                <img src="@url" class="w-full h-full object-cover" alt="evidence photo" />
+                                <button type="button" @onclick="() => RemoveReportImage(url)"
+                                        class="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition cursor-pointer">✕</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
             <!-- Modal Actions -->
             <div class="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
                 <button type="button" @onclick="CloseModal" disabled="@isSubmitting"
@@ -165,6 +204,11 @@
     private string? apiErrorMessage;
     private bool isSubmitting = false;
 
+    // Image upload state
+    private List<string> reportImageUrls = new();
+    private bool isUploadingReportImages = false;
+    private string? reportImageUploadError;
+
     private bool IsOtherSelected => string.Equals(selectedReason, "Other", StringComparison.OrdinalIgnoreCase);
 
     private bool IsSubmitDisabled =>
@@ -194,6 +238,9 @@
         validationError = null;
         apiErrorMessage = null;
         isSubmitting = false;
+        reportImageUrls = new();
+        isUploadingReportImages = false;
+        reportImageUploadError = null;
     }
 
     private async Task CloseModal()
@@ -204,6 +251,48 @@
         {
             await OnClose.InvokeAsync();
         }
+    }
+
+    private async Task HandleReportImageSelected(InputFileChangeEventArgs e)
+    {
+        reportImageUploadError = null;
+        var files = e.GetMultipleFiles(5).ToArray();
+        if (files.Length == 0) return;
+
+        if (reportImageUrls.Count + files.Length > 5)
+        {
+            reportImageUploadError = "Tối đa 5 ảnh cho mỗi báo cáo.";
+            return;
+        }
+
+        isUploadingReportImages = true;
+        try
+        {
+            var uploaded = await ReportService.UploadReportImagesAsync(files);
+            if (uploaded.Success && uploaded.Data != null && uploaded.Data.Count > 0)
+            {
+                reportImageUrls.AddRange(uploaded.Data);
+                if (reportImageUrls.Count > 5)
+                    reportImageUrls = reportImageUrls.Take(5).ToList();
+            }
+            else
+            {
+                reportImageUploadError = uploaded.Message ?? "Tải ảnh thất bại.";
+            }
+        }
+        catch (Exception ex)
+        {
+            reportImageUploadError = $"Lỗi tải ảnh: {ex.Message}";
+        }
+        finally
+        {
+            isUploadingReportImages = false;
+        }
+    }
+
+    private void RemoveReportImage(string url)
+    {
+        reportImageUrls.Remove(url);
     }
 
     private async Task ConfirmReportUserAsync()
@@ -250,7 +339,8 @@
                 ReportedUserId = targetUserId,
                 Reason = finalReason,
                 Description = string.IsNullOrWhiteSpace(descriptionText) ? null : descriptionText.Trim(),
-                Type = IsCoach ? "COACH" : "USER"
+                Type = IsCoach ? "COACH" : "USER",
+                MediaUrls = reportImageUrls.Count > 0 ? reportImageUrls : null
             };
 
             var res = await ReportService.ReportUserAsync(request);

@@ -509,6 +509,19 @@
                                                     <p class="text-sm text-gray-700 leading-relaxed mt-1.5 whitespace-pre-line">@review.Comment</p>
                                                 }
 
+                                                <!-- Review images -->
+                                                @if (review.Media != null && review.Media.Any())
+                                                {
+                                                    <div class="flex flex-wrap gap-2 mt-3">
+                                                        @foreach (var m in review.Media.OrderBy(x => x.SortOrder))
+                                                        {
+                                                            <a href="@m.MediaUrl" target="_blank" class="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:opacity-90 transition">
+                                                                <img src="@m.MediaUrl" alt="review photo" class="w-full h-full object-cover" />
+                                                            </a>
+                                                        }
+                                                    </div>
+                                                }
+
                                                 <!-- COACH RESPONSE BOX -->
                                                 @if (!string.IsNullOrWhiteSpace(review.Reply))
                                                 {
@@ -570,63 +583,6 @@
                                OnClose="() => showAlreadyInCartModal = false"
                                OnViewCart="NavigateToCart" />
 
-<!-- EDIT REVIEW MODAL (EDITABLE ONCE ONLY) -->
-@if (isEditModalOpen)
-{
-    <div class="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95">
-            <h3 class="text-xl font-bold text-gray-900 mb-2 text-center">Edit Your Review</h3>
-
-            <!-- Notice: Edit once only -->
-            <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl mb-5 flex items-start gap-2.5">
-                <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>
-                <span class="text-xs text-amber-800 font-medium">Notice: You can only edit this review <strong>once</strong>. After saving, you will not be able to modify it again.</span>
-            </div>
-
-            @if (!string.IsNullOrEmpty(editErrorMessage))
-            {
-                <div class="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 font-medium border border-red-100">
-                    @editErrorMessage
-                </div>
-            }
-
-            <EditForm Model="editReviewDto" OnValidSubmit="SubmitEditReview">
-                <!-- Stars Selection -->
-                <div class="flex justify-center gap-2 mb-6">
-                    @for (int i = 1; i <= 5; i++)
-                    {
-                        int star = i;
-                        <button type="button" @onclick="() => editReviewDto.Rating = star" class="focus:outline-none transition-transform hover:scale-110 cursor-pointer">
-                            <svg class="w-10 h-10 @(star <= editReviewDto.Rating ? "text-yellow-400" : "text-gray-200")" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                            </svg>
-                        </button>
-                    }
-                </div>
-
-                <!-- Comment Input -->
-                <div class="mb-6">
-                    <label class="block text-xs font-bold text-gray-700 mb-1">Your Review Comment:</label>
-                    <InputTextArea @bind-Value="editReviewDto.Comment" rows="4" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none text-sm" placeholder="Share your experience with this training package..."></InputTextArea>
-                </div>
-
-                <div class="flex justify-end gap-3">
-                    <button type="button" @onclick="() => isEditModalOpen = false" class="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition cursor-pointer">Cancel</button>
-                    <button type="submit" disabled="@isSubmittingEdit" class="px-5 py-2.5 text-sm font-semibold text-white bg-[#FF5500] hover:bg-orange-600 rounded-xl disabled:opacity-50 transition flex items-center gap-2 cursor-pointer">
-                        @if (isSubmittingEdit)
-                        {
-                            <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                        }
-                        Save Changes
-                    </button>
-                </div>
-            </EditForm>
-        </div>
-    </div>
-}
-
 @code {
     [Parameter]
     public Guid Id { get; set; }
@@ -641,6 +597,8 @@
     private bool isOwnPackage => currentUserId.HasValue && package != null && package.CoachId == currentUserId.Value;
     private bool inCart = false;
     private bool hasPurchased = false;
+    private Guid reviewOrderId = Guid.Empty;
+    private bool hasReviewed => currentUserId.HasValue && reviewSummary.Reviews.Any(r => r.TraineeId == currentUserId.Value);
     private const int quantity = 1; // Strict single quantity rule
     private bool isAddingToCart = false;
     private int cartCount = 0;
@@ -692,10 +650,108 @@
     private CreatePackageReviewDto editReviewDto = new CreatePackageReviewDto();
     private bool isSubmittingEdit = false;
     private string? editErrorMessage;
+    private List<string> editReviewImageUrls = new();
+    private bool isUploadingEditReviewImages = false;
+    private string? editReviewImageUploadError;
+
+    // New review modal state
+    private bool isReviewModalOpen = false;
+    private CreatePackageReviewDto reviewDto = new CreatePackageReviewDto();
+    private List<string> reviewImageUrls = new();
+    private bool isUploadingReviewImages = false;
+    private string? reviewImageUploadError;
+    private bool isSubmittingReview = false;
+    private string? reviewErrorMessage;
 
     private void ToggleMenu(Guid reviewId)
     {
         openMenuReviewId = (openMenuReviewId == reviewId) ? null : reviewId;
+    }
+
+    private void OpenReviewModal()
+    {
+        reviewDto = new CreatePackageReviewDto { Rating = 5, Comment = "", ImageUrls = new() };
+        reviewImageUrls = new();
+        reviewImageUploadError = null;
+        reviewErrorMessage = null;
+        isReviewModalOpen = true;
+    }
+
+    private void CloseReviewModal()
+    {
+        isReviewModalOpen = false;
+    }
+
+    private async Task HandleReviewImageSelected(InputFileChangeEventArgs e)
+    {
+        reviewImageUploadError = null;
+        var files = e.GetMultipleFiles(5).ToArray();
+        if (files.Length == 0) return;
+
+        if (reviewImageUrls.Count + files.Length > 5)
+        {
+            reviewImageUploadError = "Tối đa 5 ảnh cho mỗi đánh giá.";
+            return;
+        }
+
+        isUploadingReviewImages = true;
+        try
+        {
+            var uploaded = await PackageService.UploadReviewImagesAsync(Id, files);
+            if (uploaded.Success && uploaded.Data != null && uploaded.Data.Count > 0)
+            {
+                reviewImageUrls.AddRange(uploaded.Data);
+                if (reviewImageUrls.Count > 5)
+                    reviewImageUrls = reviewImageUrls.Take(5).ToList();
+            }
+            else
+            {
+                reviewImageUploadError = uploaded.Message ?? "Tải ảnh thất bại.";
+            }
+        }
+        catch (Exception ex)
+        {
+            reviewImageUploadError = $"Lỗi tải ảnh: {ex.Message}";
+        }
+        finally
+        {
+            isUploadingReviewImages = false;
+        }
+    }
+
+    private void RemoveReviewImage(string url)
+    {
+        reviewImageUrls.Remove(url);
+    }
+
+    private async Task SubmitReview()
+    {
+        isSubmittingReview = true;
+        reviewErrorMessage = null;
+
+        reviewDto.OrderId = reviewOrderId;
+
+        if (reviewOrderId == Guid.Empty)
+        {
+            reviewErrorMessage = "Không tìm thấy đơn hàng hợp lệ để đánh giá.";
+            isSubmittingReview = false;
+            return;
+        }
+
+        reviewDto.ImageUrls = reviewImageUrls.ToList();
+
+        var res = await PackageService.SubmitPackageReviewAsync(Id, reviewDto);
+        if (res.Success)
+        {
+            isReviewModalOpen = false;
+            ShowSuccessToast("Your review has been submitted successfully!");
+            await LoadReviewsAsync();
+        }
+        else
+        {
+            reviewErrorMessage = res.Message ?? "Failed to submit review.";
+        }
+        isSubmittingReview = false;
     }
 
     private void OpenEditReviewModal(PackageReviewDto review)
@@ -703,17 +759,67 @@
         openMenuReviewId = null;
         editReviewDto = new CreatePackageReviewDto
         {
+            OrderId = review.OrderId ?? Guid.Empty,
             Rating = review.Rating,
             Comment = review.Comment
         };
+        editReviewImageUrls = review.Media?
+            .OrderBy(m => m.SortOrder)
+            .Select(m => m.MediaUrl)
+            .ToList() ?? new List<string>();
+        editReviewImageUploadError = null;
         editErrorMessage = null;
         isEditModalOpen = true;
+    }
+
+    private async Task HandleEditReviewImageSelected(InputFileChangeEventArgs e)
+    {
+        editReviewImageUploadError = null;
+        var files = e.GetMultipleFiles(5).ToArray();
+        if (files.Length == 0) return;
+
+        if (editReviewImageUrls.Count + files.Length > 5)
+        {
+            editReviewImageUploadError = "Tối đa 5 ảnh cho mỗi đánh giá.";
+            return;
+        }
+
+        isUploadingEditReviewImages = true;
+        try
+        {
+            var uploaded = await PackageService.UploadReviewImagesAsync(Id, files);
+            if (uploaded.Success && uploaded.Data != null && uploaded.Data.Count > 0)
+            {
+                editReviewImageUrls.AddRange(uploaded.Data);
+                if (editReviewImageUrls.Count > 5)
+                    editReviewImageUrls = editReviewImageUrls.Take(5).ToList();
+            }
+            else
+            {
+                editReviewImageUploadError = uploaded.Message ?? "Tải ảnh thất bại.";
+            }
+        }
+        catch (Exception ex)
+        {
+            editReviewImageUploadError = $"Lỗi tải ảnh: {ex.Message}";
+        }
+        finally
+        {
+            isUploadingEditReviewImages = false;
+        }
+    }
+
+    private void RemoveEditReviewImage(string url)
+    {
+        editReviewImageUrls.Remove(url);
     }
 
     private async Task SubmitEditReview()
     {
         isSubmittingEdit = true;
         editErrorMessage = null;
+
+        editReviewDto.ImageUrls = editReviewImageUrls.ToList();
 
         var res = await PackageService.SubmitPackageReviewAsync(Id, editReviewDto);
         if (res.Success)
@@ -896,6 +1002,15 @@
                 // Trainees whose package duration has expired / completed can repurchase it.
                 var activePaidStatuses = new[] { "PAID", "COMPLETED", "ACTIVE" };
                 var now = DateTime.UtcNow;
+                var reviewOrder = ordersRes.Data.FirstOrDefault(o =>
+                    !string.IsNullOrWhiteSpace(o.OrderStatus) &&
+                    activePaidStatuses.Contains(o.OrderStatus, StringComparer.OrdinalIgnoreCase) &&
+                    o.Details.Any(d => d.PackageId == package.PackageId));
+                if (reviewOrder != null)
+                {
+                    reviewOrderId = reviewOrder.OrderId;
+                }
+
                 hasPurchased = ordersRes.Data.Any(o =>
                     !string.IsNullOrWhiteSpace(o.OrderStatus) &&
                     activePaidStatuses.Contains(o.OrderStatus, StringComparer.OrdinalIgnoreCase) &&

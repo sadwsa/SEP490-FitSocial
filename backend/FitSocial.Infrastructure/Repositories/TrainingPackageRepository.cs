@@ -75,7 +75,7 @@ namespace FitSocial.Infrastructure.Repositories
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<IEnumerable<TrainingPackage>> GetPurchasedPackagesAsync(Guid traineeId, CancellationToken cancellationToken = default)
+        public async Task<List<TrainingPackage>> GetPurchasedPackagesAsync(Guid traineeId, CancellationToken cancellationToken = default)
         {
             var paidStatuses = new[]
             {
@@ -102,11 +102,59 @@ namespace FitSocial.Infrastructure.Repositories
                 .Include(x => x.OrderDetails.Where(od => od.Order.BuyerId == traineeId))
                     .ThenInclude(od => od.MealPlans)
                 .Where(x => x.OrderDetails.Any(od =>
-                    od.Order.BuyerId == traineeId && 
+                    od.Order.BuyerId == traineeId &&
                     od.Order.OrderStatus != null &&
                     paidStatuses.Contains(od.Order.OrderStatus.ToUpper())))
                 .AsNoTracking()
+                .AsSplitQuery()
                 .ToListAsync(cancellationToken);
+        }
+
+        public async Task<(List<OrderDetail> Items, int TotalCount)> GetPurchasedOrderDetailsAsync(Guid traineeId, int pageNumber, int pageSize, CancellationToken cancellationToken = default)
+        {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 10;
+
+            var paidStatuses = new[]
+            {
+                FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid,
+                "PAID",
+                "ACTIVE",
+                "COMPLETED",
+                FitSocial.Domain.Constants.PaymentConstants.OrderStatusRefundPending,
+                "REFUND_PENDING",
+                FitSocial.Domain.Constants.PaymentConstants.OrderStatusRefunded,
+                "REFUNDED"
+            };
+
+            var query = DbContext.Set<OrderDetail>()
+                .Include(od => od.Order)
+                    .ThenInclude(o => o.RefundRequests)
+                .Include(od => od.Package)
+                    .ThenInclude(p => p.Coach)
+                        .ThenInclude(c => c.Coach)
+                .Include(od => od.Package)
+                    .ThenInclude(p => p.Media)
+                .Include(od => od.Package)
+                    .ThenInclude(p => p.Reviews.Where(r => r.TraineeId == traineeId))
+                .Include(od => od.TrainingPlans)
+                .Include(od => od.MealPlans)
+                .Where(od => od.Order.BuyerId == traineeId
+                             && od.Order.OrderStatus != null
+                             && paidStatuses.Contains(od.Order.OrderStatus.ToUpper()));
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var items = await query
+                .OrderByDescending(od => od.CreatedAt)
+                .ThenByDescending(od => od.OrderDetailsId)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .AsNoTracking()
+                .AsSplitQuery()
+                .ToListAsync(cancellationToken);
+
+            return (items, totalCount);
         }
     }
 }

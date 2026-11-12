@@ -117,16 +117,18 @@ namespace FitSocial.API.Controllers
         }
         [HttpGet("purchased")]
         [Authorize] // Bất kỳ user nào đăng nhập đều có thể lấy danh sách họ đã mua
-        public async Task<IActionResult> GetPurchasedPackages()
+        public async Task<IActionResult> GetPurchasedPackages(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdString, out var currentUserId))
             {
-                return Unauthorized(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Fail("Invalid token or user ID"));
+                return Unauthorized(ApiResponseDto<PagedResultDto<TrainingPackageResponseDto>>.Fail("Invalid token or user ID"));
             }
 
-            var packages = await _service.GetPurchasedPackagesAsync(currentUserId);
-            return Ok(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Ok(packages));
+            var packages = await _service.GetPurchasedPackagesAsync(currentUserId, pageNumber, pageSize);
+            return Ok(ApiResponseDto<PagedResultDto<TrainingPackageResponseDto>>.Ok(packages));
         }
         // ==============================================================
         // REVIEWS & REPLY ENDPOINTS (SHOPEE / TIKTOK STYLE)

@@ -67,9 +67,13 @@ public class TrainingPackageService : ITrainingPackageService
         return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}{query}");
     }
 
-    public async Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync()
+    public async Task<ApiResponse<PagedResult<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync(int pageNumber = 1, int pageSize = 10)
     {
-        return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}/purchased");
+        if (pageNumber < 1) pageNumber = 1;
+        if (pageSize < 1) pageSize = 10;
+
+        return await _apiClient.GetAsync<PagedResult<TrainingPackageResponseDto>>(
+            $"{BaseEndpoint}/purchased?pageNumber={pageNumber}&pageSize={pageSize}");
     }
 
     public async Task<ApiResponse<List<string>>> UploadPackageImagesAsync(IEnumerable<IBrowserFile> files)

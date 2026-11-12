@@ -19,19 +19,17 @@ namespace FitSocial.Application.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IReviewRepository _reviewRepository;
         private readonly IOrderRepository _orderRepository;
-        private readonly IImageService _imageService;
         private readonly IReviewMediaRepository _reviewMediaRepository;
         private readonly IUserRepository _userRepository;
         private readonly INotificationRepository _notificationRepository;
         private readonly IEmailService _emailService;
 
-        public TrainingPackageService(ITrainingPackageRepository repository, IUnitOfWork unitOfWork, IReviewRepository reviewRepository, IOrderRepository orderRepository, IImageService imageService, IReviewMediaRepository reviewMediaRepository, IUserRepository userRepository, INotificationRepository notificationRepository, IEmailService emailService)
+        public TrainingPackageService(ITrainingPackageRepository repository, IUnitOfWork unitOfWork, IReviewRepository reviewRepository, IOrderRepository orderRepository, IReviewMediaRepository reviewMediaRepository, IUserRepository userRepository, INotificationRepository notificationRepository, IEmailService emailService)
         {
             _repository = repository;
             _unitOfWork = unitOfWork;
             _reviewRepository = reviewRepository;
             _orderRepository = orderRepository;
-            _imageService = imageService;
             _reviewMediaRepository = reviewMediaRepository;
             _userRepository = userRepository;
             _notificationRepository = notificationRepository;
@@ -40,7 +38,7 @@ namespace FitSocial.Application.Services
 
         // Backward-compatible overload for existing unit tests
         public TrainingPackageService(ITrainingPackageRepository repository, IUnitOfWork unitOfWork, IReviewRepository reviewRepository, IOrderRepository orderRepository)
-            : this(repository, unitOfWork, reviewRepository, orderRepository, null!, null!, null!, null!, null!)
+            : this(repository, unitOfWork, reviewRepository, orderRepository, null!, null!, null!, null!)
         {
         }
 
@@ -163,108 +161,80 @@ namespace FitSocial.Application.Services
             return true;
         }
 
-        public async Task<IEnumerable<TrainingPackageResponseDto>> GetPurchasedPackagesAsync(Guid currentUserId)
+        public async Task<PagedResultDto<TrainingPackageResponseDto>> GetPurchasedPackagesAsync(Guid currentUserId, int pageNumber = 1, int pageSize = 10)
         {
-            var packages = await _repository.GetPurchasedPackagesAsync(currentUserId);
-            return packages.Select(pkg =>
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 10;
+            if (pageSize > 50) pageSize = 50;
+
+            var (orderDetails, totalCount) = await _repository.GetPurchasedOrderDetailsAsync(currentUserId, pageNumber, pageSize);
+
+            var dtos = orderDetails.Select(od =>
             {
+                var pkg = od.Package!;
                 var dto = MapToDto(pkg);
-                var userReview = pkg.Reviews?.FirstOrDefault(r => r.TraineeId == currentUserId);
+
+                dto.OrderDetailsId = od.OrderDetailsId;
+                dto.OrderId = od.OrderId;
+                dto.OrderCreatedAt = od.Order?.CreatedAt;
+                dto.OrderStatus = od.Order?.OrderStatus;
+
+                var latestRefund = od.Order?.RefundRequests?
+                    .OrderByDescending(r => r.RequestedAt ?? r.CreatedAt)
+                    .FirstOrDefault();
+                if (latestRefund != null)
+                {
+                    dto.RefundStatus = latestRefund.Status;
+                }
+                else if (string.Equals(od.Order?.OrderStatus, "REFUND_PENDING", StringComparison.OrdinalIgnoreCase))
+                {
+                    dto.RefundStatus = "PENDING";
+                }
+                else if (string.Equals(od.Order?.OrderStatus, "REFUNDED", StringComparison.OrdinalIgnoreCase))
+                {
+                    dto.RefundStatus = "APPROVED";
+                }
+
+                dto.PackageType = od.PackageType ?? pkg.PackageType ?? "BOTH";
+
+                var plan = od.TrainingPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+                if (plan != null)
+                {
+                    dto.TrainingPlanId = plan.TrainingPlanId;
+                    dto.PlanStatus = plan.Status;
+                }
+
+                var mealPlan = od.MealPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+                if (mealPlan != null)
+                {
+                    dto.MealPlanId = mealPlan.MealPlanId;
+                    dto.MealPlanStatus = mealPlan.Status;
+                }
+
+                var userReview = pkg.Reviews?.FirstOrDefault(r => r.TraineeId == currentUserId && r.OrderId == od.OrderId);
                 if (userReview != null)
                 {
                     dto.HasReviewed = true;
                     dto.IsReviewEdited = userReview.IsEdited ?? false;
                     dto.UserRating = userReview.Rating;
                     dto.UserComment = userReview.Comment;
+                    dto.UserReviewImageUrls = userReview.ReviewMedia?
+                        .OrderBy(m => m.SortOrder)
+                        .Select(m => m.MediaUrl)
+                        .ToList() ?? new List<string>();
                 }
-
-                var myOrderDetail = pkg.OrderDetails?
-                    .Where(od => od.Order?.BuyerId == currentUserId)
-                    .OrderByDescending(od => od.CreatedAt)
-                    .FirstOrDefault();
-
-                if (myOrderDetail != null)
+                else
                 {
-                    dto.OrderDetailsId = myOrderDetail.OrderDetailsId;
-                    dto.OrderId = myOrderDetail.OrderId;
-                    dto.OrderCreatedAt = myOrderDetail.Order?.CreatedAt;
-                    dto.OrderStatus = myOrderDetail.Order?.OrderStatus;
-
-                    var latestRefund = myOrderDetail.Order?.RefundRequests?
-                        .OrderByDescending(r => r.RequestedAt ?? r.CreatedAt)
-                        .FirstOrDefault();
-                    if (latestRefund != null)
-                    {
-                        dto.RefundStatus = latestRefund.Status;
-                    }
-                    else if (string.Equals(myOrderDetail.Order?.OrderStatus, "REFUND_PENDING", StringComparison.OrdinalIgnoreCase))
-                    {
-                        dto.RefundStatus = "PENDING";
-                    }
-                    else if (string.Equals(myOrderDetail.Order?.OrderStatus, "REFUNDED", StringComparison.OrdinalIgnoreCase))
-                    {
-                        dto.RefundStatus = "APPROVED";
-                    }
-
-                    dto.PackageType = myOrderDetail.PackageType ?? pkg.PackageType ?? "BOTH";
-
-                    var plan = myOrderDetail.TrainingPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
-                    if (plan != null)
-                    {
-                        dto.TrainingPlanId = plan.TrainingPlanId;
-                        dto.PlanStatus = plan.Status;
-                    }
-
-                    var mealPlan = myOrderDetail.MealPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
-                    if (mealPlan != null)
-                    {
-                        dto.MealPlanId = mealPlan.MealPlanId;
-                        dto.MealPlanStatus = mealPlan.Status;
-                    }
+                    dto.HasReviewed = false;
+                    dto.IsReviewEdited = false;
+                    dto.UserReviewImageUrls = new List<string>();
                 }
 
                 return dto;
-            });
+            }).ToList();
+            return PagedResultDto<TrainingPackageResponseDto>.Create(dtos, totalCount, pageNumber, pageSize);
         }
 
-        private static TrainingPackageResponseDto MapToDto(TrainingPackage entity)
-        {
-            var coachCerts = entity.Coach?.CoachCertificates;
-            bool coachHasExpired = CoachCertificatePolicy.HasExpiredCertificates(coachCerts);
-            bool coachHasValid = CoachCertificatePolicy.HasValidCertificates(coachCerts);
-
-            return new TrainingPackageResponseDto
-            {
-                PackageId = entity.PackageId,
-                CoachId = entity.CoachId,
-                CoachName = entity.Coach?.Coach?.FullName ?? "Unknown Coach",
-                CoachHasExpiredCertificates = coachHasExpired,
-                CoachHasValidCertificates = coachHasValid,
-                Title = entity.Title,
-                Description = entity.Description,
-                Price = entity.Price,
-                DurationDays = entity.DurationDays,
-                SessionCount = entity.SessionCount,
-                MinAge = entity.MinAge,
-                TargetAudience = entity.TargetAudience,
-                PackageType = entity.PackageType ?? "BOTH",
-                IsActive = entity.IsActive,
-                CreatedAt = entity.CreatedAt,
-                Media = entity.Media?.OrderBy(m => m.SortOrder).Select(m => new TrainingPackageMediaDto
-                {
-                    MediaId = m.MediaId,
-                    PackageId = m.PackageId,
-                    MediaUrl = m.MediaUrl,
-                    MediaType = m.MediaType,
-                    SortOrder = m.SortOrder,
-                    CreatedAt = m.CreatedAt
-                }).ToList() ?? new List<TrainingPackageMediaDto>()
-            };
-        }
-
-        // ==============================================================
-        // LOGIC REVIEWS & COACH REPLY THEO PACKAGE ID
-        // ==============================================================
         public async Task<ApiResponseDto<PackageReviewSummaryDto>> GetPackageReviewsAsync(Guid packageId, CancellationToken cancellationToken = default)
         {
             var reviews = await _reviewRepository.GetReviewsByPackageIdAsync(packageId, cancellationToken);
@@ -286,6 +256,7 @@ namespace FitSocial.Application.Services
                     ReviewId = r.ReviewId,
                     PackageId = packageId,
                     TraineeId = r.TraineeId,
+                    OrderId = r.OrderId,
                     TraineeName = r.Trainee?.FullName ?? "FitConnect Member",
                     TraineeAvatarUrl = r.Trainee?.AvatarUrl,
                     Rating = r.Rating ?? 0,
@@ -323,6 +294,15 @@ namespace FitSocial.Application.Services
 
          
             // Validate OrderId
+            if (dto.OrderId == Guid.Empty)
+            {
+                // Fallback: nếu đang sửa review cũ (chưa có OrderId), lấy OrderId từ review hiện có
+                var existingByPackage = await _reviewRepository.GetReviewByPackageAndTraineeAsync(packageId, traineeId, cancellationToken);
+                if (existingByPackage?.OrderId != null)
+                {
+                    dto.OrderId = existingByPackage.OrderId.Value;
+                }
+            }
             if (dto.OrderId == Guid.Empty)
                 throw new ValidationException("OrderId is required to submit a review.");
 
@@ -449,7 +429,7 @@ namespace FitSocial.Application.Services
             }
 
             // Save ReviewMedia from uploaded image URLs (frontend uploads images first)
-            if (dto.ImageUrls != null && dto.ImageUrls.Count > 0)
+            if (dto.ImageUrls != null)
             {
                 // Get the review that was just created/updated
                 var review = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
@@ -482,6 +462,41 @@ namespace FitSocial.Application.Services
 
             return ApiResponseDto<bool>.Ok(true, "Review submitted successfully.");
         }
+    private static TrainingPackageResponseDto MapToDto(TrainingPackage entity)
+    {
+        var coachCerts = entity.Coach?.CoachCertificates;
+        bool coachHasExpired = CoachCertificatePolicy.HasExpiredCertificates(coachCerts);
+        bool coachHasValid = CoachCertificatePolicy.HasValidCertificates(coachCerts);
+
+        return new TrainingPackageResponseDto
+        {
+            PackageId = entity.PackageId,
+            CoachId = entity.CoachId,
+            CoachName = entity.Coach?.Coach?.FullName ?? "Unknown Coach",
+            CoachHasExpiredCertificates = coachHasExpired,
+            CoachHasValidCertificates = coachHasValid,
+            Title = entity.Title,
+            Description = entity.Description,
+            Price = entity.Price,
+            DurationDays = entity.DurationDays,
+            SessionCount = entity.SessionCount,
+            MinAge = entity.MinAge,
+            TargetAudience = entity.TargetAudience,
+            PackageType = entity.PackageType ?? "BOTH",
+            IsActive = entity.IsActive,
+            CreatedAt = entity.CreatedAt,
+            Media = entity.Media?.OrderBy(m => m.SortOrder).Select(m => new TrainingPackageMediaDto
+            {
+                MediaId = m.MediaId,
+                PackageId = m.PackageId,
+                MediaUrl = m.MediaUrl,
+                MediaType = m.MediaType,
+                SortOrder = m.SortOrder,
+                CreatedAt = m.CreatedAt
+            }).ToList() ?? new List<TrainingPackageMediaDto>()
+        };
+    }
+
         private static bool IsUniqueConstraintViolation(Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
             // PostgreSQL unique violation SQLSTATE 23505

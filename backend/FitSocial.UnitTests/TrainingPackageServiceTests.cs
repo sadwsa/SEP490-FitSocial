@@ -56,7 +56,7 @@ public class TrainingPackageServiceTests
         _mockEmailService = new Mock<IEmailService>();
         _service = new TrainingPackageService(
             _mockRepo.Object, _mockUow.Object, _mockReviewRepo.Object, _mockOrderRepo.Object,
-            _mockImageService.Object, _mockReviewMediaRepo.Object, _mockUserRepo.Object, _mockNotificationRepo.Object, _mockEmailService.Object);
+            _mockReviewMediaRepo.Object, _mockUserRepo.Object, _mockNotificationRepo.Object, _mockEmailService.Object);
     }
 
     #region 1. Application Layer: CreatePackageAsync Tests

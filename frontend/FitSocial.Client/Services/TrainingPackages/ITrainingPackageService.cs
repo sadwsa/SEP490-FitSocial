@@ -16,7 +16,7 @@ public interface ITrainingPackageService
     Task<ApiResponse<TrainingPackageResponseDto>> UpdatePackageAsync(Guid id, UpdateTrainingPackageDto dto);
     Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPackagesByCoachIdAsync(Guid coachId);
     Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetAllPackagesAsync(string? searchKeyword = null, decimal? maxPrice = null, Guid? coachId = null);
-    Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync();
+    Task<ApiResponse<PagedResult<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync(int pageNumber = 1, int pageSize = 10);
     Task<ApiResponse<List<string>>> UploadPackageImagesAsync(IEnumerable<IBrowserFile> files);
 
     // Review & Reply

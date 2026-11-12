@@ -391,20 +391,63 @@
                                 <p>@selectedRefund.Reason</p>
                             </div>
 
-                            @if (selectedRefund.EvidenceUrls != null && selectedRefund.EvidenceUrls.Any())
-                            {
-                                <div class="evidence-list mt-2">
-                                    <span class="detail-label">Attached Evidence (@selectedRefund.EvidenceUrls.Count):</span>
-                                    <div class="evidence-links">
-                                        @foreach (var (url, idx) in selectedRefund.EvidenceUrls.Select((u, i) => (u, i + 1)))
+                            @{
+                                var evidenceUrls = GetEvidenceUrls(selectedRefund);
+                            }
+                            <div class="evidence-gallery-block mt-3">
+                                <div class="evidence-header">
+                                    <span class="detail-label mb-0">Evidence Images</span>
+                                    @if (evidenceUrls.Count > 0)
+                                    {
+                                        <span class="evidence-count-badge">@evidenceUrls.Count @(evidenceUrls.Count == 1 ? "image" : "images")</span>
+                                    }
+                                </div>
+
+                                @if (evidenceUrls.Count == 0)
+                                {
+                                    <div class="evidence-empty-state">
+                                        No evidence images provided
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="evidence-grid">
+                                        @for (int i = 0; i < evidenceUrls.Count; i++)
                                         {
-                                            <a href="@url" target="_blank" rel="noopener noreferrer" class="evidence-link">
-                                                Evidence #@idx ↗
-                                            </a>
+                                            var idx = i;
+                                            var url = evidenceUrls[idx];
+                                            var isValid = IsValidMediaUrl(url) && !failedEvidenceIndices.Contains(idx);
+
+                                            if (isValid)
+                                            {
+                                                <button type="button"
+                                                        class="evidence-item"
+                                                        @onclick="() => OpenEvidenceLightbox(evidenceUrls, idx)"
+                                                        title="Click to preview image">
+                                                    <img src="@url"
+                                                         alt="Refund evidence @(idx + 1)"
+                                                         loading="lazy"
+                                                         @onerror="() => MarkEvidenceImageFailed(idx)" />
+                                                    <span class="evidence-zoom-hint">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path>
+                                                        </svg>
+                                                    </span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <div class="evidence-item-error" title="Unable to load image">
+                                                    <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                    </svg>
+                                                    <span>Image unavailable</span>
+                                                </div>
+                                            }
                                         }
                                     </div>
-                                </div>
-                            }
+                                }
+                            </div>
                         </div>
 
                         <!-- Processing State -->
@@ -615,6 +658,69 @@
             </div>
         }
 
+        <!-- EVIDENCE IMAGE LIGHTBOX MODAL -->
+        @if (isLightboxOpen && lightboxImages.Count > 0)
+        {
+            <div class="refund-lightbox-overlay" @onclick="CloseLightbox">
+                <div class="refund-lightbox-dialog" @onclick:stopPropagation="true">
+                    <div class="refund-lightbox-topbar">
+                        <div class="refund-lightbox-info">
+                            <span>Evidence Image</span>
+                            @if (lightboxImages.Count > 1)
+                            {
+                                <span class="refund-lightbox-counter">(@(lightboxIndex + 1) / @lightboxImages.Count)</span>
+                            }
+                        </div>
+                        <button type="button" class="refund-lightbox-close-btn" @onclick="CloseLightbox" title="Close">✕</button>
+                    </div>
+
+                    <div class="refund-lightbox-main">
+                        @if (lightboxImages.Count > 1)
+                        {
+                            <button type="button"
+                                    class="refund-lightbox-arrow prev"
+                                    @onclick="PrevLightboxImage"
+                                    disabled="@(lightboxIndex <= 0)"
+                                    title="Previous image">
+                                ‹
+                            </button>
+                        }
+
+                        <div class="refund-lightbox-img-stage">
+                            <img src="@lightboxImages[lightboxIndex]"
+                                 alt="Refund evidence @(lightboxIndex + 1)"
+                                 class="refund-lightbox-img" />
+                        </div>
+
+                        @if (lightboxImages.Count > 1)
+                        {
+                            <button type="button"
+                                    class="refund-lightbox-arrow next"
+                                    @onclick="NextLightboxImage"
+                                    disabled="@(lightboxIndex >= lightboxImages.Count - 1)"
+                                    title="Next image">
+                                ›
+                            </button>
+                        }
+                    </div>
+
+                    @if (lightboxImages.Count > 1)
+                    {
+                        <div class="refund-lightbox-strip">
+                            @for (int k = 0; k < lightboxImages.Count; k++)
+                            {
+                                var stripIdx = k;
+                                <img src="@lightboxImages[stripIdx]"
+                                     alt="Thumbnail @(stripIdx + 1)"
+                                     class="refund-lightbox-strip-item @(stripIdx == lightboxIndex ? "active" : "")"
+                                     @onclick="() => lightboxIndex = stripIdx" />
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
         <!-- PROCESSING OVERLAY SCREEN (APPROVE / REJECT) -->
         @if (isProcessingAction)
         {
@@ -798,6 +904,8 @@
     private async Task OpenDetailModal(RefundRequestItem item)
     {
         selectedRefund = item;
+        failedEvidenceIndices.Clear();
+        CloseLightbox();
         isDetailModalOpen = true;
         if (selectedRefund.TraineeRefundAmount == null)
         {
@@ -850,10 +958,86 @@
 
     private void CloseModals()
     {
+        CloseLightbox();
+        failedEvidenceIndices.Clear();
         isDetailModalOpen = false;
         isApproveModalOpen = false;
         isRejectModalOpen = false;
         selectedRefund = null;
+    }
+
+    // Evidence Images & Lightbox State
+    private readonly HashSet<int> failedEvidenceIndices = new();
+    private bool isLightboxOpen = false;
+    private List<string> lightboxImages = new();
+    private int lightboxIndex = 0;
+
+    private static List<string> GetEvidenceUrls(RefundRequestItem refund)
+    {
+        if (refund.EvidenceUrls == null || refund.EvidenceUrls.Count == 0)
+        {
+            return new List<string>();
+        }
+
+        return refund.EvidenceUrls
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u.Trim())
+            .ToList();
+    }
+
+    private static bool IsValidMediaUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        var trimmed = url.Trim();
+        if (trimmed.StartsWith("/")) return true;
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private void MarkEvidenceImageFailed(int index)
+    {
+        failedEvidenceIndices.Add(index);
+    }
+
+    private void OpenEvidenceLightbox(List<string> urls, int clickedIndex)
+    {
+        var validUrls = new List<string>();
+        var targetIndex = 0;
+
+        for (int i = 0; i < urls.Count; i++)
+        {
+            if (IsValidMediaUrl(urls[i]) && !failedEvidenceIndices.Contains(i))
+            {
+                if (i == clickedIndex)
+                {
+                    targetIndex = validUrls.Count;
+                }
+                validUrls.Add(urls[i]);
+            }
+        }
+
+        if (validUrls.Count == 0) return;
+
+        lightboxImages = validUrls;
+        lightboxIndex = Math.Clamp(targetIndex, 0, lightboxImages.Count - 1);
+        isLightboxOpen = true;
+    }
+
+    private void CloseLightbox()
+    {
+        isLightboxOpen = false;
+        lightboxImages.Clear();
+        lightboxIndex = 0;
+    }
+
+    private void PrevLightboxImage()
+    {
+        if (lightboxIndex > 0) lightboxIndex--;
+    }
+
+    private void NextLightboxImage()
+    {
+        if (lightboxIndex < lightboxImages.Count - 1) lightboxIndex++;
     }
 
     private async Task ExecuteApproveAsync()

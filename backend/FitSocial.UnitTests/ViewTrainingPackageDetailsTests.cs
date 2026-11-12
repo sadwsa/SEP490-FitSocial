@@ -876,7 +876,7 @@ public class ViewCoachTrainingPackageDetailsTests
         var coachId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         // Coach user context
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
@@ -927,7 +927,7 @@ public class ViewCoachTrainingPackageDetailsTests
         // Arrange
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         mockService.Setup(s => s.GetPackageByIdAsync(packageId))
             .ReturnsAsync((TrainingPackageResponseDto?)null);
@@ -949,7 +949,7 @@ public class ViewCoachTrainingPackageDetailsTests
         // Arrange
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var expectedSummary = new PackageReviewSummaryDto
         {
@@ -995,7 +995,7 @@ public class ViewCoachTrainingPackageDetailsTests
         var packageId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -1035,7 +1035,7 @@ public class ViewCoachTrainingPackageDetailsTests
         var packageId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var claims = new List<Claim>();
         if (invalidUserId != null)

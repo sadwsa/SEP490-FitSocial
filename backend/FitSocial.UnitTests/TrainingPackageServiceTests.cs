@@ -424,7 +424,7 @@ public class TrainingPackageServiceTests
         var coachId = Guid.NewGuid();
         var newPackageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -469,7 +469,7 @@ public class TrainingPackageServiceTests
     {
         // Arrange
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var claims = new List<Claim>();
         if (invalidUserId != null)
@@ -518,7 +518,7 @@ public class TrainingPackageServiceTests
         var coachId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -560,7 +560,7 @@ public class TrainingPackageServiceTests
         var coachId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -597,7 +597,7 @@ public class TrainingPackageServiceTests
         // Arrange
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var claims = new List<Claim>();
         if (invalidUserId != null)

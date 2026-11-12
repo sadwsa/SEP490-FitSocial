@@ -272,7 +272,7 @@ public class ViewAvailableTrainingPackagesTests
         // Arrange
         var coachId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var packages = new List<TrainingPackageResponseDto>
         {
@@ -554,7 +554,7 @@ public class ViewAvailableTrainingPackagesTests
         // Arrange
         var coachId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         controller.ControllerContext = new ControllerContext
         {

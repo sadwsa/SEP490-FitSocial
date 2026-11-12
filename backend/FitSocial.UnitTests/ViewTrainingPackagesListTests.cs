@@ -393,7 +393,7 @@ public class ViewCoachTrainingPackagesListServiceTests
         // Arrange
         var coachId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         // Set up ClaimsPrincipal simulating authenticated COACH
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
@@ -436,7 +436,7 @@ public class ViewCoachTrainingPackagesListServiceTests
     {
         // Arrange
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var claims = new List<Claim>();
         if (invalidUserId != null)

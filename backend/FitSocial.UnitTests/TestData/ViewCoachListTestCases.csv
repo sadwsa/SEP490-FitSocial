@@ -1,0 +1,20 @@
+UTCID,Type,SearchKeyword,MinExperience,SortBy,RepositoryThrows,ExpectedCount,ExpectedCoachNames,ExpectedFirstStatus,ExpectedFirstApprovalStatus,ExpectedFirstExperienceYears,ExpectedFirstLocationCount
+UTCID01,N,,,,FALSE,2,Alice Johnson|Bob Smith,ACTIVE,APPROVED,5,2
+UTCID02,N,yoga,,,FALSE,1,Alice Johnson,ACTIVE,APPROVED,5,2
+UTCID03,N,ALICE,,,FALSE,1,Alice Johnson,ACTIVE,APPROVED,5,2
+UTCID04,N,nonexistent,,,FALSE,0,,,,0,0
+UTCID05,N,,5,,FALSE,1,Alice Johnson,ACTIVE,APPROVED,5,2
+UTCID06,B,,0,,FALSE,2,Alice Johnson|Bob Smith,ACTIVE,APPROVED,5,2
+UTCID07,N,,,exp_asc,FALSE,2,Bob Smith|Alice Johnson,ACTIVE,APPROVED,2,0
+UTCID08,N,,,name_asc,FALSE,2,Alice Johnson|Bob Smith,ACTIVE,APPROVED,5,2
+UTCID09,N,,,name_desc,FALSE,2,Bob Smith|Alice Johnson,ACTIVE,APPROVED,2,0
+UTCID10,N,,,unknown_sort,FALSE,2,Alice Johnson|Bob Smith,ACTIVE,APPROVED,5,2
+UTCID11,N,yoga,6,,FALSE,0,,,,0,0
+UTCID12,B,   ,,,FALSE,2,Alice Johnson|Bob Smith,ACTIVE,APPROVED,5,2
+UTCID13,B,,-1,,FALSE,2,Alice Johnson|Bob Smith,ACTIVE,APPROVED,5,2
+UTCID14,B,,99,,FALSE,0,,,,0,0
+UTCID15,N,Strength,,name_desc,FALSE,1,Bob Smith,ACTIVE,APPROVED,2,0
+UTCID16,N,coach,,exp_desc,FALSE,1,Bob Smith,ACTIVE,APPROVED,2,0
+UTCID17,A,,,,TRUE,0,,,,0,0
+UTCID18,N,,,EXP_ASC,FALSE,2,Bob Smith|Alice Johnson,ACTIVE,APPROVED,2,0
+UTCID19,N,  yoga  ,,,FALSE,1,Alice Johnson,ACTIVE,APPROVED,5,2

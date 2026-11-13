@@ -87,10 +87,12 @@
 /* Status tabs */
 .cat-tabs-bar {
     display: flex;
-    gap: 24px;
+    gap: 20px;
     border-bottom: 2px solid #e2e8f0;
-    margin-bottom: 16px;
-    overflow-x: auto;
+    margin-bottom: 12px;
+    overflow: visible;
+    flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .tab-btn {

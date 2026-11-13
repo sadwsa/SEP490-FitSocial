@@ -1,0 +1,188 @@
+@page "/coach/payout-history"
+@attribute [Authorize(Roles = "COACH")]
+@using FitSocial.Client.Layout
+@using FitSocial.Client.Models.Transactions
+@using FitSocial.Client.Services.Transactions
+@inject ITransactionService TransactionService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject AppShellContext Shell
+
+<PageTitle>Payout History - FitConnect</PageTitle>
+
+<div class="flex flex-col gap-4 min-w-0">
+    <!-- Header Section -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex justify-between items-center gap-4">
+        <div>
+            <h1 class="text-xl font-bold text-gray-800">Payout History</h1>
+            <p class="text-xs text-gray-500 mt-0.5">Track system payouts and refund deductions</p>
+        </div>
+    </div>
+
+    <!-- Error Banner -->
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm font-medium mb-4">
+            @errorMessage
+        </div>
+    }
+
+    <!-- Transaction List Container -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        @if (isLoading)
+        {
+            <div class="flex flex-col items-center justify-center py-16">
+                <div class="w-9 h-9 border-4 border-[#FF5500] border-t-transparent rounded-full animate-spin mb-3"></div>
+                <p class="text-sm text-gray-500 font-medium">Loading your payout history...</p>
+            </div>
+        }
+        else if (transactions == null || !transactions.Any())
+        {
+            <div class="p-12 text-center flex flex-col items-center justify-center border-t border-gray-100">
+                <div class="w-16 h-16 mb-4 text-orange-200">
+                    <svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                </div>
+                <h4 class="font-bold text-gray-800 text-lg mb-1">No payout history found</h4>
+                <p class="text-sm text-gray-500 mb-6">You haven't received any payouts or refund deductions yet.</p>
+            </div>
+        }
+        else
+        {
+            <ul class="divide-y divide-gray-100">
+                @foreach (var tx in transactions)
+                {
+                    <li class="p-5 hover:bg-orange-50/40 transition duration-200 ease-in-out border-t border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <!-- Left: Icon & Details -->
+                            <div class="flex items-center flex-1 min-w-0">
+                                <div class="flex-shrink-0 mr-4">
+                                    <div class="w-12 h-12 rounded-xl @(tx.Type == "PAYOUT" ? "bg-emerald-50 border border-emerald-100 text-emerald-600" : "bg-red-50 border border-red-100 text-red-600") flex items-center justify-center">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            @if (tx.Type == "PAYOUT")
+                                            {
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.595 1.012a3 3 0 010-2.024A4.5 4.5 0 0012 4c-1.11 0-2.08.402-2.595 1.012a3 3 0 010-2.024A4.5 4.5 0 0012 4z"></path>
+                                            }
+                                            else
+                                            {
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            }
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-sm font-bold text-gray-800 truncate">
+                                        @tx.Description
+                                    </p>
+                                    <p class="text-xs text-gray-400 mt-1">
+                                        @tx.Date.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Right: Amount & Status -->
+                            <div class="ml-4 flex flex-col items-end flex-shrink-0 text-right">
+                                <p class="text-sm font-bold @(tx.Amount < 0 ? "text-red-500" : "text-emerald-500") whitespace-nowrap">
+                                    @(tx.Amount > 0 ? "+" : "")@(tx.Amount.ToString("N0")) @tx.Currency
+                                </p>
+                                <div class="mt-1.5">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full
+                                        @(tx.Status == "PROCESSED" || tx.Status == "COMPLETED"
+                                            ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                                            : tx.Status == "PENDING"
+                                            ? "bg-amber-50 text-amber-600 border border-amber-100"
+                                            : "bg-gray-100 text-gray-500 border border-gray-200")
+                                        text-[10px] font-bold uppercase tracking-wider">
+                                        @tx.Status
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                }
+            </ul>
+
+            <!-- Pagination -->
+            @if (totalPages > 1)
+            {
+                <div class="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <button @onclick="PreviousPage" disabled="@(!hasPrevious)" class="px-4 py-2 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 hover:text-[#FF5500] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer">
+                        Previous
+                    </button>
+                    <span class="text-sm font-semibold text-gray-500">Page @currentPage of @totalPages</span>
+                    <button @onclick="NextPage" disabled="@(!hasNext)" class="px-4 py-2 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 hover:text-[#FF5500] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer">
+                        Next
+                    </button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<TransactionHistoryDto> transactions = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool hasNext = false;
+    private bool hasPrevious = false;
+
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private string? typeFilter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        var filter = new TransactionFilterDto
+        {
+            PageIndex = currentPage,
+            PageSize = pageSize,
+            FromDate = fromDate,
+            ToDate = toDate,
+            Type = typeFilter
+        };
+
+        var result = await TransactionService.GetCoachPayoutHistoryAsync(filter);
+        if (result != null)
+        {
+            transactions = result.Items;
+            totalPages = result.TotalPages;
+            hasNext = result.HasNextPage;
+            hasPrevious = result.HasPreviousPage;
+        }
+        else
+        {
+            errorMessage = "Không thể tải lịch sử giao dịch. Vui lòng thử lại sau.";
+        }
+
+        isLoading = false;
+    }
+
+    private async Task PreviousPage()
+    {
+        if (hasPrevious)
+        {
+            currentPage--;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (hasNext)
+        {
+            currentPage++;
+            await LoadDataAsync();
+        }
+    }
+}

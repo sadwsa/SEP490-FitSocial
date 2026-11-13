@@ -129,7 +129,7 @@ public class ViewOwnProfileServiceTests
             UserId = userId,
             Email = "trainee.jane@fitsocial.com",
             PhoneNumber = "0987654321",
-            FullName = "Jane Smith",
+            FullName = "John Doe",
             RoleCode = RoleConstants.Trainee,
             AvatarUrl = "https://fitsocial.com/avatars/trainee.jpg",
             DateOfBirth = new DateOnly(1998, 8, 20),
@@ -151,7 +151,7 @@ public class ViewOwnProfileServiceTests
         Assert.NotNull(result.Data);
 
         var traineeDto = Assert.IsType<TraineeProfileDto>(result.Data);
-        Assert.Equal("Jane Smith", traineeDto.FullName);
+        Assert.Equal("John Doe", traineeDto.FullName);
         Assert.Equal("trainee.jane@fitsocial.com", traineeDto.Email);
         Assert.Equal("0987654321", traineeDto.PhoneNumber);
         Assert.Equal("https://fitsocial.com/avatars/trainee.jpg", traineeDto.AvatarUrl);
@@ -192,7 +192,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "coach.valid@fitsocial.com",
-            FullName = "Valid Coach",
+            FullName = "John Doe",
             RoleCode = RoleConstants.Coach,
             IsLocked = false,
             CoachProfileCoach = coachProfile
@@ -300,7 +300,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "coach.noprofile@fitsocial.com",
-            FullName = "New Coach",
+            FullName = "John Doe",
             RoleCode = RoleConstants.Coach,
             IsLocked = false,
             CoachProfileCoach = null
@@ -341,7 +341,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "coach.nocerts@fitsocial.com",
-            FullName = "No Certs Coach",
+            FullName = "John Doe",
             RoleCode = RoleConstants.Coach,
             IsLocked = false,
             CoachProfileCoach = coachProfile
@@ -389,7 +389,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "coach.expired@fitsocial.com",
-            FullName = "Expired Cert Coach",
+            FullName = "John Doe",
             RoleCode = RoleConstants.Coach,
             IsLocked = false,
             CoachProfileCoach = coachProfile
@@ -437,7 +437,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "coach.pendingcert@fitsocial.com",
-            FullName = "Pending Cert Coach",
+            FullName = "John Doe",
             RoleCode = RoleConstants.Coach,
             IsLocked = false,
             CoachProfileCoach = coachProfile
@@ -491,7 +491,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "nullrole@fitsocial.com",
-            FullName = "Default Trainee",
+            FullName = "John Doe",
             RoleCode = null,
             IsLocked = false
         };
@@ -517,7 +517,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "staffrole@fitsocial.com",
-            FullName = "Staff Or Member",
+            FullName = "John Doe",
             RoleCode = "STAFF",
             IsLocked = false
         };
@@ -543,7 +543,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "nulllocked@fitsocial.com",
-            FullName = "Null Locked User",
+            FullName = "John Doe",
             RoleCode = RoleConstants.Trainee,
             IsLocked = null
         };
@@ -569,7 +569,7 @@ public class ViewOwnProfileServiceTests
         {
             UserId = userId,
             Email = "whitespace@fitsocial.com",
-            FullName = "Normalized Role Coach",
+            FullName = "John Doe",
             RoleCode = "  coach  ",
             IsLocked = false,
             CoachProfileCoach = new CoachProfile

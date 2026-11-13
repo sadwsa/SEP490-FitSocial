@@ -25,6 +25,13 @@ public class StaffAdminProfileServiceTests
         _userService = new UserService(_userRepoMock.Object, _unitOfWorkMock.Object);
     }
 
+    #region GetStaffAdminProfileAsync (UTCID01 - UTCID06)
+
+    /// <summary>
+    /// UTCID01: Normal case - Authenticated Staff user retrieves own profile successfully.
+    /// Conditions: User found, IsLocked = false, Role = "STAFF", FullName = "Nguyen Van Staff".
+    /// Confirm: Return StaffAdminOwnProfileDto with Success = true, Message = "Profile retrieved successfully.".
+    /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenStaff_ReturnsCorrectProfile()
     {
@@ -52,6 +59,7 @@ public class StaffAdminProfileServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.True(result.Success);
+        Assert.Equal("Profile retrieved successfully.", result.Message);
         Assert.NotNull(result.Data);
 
         var data = result.Data;
@@ -62,8 +70,15 @@ public class StaffAdminProfileServiceTests
         Assert.Equal("0987654321", data.PhoneNumber);
         Assert.Equal("staff@fitsocial.com", data.Email);
         Assert.Equal(RoleConstants.Staff, data.Role);
+
+        _userRepoMock.Verify(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02: Normal case - Authenticated Admin user retrieves own profile successfully.
+    /// Conditions: User found, IsLocked = false, Role = "ADMIN", FullName = "Admin Quản Trị".
+    /// Confirm: Return StaffAdminOwnProfileDto with Success = true, Message = "Profile retrieved successfully.".
+    /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenAdmin_ReturnsCorrectProfile()
     {
@@ -91,6 +106,7 @@ public class StaffAdminProfileServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.True(result.Success);
+        Assert.Equal("Profile retrieved successfully.", result.Message);
         Assert.NotNull(result.Data);
 
         var data = result.Data;
@@ -101,8 +117,15 @@ public class StaffAdminProfileServiceTests
         Assert.Equal("0912345678", data.PhoneNumber);
         Assert.Equal("admin@fitsocial.com", data.Email);
         Assert.Equal(RoleConstants.Admin, data.Role);
+
+        _userRepoMock.Verify(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03: Abnormal case - User not found in repository.
+    /// Conditions: User not found in repository, Lock = N/A, Role = N/A, FullName = N/A.
+    /// Confirm: Throws NotFoundException with message "Staff or Admin profile could not be found.".
+    /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenUserNotFound_ThrowsNotFoundException()
     {
@@ -112,9 +135,17 @@ public class StaffAdminProfileServiceTests
             .ReturnsAsync((User?)null);
 
         // Act & Assert
-        await Assert.ThrowsAsync<NotFoundException>(() => _userService.GetStaffAdminProfileAsync(userId));
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() => _userService.GetStaffAdminProfileAsync(userId));
+        Assert.Equal("Staff or Admin profile could not be found.", ex.Message);
+
+        _userRepoMock.Verify(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID04: Abnormal case - Account is locked.
+    /// Conditions: User found, IsLocked = true, Role = "STAFF", FullName = N/A.
+    /// Confirm: Throws ForbiddenException with message "This account has been locked. Please contact support.".
+    /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenAccountIsLocked_ThrowsForbiddenException()
     {
@@ -133,9 +164,17 @@ public class StaffAdminProfileServiceTests
             .ReturnsAsync(lockedStaff);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ForbiddenException>(() => _userService.GetStaffAdminProfileAsync(userId));
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => _userService.GetStaffAdminProfileAsync(userId));
+        Assert.Equal("This account has been locked. Please contact support.", ex.Message);
+
+        _userRepoMock.Verify(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID05: Abnormal case - User is Trainee (not Staff or Admin).
+    /// Conditions: User found, IsLocked = false, Role = "TRAINEE", FullName = N/A.
+    /// Confirm: Throws ForbiddenException with message "Access denied. Only Staff and Admin profiles are allowed.".
+    /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenUserIsTrainee_ThrowsForbiddenException()
     {
@@ -154,9 +193,17 @@ public class StaffAdminProfileServiceTests
             .ReturnsAsync(traineeUser);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ForbiddenException>(() => _userService.GetStaffAdminProfileAsync(userId));
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => _userService.GetStaffAdminProfileAsync(userId));
+        Assert.Equal("Access denied. Only Staff and Admin profiles are allowed.", ex.Message);
+
+        _userRepoMock.Verify(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID06: Abnormal case - User is Coach (not Staff or Admin).
+    /// Conditions: User found, IsLocked = false, Role = "COACH", FullName = N/A.
+    /// Confirm: Throws ForbiddenException with message "Access denied. Only Staff and Admin profiles are allowed.".
+    /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenUserIsCoach_ThrowsForbiddenException()
     {
@@ -175,8 +222,13 @@ public class StaffAdminProfileServiceTests
             .ReturnsAsync(coachUser);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ForbiddenException>(() => _userService.GetStaffAdminProfileAsync(userId));
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => _userService.GetStaffAdminProfileAsync(userId));
+        Assert.Equal("Access denied. Only Staff and Admin profiles are allowed.", ex.Message);
+
+        _userRepoMock.Verify(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    #endregion
 
     [Fact]
     public async Task UpdateStaffAdminProfileAsync_WhenAdmin_UpdatesProfileSuccessfully()

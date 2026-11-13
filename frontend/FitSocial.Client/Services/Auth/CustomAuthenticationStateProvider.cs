@@ -92,12 +92,7 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
             var parts = jwt.Split('.');
             if (parts.Length < 2) return true;
             var payload = parts[1];
-            switch (payload.Length % 4)
-            {
-                case 2: payload += "=="; break;
-                case 3: payload += "="; break;
-            }
-            var bytes = Convert.FromBase64String(payload);
+            var bytes = DecodeBase64Url(payload);
             using var doc = JsonDocument.Parse(bytes);
             if (!doc.RootElement.TryGetProperty("exp", out var expEl)) return false;
             var expSeconds = expEl.GetInt64();
@@ -131,7 +126,7 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         if (parts.Length < 2) return claims;
 
         var payload = parts[1];
-        var jsonBytes = ParseBase64WithoutPadding(payload);
+        var jsonBytes = DecodeBase64Url(payload);
         var keyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonBytes);
 
         if (keyValuePairs == null) return claims;
@@ -181,13 +176,24 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         return claims;
     }
 
-    private static byte[] ParseBase64WithoutPadding(string base64)
+    /// <summary>
+    /// Decodes a Base64Url-encoded string (used by JWTs) to bytes.
+    /// JWTs use Base64Url encoding (RFC 7519): '-' replaces '+', '_' replaces '/',
+    /// and padding is omitted. This method converts back to standard Base64 before decoding,
+    /// otherwise Convert.FromBase64String throws on '-' or '_' characters.
+    /// </summary>
+    private static byte[] DecodeBase64Url(string base64Url)
     {
+        // Convert Base64Url to standard Base64
+        var base64 = base64Url.Replace('-', '+').Replace('_', '/');
+
+        // Restore padding
         switch (base64.Length % 4)
         {
             case 2: base64 += "=="; break;
             case 3: base64 += "="; break;
         }
+
         return Convert.FromBase64String(base64);
     }
 }

@@ -151,6 +151,11 @@ namespace FitSocial.API.Controllers
             {
                 return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
             }
+            if (!ModelState.IsValid)
+            {
+                var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+                return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid request."));
+            }
             var result = await _service.SubmitPackageReviewAsync(id, traineeId, dto, cancellationToken);
             return Ok(result);
         }
@@ -173,6 +178,11 @@ namespace FitSocial.API.Controllers
             if (!Guid.TryParse(userIdString, out var coachId))
             {
                 return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
+            }
+            if (!ModelState.IsValid)
+            {
+                var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+                return BadRequest(ApiResponseDto<bool>.Fail(firstError ?? "Invalid request."));
             }
             try
             {

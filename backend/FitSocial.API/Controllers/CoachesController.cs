@@ -187,6 +187,12 @@ public class CoachesController : ControllerBase
         var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(userIdString, out var traineeId)) return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token"));
 
+        if (!ModelState.IsValid)
+        {
+            var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+            return BadRequest(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail(firstError ?? "Invalid request."));
+        }
+
         var result = await _coachService.UpdateReviewAsync(reviewId, traineeId, dto);
         return Ok(result);
     }

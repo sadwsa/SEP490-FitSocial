@@ -232,6 +232,18 @@ public class CoachService : ICoachService
             throw new ValidationException("This review has been edited once and cannot be edited further.");
         }
 
+        // Validate rating range (1-5)
+        if (dto.Rating < 1 || dto.Rating > 5)
+        {
+            throw new ValidationException("Rating must be between 1 and 5.");
+        }
+
+        // Validate comment max length (500 characters)
+        if (!string.IsNullOrWhiteSpace(dto.Comment) && dto.Comment.Length > 500)
+        {
+            throw new ValidationException("Comment cannot exceed 500 characters.");
+        }
+
         review.Rating = dto.Rating;
         review.Comment = dto.Comment;
         review.UpdatedAt = DateTime.UtcNow;

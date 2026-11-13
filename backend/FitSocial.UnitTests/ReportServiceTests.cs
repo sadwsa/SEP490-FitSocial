@@ -865,7 +865,7 @@ public class ReportServiceTests
         reportServiceMock.Setup(s => s.ReportUserAsync(reporterId, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ApiResponseDto<ReportListItemDto>.Ok(expectedDto, "User reported successfully."));
 
-        var controller = new ReportsController(reportServiceMock.Object);
+        var controller = new ReportsController(reportServiceMock.Object, null!);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -1000,7 +1000,7 @@ public class ReportServiceTests
     {
         // Arrange
         var reportServiceMock = new Mock<IReportService>();
-        var controller = new ReportsController(reportServiceMock.Object);
+        var controller = new ReportsController(reportServiceMock.Object, null!);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

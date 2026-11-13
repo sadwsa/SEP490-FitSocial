@@ -1120,7 +1120,7 @@ public class CoachTrainingPlanServiceTests
         var coachId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPlanService>();
         var mockLogger = new Mock<ILogger<CoachTrainingPlansController>>();
-        var controller = new CoachTrainingPlansController(mockService.Object, mockLogger.Object);
+        var controller = new CoachTrainingPlansController(mockService.Object, null!, mockLogger.Object);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -1155,7 +1155,7 @@ public class CoachTrainingPlanServiceTests
         // Arrange
         var mockService = new Mock<ITrainingPlanService>();
         var mockLogger = new Mock<ILogger<CoachTrainingPlansController>>();
-        var controller = new CoachTrainingPlansController(mockService.Object, mockLogger.Object);
+        var controller = new CoachTrainingPlansController(mockService.Object, null!, mockLogger.Object);
 
         controller.ControllerContext = new ControllerContext
         {
@@ -1180,7 +1180,7 @@ public class CoachTrainingPlanServiceTests
         var planId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPlanService>();
         var mockLogger = new Mock<ILogger<CoachTrainingPlansController>>();
-        var controller = new CoachTrainingPlansController(mockService.Object, mockLogger.Object);
+        var controller = new CoachTrainingPlansController(mockService.Object, null!, mockLogger.Object);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -1217,7 +1217,7 @@ public class CoachTrainingPlanServiceTests
         var orderDetailsId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPlanService>();
         var mockLogger = new Mock<ILogger<CoachTrainingPlansController>>();
-        var controller = new CoachTrainingPlansController(mockService.Object, mockLogger.Object);
+        var controller = new CoachTrainingPlansController(mockService.Object, null!, mockLogger.Object);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {

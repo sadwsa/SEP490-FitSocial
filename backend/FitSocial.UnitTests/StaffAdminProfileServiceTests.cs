@@ -29,8 +29,9 @@ public class StaffAdminProfileServiceTests
 
     /// <summary>
     /// UTCID01: Normal case - Authenticated Staff user retrieves own profile successfully.
-    /// Conditions: User found, IsLocked = false, Role = "STAFF", FullName = "Nguyen Van Staff".
-    /// Confirm: Return StaffAdminOwnProfileDto with Success = true, Message = "Profile retrieved successfully.".
+    /// Conditions: User = Found, IsLocked = false, RoleCode = "STAFF", FullName = "Nguyen Van Staff".
+    /// Confirm: Return StaffAdminOwnProfileDto with Success=true.
+    /// Result: Type = N, Status = Passed
     /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenStaff_ReturnsCorrectProfile()
@@ -76,8 +77,9 @@ public class StaffAdminProfileServiceTests
 
     /// <summary>
     /// UTCID02: Normal case - Authenticated Admin user retrieves own profile successfully.
-    /// Conditions: User found, IsLocked = false, Role = "ADMIN", FullName = "Admin Quản Trị".
-    /// Confirm: Return StaffAdminOwnProfileDto with Success = true, Message = "Profile retrieved successfully.".
+    /// Conditions: User = Found, IsLocked = false, RoleCode = "ADMIN", FullName = "Admin Quản Trị".
+    /// Confirm: Return StaffAdminOwnProfileDto with Success=true.
+    /// Result: Type = N, Status = Passed
     /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenAdmin_ReturnsCorrectProfile()
@@ -123,8 +125,9 @@ public class StaffAdminProfileServiceTests
 
     /// <summary>
     /// UTCID03: Abnormal case - User not found in repository.
-    /// Conditions: User not found in repository, Lock = N/A, Role = N/A, FullName = N/A.
-    /// Confirm: Throws NotFoundException with message "Staff or Admin profile could not be found.".
+    /// Conditions: User = Not found, IsLocked = false, RoleCode = empty/null, FullName = empty/null.
+    /// Confirm: NotFoundException ("Staff or Admin profile could not be found.").
+    /// Result: Type = A, Status = Passed
     /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenUserNotFound_ThrowsNotFoundException()
@@ -143,8 +146,9 @@ public class StaffAdminProfileServiceTests
 
     /// <summary>
     /// UTCID04: Abnormal case - Account is locked.
-    /// Conditions: User found, IsLocked = true, Role = "STAFF", FullName = N/A.
-    /// Confirm: Throws ForbiddenException with message "This account has been locked. Please contact support.".
+    /// Conditions: User = Found, IsLocked = true, RoleCode = "STAFF", FullName = "Nguyen Van Staff".
+    /// Confirm: ForbiddenException ("This account has been locked. Please contact support.").
+    /// Result: Type = A, Status = Passed
     /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenAccountIsLocked_ThrowsForbiddenException()
@@ -155,7 +159,7 @@ public class StaffAdminProfileServiceTests
         {
             UserId = userId,
             Email = "lockedstaff@fitsocial.com",
-            FullName = "Locked Staff",
+            FullName = "Nguyen Van Staff",
             RoleCode = RoleConstants.Staff,
             IsLocked = true
         };
@@ -172,8 +176,9 @@ public class StaffAdminProfileServiceTests
 
     /// <summary>
     /// UTCID05: Abnormal case - User is Trainee (not Staff or Admin).
-    /// Conditions: User found, IsLocked = false, Role = "TRAINEE", FullName = N/A.
-    /// Confirm: Throws ForbiddenException with message "Access denied. Only Staff and Admin profiles are allowed.".
+    /// Conditions: User = Found, IsLocked = false, RoleCode = "TRAINEE", FullName = "Nguyen Van Staff".
+    /// Confirm: ForbiddenException ("Access denied. Only Staff and Admin profiles are allowed.").
+    /// Result: Type = A, Status = Passed
     /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenUserIsTrainee_ThrowsForbiddenException()
@@ -184,7 +189,7 @@ public class StaffAdminProfileServiceTests
         {
             UserId = userId,
             Email = "trainee@fitsocial.com",
-            FullName = "Trainee User",
+            FullName = "Nguyen Van Staff",
             RoleCode = RoleConstants.Trainee,
             IsLocked = false
         };
@@ -201,8 +206,9 @@ public class StaffAdminProfileServiceTests
 
     /// <summary>
     /// UTCID06: Abnormal case - User is Coach (not Staff or Admin).
-    /// Conditions: User found, IsLocked = false, Role = "COACH", FullName = N/A.
-    /// Confirm: Throws ForbiddenException with message "Access denied. Only Staff and Admin profiles are allowed.".
+    /// Conditions: User = Found, IsLocked = false, RoleCode = "COACH", FullName = "Nguyen Van Staff".
+    /// Confirm: ForbiddenException ("Access denied. Only Staff and Admin profiles are allowed.").
+    /// Result: Type = A, Status = Passed
     /// </summary>
     [Fact]
     public async Task GetStaffAdminProfileAsync_WhenUserIsCoach_ThrowsForbiddenException()
@@ -213,7 +219,7 @@ public class StaffAdminProfileServiceTests
         {
             UserId = userId,
             Email = "coach@fitsocial.com",
-            FullName = "Coach User",
+            FullName = "Nguyen Van Staff",
             RoleCode = RoleConstants.Coach,
             IsLocked = false
         };

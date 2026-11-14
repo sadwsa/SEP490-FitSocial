@@ -36,8 +36,14 @@ public class EditPostServiceTests
             _unitOfWorkMock.Object);
     }
 
-    #region Normal Cases (N)
+    #region Normal Cases (N) - UTCID01 to UTCID03
 
+    /// <summary>
+    /// UTCID01: Normal case - Coach updates post with new content, removes old media, and adds new media successfully.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "FindTrainee", Content = "Updated workout routine with new exercises.", RemoveMediaIds = 1 belonging media ID, NewMedia = 1 new image, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: Return PostDto with Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenCoachUpdatesPostWithNewContentAndMediaModifications_ReturnsUpdatedPostDto()
     {
@@ -118,6 +124,12 @@ public class EditPostServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02: Normal case - Trainee updates content and location without media changes.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: Return PostDto with Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenTraineeUpdatesContentAndLocationWithoutMediaChanges_ReturnsUpdatedPostDto()
     {
@@ -189,6 +201,12 @@ public class EditPostServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03: Normal case - Trainee switches allowed post type to FindCoach.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "FindCoach", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: Return PostDto with Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenTraineeSwitchesAllowedPostTypeToFindCoach_ReturnsUpdatedPostDto()
     {
@@ -252,8 +270,14 @@ public class EditPostServiceTests
 
     #endregion
 
-    #region Abnormal Cases (A)
+    #region Abnormal Cases (A) - UTCID04 to UTCID10, UTCID12
 
+    /// <summary>
+    /// UTCID04: Abnormal case - Post does not exist in repository.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostOwnership = Current user is author, Post = Not found, LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: NotFoundException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenPostDoesNotExist_ThrowsNotFoundException()
     {
@@ -279,6 +303,12 @@ public class EditPostServiceTests
         _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID05: Abnormal case - Post exists but has been soft-deleted (IsDeleted = true).
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostOwnership = Current user is author, Post = Deleted (IsDeleted = true), LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: NotFoundException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenPostIsDeleted_ThrowsNotFoundException()
     {
@@ -313,6 +343,12 @@ public class EditPostServiceTests
         _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID06: Abnormal case - Current user is not the author of the post.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostOwnership = Current user is not author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: ForbiddenException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenCurrentUserIsNotAuthor_ThrowsForbiddenException()
     {
@@ -350,6 +386,12 @@ public class EditPostServiceTests
         _userRepoMock.Verify(u => u.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID07: Abnormal case - Author's account is locked (IsLocked = true).
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = true, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: ForbiddenException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenUserAccountIsLocked_ThrowsForbiddenException()
     {
@@ -395,6 +437,12 @@ public class EditPostServiceTests
         _locationRepoMock.Verify(l => l.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID08: Abnormal case - Trainee role selects forbidden FindTrainee post type.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "FindTrainee", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: ForbiddenException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenTraineeSelectsDisallowedFindTraineePostType_ThrowsForbiddenException()
     {
@@ -418,6 +466,12 @@ public class EditPostServiceTests
         _postRepoMock.Verify(r => r.GetByIdWithMediaAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID09: Abnormal case - Specified location does not exist in repository.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Non-existent GUID (Not found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: NotFoundException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenLocationDoesNotExist_ThrowsNotFoundException()
     {
@@ -465,6 +519,12 @@ public class EditPostServiceTests
         _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID10: Abnormal case - RemoveMediaIds contains a media ID that does not belong to the post.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = 1 foreign media ID, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: BusinessException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenRemoveMediaIdsContainsForeignMediaId_ThrowsBusinessException()
     {
@@ -526,35 +586,16 @@ public class EditPostServiceTests
         _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task EditPostAsync_WhenCancellationTokenIsCancelled_ThrowsOperationCanceledException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var locationId = Guid.NewGuid();
-        var cts = new CancellationTokenSource();
-        cts.Cancel();
-
-        var request = new EditPostRequestDto
-        {
-            PostType = "Normal",
-            Content = StandardValidContent,
-            LocationId = locationId
-        };
-
-        _postRepoMock.Setup(r => r.GetByIdWithMediaAsync(postId, cts.Token))
-            .ThrowsAsync(new OperationCanceledException(cts.Token));
-
-        // Act & Assert
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => _postService.EditPostAsync(postId, authorId, "COACH", request, cts.Token));
-    }
-
     #endregion
 
-    #region Boundary Cases (B)
+    #region Boundary Cases (B) & Special Scenarios - UTCID11 to UTCID13
 
+    /// <summary>
+    /// UTCID11: Boundary case - Content has maximum length of 500 characters.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = 500 characters, RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Active.
+    /// Confirm: Return PostDto with Success=true
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenContentIsMax500Characters_ReturnsUpdatedPostDto()
     {
@@ -616,6 +657,43 @@ public class EditPostServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID12: Abnormal case - Operation is cancelled via CancellationToken.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = empty/null, TotalMediaLimit = <= 10 items, CancellationToken = Cancelled.
+    /// Confirm: OperationCanceledException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
+    [Fact]
+    public async Task EditPostAsync_WhenCancellationTokenIsCancelled_ThrowsOperationCanceledException()
+    {
+        // Arrange
+        var postId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var request = new EditPostRequestDto
+        {
+            PostType = "Normal",
+            Content = StandardValidContent,
+            LocationId = locationId
+        };
+
+        _postRepoMock.Setup(r => r.GetByIdWithMediaAsync(postId, cts.Token))
+            .ThrowsAsync(new OperationCanceledException(cts.Token));
+
+        // Act & Assert
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => _postService.EditPostAsync(postId, authorId, "COACH", request, cts.Token));
+    }
+
+    /// <summary>
+    /// UTCID13: Boundary case - Total media count exceeds maximum limit (5 existing - 0 removed + 6 new = 11 > 10).
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostOwnership = Current user is author, Post = Found (IsDeleted = false), LocationId = Valid GUID (Found in DB), PostType = "Normal", Content = "Updated workout routine with new exercises.", RemoveMediaIds = empty/null, NewMedia = 6 new images, TotalMediaLimit = > 10 items, CancellationToken = Active.
+    /// Confirm: BusinessException
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task EditPostAsync_WhenTotalMediaExceedsMaxLimit_ThrowsBusinessException()
     {

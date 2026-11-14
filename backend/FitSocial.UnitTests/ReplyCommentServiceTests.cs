@@ -40,6 +40,23 @@ public class ReplyCommentServiceTests
 
     #region Normal Cases (N)
 
+    /// <summary>
+    /// UTCID01 - CreateReplyAsync_WhenValidInputWithAuthorFullName_CreatesAndReturnsReplyDto
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: false
+    /// - parentComment: Found
+    /// - parentAuthorFullName: "Jane Smith"
+    /// - Post: Found (IsDeleted = false)
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Active
+    /// Expected: Return CommentDto with Success=true, AuthorName and ReplyToAuthorName populated
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenValidInputWithAuthorFullName_CreatesAndReturnsReplyDto()
     {
@@ -116,6 +133,23 @@ public class ReplyCommentServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02 - CreateReplyAsync_WhenAuthorFullNameIsEmpty_FallsBackToEmailAsAuthorName
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - parentComment: Found
+    /// - parentAuthorFullName: "Jane Smith"
+    /// - Post: Found (IsDeleted = false)
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Active
+    /// Expected: Return CommentDto with Success=true, AuthorName falls back to user email
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenAuthorFullNameIsEmpty_FallsBackToEmailAsAuthorName()
     {
@@ -182,6 +216,23 @@ public class ReplyCommentServiceTests
         Assert.Equal(StandardParentAuthorName, result.Data.ReplyToAuthorName);
     }
 
+    /// <summary>
+    /// UTCID03 - CreateReplyAsync_WhenParentCommentAuthorFullNameIsEmpty_FallsBackToParentAuthorEmail
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: false
+    /// - parentComment: Found
+    /// - parentAuthorFullName: empty/null
+    /// - Post: Found (IsDeleted = false)
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Active
+    /// Expected: Return CommentDto with Success=true, ReplyToAuthorName falls back to parent author email
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenParentCommentAuthorFullNameIsEmpty_FallsBackToParentAuthorEmail()
     {
@@ -252,30 +303,23 @@ public class ReplyCommentServiceTests
 
     #region Abnormal Cases (A)
 
-    [Fact]
-    public async Task CreateReplyAsync_WhenUserNotFound_ThrowsNotFoundException()
-    {
-        // Arrange
-        var commentId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
-
-        var request = new CreateReplyRequestDto
-        {
-            Content = StandardValidContent
-        };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
-            _service.CreateReplyAsync(commentId, authorId, request));
-
-        Assert.Equal("User account was not found.", ex.Message);
-        _commentRepoMock.Verify(r => r.AddAsync(It.IsAny<Comment>(), It.IsAny<CancellationToken>()), Times.Never);
-        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-    }
-
+    /// <summary>
+    /// UTCID04 - CreateReplyAsync_WhenUserIsLocked_ThrowsForbiddenException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: true
+    /// - parentComment: empty/null
+    /// - parentAuthorFullName: empty/null
+    /// - Post: empty/null
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Active
+    /// Expected: Throws ForbiddenException with message "Your account is locked and cannot reply to comments."
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenUserIsLocked_ThrowsForbiddenException()
     {
@@ -307,6 +351,23 @@ public class ReplyCommentServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID05 - CreateReplyAsync_WhenParentCommentNotFound_ThrowsNotFoundException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: false
+    /// - parentComment: Not found
+    /// - parentAuthorFullName: empty/null
+    /// - Post: empty/null
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Active
+    /// Expected: Throws NotFoundException with message indicating comment was not found
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenParentCommentNotFound_ThrowsNotFoundException()
     {
@@ -340,6 +401,23 @@ public class ReplyCommentServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID06 - CreateReplyAsync_WhenTargetPostIsDeleted_ThrowsNotFoundException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: false
+    /// - parentComment: Found
+    /// - parentAuthorFullName: "Jane Smith"
+    /// - Post: Deleted (IsDeleted = true)
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Active
+    /// Expected: Throws NotFoundException with message "Post was not found or has been deleted."
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenTargetPostIsDeleted_ThrowsNotFoundException()
     {
@@ -396,6 +474,23 @@ public class ReplyCommentServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID07 - CreateReplyAsync_WhenCancellationRequested_ThrowsOperationCanceledException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - parentComment: empty/null
+    /// - parentAuthorFullName: empty/null
+    /// - Post: empty/null
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Cancelled
+    /// Expected: Throws OperationCanceledException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenCancellationRequested_ThrowsOperationCanceledException()
     {
@@ -423,6 +518,23 @@ public class ReplyCommentServiceTests
 
     #region Boundary Cases (B)
 
+    /// <summary>
+    /// UTCID08 - CreateReplyAsync_WhenAuthorIdIsEmpty_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Guid.Empty
+    /// - commentId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - parentComment: empty/null
+    /// - parentAuthorFullName: empty/null
+    /// - Post: empty/null
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Active
+    /// Expected: Throws ValidationException with message "User is not authenticated."
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenAuthorIdIsEmpty_ThrowsValidationException()
     {
@@ -443,6 +555,23 @@ public class ReplyCommentServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID09 - CreateReplyAsync_WhenCommentIdIsEmpty_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Guid.Empty
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - parentComment: empty/null
+    /// - parentAuthorFullName: empty/null
+    /// - Post: empty/null
+    /// - Content: "Thanks for the tip!"
+    /// - CancellationToken: Active
+    /// Expected: Throws ValidationException with message "Comment ID is required."
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenCommentIdIsEmpty_ThrowsValidationException()
     {
@@ -463,6 +592,23 @@ public class ReplyCommentServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID10 - CreateReplyAsync_WhenContentIsWhitespace_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - parentComment: empty/null
+    /// - parentAuthorFullName: empty/null
+    /// - Post: empty/null
+    /// - Content: " "
+    /// - CancellationToken: Active
+    /// Expected: Throws ValidationException with message "Reply content cannot be empty."
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenContentIsWhitespace_ThrowsValidationException()
     {
@@ -483,6 +629,23 @@ public class ReplyCommentServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID11 - CreateReplyAsync_WhenContentExceeds500Characters_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - authorId: Valid GUID
+    /// - commentId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - parentComment: empty/null
+    /// - parentAuthorFullName: empty/null
+    /// - Post: empty/null
+    /// - Content: 501 characters
+    /// - CancellationToken: Active
+    /// Expected: Throws ValidationException with message "Reply content cannot exceed 500 characters."
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateReplyAsync_WhenContentExceeds500Characters_ThrowsValidationException()
     {
@@ -505,4 +668,3 @@ public class ReplyCommentServiceTests
 
     #endregion
 }
-

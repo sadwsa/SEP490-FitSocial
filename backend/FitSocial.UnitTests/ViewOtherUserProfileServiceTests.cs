@@ -29,6 +29,11 @@ public class ViewOtherUserProfileServiceTests
 
     #region Normal Cases (N)
 
+    /// <summary>
+    /// UTCID01: Normal case - Retrieves public coach profile with full details (locations, reviews, valid certificates).
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", FullName = "John Doe", CoachProfile = Populated with details, Locations = "District 1, HCMC, District 3, HCMC", Reviews = Rating: 4.5, Certificates = 1 Valid, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Returns CoachProfileResponseDto with Success = true, Rating = 4.5, TotalReviews = 2, Location aggregated.
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenCoachExistsWithFullDetails_ReturnsCoachProfileResponseDto()
     {
@@ -109,6 +114,11 @@ public class ViewOtherUserProfileServiceTests
         _userRepoMock.Verify(r => r.FindUserProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02: Normal case - Retrieves public trainee profile successfully.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "TRAINEE", FullName = "John Doe", CoachProfile = empty/null, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Returns TraineeProfileResponseDto with Success = true, Bio = null, Location = null.
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenTraineeExists_ReturnsTraineeProfileResponseDto()
     {
@@ -151,6 +161,11 @@ public class ViewOtherUserProfileServiceTests
         _userRepoMock.Verify(r => r.FindUserProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03: Normal case - Coach has both valid and expired certificates, only valid certificate is returned.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", FullName = "John Doe", CoachProfile = Populated with details, Locations = empty/null, Reviews = Rating: null, Certificates = 1 Valid and 1 Expired, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Returns CoachProfileResponseDto, HasExpiredCertificates = true, HasValidCertificates = true, 1 Cert returned.
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenCoachHasExpiredAndValidCertificates_ReturnsOnlyValidCertificatesAndFlagsTrue()
     {
@@ -216,6 +231,11 @@ public class ViewOtherUserProfileServiceTests
 
     #region Abnormal Cases (A)
 
+    /// <summary>
+    /// UTCID04: Abnormal case - User does not exist in repository.
+    /// Conditions: Precondition = Database connected, Target User = empty/null, IsLocked = false, RoleCode = empty/null, FullName = empty/null, CoachProfile = empty/null, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Throws NotFoundException with message "User profile not found.".
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenUserNotFound_ThrowsNotFoundException()
     {
@@ -231,6 +251,11 @@ public class ViewOtherUserProfileServiceTests
         _userRepoMock.Verify(r => r.FindUserProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID05: Abnormal case - User is locked in database.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = true, RoleCode = "TRAINEE", FullName = "John Doe", CoachProfile = empty/null, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Throws NotFoundException with message "User profile not found.".
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenUserIsLocked_ThrowsNotFoundException()
     {
@@ -254,6 +279,11 @@ public class ViewOtherUserProfileServiceTests
         _userRepoMock.Verify(r => r.FindUserProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID06: Abnormal case - User has unauthorized role (Admin).
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "ADMIN", FullName = "John Doe", CoachProfile = empty/null, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Throws NotFoundException with message "User profile not found.".
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenUserRoleIsAdmin_ThrowsNotFoundException()
     {
@@ -277,6 +307,11 @@ public class ViewOtherUserProfileServiceTests
         _userRepoMock.Verify(r => r.FindUserProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID07: Abnormal case - Repository throws database exception.
+    /// Conditions: Precondition = empty/null, Target User = empty/null, IsLocked = false, RoleCode = empty/null, FullName = empty/null, CoachProfile = empty/null, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Active, Repository = Throws InvalidOperationException.
+    /// Confirm: Propagates InvalidOperationException with message "Database connection failure".
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenRepositoryThrowsException_PropagatesException()
     {
@@ -292,6 +327,11 @@ public class ViewOtherUserProfileServiceTests
         _userRepoMock.Verify(r => r.FindUserProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID08: Abnormal case - CancellationToken is requested cancellation.
+    /// Conditions: Precondition = Database connected, Target User = empty/null, IsLocked = false, RoleCode = empty/null, FullName = empty/null, CoachProfile = empty/null, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Cancelled, Repository = Normal execution.
+    /// Confirm: Throws OperationCanceledException.
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenCancellationTokenCancelled_ThrowsOperationCanceledException()
     {
@@ -313,6 +353,11 @@ public class ViewOtherUserProfileServiceTests
 
     #region Boundary Cases (B)
 
+    /// <summary>
+    /// UTCID09: Boundary case - Coach profile in database is null.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", FullName = "John Doe", CoachProfile = empty/null, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Returns CoachProfileResponseDto with default zero ratings, null locations/bio and empty certs.
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenCoachProfileIsNull_ReturnsCoachDtoWithDefaultValues()
     {
@@ -348,6 +393,11 @@ public class ViewOtherUserProfileServiceTests
         _userRepoMock.Verify(r => r.FindUserProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID10: Boundary case - Coach reviews have null rating and locations collection is empty.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", FullName = "John Doe", CoachProfile = Populated with details, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Returns CoachProfileResponseDto with Rating = 0.0, TotalReviews = 0, Location = null.
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenCoachReviewsHaveNullRatingAndLocationsEmpty_ReturnsZeroRatingAndNullLocation()
     {
@@ -389,6 +439,11 @@ public class ViewOtherUserProfileServiceTests
         _userRepoMock.Verify(r => r.FindUserProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID11: Boundary case - Both FullName and RoleCode are null in database.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = empty/null, FullName = empty/null, CoachProfile = empty/null, Locations = empty/null, Reviews = Rating: null, Certificates = empty/null, CancellationToken = Active, Repository = Normal execution.
+    /// Confirm: Returns TraineeProfileResponseDto with FullName = string.Empty (""), Role = "TRAINEE".
+    /// </summary>
     [Fact]
     public async Task GetUserProfileAsync_WhenFullNameAndRoleCodeAreNull_DefaultsToTraineeAndEmptyFullName()
     {

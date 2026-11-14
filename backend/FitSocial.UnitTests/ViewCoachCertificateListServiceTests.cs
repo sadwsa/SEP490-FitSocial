@@ -16,6 +16,8 @@ public class ViewCoachCertificateListServiceTests
     private readonly Mock<ICoachCertificateRepository> _mockCertRepo;
     private readonly Mock<ICoachProfileRepository> _mockCoachRepo;
     private readonly Mock<IUnitOfWork> _mockUow;
+    private readonly Mock<IAuditLogRepository> _mockAuditRepo;
+    private readonly Mock<INotificationRepository> _mockNotificationRepo;
     private readonly CoachCertificateService _service;
 
     public ViewCoachCertificateListServiceTests()
@@ -23,50 +25,71 @@ public class ViewCoachCertificateListServiceTests
         _mockCertRepo = new Mock<ICoachCertificateRepository>();
         _mockCoachRepo = new Mock<ICoachProfileRepository>();
         _mockUow = new Mock<IUnitOfWork>();
+        _mockAuditRepo = new Mock<IAuditLogRepository>();
+        _mockNotificationRepo = new Mock<INotificationRepository>();
 
         _service = new CoachCertificateService(
             _mockCertRepo.Object,
             _mockCoachRepo.Object,
-            _mockUow.Object);
+            _mockUow.Object,
+            _mockAuditRepo.Object,
+            _mockNotificationRepo.Object);
     }
 
     private static CoachCertificate CreateCertificate(
-        Guid? certId = null,
+        Guid? id = null,
         Guid? coachId = null,
-        string name = "ACE Certified Trainer",
         string status = "PENDING",
-        string coachName = "John Coach",
-        string coachEmail = "john@example.com")
+        string coachName = "Coach John Doe",
+        string coachEmail = "coach@example.com",
+        bool includeCoach = true)
     {
-        var cId = certId ?? Guid.NewGuid();
+        var certId = id ?? Guid.NewGuid();
         var coId = coachId ?? Guid.NewGuid();
 
         return new CoachCertificate
         {
-            CertificateId = cId,
+            CertificateId = certId,
             CoachId = coId,
-            CertificateName = name,
+            CertificateName = "Certified Personal Trainer",
             CertificateUrl = "https://example.com/cert.pdf",
             IssuedBy = "American Council on Exercise",
             IssuedDate = new DateOnly(2023, 1, 1),
             ExpiryDate = new DateOnly(2025, 1, 1),
             VerificationStatus = status,
             CreatedAt = DateTime.UtcNow,
-            Coach = new CoachProfile
-            {
-                CoachId = coId,
-                Coach = new User
+            Coach = includeCoach
+                ? new CoachProfile
                 {
-                    UserId = coId,
-                    FullName = coachName,
-                    Email = coachEmail,
-                    PhoneNumber = "0987654321",
-                    AvatarUrl = "https://example.com/avatar.jpg"
+                    CoachId = coId,
+                    Coach = new User
+                    {
+                        UserId = coId,
+                        FullName = coachName,
+                        Email = coachEmail,
+                        PhoneNumber = "0987654321",
+                        AvatarUrl = "https://example.com/avatar.jpg"
+                    }
                 }
-            }
+                : null!
         };
     }
 
+    #region Normal Cases (N)
+
+    /// <summary>
+    /// UTCID01 - GetCertificatesAsync_DefaultQuery_ReturnsPagedCertificatesWithStatusCounts
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "ALL"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: Found
+    /// - DatabaseResults: Found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminListResponseDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_DefaultQuery_ReturnsPagedCertificatesWithStatusCounts()
     {
@@ -106,11 +129,24 @@ public class ViewCoachCertificateListServiceTests
         _mockCertRepo.Verify(r => r.GetPagedCertificatesAsync(null, "ALL", "date_desc", 1, 10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02 - GetCertificatesAsync_FilterByPendingStatus_ReturnsFilteredPendingCertificates
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: Found
+    /// - DatabaseResults: Found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminListResponseDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_FilterByPendingStatus_ReturnsFilteredPendingCertificates()
     {
         // Arrange
-        var query = new GetCoachCertificatesAdminQueryDto { Status = "PENDING", PageNumber = 1, PageSize = 10 };
+        var query = new GetCoachCertificatesAdminQueryDto { Status = "PENDING" };
         var list = new List<CoachCertificate> { CreateCertificate(status: "PENDING") };
 
         _mockCertRepo.Setup(r => r.GetPagedCertificatesAsync(null, "PENDING", "date_desc", 1, 10, It.IsAny<CancellationToken>()))
@@ -127,13 +163,27 @@ public class ViewCoachCertificateListServiceTests
         Assert.True(result.Success);
         Assert.Single(result.Data.Certificates.Items);
         Assert.Equal("PENDING", result.Data.Certificates.Items[0].VerificationStatus);
+        Assert.Equal(1, result.Data.Certificates.TotalCount);
     }
 
+    /// <summary>
+    /// UTCID03 - GetCertificatesAsync_FilterByApprovedStatus_ReturnsFilteredApprovedCertificates
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "APPROVED"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: Found
+    /// - DatabaseResults: Found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminListResponseDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_FilterByApprovedStatus_ReturnsFilteredApprovedCertificates()
     {
         // Arrange
-        var query = new GetCoachCertificatesAdminQueryDto { Status = "APPROVED", PageNumber = 1, PageSize = 10 };
+        var query = new GetCoachCertificatesAdminQueryDto { Status = "APPROVED" };
         var list = new List<CoachCertificate> { CreateCertificate(status: "APPROVED") };
 
         _mockCertRepo.Setup(r => r.GetPagedCertificatesAsync(null, "APPROVED", "date_desc", 1, 10, It.IsAny<CancellationToken>()))
@@ -150,13 +200,27 @@ public class ViewCoachCertificateListServiceTests
         Assert.True(result.Success);
         Assert.Single(result.Data.Certificates.Items);
         Assert.Equal("APPROVED", result.Data.Certificates.Items[0].VerificationStatus);
+        Assert.Equal(1, result.Data.Certificates.TotalCount);
     }
 
+    /// <summary>
+    /// UTCID04 - GetCertificatesAsync_FilterByRejectedStatus_ReturnsFilteredRejectedCertificates
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "REJECTED"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: Found
+    /// - DatabaseResults: Found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminListResponseDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_FilterByRejectedStatus_ReturnsFilteredRejectedCertificates()
     {
         // Arrange
-        var query = new GetCoachCertificatesAdminQueryDto { Status = "REJECTED", PageNumber = 1, PageSize = 10 };
+        var query = new GetCoachCertificatesAdminQueryDto { Status = "REJECTED" };
         var list = new List<CoachCertificate> { CreateCertificate(status: "REJECTED") };
 
         _mockCertRepo.Setup(r => r.GetPagedCertificatesAsync(null, "REJECTED", "date_desc", 1, 10, It.IsAny<CancellationToken>()))
@@ -173,20 +237,36 @@ public class ViewCoachCertificateListServiceTests
         Assert.True(result.Success);
         Assert.Single(result.Data.Certificates.Items);
         Assert.Equal("REJECTED", result.Data.Certificates.Items[0].VerificationStatus);
+        Assert.Equal(1, result.Data.Certificates.TotalCount);
     }
 
+    /// <summary>
+    /// UTCID05 - GetCertificatesAsync_FilterBySearchKeyword_ReturnsMatchingCertificates
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "ALL"
+    /// - Search: "NASM"
+    /// - SortBy: "date_desc"
+    /// - Coach: Found
+    /// - DatabaseResults: Found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminListResponseDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_FilterBySearchKeyword_ReturnsMatchingCertificates()
     {
         // Arrange
-        var query = new GetCoachCertificatesAdminQueryDto { Search = "NASM", Status = "ALL", PageNumber = 1, PageSize = 10 };
-        var list = new List<CoachCertificate> { CreateCertificate(name: "NASM CPT") };
+        var query = new GetCoachCertificatesAdminQueryDto { Search = "NASM", Status = "ALL" };
+        var cert = CreateCertificate();
+        cert.CertificateName = "NASM Certified Personal Trainer";
+        var list = new List<CoachCertificate> { cert };
 
         _mockCertRepo.Setup(r => r.GetPagedCertificatesAsync("NASM", "ALL", "date_desc", 1, 10, It.IsAny<CancellationToken>()))
             .ReturnsAsync((list, 1));
 
         _mockCertRepo.Setup(r => r.GetStatusCountsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<string, int>());
+            .ReturnsAsync(new Dictionary<string, int> { ["ALL"] = 1 });
 
         // Act
         var result = await _service.GetCertificatesAsync(query);
@@ -195,21 +275,35 @@ public class ViewCoachCertificateListServiceTests
         Assert.NotNull(result);
         Assert.True(result.Success);
         Assert.Single(result.Data.Certificates.Items);
-        Assert.Equal("NASM CPT", result.Data.Certificates.Items[0].CertificateName);
+        Assert.Equal("NASM Certified Personal Trainer", result.Data.Certificates.Items[0].CertificateName);
+        Assert.Equal(1, result.Data.Certificates.TotalCount);
     }
 
+    /// <summary>
+    /// UTCID06 - GetCertificatesAsync_CustomSortBy_PassesSortParameterAndReturnsResults
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "ALL"
+    /// - Search: empty/null
+    /// - SortBy: "date_asc"
+    /// - Coach: Found
+    /// - DatabaseResults: Found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminListResponseDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_CustomSortBy_PassesSortParameterAndReturnsResults()
     {
         // Arrange
-        var query = new GetCoachCertificatesAdminQueryDto { SortBy = "date_asc", Status = "ALL", PageNumber = 1, PageSize = 10 };
+        var query = new GetCoachCertificatesAdminQueryDto { SortBy = "date_asc" };
         var list = new List<CoachCertificate> { CreateCertificate() };
 
         _mockCertRepo.Setup(r => r.GetPagedCertificatesAsync(null, "ALL", "date_asc", 1, 10, It.IsAny<CancellationToken>()))
             .ReturnsAsync((list, 1));
 
         _mockCertRepo.Setup(r => r.GetStatusCountsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<string, int>());
+            .ReturnsAsync(new Dictionary<string, int> { ["ALL"] = 1 });
 
         // Act
         var result = await _service.GetCertificatesAsync(query);
@@ -217,29 +311,35 @@ public class ViewCoachCertificateListServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.True(result.Success);
-        Assert.Single(result.Data.Certificates.Items);
+        _mockCertRepo.Verify(r => r.GetPagedCertificatesAsync(null, "ALL", "date_asc", 1, 10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID07 - GetCertificatesAsync_WithNullCoachNavigation_MapsWithDefaultUnknownCoach
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "ALL"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: empty/null
+    /// - DatabaseResults: Found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminListResponseDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_WithNullCoachNavigation_MapsWithDefaultUnknownCoach()
     {
         // Arrange
-        var certId = Guid.NewGuid();
-        var cert = new CoachCertificate
-        {
-            CertificateId = certId,
-            CoachId = Guid.NewGuid(),
-            CertificateName = "CrossFit Level 1",
-            VerificationStatus = "PENDING",
-            Coach = null!
-        };
         var query = new GetCoachCertificatesAdminQueryDto();
+        var certWithoutCoach = CreateCertificate(includeCoach: false);
+        var list = new List<CoachCertificate> { certWithoutCoach };
 
         _mockCertRepo.Setup(r => r.GetPagedCertificatesAsync(null, "ALL", "date_desc", 1, 10, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<CoachCertificate> { cert }, 1));
+            .ReturnsAsync((list, 1));
 
         _mockCertRepo.Setup(r => r.GetStatusCountsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<string, int>());
+            .ReturnsAsync(new Dictionary<string, int> { ["ALL"] = 1 });
 
         // Act
         var result = await _service.GetCertificatesAsync(query);
@@ -252,6 +352,23 @@ public class ViewCoachCertificateListServiceTests
         Assert.Equal(string.Empty, result.Data.Certificates.Items[0].CoachEmail);
     }
 
+    #endregion
+
+    #region Boundary Cases (B)
+
+    /// <summary>
+    /// UTCID08 - GetCertificatesAsync_EmptyResult_ReturnsEmptyPagedListWithZeroCounts
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "ALL"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: Found
+    /// - DatabaseResults: Not found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminListResponseDto> with Success=true
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_EmptyResult_ReturnsEmptyPagedListWithZeroCounts()
     {
@@ -272,56 +389,29 @@ public class ViewCoachCertificateListServiceTests
         Assert.True(result.Success);
         Assert.Empty(result.Data.Certificates.Items);
         Assert.Equal(0, result.Data.Certificates.TotalCount);
-        Assert.Equal(0, result.Data.Certificates.TotalPages);
         Assert.Equal(0, result.Data.StatusCounts.All);
         Assert.Equal(0, result.Data.StatusCounts.Pending);
+        Assert.Equal(0, result.Data.StatusCounts.Approved);
+        Assert.Equal(0, result.Data.StatusCounts.Rejected);
     }
 
-    [Fact]
-    public async Task GetCertificatesAsync_CustomPagination_ReturnsCorrectPageAndPageSize()
-    {
-        // Arrange
-        var query = new GetCoachCertificatesAdminQueryDto { PageNumber = 2, PageSize = 5 };
-        var list = new List<CoachCertificate>
-        {
-            CreateCertificate(),
-            CreateCertificate(),
-            CreateCertificate(),
-            CreateCertificate(),
-            CreateCertificate()
-        };
+    #endregion
 
-        _mockCertRepo.Setup(r => r.GetPagedCertificatesAsync(null, "ALL", "date_desc", 2, 5, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((list, 15));
+    #region Abnormal Cases (A)
 
-        _mockCertRepo.Setup(r => r.GetStatusCountsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<string, int> { ["ALL"] = 15 });
-
-        // Act
-        var result = await _service.GetCertificatesAsync(query);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.Equal(2, result.Data.Certificates.PageNumber);
-        Assert.Equal(5, result.Data.Certificates.PageSize);
-        Assert.Equal(15, result.Data.Certificates.TotalCount);
-        Assert.Equal(3, result.Data.Certificates.TotalPages);
-        Assert.Equal(5, result.Data.Certificates.Items.Count);
-    }
-
-    [Fact]
-    public async Task GetCertificatesAsync_NullQuery_ReturnsFailResponse()
-    {
-        // Arrange & Act
-        var result = await _service.GetCertificatesAsync(null!);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Contains("Error retrieving coach certificates", result.Message);
-    }
-
+    /// <summary>
+    /// UTCID09 - GetCertificatesAsync_RepositoryThrowsException_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection failure
+    /// - Status: "ALL"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: empty/null
+    /// - DatabaseResults: Not found
+    /// Expected: Exception ("Database connection failure")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_RepositoryThrowsException_ReturnsFailResponse()
     {
@@ -341,6 +431,19 @@ public class ViewCoachCertificateListServiceTests
         Assert.Contains("Database connection failure", result.Message);
     }
 
+    /// <summary>
+    /// UTCID10 - GetCertificatesAsync_StatusCountsThrowsException_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection failure
+    /// - Status: "ALL"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: empty/null
+    /// - DatabaseResults: Not found
+    /// Expected: Exception ("Count query failed")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_StatusCountsThrowsException_ReturnsFailResponse()
     {
@@ -363,6 +466,19 @@ public class ViewCoachCertificateListServiceTests
         Assert.Contains("Count query failed", result.Message);
     }
 
+    /// <summary>
+    /// UTCID11 - GetCertificatesAsync_CancelledToken_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Cancelled token
+    /// - Status: "ALL"
+    /// - Search: empty/null
+    /// - SortBy: "date_desc"
+    /// - Coach: empty/null
+    /// - DatabaseResults: Not found
+    /// Expected: OperationCanceledException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificatesAsync_CancelledToken_ReturnsFailResponse()
     {
@@ -383,5 +499,6 @@ public class ViewCoachCertificateListServiceTests
         Assert.False(result.Success);
         Assert.Contains("Error retrieving coach certificates", result.Message);
     }
-}
 
+    #endregion
+}

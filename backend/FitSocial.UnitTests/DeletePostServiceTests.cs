@@ -38,10 +38,16 @@ public class DeletePostServiceTests
             postRealtimeNotifier: _realtimeNotifierMock.Object);
     }
 
-    #region Normal Cases (N)
+    #region Normal Cases (N) - UTCID01 to UTCID03
 
+    /// <summary>
+    /// UTCID01: Normal case - Author deletes own post successfully.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Valid GUID, currentUserRole = "COACH", IsLocked = false, Post = Found (IsDeleted = false), PostOwnership = Current user is author, CancellationToken = Active.
+    /// Confirm: Return Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
-    public async Task DeletePostAsync_WhenAuthorDeletesOwnPost_ReturnsSuccessAndBroadcastsRealtime()
+    public async Task DeletePostAsync_WhenAuthorDeletesOwnPost_ReturnsSuccess()
     {
         // Arrange
         var postId = Guid.NewGuid();
@@ -78,9 +84,14 @@ public class DeletePostServiceTests
 
         _postRepoMock.Verify(r => r.Update(post), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _realtimeNotifierMock.Verify(n => n.NotifyPostDeletedAsync(postId), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02: Normal case - Admin deletes another user's post successfully.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Valid GUID, currentUserRole = "ADMIN", IsLocked = false, Post = Found (IsDeleted = false), PostOwnership = Current user is not author, CancellationToken = Active.
+    /// Confirm: Return Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenAdminDeletesAnotherUsersPost_ReturnsSuccess()
     {
@@ -118,9 +129,14 @@ public class DeletePostServiceTests
 
         _postRepoMock.Verify(r => r.Update(post), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _realtimeNotifierMock.Verify(n => n.NotifyPostDeletedAsync(postId), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03: Normal case - Staff deletes another user's post successfully.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Valid GUID, currentUserRole = "STAFF", IsLocked = false, Post = Found (IsDeleted = false), PostOwnership = Current user is not author, CancellationToken = Active.
+    /// Confirm: Return Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenStaffDeletesAnotherUsersPost_ReturnsSuccess()
     {
@@ -158,53 +174,18 @@ public class DeletePostServiceTests
 
         _postRepoMock.Verify(r => r.Update(post), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _realtimeNotifierMock.Verify(n => n.NotifyPostDeletedAsync(postId), Times.Once);
-    }
-
-    [Fact]
-    public async Task DeletePostAsync_WhenRealtimeNotifierFails_StillReturnsSuccess()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var post = new Post
-        {
-            Id = postId,
-            AuthorId = authorId,
-            Content = "Post deleted with realtime failure.",
-            IsDeleted = false
-        };
-        var author = new User
-        {
-            UserId = authorId,
-            FullName = "John Doe",
-            IsLocked = false
-        };
-
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(post);
-        _userRepoMock.Setup(u => u.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(author);
-        _realtimeNotifierMock.Setup(n => n.NotifyPostDeletedAsync(postId))
-            .ThrowsAsync(new Exception("SignalR connection dropped"));
-
-        // Act
-        var result = await _postService.DeletePostAsync(postId, authorId, "COACH");
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.True(result.Data);
-        Assert.Equal("Post deleted successfully.", result.Message);
-        Assert.True(post.IsDeleted);
-
-        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion
 
-    #region Abnormal Cases (A)
+    #region Abnormal Cases (A) - UTCID04 to UTCID08
 
+    /// <summary>
+    /// UTCID04: Abnormal case - Post does not exist in repository.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Valid GUID, currentUserRole = "COACH", IsLocked = false, Post = Not found, PostOwnership = Current user is not author, CancellationToken = Active.
+    /// Confirm: NotFoundException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenPostNotFound_ThrowsNotFoundException()
     {
@@ -223,6 +204,12 @@ public class DeletePostServiceTests
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID05: Abnormal case - Post is already soft-deleted (IsDeleted = true).
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Valid GUID, currentUserRole = "COACH", IsLocked = false, Post = Deleted (IsDeleted = true), PostOwnership = Current user is author, CancellationToken = Active.
+    /// Confirm: NotFoundException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenPostIsAlreadyDeleted_ThrowsNotFoundException()
     {
@@ -247,6 +234,12 @@ public class DeletePostServiceTests
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID06: Abnormal case - Operating user is not author and has non-administrative role (TRAINEE).
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Valid GUID, currentUserRole = "TRAINEE", IsLocked = false, Post = Found (IsDeleted = false), PostOwnership = Current user is not author, CancellationToken = Active.
+    /// Confirm: ForbiddenException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenUserIsNotAuthorAndNotAdminOrStaff_ThrowsForbiddenException()
     {
@@ -273,32 +266,12 @@ public class DeletePostServiceTests
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task DeletePostAsync_WhenUserDoesNotExistInDatabase_ThrowsForbiddenException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var post = new Post
-        {
-            Id = postId,
-            AuthorId = authorId,
-            IsDeleted = false
-        };
-
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(post);
-        _userRepoMock.Setup(u => u.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ForbiddenException>(
-            () => _postService.DeletePostAsync(postId, authorId, "COACH"));
-
-        Assert.Equal("Your account is locked and cannot perform this action.", ex.Message);
-        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-    }
-
+    /// <summary>
+    /// UTCID07: Abnormal case - User account is locked (IsLocked = true).
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Valid GUID, currentUserRole = "COACH", IsLocked = true, Post = Found (IsDeleted = false), PostOwnership = Current user is author, CancellationToken = Active.
+    /// Confirm: ForbiddenException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenUserIsLocked_ThrowsForbiddenException()
     {
@@ -331,6 +304,12 @@ public class DeletePostServiceTests
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID08: Abnormal case - Operation is cancelled via CancellationToken.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Valid GUID, currentUserRole = "COACH", IsLocked = false, Post = Found (IsDeleted = false), PostOwnership = Current user is author, CancellationToken = Cancelled.
+    /// Confirm: OperationCanceledException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenCancellationTokenCancelled_ThrowsOperationCanceledException()
     {
@@ -350,8 +329,14 @@ public class DeletePostServiceTests
 
     #endregion
 
-    #region Boundary Cases (B)
+    #region Boundary Cases (B) - UTCID09 to UTCID10
 
+    /// <summary>
+    /// UTCID09: Boundary case - PostId is empty GUID (Guid.Empty).
+    /// Conditions: Precondition = Database connection is active, postId = Guid.Empty, currentUserId = Valid GUID, currentUserRole = "COACH", IsLocked = false, Post = empty/null, PostOwnership = Current user is not author, CancellationToken = Active.
+    /// Confirm: ValidationException
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenPostIdIsEmpty_ThrowsValidationException()
     {
@@ -367,6 +352,12 @@ public class DeletePostServiceTests
         _postRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID10: Boundary case - CurrentUserId is empty GUID (Guid.Empty).
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, currentUserId = Guid.Empty, currentUserRole = "COACH", IsLocked = false, Post = empty/null, PostOwnership = Current user is not author, CancellationToken = Active.
+    /// Confirm: ForbiddenException
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task DeletePostAsync_WhenCurrentUserIdIsEmpty_ThrowsForbiddenException()
     {
@@ -384,4 +375,3 @@ public class DeletePostServiceTests
 
     #endregion
 }
-

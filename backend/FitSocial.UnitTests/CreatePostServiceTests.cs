@@ -36,6 +36,12 @@ public class CreatePostServiceTests
 
     #region Normal Cases (N)
 
+    /// <summary>
+    /// UTCID01: Normal case - Coach creates post with content and image media successfully.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "COACH", IsLocked = false, PostType = "FindTrainee", LocationId = Valid GUID (Found in DB), Content = "Coaching session available for beginners.", Media = 1 Image, CancellationToken = Active, Transaction = Commit succeeds.
+    /// Confirm: Return PostDto with Success=true.
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenCoachCreatesPostWithContentAndMedia_ReturnsCreatedPostDto()
     {
@@ -90,6 +96,12 @@ public class CreatePostServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02: Normal case - Trainee creates text-only post without media successfully.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = "Great workout today without media.", Media = empty/null, CancellationToken = Active, Transaction = Commit succeeds.
+    /// Confirm: Return PostDto with Success=true.
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenTraineeCreatesTextOnlyPost_ReturnsCreatedPostDto()
     {
@@ -134,6 +146,12 @@ public class CreatePostServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03: Normal case - Trainee creates media-only post without text content successfully.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = empty/null, Media = 1 Video, CancellationToken = Active, Transaction = Commit succeeds.
+    /// Confirm: Return PostDto with Success=true.
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenMediaOnlyPostWithoutContent_ReturnsCreatedPostDto()
     {
@@ -175,6 +193,12 @@ public class CreatePostServiceTests
 
     #region Abnormal Cases (A)
 
+    /// <summary>
+    /// UTCID04: Abnormal case - Author account not found in database.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = "Hello", Media = empty/null, CancellationToken = Active, Transaction = empty/null.
+    /// Confirm: NotFoundException ("Author account not found.").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenAuthorNotFound_ThrowsNotFoundException()
     {
@@ -193,6 +217,12 @@ public class CreatePostServiceTests
         _postRepoMock.Verify(p => p.AddAsync(It.IsAny<Post>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID05: Abnormal case - Author account is locked.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = true, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = "Hello", Media = empty/null, CancellationToken = Active, Transaction = empty/null.
+    /// Confirm: ForbiddenException ("Your account is locked and cannot create posts.").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenAuthorIsLocked_ThrowsForbiddenException()
     {
@@ -210,6 +240,12 @@ public class CreatePostServiceTests
         Assert.Equal("Your account is locked and cannot create posts.", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID06: Abnormal case - Trainee selects forbidden PostType FindTrainee.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "FindTrainee", LocationId = Valid GUID (Found in DB), Content = "Hello", Media = empty/null, CancellationToken = Active, Transaction = empty/null.
+    /// Confirm: ForbiddenException ("Role 'TRAINEE' is not permitted to select PostType 'FindTrainee'").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenTraineeSelectsFindTrainee_ThrowsForbiddenException()
     {
@@ -220,7 +256,7 @@ public class CreatePostServiceTests
         {
             PostType = "FindTrainee",
             LocationId = Guid.NewGuid(),
-            Content = "Looking for trainees"
+            Content = "Hello"
         };
 
         _userRepoMock.Setup(u => u.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
@@ -232,6 +268,12 @@ public class CreatePostServiceTests
         Assert.Contains("Role 'TRAINEE' is not permitted to select PostType 'FindTrainee'", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID07: Abnormal case - LocationId does not exist in database.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Non-existent GUID (Not found in DB), Content = "Hello", Media = empty/null, CancellationToken = Active, Transaction = empty/null.
+    /// Confirm: NotFoundException ("Selected location does not exist.").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenLocationDoesNotExist_ThrowsNotFoundException()
     {
@@ -243,7 +285,7 @@ public class CreatePostServiceTests
         {
             PostType = "Normal",
             LocationId = locationId,
-            Content = "Hello from unknown location"
+            Content = "Hello"
         };
 
         _userRepoMock.Setup(u => u.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
@@ -257,6 +299,12 @@ public class CreatePostServiceTests
         Assert.Contains($"Selected location with ID '{locationId}' does not exist.", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID08: Abnormal case - Media item has empty or whitespace MediaUrl.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = "Post with broken media", Media = Missing MediaUrl, CancellationToken = Active, Transaction = empty/null.
+    /// Confirm: ValidationException ("Media #1 is missing MediaUrl.").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenMediaUrlIsEmpty_ThrowsValidationException()
     {
@@ -287,6 +335,12 @@ public class CreatePostServiceTests
         Assert.Equal("Media #1 is missing MediaUrl.", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID09: Abnormal case - Database transaction commit fails and throws InvalidOperationException.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = "Hello", Media = empty/null, CancellationToken = Active, Transaction = Commit throws InvalidOperationException.
+    /// Confirm: InvalidOperationException ("Transaction commit failed").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenDatabaseCommitFails_RollsBackAndPropagatesException()
     {
@@ -299,7 +353,7 @@ public class CreatePostServiceTests
         {
             PostType = "Normal",
             LocationId = locationId,
-            Content = "Post causing db failure"
+            Content = "Hello"
         };
 
         _userRepoMock.Setup(u => u.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
@@ -317,6 +371,12 @@ public class CreatePostServiceTests
         _unitOfWorkMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID10: Abnormal case - CancellationToken is cancelled before execution.
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = "Hello", Media = empty/null, CancellationToken = Cancelled, Transaction = empty/null.
+    /// Confirm: OperationCanceledException.
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenCancellationTokenCancelled_ThrowsOperationCanceledException()
     {
@@ -338,6 +398,12 @@ public class CreatePostServiceTests
 
     #region Boundary Cases (B)
 
+    /// <summary>
+    /// UTCID11: Boundary case - LocationId is empty GUID (Guid.Empty).
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Guid.Empty, Content = "Hello", Media = empty/null, CancellationToken = Active, Transaction = empty/null.
+    /// Confirm: ValidationException ("Location is required and cannot be empty.").
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenLocationIdIsEmptyGuid_ThrowsValidationException()
     {
@@ -348,7 +414,7 @@ public class CreatePostServiceTests
         {
             PostType = "Normal",
             LocationId = Guid.Empty,
-            Content = "Post with empty location"
+            Content = "Hello"
         };
 
         _userRepoMock.Setup(u => u.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
@@ -360,6 +426,12 @@ public class CreatePostServiceTests
         Assert.Equal("Location is required and cannot be empty.", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID12: Boundary case - Neither text content nor media is provided (whitespace content and empty media list).
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = empty/null, Media = empty/null, CancellationToken = Active, Transaction = empty/null.
+    /// Confirm: ValidationException ("Post must contain text content or at least one image/video.").
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenNeitherContentNorMediaProvided_ThrowsValidationException()
     {
@@ -387,6 +459,12 @@ public class CreatePostServiceTests
         Assert.Equal("Post must contain text content or at least one image/video.", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID13: Boundary case - Media count exceeds maximum limit of 10 items (11 items provided).
+    /// Conditions: Precondition = Database connection is active, currentUserRole = "TRAINEE", IsLocked = false, PostType = "Normal", LocationId = Valid GUID (Found in DB), Content = "Hello", Media = 11 Media items, CancellationToken = Active, Transaction = empty/null.
+    /// Confirm: BusinessException ("A post can contain at most 10 media items").
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task CreatePostAsync_WhenMediaCountExceedsTen_ThrowsBusinessException()
     {
@@ -410,7 +488,7 @@ public class CreatePostServiceTests
         {
             PostType = "Normal",
             LocationId = locationId,
-            Content = "Post with 11 media items",
+            Content = "Hello",
             Media = elevenMediaItems
         };
 
@@ -427,4 +505,3 @@ public class CreatePostServiceTests
 
     #endregion
 }
-

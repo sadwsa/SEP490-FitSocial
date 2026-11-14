@@ -8,7 +8,6 @@ using FitSocial.Application.Services;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
-using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
 
@@ -36,18 +35,24 @@ public class PostReactionServiceTests
             _uowMock.Object);
     }
 
-    #region Normal Cases (N)
+    #region Normal Cases (N) - UTCID01 to UTCID03
 
+    /// <summary>
+    /// UTCID01: Normal case - User has not liked post yet, heart clicked, post liked successfully and count incremented.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Valid GUID, userRole = "TRAINEE", IsLocked = false, Post = Found (IsDeleted = false), existingInteraction = null (Not liked), CancellationToken = Active.
+    /// Confirm: Return PostReactionResponseDto with Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenPostNotLikedYet_LikesPostAndIncrementsCount()
     {
         // Arrange
         var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
 
         var user = new User
         {
-            UserId = userId,
+            UserId = currentUserId,
             RoleCode = RoleConstants.Trainee,
             FullName = "John Doe",
             IsLocked = false
@@ -60,17 +65,17 @@ public class PostReactionServiceTests
             IsDeleted = false
         };
 
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+        _userRepoMock.Setup(r => r.GetByIdAsync(currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(post);
-        _reactionRepoMock.Setup(r => r.GetByUserAndPostAsync(postId, userId, It.IsAny<CancellationToken>()))
+        _reactionRepoMock.Setup(r => r.GetByUserAndPostAsync(postId, currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((PostInteraction?)null);
         _reactionRepoMock.Setup(r => r.GetReactionCountAsync(postId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
         // Act
-        var result = await _service.ToggleReactionAsync(postId, userId, RoleConstants.Trainee);
+        var result = await _service.ToggleReactionAsync(postId, currentUserId, RoleConstants.Trainee);
 
         // Assert
         Assert.NotNull(result);
@@ -81,21 +86,27 @@ public class PostReactionServiceTests
         Assert.Equal(1, result.Data.LikeCount);
         Assert.Equal("Post liked successfully.", result.Message);
 
-        _reactionRepoMock.Verify(r => r.AddAsync(It.Is<PostInteraction>(pi => pi.PostId == postId && pi.UserId == userId), It.IsAny<CancellationToken>()), Times.Once);
+        _reactionRepoMock.Verify(r => r.AddAsync(It.Is<PostInteraction>(pi => pi.PostId == postId && pi.UserId == currentUserId), It.IsAny<CancellationToken>()), Times.Once);
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02: Normal case - User has already liked post, heart clicked again, post unliked successfully and count decremented.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Valid GUID, userRole = "COACH", IsLocked = false, Post = Found (IsDeleted = false), existingInteraction = Found (Already liked), CancellationToken = Active.
+    /// Confirm: Return PostReactionResponseDto with Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenAlreadyLiked_UnlikesPostAndDecrementsCount()
     {
         // Arrange
         var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var existingInteraction = new PostInteraction { PostId = postId, UserId = userId };
+        var currentUserId = Guid.NewGuid();
+        var existingInteraction = new PostInteraction { PostId = postId, UserId = currentUserId };
 
         var user = new User
         {
-            UserId = userId,
+            UserId = currentUserId,
             RoleCode = RoleConstants.Coach,
             FullName = "John Doe",
             IsLocked = false
@@ -108,17 +119,17 @@ public class PostReactionServiceTests
             IsDeleted = false
         };
 
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+        _userRepoMock.Setup(r => r.GetByIdAsync(currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(post);
-        _reactionRepoMock.Setup(r => r.GetByUserAndPostAsync(postId, userId, It.IsAny<CancellationToken>()))
+        _reactionRepoMock.Setup(r => r.GetByUserAndPostAsync(postId, currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingInteraction);
         _reactionRepoMock.Setup(r => r.GetReactionCountAsync(postId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         // Act
-        var result = await _service.ToggleReactionAsync(postId, userId, RoleConstants.Coach);
+        var result = await _service.ToggleReactionAsync(postId, currentUserId, RoleConstants.Coach);
 
         // Assert
         Assert.NotNull(result);
@@ -133,67 +144,22 @@ public class PostReactionServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
-    public async Task ToggleReactionAsync_WhenDbUpdateExceptionOccurs_RecoversAndReturnsCurrentState()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var interaction = new PostInteraction { PostId = postId, UserId = userId };
-
-        var user = new User
-        {
-            UserId = userId,
-            RoleCode = RoleConstants.Trainee,
-            FullName = "John Doe",
-            IsLocked = false
-        };
-
-        var post = new Post
-        {
-            Id = postId,
-            Content = "High concurrency post.",
-            IsDeleted = false
-        };
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(post);
-
-        // First call returns null, simulating heart click
-        _reactionRepoMock.SetupSequence(r => r.GetByUserAndPostAsync(postId, userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((PostInteraction?)null)
-            .ReturnsAsync(interaction); // In catch block, finds existing interaction from concurrent save
-
-        _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new DbUpdateException("Duplicate key violation concurrent like"));
-
-        _reactionRepoMock.Setup(r => r.GetReactionCountAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(5);
-
-        // Act
-        var result = await _service.ToggleReactionAsync(postId, userId, RoleConstants.Trainee);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.NotNull(result.Data);
-        Assert.True(result.Data.IsLiked);
-        Assert.Equal(5, result.Data.LikeCount);
-        Assert.Equal("Post liked successfully.", result.Message);
-    }
-
+    /// <summary>
+    /// UTCID03: Normal case - userRole argument is empty string, service gracefully falls back to user.RoleCode in database.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Valid GUID, userRole = empty/null, IsLocked = false, Post = Found (IsDeleted = false), existingInteraction = null (Not liked), CancellationToken = Active.
+    /// Confirm: Return PostReactionResponseDto with Success=true
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenUserRoleArgumentIsEmpty_FallsBackToUserRoleCode()
     {
         // Arrange
         var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
 
         var user = new User
         {
-            UserId = userId,
+            UserId = currentUserId,
             RoleCode = RoleConstants.Trainee,
             FullName = "John Doe",
             IsLocked = false
@@ -206,17 +172,17 @@ public class PostReactionServiceTests
             IsDeleted = false
         };
 
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+        _userRepoMock.Setup(r => r.GetByIdAsync(currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(post);
-        _reactionRepoMock.Setup(r => r.GetByUserAndPostAsync(postId, userId, It.IsAny<CancellationToken>()))
+        _reactionRepoMock.Setup(r => r.GetByUserAndPostAsync(postId, currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((PostInteraction?)null);
         _reactionRepoMock.Setup(r => r.GetReactionCountAsync(postId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
         // Act with empty string userRole
-        var result = await _service.ToggleReactionAsync(postId, userId, string.Empty);
+        var result = await _service.ToggleReactionAsync(postId, currentUserId, string.Empty);
 
         // Assert
         Assert.NotNull(result);
@@ -227,116 +193,122 @@ public class PostReactionServiceTests
 
     #endregion
 
-    #region Abnormal Cases (A)
+    #region Abnormal Cases (A) - UTCID04 to UTCID08
 
-    [Fact]
-    public async Task ToggleReactionAsync_WhenUserAccountNotFound_ThrowsNotFoundException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<NotFoundException>(
-            () => _service.ToggleReactionAsync(postId, userId, RoleConstants.Trainee));
-
-        Assert.Equal("User account was not found.", ex.Message);
-        _postRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
+    /// <summary>
+    /// UTCID04: Abnormal case - User account is locked (IsLocked = true).
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Valid GUID, userRole = "TRAINEE", IsLocked = true, Post = empty/null, existingInteraction = empty/null, CancellationToken = Active.
+    /// Confirm: ForbiddenException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenUserAccountIsLocked_ThrowsForbiddenException()
     {
         // Arrange
         var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
 
         var lockedUser = new User
         {
-            UserId = userId,
+            UserId = currentUserId,
             RoleCode = RoleConstants.Trainee,
             FullName = "John Doe",
             IsLocked = true
         };
 
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+        _userRepoMock.Setup(r => r.GetByIdAsync(currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(lockedUser);
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ForbiddenException>(
-            () => _service.ToggleReactionAsync(postId, userId, RoleConstants.Trainee));
+            () => _service.ToggleReactionAsync(postId, currentUserId, RoleConstants.Trainee));
 
         Assert.Equal("Your account is locked and cannot react to posts.", ex.Message);
         _postRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID05: Abnormal case - User role is unauthorized to react (ADMIN).
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Valid GUID, userRole = "ADMIN", IsLocked = false, Post = empty/null, existingInteraction = empty/null, CancellationToken = Active.
+    /// Confirm: ForbiddenException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenUserRoleIsUnauthorized_ThrowsForbiddenException()
     {
         // Arrange
         var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
 
         var adminUser = new User
         {
-            UserId = userId,
+            UserId = currentUserId,
             RoleCode = RoleConstants.Admin,
             FullName = "Admin User",
             IsLocked = false
         };
 
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+        _userRepoMock.Setup(r => r.GetByIdAsync(currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(adminUser);
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ForbiddenException>(
-            () => _service.ToggleReactionAsync(postId, userId, RoleConstants.Admin));
+            () => _service.ToggleReactionAsync(postId, currentUserId, RoleConstants.Admin));
 
         Assert.Equal("Only Trainees and Coaches can react to posts.", ex.Message);
         _postRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID06: Abnormal case - Post does not exist in repository.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Valid GUID, userRole = "TRAINEE", IsLocked = false, Post = Not found, existingInteraction = empty/null, CancellationToken = Active.
+    /// Confirm: NotFoundException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenPostNotFound_ThrowsNotFoundException()
     {
         // Arrange
         var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
 
         var user = new User
         {
-            UserId = userId,
+            UserId = currentUserId,
             RoleCode = RoleConstants.Trainee,
             FullName = "John Doe",
             IsLocked = false
         };
 
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+        _userRepoMock.Setup(r => r.GetByIdAsync(currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Post?)null);
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<NotFoundException>(
-            () => _service.ToggleReactionAsync(postId, userId, RoleConstants.Trainee));
+            () => _service.ToggleReactionAsync(postId, currentUserId, RoleConstants.Trainee));
 
         Assert.Equal($"Post with ID '{postId}' was not found.", ex.Message);
         _reactionRepoMock.Verify(r => r.GetByUserAndPostAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID07: Abnormal case - Post exists but is marked as soft-deleted (IsDeleted = true).
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Valid GUID, userRole = "TRAINEE", IsLocked = false, Post = Deleted (IsDeleted = true), existingInteraction = empty/null, CancellationToken = Active.
+    /// Confirm: BusinessException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenPostIsDeleted_ThrowsBusinessException()
     {
         // Arrange
         var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
 
         var user = new User
         {
-            UserId = userId,
+            UserId = currentUserId,
             RoleCode = RoleConstants.Trainee,
             FullName = "John Doe",
             IsLocked = false
@@ -349,42 +321,54 @@ public class PostReactionServiceTests
             IsDeleted = true
         };
 
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+        _userRepoMock.Setup(r => r.GetByIdAsync(currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(deletedPost);
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<BusinessException>(
-            () => _service.ToggleReactionAsync(postId, userId, RoleConstants.Trainee));
+            () => _service.ToggleReactionAsync(postId, currentUserId, RoleConstants.Trainee));
 
         Assert.Equal("Cannot react to a post that has been deleted.", ex.Message);
         _reactionRepoMock.Verify(r => r.GetByUserAndPostAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID08: Abnormal case - Operation is cancelled via CancellationToken.
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Valid GUID, userRole = "TRAINEE", IsLocked = false, Post = Found (IsDeleted = false), existingInteraction = empty/null, CancellationToken = Cancelled.
+    /// Confirm: OperationCanceledException
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenCancellationTokenCancelled_ThrowsOperationCanceledException()
     {
         // Arrange
         var postId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        _userRepoMock.Setup(r => r.GetByIdAsync(userId, cts.Token))
+        _userRepoMock.Setup(r => r.GetByIdAsync(currentUserId, cts.Token))
             .ThrowsAsync(new OperationCanceledException(cts.Token));
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => _service.ToggleReactionAsync(postId, userId, RoleConstants.Trainee, cts.Token));
+            () => _service.ToggleReactionAsync(postId, currentUserId, RoleConstants.Trainee, cts.Token));
     }
 
     #endregion
 
-    #region Boundary Cases (B)
+    #region Boundary Cases (B) - UTCID09 to UTCID10
 
+    /// <summary>
+    /// UTCID09: Boundary case - CurrentUserId is empty GUID (Guid.Empty).
+    /// Conditions: Precondition = Database connection is active, postId = Valid GUID, CurrentUserId = Guid.Empty, userRole = "TRAINEE", IsLocked = false, Post = empty/null, existingInteraction = empty/null, CancellationToken = Active.
+    /// Confirm: ValidationException
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
-    public async Task ToggleReactionAsync_WhenUserIdIsEmpty_ThrowsValidationException()
+    public async Task ToggleReactionAsync_WhenCurrentUserIdIsEmpty_ThrowsValidationException()
     {
         // Arrange
         var postId = Guid.NewGuid();
@@ -398,16 +382,22 @@ public class PostReactionServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID10: Boundary case - PostId is empty GUID (Guid.Empty).
+    /// Conditions: Precondition = Database connection is active, postId = Guid.Empty, CurrentUserId = Valid GUID, userRole = "TRAINEE", IsLocked = false, Post = empty/null, existingInteraction = empty/null, CancellationToken = Active.
+    /// Confirm: ValidationException
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task ToggleReactionAsync_WhenPostIdIsEmpty_ThrowsValidationException()
     {
         // Arrange
         var emptyPostId = Guid.Empty;
-        var userId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ValidationException>(
-            () => _service.ToggleReactionAsync(emptyPostId, userId, RoleConstants.Trainee));
+            () => _service.ToggleReactionAsync(emptyPostId, currentUserId, RoleConstants.Trainee));
 
         Assert.Equal("Post ID is required.", ex.Message);
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);

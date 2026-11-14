@@ -45,6 +45,21 @@ public class ProcessViolationReportServiceTests
 
     #region Normal Cases (N)
 
+    /// <summary>
+    /// UTCID01 - ProcessViolationReportAsync_WhenActionIsWarn_IncrementsWarningCountAndResolvesReport
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: "USER"
+    /// - Post: empty/null
+    /// - RoleCode: "USER"
+    /// - WarningCount: 0
+    /// - Action: "WARN"
+    /// - Reason: empty/null
+    /// Expected: Return ReportListItemDto with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenActionIsWarn_IncrementsWarningCountAndResolvesReport()
     {
@@ -101,6 +116,21 @@ public class ProcessViolationReportServiceTests
             notif.Type == "ViolationWarning"), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02 - ProcessViolationReportAsync_WhenActionIsLockForRepeatedViolation_LocksAccountAndResolvesReport
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: "USER"
+    /// - Post: empty/null
+    /// - RoleCode: "USER"
+    /// - WarningCount: 2
+    /// - Action: "LOCK"
+    /// - Reason: empty/null
+    /// Expected: Return ReportListItemDto with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenActionIsLockForRepeatedViolation_LocksAccountAndResolvesReport()
     {
@@ -155,6 +185,21 @@ public class ProcessViolationReportServiceTests
             notif.Type == "ViolationLock"), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03 - ProcessViolationReportAsync_WhenActionIsBlockForCoachWithSoldPackages_BlocksProfileWithoutLockingAccount
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: "USER"
+    /// - Post: empty/null
+    /// - RoleCode: "COACH (HasSoldPackages = true)"
+    /// - WarningCount: 2
+    /// - Action: "BLOCK"
+    /// - Reason: empty/null
+    /// Expected: Return ReportListItemDto with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenActionIsBlockForCoachWithSoldPackages_BlocksProfileWithoutLockingAccount()
     {
@@ -217,6 +262,21 @@ public class ProcessViolationReportServiceTests
             notif.Type == "ViolationBlock"), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID04 - ProcessViolationReportAsync_WhenActionIsDeletePost_SoftDeletesPostAndIncrementsWarningCount
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: "POST"
+    /// - Post: Found (IsDeleted = false)
+    /// - RoleCode: "USER"
+    /// - WarningCount: 1
+    /// - Action: "DELETE_POST"
+    /// - Reason: "Violates community guidelines"
+    /// Expected: Return ReportListItemDto with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenActionIsDeletePost_SoftDeletesPostAndIncrementsWarningCount()
     {
@@ -280,6 +340,21 @@ public class ProcessViolationReportServiceTests
             notif.Type == "ViolationPostDeleted"), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID05 - ProcessViolationReportAsync_WhenActionIsReject_MarksReportAsRejectedWithoutPenalizingUser
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: empty/null
+    /// - Post: empty/null
+    /// - RoleCode: empty/null
+    /// - WarningCount: empty/null
+    /// - Action: "REJECT"
+    /// - Reason: empty/null
+    /// Expected: Return ReportListItemDto with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenActionIsReject_MarksReportAsRejectedWithoutPenalizingUser()
     {
@@ -319,6 +394,21 @@ public class ProcessViolationReportServiceTests
 
     #region Abnormal Cases (A)
 
+    /// <summary>
+    /// UTCID06 - ProcessViolationReportAsync_WhenReportNotFound_ThrowsNotFoundException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: empty/null
+    /// - TargetType: empty/null
+    /// - Post: empty/null
+    /// - RoleCode: empty/null
+    /// - WarningCount: empty/null
+    /// - Action: "WARN"
+    /// - Reason: empty/null
+    /// Expected: NotFoundException: Report not found.
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenReportNotFound_ThrowsNotFoundException()
     {
@@ -342,6 +432,21 @@ public class ProcessViolationReportServiceTests
         _uowMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID07 - ProcessViolationReportAsync_WhenReportAlreadyProcessed_ThrowsBusinessException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "RESOLVED"
+    /// - TargetType: empty/null
+    /// - Post: empty/null
+    /// - RoleCode: empty/null
+    /// - WarningCount: empty/null
+    /// - Action: "WARN"
+    /// - Reason: empty/null
+    /// Expected: BusinessException: Report has already been processed with status 'RESOLVED'.
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenReportAlreadyProcessed_ThrowsBusinessException()
     {
@@ -371,6 +476,21 @@ public class ProcessViolationReportServiceTests
         _uowMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID08 - ProcessViolationReportAsync_WhenLockRequestedForLowViolationCount_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: "USER"
+    /// - Post: empty/null
+    /// - RoleCode: "USER"
+    /// - WarningCount: 1
+    /// - Action: "LOCK"
+    /// - Reason: empty/null
+    /// Expected: ValidationException: Action 'LOCK' is only allowed when user has more than 2 violations...
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenLockRequestedForLowViolationCount_ThrowsValidationException()
     {
@@ -412,6 +532,21 @@ public class ProcessViolationReportServiceTests
         _uowMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID09 - ProcessViolationReportAsync_WhenLockCoachWithSoldPackages_ThrowsBusinessException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: "USER"
+    /// - Post: empty/null
+    /// - RoleCode: "COACH (HasSoldPackages = true)"
+    /// - WarningCount: 2
+    /// - Action: "LOCK"
+    /// - Reason: empty/null
+    /// Expected: BusinessException: Cannot lock Coach account because this Coach has sold Training Packages...
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenLockCoachWithSoldPackages_ThrowsBusinessException()
     {
@@ -455,6 +590,21 @@ public class ProcessViolationReportServiceTests
         _uowMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID10 - ProcessViolationReportAsync_WhenDeletePostOnAlreadyDeletedPost_ThrowsBusinessException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: "POST"
+    /// - Post: Deleted (IsDeleted = true)
+    /// - RoleCode: empty/null
+    /// - WarningCount: empty/null
+    /// - Action: "DELETE_POST"
+    /// - Reason: "Violates community guidelines"
+    /// Expected: BusinessException: The reported post has already been deleted.
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenDeletePostOnAlreadyDeletedPost_ThrowsBusinessException()
     {
@@ -485,7 +635,7 @@ public class ProcessViolationReportServiceTests
         var request = new ProcessViolationReportRequestDto
         {
             Action = "DELETE_POST",
-            Reason = "Spam post"
+            Reason = "Violates community guidelines"
         };
 
         // Act & Assert
@@ -500,6 +650,21 @@ public class ProcessViolationReportServiceTests
 
     #region Boundary Cases (B)
 
+    /// <summary>
+    /// UTCID11 - ProcessViolationReportAsync_WhenActionIsEmpty_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: empty/null
+    /// - TargetType: empty/null
+    /// - Post: empty/null
+    /// - RoleCode: empty/null
+    /// - WarningCount: empty/null
+    /// - Action: " "
+    /// - Reason: empty/null
+    /// Expected: ValidationException: Action is required.
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenActionIsEmpty_ThrowsValidationException()
     {
@@ -520,6 +685,21 @@ public class ProcessViolationReportServiceTests
         _reportRepoMock.Verify(r => r.GetReportWithDetailsByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID12 - ProcessViolationReportAsync_WhenActionIsInvalid_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: empty/null
+    /// - Post: empty/null
+    /// - RoleCode: empty/null
+    /// - WarningCount: empty/null
+    /// - Action: "BAN_USER"
+    /// - Reason: empty/null
+    /// Expected: ValidationException: Invalid action 'BAN_USER'. Allowed actions are WARN, BLOCK, LOCK, DELETE_POST, REJECT, DISMISS.
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenActionIsInvalid_ThrowsValidationException()
     {
@@ -548,6 +728,21 @@ public class ProcessViolationReportServiceTests
         Assert.Equal("Invalid action 'BAN_USER'. Allowed actions are WARN, BLOCK, LOCK, DELETE_POST, REJECT, DISMISS.", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID13 - ProcessViolationReportAsync_WhenDeletePostReasonExceeds300Characters_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "PENDING"
+    /// - TargetType: "POST"
+    /// - Post: empty/null
+    /// - RoleCode: empty/null
+    /// - WarningCount: empty/null
+    /// - Action: "DELETE_POST"
+    /// - Reason: 301 characters
+    /// Expected: ValidationException: Deletion reason cannot exceed 300 characters.
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessViolationReportAsync_WhenDeletePostReasonExceeds300Characters_ThrowsValidationException()
     {
@@ -581,4 +776,3 @@ public class ProcessViolationReportServiceTests
 
     #endregion
 }
-

@@ -91,6 +91,20 @@ public class ProcessCoachCertificateServiceTests
         };
     }
 
+    #region Normal Cases (N)
+
+    /// <summary>
+    /// UTCID01 - ProcessCertificateAsync_ActionApprove_PendingCertificate_SuccessfullyApproves
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "APPROVE"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: empty/null
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionApprove_PendingCertificate_SuccessfullyApproves()
     {
@@ -129,6 +143,18 @@ public class ProcessCoachCertificateServiceTests
             x.ReferenceId == certId), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02 - ProcessCertificateAsync_ActionReject_ValidReason_SuccessfullyRejects
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "REJECT"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: "Certificate expired and illegible signature."
+    /// - CoachProfileCertificates: Other pending certificates exist in coach profile
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionReject_ValidReason_SuccessfullyRejects()
     {
@@ -181,6 +207,18 @@ public class ProcessCoachCertificateServiceTests
             x.ReferenceId == certId), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03 - ProcessCertificateAsync_ActionReject_AllCertsRejected_AutoRejectsCoachProfile
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "REJECT"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: "Invalid accreditation credentials."
+    /// - CoachProfileCertificates: All certificates of coach profile are rejected
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionReject_AllCertsRejected_AutoRejectsCoachProfile()
     {
@@ -226,6 +264,22 @@ public class ProcessCoachCertificateServiceTests
             x.Type == "COACH_APPLICATION_REJECTED"), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    #endregion
+
+    #region Boundary Cases (B)
+
+    /// <summary>
+    /// UTCID04 - ProcessCertificateAsync_ActionReject_ReasonAtMaxBoundary1000Chars_SuccessfullyRejects
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "REJECT"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: 1000 characters
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=true
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionReject_ReasonAtMaxBoundary1000Chars_SuccessfullyRejects()
     {
@@ -256,6 +310,18 @@ public class ProcessCoachCertificateServiceTests
         Assert.Equal(exactly1000Chars, cert.RejectedReason);
     }
 
+    /// <summary>
+    /// UTCID05 - ProcessCertificateAsync_ActionReject_ReasonExceeds1000Chars_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "REJECT"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: 1001 characters
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionReject_ReasonExceeds1000Chars_ReturnsFailResponse()
     {
@@ -284,6 +350,18 @@ public class ProcessCoachCertificateServiceTests
         _mockCertRepo.Verify(r => r.Update(It.IsAny<CoachCertificate>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID06 - ProcessCertificateAsync_ActionReject_WhitespaceReason_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "REJECT"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: "   "
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionReject_WhitespaceReason_ReturnsFailResponse()
     {
@@ -311,6 +389,18 @@ public class ProcessCoachCertificateServiceTests
         _mockCertRepo.Verify(r => r.Update(It.IsAny<CoachCertificate>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID07 - ProcessCertificateAsync_NullOrWhitespaceAction_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: empty/null
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: empty/null
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_NullOrWhitespaceAction_ReturnsFailResponse()
     {
@@ -332,6 +422,22 @@ public class ProcessCoachCertificateServiceTests
         _mockCertRepo.Verify(r => r.GetCertificateWithDetailsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    #endregion
+
+    #region Abnormal Cases (A)
+
+    /// <summary>
+    /// UTCID08 - ProcessCertificateAsync_InvalidAction_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "UNKNOWN_ACTION"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: empty/null
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_InvalidAction_ReturnsFailResponse()
     {
@@ -352,6 +458,18 @@ public class ProcessCoachCertificateServiceTests
         Assert.Contains("Invalid action 'UNKNOWN_ACTION'", result.Message);
     }
 
+    /// <summary>
+    /// UTCID09 - ProcessCertificateAsync_CertificateNotFound_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "APPROVE"
+    /// - Certificate: Not found
+    /// - Reason: empty/null
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_CertificateNotFound_ReturnsFailResponse()
     {
@@ -376,6 +494,18 @@ public class ProcessCoachCertificateServiceTests
         Assert.Equal("Certificate not found.", result.Message);
     }
 
+    /// <summary>
+    /// UTCID10 - ProcessCertificateAsync_ActionApprove_AlreadyApproved_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "APPROVE"
+    /// - Certificate: Found ("APPROVED")
+    /// - Reason: empty/null
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionApprove_AlreadyApproved_ReturnsFailResponse()
     {
@@ -401,6 +531,18 @@ public class ProcessCoachCertificateServiceTests
         Assert.Equal("Certificate has already been approved.", result.Message);
     }
 
+    /// <summary>
+    /// UTCID11 - ProcessCertificateAsync_ActionApprove_AlreadyRejected_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "APPROVE"
+    /// - Certificate: Found ("REJECTED")
+    /// - Reason: empty/null
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionApprove_AlreadyRejected_ReturnsFailResponse()
     {
@@ -426,6 +568,18 @@ public class ProcessCoachCertificateServiceTests
         Assert.Equal("Certificate has already been reviewed and rejected.", result.Message);
     }
 
+    /// <summary>
+    /// UTCID12 - ProcessCertificateAsync_ActionReject_InvalidCurrentStatus_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Action: "REJECT"
+    /// - Certificate: Found ("REVOKED")
+    /// - Reason: "Revoked certificate cannot be rejected."
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_ActionReject_InvalidCurrentStatus_ReturnsFailResponse()
     {
@@ -452,6 +606,18 @@ public class ProcessCoachCertificateServiceTests
         Assert.Equal("Certificate cannot be rejected from status 'REVOKED'.", result.Message);
     }
 
+    /// <summary>
+    /// UTCID13 - ProcessCertificateAsync_DatabaseExceptionOnSave_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection failure
+    /// - Action: "APPROVE"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: empty/null
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: Exception ("Database connection failure")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_DatabaseExceptionOnSave_ReturnsFailResponse()
     {
@@ -479,6 +645,18 @@ public class ProcessCoachCertificateServiceTests
         Assert.Contains("Database connection failure", result.Message);
     }
 
+    /// <summary>
+    /// UTCID14 - ProcessCertificateAsync_CancelledToken_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Cancelled token
+    /// - Action: "REJECT"
+    /// - Certificate: Found ("PENDING")
+    /// - Reason: "Cancelled operation"
+    /// - CoachProfileCertificates: empty/null
+    /// Expected: OperationCanceledException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessCertificateAsync_CancelledToken_ReturnsFailResponse()
     {
@@ -505,5 +683,6 @@ public class ProcessCoachCertificateServiceTests
         Assert.False(result.Success);
         Assert.Contains("Error rejecting certificate", result.Message);
     }
-}
 
+    #endregion
+}

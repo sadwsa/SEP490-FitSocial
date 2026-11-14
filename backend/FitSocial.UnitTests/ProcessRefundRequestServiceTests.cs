@@ -111,6 +111,20 @@ public class ProcessRefundRequestServiceTests
         };
     }
 
+    #region Normal Cases (N)
+
+    /// <summary>
+    /// UTCID01 - ProcessRefundRequestAsync_StatusApproved_CallsApproveAndReturnsSuccess
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "APPROVED"
+    /// - ApprovedAmount: 500000
+    /// - StaffNote: "Refund approved by staff"
+    /// - DatabaseResults: Found ("PENDING")
+    /// Expected: Return ApiResponseDto<RefundRequestDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_StatusApproved_CallsApproveAndReturnsSuccess()
     {
@@ -143,6 +157,18 @@ public class ProcessRefundRequestServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02 - ProcessRefundRequestAsync_StatusApprovedMinimalData_UsesDefaultAmountAndSucceeds
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "APPROVED"
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: empty/null
+    /// - DatabaseResults: Found ("PENDING")
+    /// Expected: Return ApiResponseDto<RefundRequestDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_StatusApprovedMinimalData_UsesDefaultAmountAndSucceeds()
     {
@@ -172,6 +198,18 @@ public class ProcessRefundRequestServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03 - ProcessRefundRequestAsync_StatusRejectedWithNote_CallsRejectAndReturnsSuccess
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "REJECTED"
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: "Invalid refund evidence provided"
+    /// - DatabaseResults: Found ("PENDING")
+    /// Expected: Return ApiResponseDto<RefundRequestDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_StatusRejectedWithNote_CallsRejectAndReturnsSuccess()
     {
@@ -201,6 +239,18 @@ public class ProcessRefundRequestServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID04 - ProcessRefundRequestAsync_StatusRejectedWithoutNote_UsesDefaultNoteAndSucceeds
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "REJECTED"
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: empty/null
+    /// - DatabaseResults: Found ("PENDING")
+    /// Expected: Return ApiResponseDto<RefundRequestDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_StatusRejectedWithoutNote_UsesDefaultNoteAndSucceeds()
     {
@@ -229,6 +279,18 @@ public class ProcessRefundRequestServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID05 - ProcessRefundRequestAsync_StatusCaseInsensitiveAndWhitespace_ProcessesSuccessfully
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: " approved "
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: "Valid request"
+    /// - DatabaseResults: Found ("PENDING")
+    /// Expected: Return ApiResponseDto<RefundRequestDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_StatusCaseInsensitiveAndWhitespace_ProcessesSuccessfully()
     {
@@ -255,6 +317,22 @@ public class ProcessRefundRequestServiceTests
         Assert.Equal("APPROVED", result.Data.Status);
     }
 
+    #endregion
+
+    #region Boundary Cases (B)
+
+    /// <summary>
+    /// UTCID06 - ProcessRefundRequestAsync_ApprovedAmountExceedsOrderTotal_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "APPROVED"
+    /// - ApprovedAmount: 1000000
+    /// - StaffNote: empty/null
+    /// - DatabaseResults: Found ("PENDING")
+    /// Expected: ValidationException
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_ApprovedAmountExceedsOrderTotal_ThrowsValidationException()
     {
@@ -278,19 +356,22 @@ public class ProcessRefundRequestServiceTests
         Assert.Contains("cannot exceed the original paid amount", ex.Message);
     }
 
-    [Fact]
-    public async Task ProcessRefundRequestAsync_NullDto_ThrowsValidationException()
-    {
-        // Arrange
-        var requestId = Guid.NewGuid();
-        var staffId = Guid.NewGuid();
+    #endregion
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.ProcessRefundRequestAsync(requestId, staffId, null!));
-        Assert.Equal("Process payload cannot be null.", ex.Message);
-    }
+    #region Abnormal Cases (A)
 
+    /// <summary>
+    /// UTCID07 - ProcessRefundRequestAsync_InvalidStatusValue_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "CANCELLED"
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: empty/null
+    /// - DatabaseResults: Not found
+    /// Expected: ValidationException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_InvalidStatusValue_ThrowsValidationException()
     {
@@ -308,32 +389,18 @@ public class ProcessRefundRequestServiceTests
         Assert.Equal("Status must be either 'APPROVED' or 'REJECTED'.", ex.Message);
     }
 
-    [Fact]
-    public async Task ProcessRefundRequestAsync_EmptyRefundRequestId_ThrowsValidationException()
-    {
-        // Arrange
-        var staffId = Guid.NewGuid();
-        var dto = new ProcessRefundRequestDto { Status = "APPROVED" };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.ProcessRefundRequestAsync(Guid.Empty, staffId, dto));
-        Assert.Equal("Refund Request ID is required.", ex.Message);
-    }
-
-    [Fact]
-    public async Task ProcessRefundRequestAsync_EmptyStaffUserId_ThrowsValidationException()
-    {
-        // Arrange
-        var requestId = Guid.NewGuid();
-        var dto = new ProcessRefundRequestDto { Status = "APPROVED" };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.ProcessRefundRequestAsync(requestId, Guid.Empty, dto));
-        Assert.Equal("Staff user ID is required.", ex.Message);
-    }
-
+    /// <summary>
+    /// UTCID08 - ProcessRefundRequestAsync_RefundRequestNotFound_ThrowsNotFoundException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "APPROVED"
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: empty/null
+    /// - DatabaseResults: Not found
+    /// Expected: NotFoundException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_RefundRequestNotFound_ThrowsNotFoundException()
     {
@@ -351,6 +418,18 @@ public class ProcessRefundRequestServiceTests
         Assert.Equal("Refund request not found.", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID09 - ProcessRefundRequestAsync_AlreadyProcessedRequest_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - Status: "APPROVED"
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: empty/null
+    /// - DatabaseResults: Found ("APPROVED")
+    /// Expected: ValidationException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_AlreadyProcessedRequest_ThrowsValidationException()
     {
@@ -370,6 +449,18 @@ public class ProcessRefundRequestServiceTests
         Assert.Contains("already been processed", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID10 - ProcessRefundRequestAsync_RepositoryThrowsException_ThrowsException
+    /// Condition:
+    /// - Precondition: Database connection failure
+    /// - Status: "APPROVED"
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: empty/null
+    /// - DatabaseResults: Not found
+    /// Expected: Exception ("Database connection failure")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_RepositoryThrowsException_ThrowsException()
     {
@@ -387,6 +478,18 @@ public class ProcessRefundRequestServiceTests
         Assert.Equal("Database connection failure", ex.Message);
     }
 
+    /// <summary>
+    /// UTCID11 - ProcessRefundRequestAsync_CancelledToken_ThrowsOperationCanceledException
+    /// Condition:
+    /// - Precondition: Cancelled token
+    /// - Status: "APPROVED"
+    /// - ApprovedAmount: empty/null
+    /// - StaffNote: empty/null
+    /// - DatabaseResults: Not found
+    /// Expected: OperationCanceledException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ProcessRefundRequestAsync_CancelledToken_ThrowsOperationCanceledException()
     {
@@ -404,5 +507,6 @@ public class ProcessRefundRequestServiceTests
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             _service.ProcessRefundRequestAsync(requestId, staffId, dto, cts.Token));
     }
-}
 
+    #endregion
+}

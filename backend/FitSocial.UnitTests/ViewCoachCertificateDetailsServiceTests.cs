@@ -82,6 +82,18 @@ public class ViewCoachCertificateDetailsServiceTests
         };
     }
 
+    #region Normal Cases (N)
+
+    /// <summary>
+    /// UTCID01 - GetCertificateByIdAsync_ApprovedCertificateWithFullDetails_ReturnsSuccessWithMappedDto
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - certificateId: Valid GUID
+    /// - Certificate: Found ("APPROVED")
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificateByIdAsync_ApprovedCertificateWithFullDetails_ReturnsSuccessWithMappedDto()
     {
@@ -112,6 +124,16 @@ public class ViewCoachCertificateDetailsServiceTests
         _mockCertRepo.Verify(r => r.GetCertificateWithDetailsAsync(certId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02 - GetCertificateByIdAsync_PendingCertificate_ReturnsSuccessWithPendingStatus
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - certificateId: Valid GUID
+    /// - Certificate: Found ("PENDING")
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificateByIdAsync_PendingCertificate_ReturnsSuccessWithPendingStatus()
     {
@@ -134,6 +156,16 @@ public class ViewCoachCertificateDetailsServiceTests
         Assert.Null(result.Data.VerifiedByName);
     }
 
+    /// <summary>
+    /// UTCID03 - GetCertificateByIdAsync_RejectedCertificate_ReturnsSuccessWithRejectedReason
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - certificateId: Valid GUID
+    /// - Certificate: Found ("REJECTED")
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificateByIdAsync_RejectedCertificate_ReturnsSuccessWithRejectedReason()
     {
@@ -159,6 +191,16 @@ public class ViewCoachCertificateDetailsServiceTests
         Assert.Equal("Admin Staff", result.Data.VerifiedByName);
     }
 
+    /// <summary>
+    /// UTCID04 - GetCertificateByIdAsync_WithNullCoachNavigation_ReturnsSuccessWithDefaultUnknownCoach
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - certificateId: Valid GUID
+    /// - Certificate: Found (Coach = empty/null)
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificateByIdAsync_WithNullCoachNavigation_ReturnsSuccessWithDefaultUnknownCoach()
     {
@@ -190,6 +232,20 @@ public class ViewCoachCertificateDetailsServiceTests
         Assert.Null(result.Data.CoachExperienceYears);
     }
 
+    #endregion
+
+    #region Boundary Cases (B)
+
+    /// <summary>
+    /// UTCID05 - GetCertificateByIdAsync_EmptyGuid_ReturnsCertificateNotFound
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - certificateId: Guid.Empty
+    /// - Certificate: Not found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificateByIdAsync_EmptyGuid_ReturnsCertificateNotFound()
     {
@@ -207,6 +263,20 @@ public class ViewCoachCertificateDetailsServiceTests
         Assert.Null(result.Data);
     }
 
+    #endregion
+
+    #region Abnormal Cases (A)
+
+    /// <summary>
+    /// UTCID06 - GetCertificateByIdAsync_CertificateNotFound_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - certificateId: Valid GUID
+    /// - Certificate: Not found
+    /// Expected: Return ApiResponseDto<CoachCertificateAdminDetailDto> with Success=false
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificateByIdAsync_CertificateNotFound_ReturnsFailResponse()
     {
@@ -225,6 +295,16 @@ public class ViewCoachCertificateDetailsServiceTests
         Assert.Null(result.Data);
     }
 
+    /// <summary>
+    /// UTCID07 - GetCertificateByIdAsync_RepositoryThrowsException_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Database connection failure
+    /// - certificateId: Valid GUID
+    /// - Certificate: Not found
+    /// Expected: Exception ("Database connection failure")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificateByIdAsync_RepositoryThrowsException_ReturnsFailResponse()
     {
@@ -242,6 +322,16 @@ public class ViewCoachCertificateDetailsServiceTests
         Assert.Contains("Database connection failure", result.Message);
     }
 
+    /// <summary>
+    /// UTCID08 - GetCertificateByIdAsync_CancelledToken_ReturnsFailResponse
+    /// Condition:
+    /// - Precondition: Cancelled token
+    /// - certificateId: Valid GUID
+    /// - Certificate: Not found
+    /// Expected: OperationCanceledException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task GetCertificateByIdAsync_CancelledToken_ReturnsFailResponse()
     {
@@ -261,5 +351,6 @@ public class ViewCoachCertificateDetailsServiceTests
         Assert.False(result.Success);
         Assert.Contains("Error retrieving certificate", result.Message);
     }
-}
 
+    #endregion
+}

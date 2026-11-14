@@ -11,6 +11,11 @@ public interface IReportService
         GetReportsQueryDto query,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseDto<PagedResultDto<ReportListItemDto>>> GetReportsAsync(
+        GetReportsQueryDto query,
+        Guid? currentUserId,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseDto<ReportListItemDto>> GetReportByIdAsync(
         Guid reportId,
         CancellationToken cancellationToken = default);

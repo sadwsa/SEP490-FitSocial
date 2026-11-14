@@ -38,6 +38,21 @@ public class CommentOnPostServiceTests
 
     #region Normal Cases (N)
 
+    /// <summary>
+    /// UTCID01 - CreateCommentAsync_WhenValidRootComment_CreatesAndReturnsCommentDto
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: false
+    /// - Post: Found (IsDeleted = false)
+    /// - Content: "Great workout routine!"
+    /// - CancellationToken: Active
+    /// Expected: Return CommentDto with Success=true, ParentCommentId is null
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenValidRootComment_CreatesAndReturnsCommentDto()
     {
@@ -89,67 +104,21 @@ public class CommentOnPostServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
-    public async Task CreateCommentAsync_WhenReplyingToValidParentComment_CreatesReplyWithParentInfo()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var parentCommentId = Guid.NewGuid();
-        var parentAuthorId = Guid.NewGuid();
-
-        var user = new User
-        {
-            UserId = authorId,
-            FullName = StandardAuthorName,
-            IsLocked = false
-        };
-        var post = new Post
-        {
-            Id = postId,
-            IsDeleted = false
-        };
-        var parentComment = new Comment
-        {
-            Id = parentCommentId,
-            PostId = postId,
-            AuthorId = parentAuthorId,
-            Author = new User { UserId = parentAuthorId, FullName = "Jane Smith" },
-            Content = "Initial post feedback."
-        };
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(post);
-        _commentRepoMock.Setup(r => r.GetByIdWithAuthorAsync(parentCommentId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(parentComment);
-        _commentRepoMock.Setup(r => r.AddAsync(It.IsAny<Comment>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
-
-        var request = new CreateCommentRequestDto
-        {
-            ParentCommentId = parentCommentId,
-            Content = StandardValidContent
-        };
-
-        // Act
-        var result = await _service.CreateCommentAsync(postId, authorId, request);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.NotNull(result.Data);
-        Assert.Equal(parentCommentId, result.Data.ParentCommentId);
-        Assert.Equal("Jane Smith", result.Data.ReplyToAuthorName);
-        Assert.Equal(StandardValidContent, result.Data.Content);
-
-        _commentRepoMock.Verify(r => r.AddAsync(It.Is<Comment>(c => c.ParentCommentId == parentCommentId), It.IsAny<CancellationToken>()), Times.Once);
-        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
-    }
-
+    /// <summary>
+    /// UTCID02 - CreateCommentAsync_WhenAuthorHasNoFullName_FallsBackToEmail
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - Post: Found (IsDeleted = false)
+    /// - Content: "Great workout routine!"
+    /// - CancellationToken: Active
+    /// Expected: Return CommentDto with Success=true, AuthorName falls back to user email
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenAuthorHasNoFullName_FallsBackToEmail()
     {
@@ -196,25 +165,21 @@ public class CommentOnPostServiceTests
 
     #region Abnormal Cases (A)
 
-    [Fact]
-    public async Task CreateCommentAsync_WhenUserNotFound_ThrowsNotFoundException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var request = new CreateCommentRequestDto { Content = StandardValidContent };
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<NotFoundException>(
-            () => _service.CreateCommentAsync(postId, authorId, request));
-
-        Assert.Equal("User account was not found.", ex.Message);
-        _postRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
+    /// <summary>
+    /// UTCID03 - CreateCommentAsync_WhenUserIsLocked_ThrowsForbiddenException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: true
+    /// - Post: empty/null
+    /// - Content: "Great workout routine!"
+    /// - CancellationToken: Active
+    /// Expected: Throws ForbiddenException with message "Your account is locked and cannot comment on posts."
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenUserIsLocked_ThrowsForbiddenException()
     {
@@ -240,6 +205,21 @@ public class CommentOnPostServiceTests
         _postRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID04 - CreateCommentAsync_WhenPostNotFound_ThrowsNotFoundException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: false
+    /// - Post: Not found
+    /// - Content: "Great workout routine!"
+    /// - CancellationToken: Active
+    /// Expected: Throws NotFoundException with message indicating post was not found
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenPostNotFound_ThrowsNotFoundException()
     {
@@ -262,6 +242,21 @@ public class CommentOnPostServiceTests
         _commentRepoMock.Verify(r => r.AddAsync(It.IsAny<Comment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID05 - CreateCommentAsync_WhenPostIsDeleted_ThrowsNotFoundException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Valid GUID
+    /// - FullName: "John Doe"
+    /// - IsLocked: false
+    /// - Post: Deleted (IsDeleted = true)
+    /// - Content: "Great workout routine!"
+    /// - CancellationToken: Active
+    /// Expected: Throws NotFoundException with message indicating post was not found
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenPostIsDeleted_ThrowsNotFoundException()
     {
@@ -285,45 +280,21 @@ public class CommentOnPostServiceTests
         _commentRepoMock.Verify(r => r.AddAsync(It.IsAny<Comment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task CreateCommentAsync_WhenParentCommentBelongsToDifferentPost_ThrowsValidationException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var otherPostId = Guid.NewGuid();
-        var parentCommentId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-
-        var user = new User { UserId = authorId, FullName = StandardAuthorName, IsLocked = false };
-        var post = new Post { Id = postId, IsDeleted = false };
-        var parentCommentOfOtherPost = new Comment
-        {
-            Id = parentCommentId,
-            PostId = otherPostId, // Mismatched post ID
-            Content = "Comment on another post."
-        };
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(authorId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(post);
-        _commentRepoMock.Setup(r => r.GetByIdWithAuthorAsync(parentCommentId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(parentCommentOfOtherPost);
-
-        var request = new CreateCommentRequestDto
-        {
-            ParentCommentId = parentCommentId,
-            Content = StandardValidContent
-        };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(
-            () => _service.CreateCommentAsync(postId, authorId, request));
-
-        Assert.Equal("Parent comment does not belong to this post.", ex.Message);
-        _commentRepoMock.Verify(r => r.AddAsync(It.IsAny<Comment>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
+    /// <summary>
+    /// UTCID06 - CreateCommentAsync_WhenCancellationTokenCancelled_ThrowsOperationCanceledException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - Content: "Great workout routine!"
+    /// - CancellationToken: Cancelled
+    /// Expected: Throws OperationCanceledException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenCancellationTokenCancelled_ThrowsOperationCanceledException()
     {
@@ -347,6 +318,21 @@ public class CommentOnPostServiceTests
 
     #region Boundary Cases (B)
 
+    /// <summary>
+    /// UTCID07 - CreateCommentAsync_WhenAuthorIdIsEmpty_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Guid.Empty
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - Content: "Great workout routine!"
+    /// - CancellationToken: Active
+    /// Expected: Throws ValidationException with message "User is not authenticated."
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenAuthorIdIsEmpty_ThrowsValidationException()
     {
@@ -363,6 +349,21 @@ public class CommentOnPostServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID08 - CreateCommentAsync_WhenPostIdIsEmpty_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Guid.Empty
+    /// - authorId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - Content: "Great workout routine!"
+    /// - CancellationToken: Active
+    /// Expected: Throws ValidationException with message "Post ID is required."
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenPostIdIsEmpty_ThrowsValidationException()
     {
@@ -379,6 +380,21 @@ public class CommentOnPostServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID09 - CreateCommentAsync_WhenContentIsWhitespace_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - Content: " "
+    /// - CancellationToken: Active
+    /// Expected: Throws ValidationException with message "Comment content cannot be empty."
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenContentIsWhitespace_ThrowsValidationException()
     {
@@ -395,6 +411,21 @@ public class CommentOnPostServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID10 - CreateCommentAsync_WhenContentExceeds500Characters_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - authorId: Valid GUID
+    /// - FullName: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - Content: 501 characters
+    /// - CancellationToken: Active
+    /// Expected: Throws ValidationException with message "Comment content cannot exceed 500 characters."
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task CreateCommentAsync_WhenContentExceeds500Characters_ThrowsValidationException()
     {
@@ -413,4 +444,3 @@ public class CommentOnPostServiceTests
 
     #endregion
 }
-

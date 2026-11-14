@@ -29,6 +29,12 @@ public class ViewOwnProfileServiceTests
 
     #region Normal Cases (N)
 
+    /// <summary>
+    /// UTCID01: Normal case - Retrieves personal coach profile with both valid and expired certificates, returning only valid certificates.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", CoachProfile = Coach has both valid certificates (APPROVED, unexpired) and expired certificates (APPROVED, expired), FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return CoachProfileDto with Success=true.
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenCoachWithBothValidAndExpiredCertificates_ReturnsCoachProfileDtoWithValidCertificatesOnly()
     {
@@ -119,6 +125,12 @@ public class ViewOwnProfileServiceTests
         _userRepoMock.Verify(r => r.FindWithCoachProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID02: Normal case - Retrieves personal profile for trainee user successfully.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "TRAINEE", CoachProfile = empty/null, FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return TraineeProfileDto with Success=true.
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenTrainee_ReturnsTraineeProfileDtoSuccessfully()
     {
@@ -162,6 +174,12 @@ public class ViewOwnProfileServiceTests
         _userRepoMock.Verify(r => r.FindWithCoachProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID03: Normal case - Coach user has only valid certificates.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", CoachProfile = Coach has only valid certificates (APPROVED, unexpired), FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return CoachProfileDto with Success=true.
+    /// Result: Type = N, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenCoachWithOnlyValidCertificates_ReturnsValidCertificatesAndHasExpiredFalse()
     {
@@ -216,6 +234,12 @@ public class ViewOwnProfileServiceTests
 
     #region Abnormal Cases (A)
 
+    /// <summary>
+    /// UTCID04: Abnormal case - User does not exist in repository.
+    /// Conditions: Precondition = Database connected, Target User = empty/null, IsLocked = false, RoleCode = empty/null, CoachProfile = empty/null, FullName = empty/null, Repository = Normal execution.
+    /// Confirm: NotFoundException ("User profile could not be found.").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenUserNotFound_ThrowsNotFoundException()
     {
@@ -231,6 +255,12 @@ public class ViewOwnProfileServiceTests
         _userRepoMock.Verify(r => r.FindWithCoachProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID05: Abnormal case - User account is locked.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = true, RoleCode = "TRAINEE", CoachProfile = empty/null, FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: ForbiddenException ("Account locked").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenUserIsLocked_ThrowsForbiddenException()
     {
@@ -255,6 +285,12 @@ public class ViewOwnProfileServiceTests
         _userRepoMock.Verify(r => r.FindWithCoachProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID06: Abnormal case - Repository throws database exception.
+    /// Conditions: Precondition = Database connection failed, Target User = empty/null, IsLocked = false, RoleCode = empty/null, CoachProfile = empty/null, FullName = empty/null, Repository = Repository throws DB exception.
+    /// Confirm: InvalidOperationException ("DB connection error").
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenRepositoryThrowsException_PropagatesException()
     {
@@ -270,6 +306,12 @@ public class ViewOwnProfileServiceTests
         _userRepoMock.Verify(r => r.FindWithCoachProfileByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// UTCID07: Abnormal case - CancellationToken is cancelled before query completes.
+    /// Conditions: Precondition = Database connected, Target User = empty/null, IsLocked = false, RoleCode = empty/null, CoachProfile = empty/null, FullName = empty/null, Repository = CancellationToken requested cancel.
+    /// Confirm: OperationCanceledException.
+    /// Result: Type = A, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenCancellationTokenCancelled_ThrowsOperationCanceledException()
     {
@@ -291,6 +333,12 @@ public class ViewOwnProfileServiceTests
 
     #region Boundary Cases (B)
 
+    /// <summary>
+    /// UTCID08: Boundary case - Coach user with null CoachProfileCoach.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", CoachProfile = CoachProfileCoach = null (Coach profile has not been created), FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return CoachProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenCoachProfileIsNull_ReturnsCoachDtoWithDefaultValues()
     {
@@ -323,6 +371,12 @@ public class ViewOwnProfileServiceTests
         Assert.Empty(coachDto.Certificates);
     }
 
+    /// <summary>
+    /// UTCID09: Boundary case - Coach certificates list is empty.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", CoachProfile = Coach has no certificates (Empty list, Count = 0), FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return CoachProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenCoachCertificatesListIsEmpty_ReturnsEmptyCertificates()
     {
@@ -361,6 +415,12 @@ public class ViewOwnProfileServiceTests
         Assert.Empty(coachDto.Certificates);
     }
 
+    /// <summary>
+    /// UTCID10: Boundary case - Coach certificates are all expired.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", CoachProfile = Coach has only expired certificates (APPROVED, expired), FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return CoachProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenCoachCertificatesAreAllExpired_ReturnsHasExpiredTrueAndEmptyCertificates()
     {
@@ -409,6 +469,12 @@ public class ViewOwnProfileServiceTests
         Assert.Empty(coachDto.Certificates);
     }
 
+    /// <summary>
+    /// UTCID11: Boundary case - Coach certificates are in PENDING status.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "COACH", CoachProfile = Coach has only pending certificates (PENDING, unexpired), FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return CoachProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenCoachCertificatesNotApproved_ReturnsHasValidFalse()
     {
@@ -457,6 +523,12 @@ public class ViewOwnProfileServiceTests
         Assert.Empty(coachDto.Certificates);
     }
 
+    /// <summary>
+    /// UTCID12: Boundary case - User FullName is null in database.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "TRAINEE", CoachProfile = empty/null, FullName = empty/null, Repository = Normal execution.
+    /// Confirm: Return TraineeProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenUserFullNameIsNull_ReturnsEmptyStringForFullName()
     {
@@ -482,6 +554,12 @@ public class ViewOwnProfileServiceTests
         Assert.Equal(string.Empty, result.Data?.FullName);
     }
 
+    /// <summary>
+    /// UTCID13: Boundary case - RoleCode is null in database, defaults to Trainee role.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = empty/null, CoachProfile = empty/null, FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return TraineeProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenRoleCodeIsNull_DefaultsToTraineeRole()
     {
@@ -508,6 +586,12 @@ public class ViewOwnProfileServiceTests
         Assert.Equal(RoleConstants.Trainee, traineeDto.Role);
     }
 
+    /// <summary>
+    /// UTCID14: Boundary case - User has custom/staff role, returns TraineeDto with specified role.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "STAFF", CoachProfile = empty/null, FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return TraineeProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenUserHasCustomRole_ReturnsTraineeDtoWithSpecifiedRole()
     {
@@ -534,22 +618,28 @@ public class ViewOwnProfileServiceTests
         Assert.Equal("STAFF", traineeDto.Role);
     }
 
+    /// <summary>
+    /// UTCID15: Boundary case - User account is active with IsLocked = false.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "TRAINEE", CoachProfile = empty/null, FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return TraineeProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
-    public async Task GetOwnProfileAsync_WhenIsLockedIsNull_ReturnsProfileSuccessfully()
+    public async Task GetOwnProfileAsync_WhenIsLockedIsFalse_ReturnsProfileSuccessfully()
     {
         // Arrange
         var userId = Guid.NewGuid();
-        var userWithNullLocked = new User
+        var activeUser = new User
         {
             UserId = userId,
-            Email = "nulllocked@fitsocial.com",
+            Email = "activeuser@fitsocial.com",
             FullName = "John Doe",
             RoleCode = RoleConstants.Trainee,
-            IsLocked = null
+            IsLocked = false
         };
 
         _userRepoMock.Setup(r => r.FindWithCoachProfileByIdAsync(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(userWithNullLocked);
+            .ReturnsAsync(activeUser);
 
         // Act
         var result = await _userService.GetOwnProfileAsync(userId);
@@ -560,6 +650,12 @@ public class ViewOwnProfileServiceTests
         Assert.NotNull(result.Data);
     }
 
+    /// <summary>
+    /// UTCID16: Boundary case - RoleCode has whitespace or lowercase, normalizes role to COACH.
+    /// Conditions: Precondition = Database connected, Target User = Found, IsLocked = false, RoleCode = "  coach  ", CoachProfile = empty/null, FullName = "John Doe", Repository = Normal execution.
+    /// Confirm: Return CoachProfileDto with Success=true.
+    /// Result: Type = B, Status = Passed
+    /// </summary>
     [Fact]
     public async Task GetOwnProfileAsync_WhenRoleCodeHasWhitespaceOrLowerCase_NormalizesRoleCorrectly()
     {

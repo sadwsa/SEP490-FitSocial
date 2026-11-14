@@ -20,9 +20,9 @@ namespace FitSocial.API.Controllers;
 public class ReportsController : ControllerBase
 {
     private readonly IReportService _reportService;
-    private readonly CloudinaryImageService _imageService;
+    private readonly CloudinaryImageService? _imageService;
 
-    public ReportsController(IReportService reportService, CloudinaryImageService imageService)
+    public ReportsController(IReportService reportService, CloudinaryImageService? imageService = null)
     {
         _reportService = reportService;
         _imageService = imageService;
@@ -39,7 +39,11 @@ public class ReportsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetReports([FromQuery] GetReportsQueryDto query, CancellationToken cancellationToken = default)
     {
-        var result = await _reportService.GetReportsAsync(query, cancellationToken);
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+        Guid? currentUserId = Guid.TryParse(userIdStr, out var uId) ? uId : null;
+
+        var result = await _reportService.GetReportsAsync(query, currentUserId, cancellationToken);
         if (!result.Success)
         {
             return BadRequest(result);

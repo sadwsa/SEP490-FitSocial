@@ -30,11 +30,18 @@ public class CoachTrainingPlansController : ControllerBase
     public CoachTrainingPlansController(
         ITrainingPlanService trainingPlanService,
         ITransactionService transactionService,
-        ILogger<CoachTrainingPlansController> logger)
+        ILogger<CoachTrainingPlansController>? logger = null)
     {
         _trainingPlanService = trainingPlanService;
         _transactionService = transactionService;
-        _logger = logger;
+        _logger = logger!;
+    }
+
+    public CoachTrainingPlansController(
+        ITrainingPlanService trainingPlanService,
+        ILogger<CoachTrainingPlansController> logger)
+        : this(trainingPlanService, null!, logger)
+    {
     }
 
     /// <summary>

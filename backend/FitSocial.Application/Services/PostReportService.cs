@@ -130,8 +130,6 @@ public class PostReportService : IPostReportService
             report.Type = request.Type.Trim();
         }
 
-
-
         await _reportRepository.AddAsync(report, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -147,7 +145,7 @@ public class PostReportService : IPostReportService
             Description = report.Description,
             Type = report.Type,
             Status = report.Status ?? string.Empty,
-            MediaUrls = report.ReportMedia.Select(m => m.MediaUrl ?? string.Empty).Where(u => !string.IsNullOrEmpty(u)).ToList(),
+            MediaUrls = new List<string>(),
             CreatedAt = report.CreatedAt
         };
 

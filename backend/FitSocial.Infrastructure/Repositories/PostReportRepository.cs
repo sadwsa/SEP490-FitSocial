@@ -23,6 +23,8 @@ public class PostReportRepository : Repository<Report>, IPostReportRepository
     public async Task<bool> HasActiveReportAsync(Guid postId, Guid reporterId, CancellationToken cancellationToken = default)
     {
         var pendingStatus = ReportStatus.Pending.ToString();
+
+        // AnyAsync = Exists check, returns true if any report matches the criteria
         return await DbSet.AnyAsync(r =>
             r.ReportedPostId == postId &&
             r.ReporterId == reporterId &&

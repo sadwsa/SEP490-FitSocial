@@ -161,6 +161,8 @@ public class PostRepository : Repository<Post>, IPostRepository
                 .ThenByDescending(p => p.Id);
         }
 
+        //Check xem có cần ghim bài viết vừa tạo không
+
         // Feed Session Snapshot Ranking:
         // When sessionId is provided, freeze the ranking for the session
         // so real-time interaction changes (likes/comments) do not shift posts between pages.
@@ -196,16 +198,17 @@ public class PostRepository : Repository<Post>, IPostRepository
             var normalizedSortBy = !string.IsNullOrWhiteSpace(sortBy) ? sortBy.Trim().ToLowerInvariant() : "hot";
             var normalizedSearch = !string.IsNullOrWhiteSpace(searchTerm) ? searchTerm.Trim() : null;
 
+            // Kiểm tra xem có snapshot cache không
             if (_memoryCache.TryGetValue(cacheKey, out FeedSessionSnapshot? snapshot) && snapshot != null)
             {
-                // Validate Session Ownership
+                // Đảm bảo snapshot id khớp với người dùng hiện tại
                 if (snapshot.UserId != validUserId)
                 {
                     throw new ForbiddenException(
                         "Feed session ownership mismatch. You cannot access a feed session established by another user.");
                 }
 
-                // Validate Query Parameter Consistency
+                // So sánh thông tin request hiện tại với thông tin đã lưu trong snapshot 
                 var sameType = string.Equals(snapshot.PostType, normalizedType, StringComparison.OrdinalIgnoreCase);
                 var sameLoc = snapshot.LocationId == locationId;
                 var sameAuthor = snapshot.AuthorId == authorId;
@@ -221,19 +224,20 @@ public class PostRepository : Repository<Post>, IPostRepository
             }
             else
             {
-                // Cache Entry Missing / Expired
+                // Nếu đang ở trang 2 trở lên, nhưng chưa có snapshot cache, thì báo lỗi
                 if (pageNumber > 1)
                 {
-                    // CRITICAL: Do NOT silently recalculate a new snapshot for page > 1!
+                    
                     throw new SessionExpiredException("Feed session has expired. Please refresh your feed.");
                 }
 
-                // pageNumber == 1: Create a brand new session snapshot
+                // Nêuu đang ở trang 1, thì tạo snapshot cache mới, lấy 1k bài viết đầu tiên sort theo sortBy, lưu vào cache
                 var postIds = await orderedQuery
                     .Select(p => p.Id)
-                    .Take(1000) // Cache safety cap
+                    .Take(1000) 
                     .ToListAsync(cancellationToken);
 
+                //Check xem có bài viết ưu tiên nào không
                 if (effectivePrioritizedPostId.HasValue && effectivePrioritizedPostId.Value != Guid.Empty)
                 {
                     var targetId = effectivePrioritizedPostId.Value;
@@ -254,6 +258,7 @@ public class PostRepository : Repository<Post>, IPostRepository
                         })
                         .FirstOrDefaultAsync(cancellationToken);
 
+                    // Nếu bài viết ưu tiên tồn tại và phù hợp với các tiêu chí lọc, thì thêm vào đầu danh sách
                     if (candidate != null)
                     {
                         bool matchesType = string.IsNullOrWhiteSpace(normalizedType) ||
@@ -268,6 +273,7 @@ public class PostRepository : Repository<Post>, IPostRepository
                         bool matchesSearch = string.IsNullOrWhiteSpace(searchTerm) ||
                             (candidate.Content != null && candidate.Content.Contains(searchTerm.Trim(), StringComparison.OrdinalIgnoreCase));
 
+                        // Nếu bài viết ưu tiên phù hợp với các tiêu chí lọc, thì thêm vào đầu danh sách
                         if (matchesType && matchesLoc && matchesAuthor && matchesSearch)
                         {
                             postIds.Remove(candidate.Id);
@@ -292,11 +298,14 @@ public class PostRepository : Repository<Post>, IPostRepository
 
                 _memoryCache.Set(cacheKey, snapshot, new MemoryCacheEntryOptions
                 {
+                    // Mỗi lận cuộn trang sẽ gian hạn thêm 20p
                     SlidingExpiration = TimeSpan.FromMinutes(20),
+                    // Giới hạn thời gian tồn tại tối đa là 1h
                     AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
                 });
             }
 
+            // Lấy danh sách snapshot và phân trang theo pageNumber và pageSize
             var cachedIds = snapshot.PostIds;
             var totalCount = cachedIds.Count;
             var pageIds = cachedIds.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList();
@@ -305,6 +314,7 @@ public class PostRepository : Repository<Post>, IPostRepository
                 return (new List<Post>(), totalCount);
             }
 
+            // Lấy dữ liệu bài viết từ cơ sở dữ liệu dựa trên danh sách id đã phân trang
             var posts = await DbSet.AsNoTracking()
                 .Where(p => pageIds.Contains(p.Id) && (p.IsDeleted == null || p.IsDeleted == false))
                 .Include(p => p.Author)
@@ -312,10 +322,10 @@ public class PostRepository : Repository<Post>, IPostRepository
                 .Include(p => p.PostMedia)
                 .Include(p => p.PostInteractions)
                 .Include(p => p.Comments)
-                .AsSplitQuery()
+                .AsSplitQuery() //tách thành nhiều truy vấn cho từng bảng liên quan
                 .ToListAsync(cancellationToken);
 
-            // Reorder posts strictly according to the session snapshot's frozen pageIds
+            // Chuyển đổi danh sách bài viết thành Dictionary để truy xuất theo id 
             var postDict = posts.ToDictionary(p => p.Id);
             var orderedItems = new List<Post>(pageIds.Count);
             foreach (var id in pageIds)
@@ -329,11 +339,13 @@ public class PostRepository : Repository<Post>, IPostRepository
             return (orderedItems, totalCount);
         }
 
-        // Standard non-snapshot pagination fallback (for callers without sessionId or when cache is unavailable)
+        // Đếm số lượng bài viết theo các điều kiện loc và tìm kiếm
         var unCachedTotalCount = await query.CountAsync(cancellationToken);
 
         var items = await orderedQuery
+            // Bỏ qua các bài viết của trang trước
             .Skip((pageNumber - 1) * pageSize)
+            // Lấy số lượng bài viết theo pageSize
             .Take(pageSize)
             .Include(p => p.Author)
             .Include(p => p.Location)
@@ -343,14 +355,22 @@ public class PostRepository : Repository<Post>, IPostRepository
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
+        // Nếu có bài viết ưu tiên, nếu hợp lệ thì đưa bài viết ưu tiên lên đầu danh sách
         if (pageNumber == 1 && currentUserId.HasValue && effectivePrioritizedPostId.HasValue && effectivePrioritizedPostId.Value != Guid.Empty)
         {
             var targetId = effectivePrioritizedPostId.Value;
+
+            // Kiểm tra xem bài viết ưu tiên có tồn tại trong danh sách bài viết đã lấy hay không (15p)
             var fifteenMinutesAgo = (asOf ?? DateTime.UtcNow).AddMinutes(-15);
+            
+            // Tìm bài viết trong List items nếu thầy trả về vị trí, nếu không thấy trả về -1
             var existingIndex = items.FindIndex(p => p.Id == targetId);
+
+            // Bài viết ưu tiên nằm trong trang 1
             if (existingIndex > 0)
             {
                 var targetPost = items[existingIndex];
+                // Kiểm tra tính hợp lệ của bài viết ưu tiên
                 if (targetPost.AuthorId == currentUserId.Value &&
                     targetPost.CreatedAt != null &&
                     targetPost.CreatedAt >= fifteenMinutesAgo &&
@@ -378,6 +398,7 @@ public class PostRepository : Repository<Post>, IPostRepository
 
                 if (candidate != null)
                 {
+                    // Kiểm tra tính hợp lệ của bài viết ưu tiên dựa trên các tiêu chí lọc 
                     bool matchesType = string.IsNullOrWhiteSpace(normalizedType) ||
                         string.Equals(candidate.PostType?.Trim(), normalizedType, StringComparison.OrdinalIgnoreCase);
 

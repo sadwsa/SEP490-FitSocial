@@ -127,7 +127,10 @@ public class PostService : IPostService
             // 9.2. Remove requested media
             if (mediaToRemove.Count > 0)
             {
+                // Xóa ở DB
                 _posts.RemoveMediaRange(mediaToRemove);
+
+                // Xóa ở bộ nhớ cache 
                 foreach (var item in mediaToRemove)
                 {
                     post.PostMedia.Remove(item);

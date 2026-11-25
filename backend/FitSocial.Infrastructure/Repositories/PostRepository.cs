@@ -208,7 +208,7 @@ public class PostRepository : Repository<Post>, IPostRepository
                         "Feed session ownership mismatch. You cannot access a feed session established by another user.");
                 }
 
-                // So sánh dữ liệu lưu trữ trong snapshot so với request hiện tại
+                // So sánh thông tin request hiện tại với thông tin đã lưu trong snapshot 
                 var sameType = string.Equals(snapshot.PostType, normalizedType, StringComparison.OrdinalIgnoreCase);
                 var sameLoc = snapshot.LocationId == locationId;
                 var sameAuthor = snapshot.AuthorId == authorId;
@@ -234,7 +234,7 @@ public class PostRepository : Repository<Post>, IPostRepository
                 // Nêuu đang ở trang 1, thì tạo snapshot cache mới, lấy 1k bài viết đầu tiên sort theo sortBy, lưu vào cache
                 var postIds = await orderedQuery
                     .Select(p => p.Id)
-                    .Take(1000) // Cache safety cap
+                    .Take(1000) 
                     .ToListAsync(cancellationToken);
 
                 //Check xem có bài viết ưu tiên nào không
@@ -362,6 +362,8 @@ public class PostRepository : Repository<Post>, IPostRepository
 
             // Kiểm tra xem bài viết ưu tiên có tồn tại trong danh sách bài viết đã lấy hay không (15p)
             var fifteenMinutesAgo = (asOf ?? DateTime.UtcNow).AddMinutes(-15);
+            
+            // Tìm bài viết trong List items nếu thầy trả về vị trí, nếu không thấy trả về -1
             var existingIndex = items.FindIndex(p => p.Id == targetId);
 
             // Bài viết ưu tiên nằm trong trang 1

@@ -71,25 +71,6 @@ public class ReportsController : ControllerBase
     }
 
     /// <summary>
-    /// Resolve or dismiss a report (Admin/Staff).
-    /// </summary>
-    [HttpPut("{id:guid}/resolve")]
-    [Authorize(Roles = $"{RoleConstants.Admin},{RoleConstants.Staff}")]
-    [ProducesResponseType(typeof(ApiResponseDto<ReportListItemDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ResolveReport(Guid id, [FromBody] ResolveReportRequestDto request, CancellationToken cancellationToken = default)
-    {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(userIdStr, out var staffId))
-        {
-            return Unauthorized(ApiResponseDto<ReportListItemDto>.Fail("Unauthorized"));
-        }
-
-        var result = await _reportService.ResolveReportAsync(id, staffId, request, cancellationToken);
-        return Ok(result);
-    }
-
-    /// <summary>
     /// Process a violation report with an action: WARN, BLOCK, LOCK, REJECT, or DISMISS (Admin/Staff).
     /// </summary>
     [HttpPost("{id:guid}/process")]

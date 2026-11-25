@@ -20,12 +20,6 @@ public interface IReportService
         Guid reportId,
         CancellationToken cancellationToken = default);
 
-    Task<ApiResponseDto<ReportListItemDto>> ResolveReportAsync(
-        Guid reportId,
-        Guid staffId,
-        ResolveReportRequestDto request,
-        CancellationToken cancellationToken = default);
-
     Task<ApiResponseDto<ReportListItemDto>> ProcessViolationReportAsync(
         Guid reportId,
         Guid staffId,

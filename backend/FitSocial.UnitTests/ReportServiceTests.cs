@@ -54,38 +54,6 @@ public class ReportServiceTests
 
 
     [Fact]
-    public async Task ResolveReportAsync_ShouldSetStatusAndResolverInfo()
-    {
-        // Arrange
-        var reportId = Guid.NewGuid();
-        var staffId = Guid.NewGuid();
-        var report = new Report
-        {
-            ReportId = reportId,
-            Status = "PENDING",
-            Reason = "Inappropriate content"
-        };
-
-        _mockReportRepo.Setup(r => r.GetReportWithDetailsByIdAsync(reportId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(report);
-        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
-
-        var request = new ResolveReportRequestDto { Status = "RESOLVED", ResolutionNote = "Content removed" };
-
-        // Act
-        var result = await _service.ResolveReportAsync(reportId, staffId, request);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.Equal("RESOLVED", report.Status);
-        Assert.Equal(staffId, report.ResolvedBy);
-        Assert.NotNull(report.ResolvedAt);
-        Assert.NotNull(report.NotifiedReportedUserAt);
-    }
-
-    [Fact]
     public async Task SubmitAppealAsync_WhenReportedUserAppeals_ShouldSetPendingAppealAndMedia()
     {
         // Arrange

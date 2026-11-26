@@ -79,7 +79,7 @@ public class BrowserTokenStorage : ITokenStorage
         }
         try
         {
-            return await _jsRuntime.InvokeAsync<T?>("fitSocialStorage.sessionGet", key);
+            return await _jsRuntime.InvokeAsync<T?>("fitConnectStorage.sessionGet", key);
         }
         catch (Exception ex)
         {
@@ -98,7 +98,7 @@ public class BrowserTokenStorage : ITokenStorage
         }
         try
         {
-            await _jsRuntime.InvokeVoidAsync("fitSocialStorage.sessionSet", key, value);
+            await _jsRuntime.InvokeVoidAsync("fitConnectStorage.sessionSet", key, value);
         }
         catch (Exception ex)
         {
@@ -119,7 +119,7 @@ public class BrowserTokenStorage : ITokenStorage
         }
         try
         {
-            await _jsRuntime.InvokeVoidAsync("fitSocialStorage.sessionRemove", key);
+            await _jsRuntime.InvokeVoidAsync("fitConnectStorage.sessionRemove", key);
         }
         catch (Exception ex)
         {

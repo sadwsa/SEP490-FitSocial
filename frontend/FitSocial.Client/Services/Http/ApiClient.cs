@@ -6,6 +6,7 @@ using Blazored.LocalStorage;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Services.Auth;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FitSocial.Client.Services.Http;
 
@@ -13,15 +14,15 @@ public class ApiClient
 {
     private readonly HttpClient _http;
     private readonly ITokenStorage _localStorage;
-    private readonly IAuthService _authService;
+    private readonly IServiceProvider _serviceProvider;
     private readonly NavigationManager _navigation;
     private const string AuthTokenKey = "authToken";
 
-    public ApiClient(HttpClient http, ITokenStorage localStorage, IAuthService authService, NavigationManager navigation)
+    public ApiClient(HttpClient http, ITokenStorage localStorage, IServiceProvider serviceProvider, NavigationManager navigation)
     {
         _http = http;
         _localStorage = localStorage;
-        _authService = authService;
+        _serviceProvider = serviceProvider;
         _navigation = navigation;
     }
 
@@ -108,8 +109,23 @@ public class ApiClient
         catch { }
     }
 
-    private static bool IsAuthEndpoint(string endpoint) =>
-        endpoint.StartsWith("auth/", StringComparison.OrdinalIgnoreCase);
+    private static bool ShouldSkipRefresh(string endpoint)
+    {
+        var path = endpoint.Split('?')[0].Trim().TrimStart('/');
+        return path.Equals("auth/login", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/admin-login", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/refresh", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/logout", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/register-trainee", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/google/code", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("ekyc/verify", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("ekyc/check-idcard", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("payments/coach-activation/prepare", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("payments/coach-activation/create-link", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("payments/coach-activation/complete", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("payments/coach-activation/cancel", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("payments/coach-activation/regenerate-by-email", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// On 401 tries one silent refresh (except for auth endpoints themselves),
@@ -117,14 +133,15 @@ public class ApiClient
     /// </summary>
     private async Task<bool> TryRefreshOnceAsync(string endpoint, HttpStatusCode status)
     {
-        if (status != HttpStatusCode.Unauthorized || IsAuthEndpoint(endpoint))
+        if (status != HttpStatusCode.Unauthorized || ShouldSkipRefresh(endpoint))
         {
             return false;
         }
 
         try
         {
-            var refreshed = await _authService.RefreshTokenAsync();
+            var authService = _serviceProvider.GetRequiredService<IAuthService>();
+            var refreshed = await authService.RefreshTokenAsync();
             if (!refreshed)
             {
                 RedirectToLogin();

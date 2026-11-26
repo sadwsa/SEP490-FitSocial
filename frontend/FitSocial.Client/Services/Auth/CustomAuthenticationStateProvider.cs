@@ -1,23 +1,23 @@
-using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
 using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FitSocial.Client.Services.Auth;
 
 public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 {
     private readonly ITokenStorage _localStorage;
-    private readonly HttpClient _http;
+    private readonly IServiceProvider _serviceProvider;
     private static readonly ClaimsPrincipal Anonymous = new(new ClaimsIdentity());
     private const string AuthTokenKey = "authToken";
     private const string RefreshTokenKey = "refreshToken";
 
-    public CustomAuthenticationStateProvider(ITokenStorage localStorage, HttpClient http)
+    public CustomAuthenticationStateProvider(ITokenStorage localStorage, IServiceProvider serviceProvider)
     {
         _localStorage = localStorage;
-        _http = http;
+        _serviceProvider = serviceProvider;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -32,7 +32,12 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 
             if (IsTokenExpired(token, TimeSpan.FromSeconds(60)))
             {
-                token = await TrySilentRefreshAsync() ?? "";
+                var authService = _serviceProvider.GetRequiredService<IAuthService>();
+                var refreshed = await authService.RefreshTokenAsync();
+                if (refreshed)
+                {
+                    token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+                }
                 if (string.IsNullOrWhiteSpace(token))
                 {
                     return new AuthenticationState(Anonymous);
@@ -48,38 +53,6 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         catch
         {
             return new AuthenticationState(Anonymous);
-        }
-    }
-
-    private async Task<string?> TrySilentRefreshAsync()
-    {
-        try
-        {
-            var refreshToken = await _localStorage.GetItemAsync<string>(RefreshTokenKey);
-            if (string.IsNullOrWhiteSpace(refreshToken)) return null;
-
-            using var response = await _http.PostAsJsonAsync("auth/refresh", new { refreshToken });
-            if (!response.IsSuccessStatusCode) return null;
-
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (!root.TryGetProperty("success", out var ok) || !ok.GetBoolean()) return null;
-            if (!root.TryGetProperty("data", out var data)) return null;
-            if (!data.TryGetProperty("accessToken", out var at) || !data.TryGetProperty("refreshToken", out var rt)) return null;
-
-            var newAccess = at.GetString();
-            var newRefresh = rt.GetString();
-            if (string.IsNullOrWhiteSpace(newAccess) || string.IsNullOrWhiteSpace(newRefresh)) return null;
-
-            await _localStorage.SetItemAsync(AuthTokenKey, newAccess);
-            await _localStorage.SetItemAsync(RefreshTokenKey, newRefresh);
-            NotifyUserAuthentication(newAccess);
-            return newAccess;
-        }
-        catch
-        {
-            return null;
         }
     }
 

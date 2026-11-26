@@ -1,7 +1,6 @@
-using System.Net.Http.Json;
-using System.Text.Json;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.SystemOperations;
+using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.SystemOperations;
 
@@ -17,9 +16,12 @@ public interface ISystemOperationsService
 
 public class SystemOperationsService : ISystemOperationsService
 {
-    private readonly HttpClient _http;
+    private readonly ApiClient _apiClient;
 
-    public SystemOperationsService(HttpClient http) => _http = http;
+    public SystemOperationsService(ApiClient apiClient)
+    {
+        _apiClient = apiClient;
+    }
 
     public async Task<ApiResponse<CoachSubscriptionPlansResponseDto>> GetCoachSubscriptionPlansAsync(bool? isActive = null, string? search = null, int page = 1, int pageSize = 20)
     {
@@ -29,103 +31,21 @@ public class SystemOperationsService : ISystemOperationsService
         q.Add($"page={page}");
         q.Add($"pageSize={pageSize}");
         var url = $"system-operations/coach-subscription-plans?{string.Join("&", q)}";
-        try
-        {
-            var resp = await _http.GetAsync(url);
-            var raw = await resp.Content.ReadAsStringAsync();
-            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var wrapped = JsonSerializer.Deserialize<ApiResponse<CoachSubscriptionPlansResponseDto>>(raw, opts);
-            if (wrapped != null) return wrapped;
-            return new ApiResponse<CoachSubscriptionPlansResponseDto> { Success = false, Message = "Failed to parse response." };
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<CoachSubscriptionPlansResponseDto> { Success = false, Message = ex.Message };
-        }
+        return await _apiClient.GetAsync<CoachSubscriptionPlansResponseDto>(url);
     }
 
-    public async Task<ApiResponse<CoachSubscriptionPlanDto>> GetPlanByIdAsync(Guid priceId)
-    {
-        try
-        {
-            var resp = await _http.GetAsync($"system-operations/coach-subscription-plans/{priceId}");
-            var raw = await resp.Content.ReadAsStringAsync();
-            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var wrapped = JsonSerializer.Deserialize<ApiResponse<CoachSubscriptionPlanDto>>(raw, opts);
-            if (wrapped != null) return wrapped;
-            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = "Failed to parse response." };
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = ex.Message };
-        }
-    }
+    public Task<ApiResponse<CoachSubscriptionPlanDto>> GetPlanByIdAsync(Guid priceId)
+        => _apiClient.GetAsync<CoachSubscriptionPlanDto>($"system-operations/coach-subscription-plans/{priceId}");
 
-    public async Task<ApiResponse<CoachSubscriptionPlanDto>> CreatePlanAsync(CreatePlanRequest request)
-    {
-        try
-        {
-            var resp = await _http.PostAsJsonAsync("system-operations/coach-subscription-plans", request);
-            var raw = await resp.Content.ReadAsStringAsync();
-            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var wrapped = JsonSerializer.Deserialize<ApiResponse<CoachSubscriptionPlanDto>>(raw, opts);
-            if (wrapped != null) return wrapped;
-            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = "Failed to parse response." };
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = ex.Message };
-        }
-    }
+    public Task<ApiResponse<CoachSubscriptionPlanDto>> CreatePlanAsync(CreatePlanRequest request)
+        => _apiClient.PostAsync<CreatePlanRequest, CoachSubscriptionPlanDto>("system-operations/coach-subscription-plans", request);
 
-    public async Task<ApiResponse<CoachSubscriptionPlanDto>> UpdatePlanAsync(Guid planId, UpdatePlanRequest request)
-    {
-        try
-        {
-            var resp = await _http.PutAsJsonAsync($"system-operations/coach-subscription-plans/{planId}", request);
-            var raw = await resp.Content.ReadAsStringAsync();
-            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var wrapped = JsonSerializer.Deserialize<ApiResponse<CoachSubscriptionPlanDto>>(raw, opts);
-            if (wrapped != null) return wrapped;
-            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = "Failed to parse response." };
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<CoachSubscriptionPlanDto> { Success = false, Message = ex.Message };
-        }
-    }
+    public Task<ApiResponse<CoachSubscriptionPlanDto>> UpdatePlanAsync(Guid planId, UpdatePlanRequest request)
+        => _apiClient.PutAsync<UpdatePlanRequest, CoachSubscriptionPlanDto>($"system-operations/coach-subscription-plans/{planId}", request);
 
-    public async Task<ApiResponse<bool>> DeletePlanAsync(Guid planId)
-    {
-        try
-        {
-            var resp = await _http.DeleteAsync($"system-operations/coach-subscription-plans/{planId}");
-            var raw = await resp.Content.ReadAsStringAsync();
-            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var wrapped = JsonSerializer.Deserialize<ApiResponse<bool>>(raw, opts);
-            if (wrapped != null) return wrapped;
-            return new ApiResponse<bool> { Success = false, Message = "Failed to parse response." };
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<bool> { Success = false, Message = ex.Message };
-        }
-    }
+    public Task<ApiResponse<bool>> DeletePlanAsync(Guid planId)
+        => _apiClient.DeleteAsync<bool>($"system-operations/coach-subscription-plans/{planId}");
 
-    public async Task<ApiResponse<List<CoachSubscriptionPlanDto>>> GetActivePlansAsync()
-    {
-        try
-        {
-            var resp = await _http.GetAsync("coachsubscriptionplans");
-            var raw = await resp.Content.ReadAsStringAsync();
-            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var wrapped = JsonSerializer.Deserialize<ApiResponse<List<CoachSubscriptionPlanDto>>>(raw, opts);
-            if (wrapped != null) return wrapped;
-            return new ApiResponse<List<CoachSubscriptionPlanDto>> { Success = false, Message = "Failed to parse response." };
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<List<CoachSubscriptionPlanDto>> { Success = false, Message = ex.Message };
-        }
-    }
+    public Task<ApiResponse<List<CoachSubscriptionPlanDto>>> GetActivePlansAsync()
+        => _apiClient.GetAsync<List<CoachSubscriptionPlanDto>>("coachsubscriptionplans");
 }

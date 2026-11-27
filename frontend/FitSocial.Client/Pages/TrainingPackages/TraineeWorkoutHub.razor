@@ -94,22 +94,22 @@
             else
             {
                 <!-- BANNER: PROGRAM & TRAINING PROGRESS OVERVIEW (View Training Progress) -->
-                <div class="bg-white rounded-2xl p-6 shadow-xs border border-gray-100">
-                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-gray-100">
-                        <div class="flex items-start gap-4">
+                <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-gray-100 overflow-hidden">
+                    <div class="flex flex-col gap-5 pb-5 border-b border-gray-100">
+                        <div class="flex items-start gap-4 min-w-0">
                             @if (!string.IsNullOrWhiteSpace(workoutPlan.PackageThumbnailUrl))
                             {
-                                <img src="@workoutPlan.PackageThumbnailUrl" alt="@workoutPlan.PackageTitle" class="w-20 h-20 rounded-2xl object-cover border border-gray-100 flex-shrink-0 shadow-xs" />
+                                <img src="@workoutPlan.PackageThumbnailUrl" alt="@workoutPlan.PackageTitle" class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-gray-100 flex-shrink-0 shadow-xs" />
                             }
                             else
                             {
-                                <div class="w-20 h-20 rounded-2xl bg-orange-50 text-[#FF5500] flex items-center justify-center flex-shrink-0 font-black text-xl border border-orange-100">
+                                <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-orange-50 text-[#FF5500] flex items-center justify-center flex-shrink-0 font-black text-xl border border-orange-100">
                                     FIT
                                 </div>
                             }
-                            <div>
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-wide">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                                    <span class="px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-wide whitespace-nowrap shrink-0">
                                         Enrolled Program
                                     </span>
                                     <span class="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
@@ -125,11 +125,11 @@
                                         }
                                     </span>
                                 </div>
-                                <h1 class="text-xl sm:text-2xl font-black text-gray-900 leading-snug">@workoutPlan.PackageTitle</h1>
+                                <h1 class="text-xl sm:text-2xl font-black text-gray-900 leading-snug break-words">@workoutPlan.PackageTitle</h1>
                                 <p class="text-xs sm:text-sm text-gray-500 mt-1 line-clamp-2">@workoutPlan.PlanTitle - @(string.IsNullOrWhiteSpace(workoutPlan.PlanDescription) ? "Follow your scheduled exercises and complete daily sessions." : workoutPlan.PlanDescription)</p>
                                 @if (workoutPlan.StartDate.HasValue || workoutPlan.EndDate.HasValue)
                                 {
-                                    <div class="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                                    <div class="flex flex-wrap items-center gap-2 mt-2.5 text-xs">
                                         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 font-semibold border border-gray-200/80">
                                             <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                                             <span>@(workoutPlan.StartDate?.ToString("dd/MM/yyyy") ?? "—") → @(workoutPlan.EndDate?.ToString("dd/MM/yyyy") ?? "—")</span>
@@ -155,13 +155,16 @@
                         </div>
 
                         <!-- Progress & Adherence Summary Cards -->
-                        <div class="flex flex-col sm:flex-row items-stretch gap-3 md:min-w-[360px]">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full">
                             <!-- Overall Progress -->
-                            <div class="bg-gray-50 border border-gray-200/70 rounded-2xl p-4 flex items-center gap-4 flex-1">
+                            <div class="bg-gray-50/90 border border-gray-200/70 rounded-2xl p-4 flex items-center gap-4 min-w-0">
                                 <div class="relative w-14 h-14 flex-shrink-0 flex items-center justify-center">
                                     <svg class="w-14 h-14 transform -rotate-90" viewBox="0 0 36 36">
                                         <path class="text-gray-200" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                        <path class="text-[#FF5500] transition-all duration-700 ease-out" stroke-dasharray="@($"{workoutPlan.ProgressPercentage}, 100")" stroke-width="3.5" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        @if (workoutPlan.ProgressPercentage > 0)
+                                        {
+                                            <path class="text-[#FF5500] transition-all duration-700 ease-out" stroke-dasharray="@($"{workoutPlan.ProgressPercentage}, 100")" stroke-width="3.5" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        }
                                     </svg>
                                     <span class="absolute font-black text-xs text-gray-800">@($"{workoutPlan.ProgressPercentage:N0}%")</span>
                                 </div>
@@ -177,21 +180,24 @@
                             </div>
 
                             <!-- Adherence Rate -->
-                            <div class="bg-gray-50 border border-gray-200/70 rounded-2xl p-4 flex items-center gap-4 flex-1">
+                            <div class="bg-gray-50/90 border border-gray-200/70 rounded-2xl p-4 flex items-center gap-4 min-w-0">
                                 <div class="relative w-14 h-14 flex-shrink-0 flex items-center justify-center">
                                     <svg class="w-14 h-14 transform -rotate-90" viewBox="0 0 36 36">
                                         <path class="text-gray-200" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                        <path class="@(workoutPlan.AdherenceRate >= 80 ? "text-emerald-500" : workoutPlan.AdherenceRate >= 50 ? "text-amber-500" : "text-rose-500") transition-all duration-700 ease-out" stroke-dasharray="@($"{workoutPlan.AdherenceRate}, 100")" stroke-width="3.5" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        @if (workoutPlan.AdherenceRate > 0)
+                                        {
+                                            <path class="@(workoutPlan.AdherenceRate >= 80 ? "text-emerald-500" : workoutPlan.AdherenceRate >= 50 ? "text-amber-500" : "text-rose-500") transition-all duration-700 ease-out" stroke-dasharray="@($"{workoutPlan.AdherenceRate}, 100")" stroke-width="3.5" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        }
                                     </svg>
                                     <span class="absolute font-black text-xs text-gray-800">@($"{workoutPlan.AdherenceRate:N0}%")</span>
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Adherence Rate</span>
-                                    <p class="text-sm font-black text-gray-900 mt-0.5">
-                                        <span class="@(workoutPlan.AdherenceRate >= 80 ? "text-emerald-700" : "text-amber-700")">@workoutPlan.AdherenceRate%</span>
+                                    <p class="text-sm font-black text-gray-900 mt-0.5 flex items-center gap-2 flex-wrap">
+                                        <span class="@(workoutPlan.AdherenceRate >= 80 ? "text-emerald-700" : workoutPlan.AdherenceRate >= 50 ? "text-amber-700" : "text-rose-600")">@($"{workoutPlan.AdherenceRate:N0}%")</span>
                                         @if (workoutPlan.MissedExercisesCount > 0)
                                         {
-                                            <span class="text-[11px] font-normal text-rose-600 block">(@workoutPlan.MissedExercisesCount missed)</span>
+                                            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200/70 whitespace-nowrap">@workoutPlan.MissedExercisesCount missed</span>
                                         }
                                     </p>
                                 </div>

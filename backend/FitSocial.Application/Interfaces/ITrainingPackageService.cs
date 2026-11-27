@@ -28,6 +28,7 @@ namespace FitSocial.Application.Interfaces
         // --- CÁC PHƯƠNG THỨC REVIEWS & REPLY GÓI TẬP ---
         Task<ApiResponseDto<PackageReviewSummaryDto>> GetPackageReviewsAsync(Guid packageId, CancellationToken cancellationToken = default);
         Task<ApiResponseDto<bool>> SubmitPackageReviewAsync(Guid packageId, Guid traineeId, CreatePackageReviewDto dto, CancellationToken cancellationToken = default);
+        Task<ApiResponseDto<bool>> UpdatePackageReviewAsync(Guid packageId, Guid reviewId, Guid traineeId, UpdatePackageReviewDto dto, CancellationToken cancellationToken = default);
         Task<ApiResponseDto<bool>> ReplyToReviewAsync(Guid packageId, Guid reviewId, Guid coachId, ReplyReviewDto dto, CancellationToken cancellationToken = default);
 
 

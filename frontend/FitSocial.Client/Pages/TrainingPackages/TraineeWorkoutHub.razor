@@ -5,7 +5,6 @@
 @inject FitSocial.Client.Services.TrainingPlans.ITrainingPlanClientService TrainingPlanService
 @inject FitSocial.Client.Services.Files.IFileUploadService FileUploadService
 @inject NavigationManager Navigation
-@inject AuthenticationStateProvider AuthStateProvider
 @inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.TrainingPlans
@@ -393,8 +392,8 @@
                                             </p>
                                         }
 
-                                        <!-- Trainee Notes (if logged) -->
-                                        @if (!string.IsNullOrWhiteSpace(ex.TraineeNotes))
+                                        <!-- Trainee Notes (if logged, not duplicated by Missed Reason section) -->
+                                        @if (!string.IsNullOrWhiteSpace(ex.TraineeNotes) && (!IsDayPast(ex) || ex.IsCompleted || string.Equals(ex.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase)))
                                         {
                                             <div class="text-xs text-emerald-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/60 mt-1 flex items-start gap-2">
                                                 <svg class="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.5L19 7.5V19a2 2 0 01-2 2z"></path></svg>
@@ -442,7 +441,7 @@
                                         }
 
                                         <!-- Missed Reason for Past Workout -->
-                                        @if (!ex.IsCompleted && IsDayPast(ex))
+                                        @if (!ex.IsCompleted && IsDayPast(ex) && !string.Equals(ex.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
                                         {
                                             <div class="mt-2.5 flex flex-col gap-1.5">
                                                 @if (!string.IsNullOrWhiteSpace(ex.TraineeNotes))
@@ -686,12 +685,22 @@
         return date.HasValue && date.Value.Date < BusinessToday;
     }
 
+    private Guid _loadedOrderDetailsId;
+
     protected override async Task OnInitializedAsync()
     {
         // This page has no search bar -> disable shared topbar search
         Shell.ShowSearch = false;
+        await Task.CompletedTask;
+    }
 
-        await LoadWorkoutPlanAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrderDetailsId != Guid.Empty && OrderDetailsId != _loadedOrderDetailsId)
+        {
+            _loadedOrderDetailsId = OrderDetailsId;
+            await LoadWorkoutPlanAsync();
+        }
     }
 
     public void Dispose()
@@ -704,35 +713,44 @@
         isLoading = true;
         errorMessage = null;
 
-        var res = await TrainingPlanService.GetTraineeWorkoutPlanAsync(OrderDetailsId);
-        if (res.Success && res.Data != null)
+        try
         {
-            workoutPlan = res.Data;
-            if (workoutPlan.Weeks.Any())
+            var res = await TrainingPlanService.GetTraineeWorkoutPlanAsync(OrderDetailsId);
+            if (res.Success && res.Data != null)
             {
-                var todayWeek = workoutPlan.Weeks.FirstOrDefault(w => w.Days.Any(d => d.IsToday));
-                var todayDay = todayWeek?.Days.FirstOrDefault(d => d.IsToday);
-                if (todayWeek != null && todayDay != null)
+                workoutPlan = res.Data;
+                if (workoutPlan.Weeks.Any())
                 {
-                    selectedWeekNumber = todayWeek.WeekNumber;
-                    selectedDayNumber = todayDay.DayNumber;
-                }
-                else
-                {
-                    selectedWeekNumber = workoutPlan.Weeks.First().WeekNumber;
-                    if (workoutPlan.Weeks.First().Days.Any())
+                    var todayWeek = workoutPlan.Weeks.FirstOrDefault(w => w.Days.Any(d => d.IsToday));
+                    var todayDay = todayWeek?.Days.FirstOrDefault(d => d.IsToday);
+                    if (todayWeek != null && todayDay != null)
                     {
-                        selectedDayNumber = workoutPlan.Weeks.First().Days.First().DayNumber;
+                        selectedWeekNumber = todayWeek.WeekNumber;
+                        selectedDayNumber = todayDay.DayNumber;
+                    }
+                    else
+                    {
+                        selectedWeekNumber = workoutPlan.Weeks.First().WeekNumber;
+                        if (workoutPlan.Weeks.First().Days.Any())
+                        {
+                            selectedDayNumber = workoutPlan.Weeks.First().Days.First().DayNumber;
+                        }
                     }
                 }
             }
+            else
+            {
+                errorMessage = res.Message ?? "Failed to load workout plan.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            errorMessage = res.Message ?? "Failed to load workout plan.";
+            errorMessage = "Failed to load workout plan: " + ex.Message;
         }
-
-        isLoading = false;
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private void SelectWeek(short weekNumber)
@@ -755,75 +773,6 @@
         activeExercise = ex;
     }
 
-    private async Task HandleMarkComplete(TraineeWorkoutExerciseDto ex)
-    {
-        if (ex.IsCompleted) return; // Already completed, do nothing
-
-        // Only today's session can be marked complete; past and future days are read-only.
-        if (!(CurrentDay?.IsToday ?? false))
-        {
-            ShowToast("You can only complete today's workout.");
-            return;
-        }
-
-        togglingExerciseId = ex.TrainingPlanExerciseId;
-        var note = GetExerciseNote(ex.TrainingPlanExerciseId);
-        var dto = new ToggleWorkoutCompletionDto
-        {
-            TrainingPlanExerciseId = ex.TrainingPlanExerciseId,
-            LogDate = ex.ScheduledDate ?? CurrentDay?.ScheduledDate ?? BusinessToday,
-            Status = "COMPLETED",
-            Notes = string.IsNullOrWhiteSpace(note) ? null : note.Trim()
-        };
-
-        var res = await TrainingPlanService.ToggleWorkoutCompletionAsync(dto);
-        if (res.Success && res.Data != null)
-        {
-            ex.IsCompleted = res.Data.IsCompleted;
-            ex.WorkoutCompletionLogId = res.Data.WorkoutCompletionLogId;
-            ex.CompletedAt = res.Data.CompletedAt;
-            ex.Status = res.Data.Status;
-            ex.TraineeNotes = res.Data.Notes;
-            exerciseNotes.Remove(ex.TrainingPlanExerciseId);
-
-            if (workoutPlan != null)
-            {
-                workoutPlan.TotalExercisesCount = res.Data.TotalExercisesCount;
-                workoutPlan.CompletedExercisesCount = res.Data.CompletedExercisesCount;
-                int missed = workoutPlan.Weeks.Sum(w => w.Days.Sum(d => d.Exercises.Count(e => string.Equals(e.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase))));
-                workoutPlan.MissedExercisesCount = missed;
-                workoutPlan.AdherenceRate = (workoutPlan.CompletedExercisesCount + missed) > 0
-                    ? Math.Round((double)workoutPlan.CompletedExercisesCount / (workoutPlan.CompletedExercisesCount + missed) * 100, 1)
-                    : 100;
-            }
-
-            // Recalculate day and week counts
-            if (CurrentDay != null)
-            {
-                CurrentDay.CompletedExercises = CurrentDay.Exercises.Count(e => e.IsCompleted);
-            }
-            if (CurrentWeek != null)
-            {
-                CurrentWeek.CompletedExercises = CurrentWeek.Days.Sum(d => d.CompletedExercises);
-            }
-
-            if (res.Data.ProgressPercentage >= 100)
-            {
-                ShowToast("🎉 Congratulations! You have completed 100% of your training plan!");
-            }
-            else
-            {
-                ShowToast($"Great job! Completed {ex.ExerciseName}!");
-            }
-        }
-        else
-        {
-            ShowToast(res.Message ?? "Unable to update workout status.");
-        }
-
-        togglingExerciseId = null;
-    }
-
     private async Task HandleSaveMissedReason(TraineeWorkoutExerciseDto ex)
     {
         var note = GetExerciseNote(ex.TrainingPlanExerciseId);
@@ -834,28 +783,37 @@
         }
 
         togglingExerciseId = ex.TrainingPlanExerciseId;
-        var dto = new ToggleWorkoutCompletionDto
+        try
         {
-            TrainingPlanExerciseId = ex.TrainingPlanExerciseId,
-            LogDate = ex.ScheduledDate ?? CurrentDay?.ScheduledDate ?? BusinessToday,
-            Status = "INCOMPLETE",
-            Notes = note.Trim()
-        };
+            var dto = new ToggleWorkoutCompletionDto
+            {
+                TrainingPlanExerciseId = ex.TrainingPlanExerciseId,
+                LogDate = ex.ScheduledDate ?? CurrentDay?.ScheduledDate ?? BusinessToday,
+                Status = "INCOMPLETE",
+                Notes = note.Trim()
+            };
 
-        var res = await TrainingPlanService.ToggleWorkoutCompletionAsync(dto);
-        if (res.Success && res.Data != null)
-        {
-            ex.Status = "INCOMPLETE";
-            ex.TraineeNotes = res.Data.Notes;
-            exerciseNotes.Remove(ex.TrainingPlanExerciseId);
-            ShowToast("Missed workout reason saved successfully!");
+            var res = await TrainingPlanService.ToggleWorkoutCompletionAsync(dto);
+            if (res.Success && res.Data != null)
+            {
+                ex.Status = "INCOMPLETE";
+                ex.TraineeNotes = res.Data.Notes;
+                exerciseNotes.Remove(ex.TrainingPlanExerciseId);
+                ShowToast("Missed workout reason saved successfully!");
+            }
+            else
+            {
+                ShowToast(res.Message ?? "Failed to save missed workout reason.");
+            }
         }
-        else
+        catch (Exception exception)
         {
-            ShowToast(res.Message ?? "Failed to save missed workout reason.");
+            ShowToast($"Error: {exception.Message}");
         }
-
-        togglingExerciseId = null;
+        finally
+        {
+            togglingExerciseId = null;
+        }
     }
 
     private void HandleCoachReportSubmitted(Guid coachId)
@@ -914,9 +872,11 @@
         showProofModal = true;
     }
 
-    private void CloseSubmitProofModal()
+    private void CloseSubmitProofModal() => ResetSubmitProofModal(false);
+
+    private void ResetSubmitProofModal(bool force)
     {
-        if (isSubmittingProof || isUploadingProof) return;
+        if (!force && (isSubmittingProof || isUploadingProof)) return;
         showProofModal = false;
         submittingExercise = null;
         proofMediaUrl = null;
@@ -983,7 +943,7 @@
                 submittingExercise.WorkoutCompletionLogId = res.Data.WorkoutCompletionLogId;
                 exerciseNotes.Remove(submittingExercise.TrainingPlanExerciseId);
 
-                CloseSubmitProofModal();
+                ResetSubmitProofModal(force: true);
                 ShowToast("🎉 Workout completion request submitted! Please wait for coach review.");
             }
             else

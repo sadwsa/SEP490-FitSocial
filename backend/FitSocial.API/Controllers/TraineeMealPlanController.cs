@@ -42,19 +42,11 @@ public class TraineeMealPlanController : ControllerBase
         if (traineeId == Guid.Empty)
             return Unauthorized(ApiResponseDto<TraineeMealPlanDto>.Fail("Unauthorized: Invalid user identity."));
 
-        try
-        {
-            var result = await _mealPlanService.GetTraineeMealPlanAsync(traineeId, orderDetailsId, cancellationToken);
-            if (result == null)
-                return Ok(ApiResponseDto<TraineeMealPlanDto?>.Ok(null, "No meal plan assigned yet."));
+        var result = await _mealPlanService.GetTraineeMealPlanAsync(traineeId, orderDetailsId, cancellationToken);
+        if (result == null)
+            return Ok(ApiResponseDto<TraineeMealPlanDto?>.Ok(null, "No meal plan assigned yet."));
 
-            return Ok(ApiResponseDto<TraineeMealPlanDto>.Ok(result, "Meal plan retrieved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[MealPlan] Error getting meal plan for order {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
-            throw;
-        }
+        return Ok(ApiResponseDto<TraineeMealPlanDto>.Ok(result, "Meal plan retrieved successfully."));
     }
 
     /// <summary>
@@ -74,16 +66,8 @@ public class TraineeMealPlanController : ControllerBase
         if (traineeId == Guid.Empty)
             return Unauthorized(ApiResponseDto<MealCompletionResultDto>.Fail("Unauthorized: Invalid user identity."));
 
-        try
-        {
-            var result = await _mealPlanService.RequestMealCompletionAsync(traineeId, dto, cancellationToken);
-            return Ok(ApiResponseDto<MealCompletionResultDto>.Ok(result, "Meal completion proof submitted! Waiting for coach review."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[MealPlan] Error requesting meal completion for item {MealPlanItemId}: {Message}", dto?.MealPlanItemId, ex.Message);
-            throw;
-        }
+        var result = await _mealPlanService.RequestMealCompletionAsync(traineeId, dto, cancellationToken);
+        return Ok(ApiResponseDto<MealCompletionResultDto>.Ok(result, "Meal completion proof submitted! Waiting for coach review."));
     }
 
     /// <summary>
@@ -101,16 +85,8 @@ public class TraineeMealPlanController : ControllerBase
         if (traineeId == Guid.Empty)
             return Unauthorized(ApiResponseDto<MealCompletionResultDto>.Fail("Unauthorized: Invalid user identity."));
 
-        try
-        {
-            var result = await _mealPlanService.SaveMealMissedReasonAsync(traineeId, dto, cancellationToken);
-            return Ok(ApiResponseDto<MealCompletionResultDto>.Ok(result, "Missed meal reason saved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[MealPlan] Error saving missed reason for item {MealPlanItemId}: {Message}", dto?.MealPlanItemId, ex.Message);
-            throw;
-        }
+        var result = await _mealPlanService.SaveMealMissedReasonAsync(traineeId, dto, cancellationToken);
+        return Ok(ApiResponseDto<MealCompletionResultDto>.Ok(result, "Missed meal reason saved successfully."));
     }
 
     private Guid GetCurrentUserId()

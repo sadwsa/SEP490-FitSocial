@@ -5,16 +5,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.TrainingPlan;
 using FitSocial.Application.Exceptions;
+using FitSocial.Application.Helpers;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace FitSocial.Application.Services;
 
 public class TrainingPlanService : ITrainingPlanService
 {
-    private static readonly TimeSpan BusinessTimeZoneOffset = TimeSpan.FromHours(7);
-    public static DateTime GetBusinessToday() => DateTime.UtcNow.Add(BusinessTimeZoneOffset).Date;
+    public static DateTime GetBusinessToday() => PlanScheduleHelper.GetBusinessToday();
 
     private readonly ITrainingPlanRepository _trainingPlanRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -525,32 +526,8 @@ public class TrainingPlanService : ITrainingPlanService
         };
     }
 
-    private static readonly HashSet<string> AllowedTraineeOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
-    {
-        FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid,
-        FitSocial.Domain.Constants.PaymentConstants.OrderStatusActive,
-        FitSocial.Domain.Constants.PaymentConstants.OrderStatusCompleted,
-        FitSocial.Domain.Constants.PaymentConstants.OrderStatusRefundPending
-    };
-
     private static void ValidateOrderStatusForTraineeAccess(Order? order)
-    {
-        if (order == null || string.IsNullOrWhiteSpace(order.OrderStatus))
-        {
-            return;
-        }
-
-        var status = order.OrderStatus.Trim();
-        if (string.Equals(status, FitSocial.Domain.Constants.PaymentConstants.OrderStatusRefunded, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ForbiddenException("This package has been refunded and its workout plan is no longer accessible.");
-        }
-
-        if (!AllowedTraineeOrderStatuses.Contains(status))
-        {
-            throw new ForbiddenException($"Workout plan is not accessible for order with status '{order.OrderStatus}'.");
-        }
-    }
+        => PlanScheduleHelper.ValidateOrderStatusForTraineeAccess(order, "workout plan");
 
     public async Task<TraineeWorkoutPlanProgressDto> GetTraineeWorkoutPlanAsync(
         Guid traineeId,
@@ -594,23 +571,7 @@ public class TrainingPlanService : ITrainingPlanService
                             || string.Equals(plan.Status, "PENDING_COACH", StringComparison.OrdinalIgnoreCase);
         if (isDraftOrPending)
         {
-            return new TraineeWorkoutPlanProgressDto
-            {
-                TrainingPlanId = plan.TrainingPlanId,
-                OrderDetailsId = plan.OrderDetailsId ?? Guid.Empty,
-                PackageId = plan.OrderDetails?.PackageId ?? Guid.Empty,
-                PackageTitle = plan.OrderDetails?.PackageTitle ?? plan.OrderDetails?.Package?.Title ?? "Training Package",
-                PackageType = plan.OrderDetails?.PackageType ?? plan.OrderDetails?.Package?.PackageType ?? "BOTH",
-                PlanTitle = plan.Title ?? "Training Plan",
-                PlanDescription = plan.Description,
-                PlanStatus = plan.Status,
-                StartDate = plan.StartDate,
-                EndDate = plan.EndDate,
-                CoachId = plan.CoachId,
-                CoachName = plan.Coach?.Coach?.FullName ?? "Coach",
-                CoachAvatarUrl = plan.Coach?.Coach?.AvatarUrl,
-                Weeks = new List<TraineeWorkoutWeekDto>()
-            };
+            return BuildDraftProgressDto(plan);
         }
 
         await BackfillIncompleteLogsAsync(plan, traineeId, ct);
@@ -639,27 +600,32 @@ public class TrainingPlanService : ITrainingPlanService
                             || string.Equals(plan.Status, "PENDING_COACH", StringComparison.OrdinalIgnoreCase);
         if (isDraftOrPending)
         {
-            return new TraineeWorkoutPlanProgressDto
-            {
-                TrainingPlanId = plan.TrainingPlanId,
-                OrderDetailsId = plan.OrderDetailsId ?? Guid.Empty,
-                PackageId = plan.OrderDetails?.PackageId ?? Guid.Empty,
-                PackageTitle = plan.OrderDetails?.PackageTitle ?? plan.OrderDetails?.Package?.Title ?? "Training Package",
-                PackageType = plan.OrderDetails?.PackageType ?? plan.OrderDetails?.Package?.PackageType ?? "BOTH",
-                PlanTitle = plan.Title ?? "Training Plan",
-                PlanDescription = plan.Description,
-                PlanStatus = plan.Status,
-                StartDate = plan.StartDate,
-                EndDate = plan.EndDate,
-                CoachId = plan.CoachId,
-                CoachName = plan.Coach?.Coach?.FullName ?? "Coach",
-                CoachAvatarUrl = plan.Coach?.Coach?.AvatarUrl,
-                Weeks = new List<TraineeWorkoutWeekDto>()
-            };
+            return BuildDraftProgressDto(plan);
         }
 
         await BackfillIncompleteLogsAsync(plan, traineeId, ct);
         return MapToTraineeProgressDto(plan, traineeId);
+    }
+
+    private static TraineeWorkoutPlanProgressDto BuildDraftProgressDto(TrainingPlan plan)
+    {
+        return new TraineeWorkoutPlanProgressDto
+        {
+            TrainingPlanId = plan.TrainingPlanId,
+            OrderDetailsId = plan.OrderDetailsId ?? Guid.Empty,
+            PackageId = plan.OrderDetails?.PackageId ?? Guid.Empty,
+            PackageTitle = plan.OrderDetails?.PackageTitle ?? plan.OrderDetails?.Package?.Title ?? "Training Package",
+            PackageType = plan.OrderDetails?.PackageType ?? plan.OrderDetails?.Package?.PackageType ?? "BOTH",
+            PlanTitle = plan.Title ?? "Training Plan",
+            PlanDescription = plan.Description,
+            PlanStatus = plan.Status,
+            StartDate = plan.StartDate,
+            EndDate = plan.EndDate,
+            CoachId = plan.CoachId,
+            CoachName = plan.Coach?.Coach?.FullName ?? "Coach",
+            CoachAvatarUrl = plan.Coach?.Coach?.AvatarUrl,
+            Weeks = new List<TraineeWorkoutWeekDto>()
+        };
     }
 
     /// <summary>
@@ -714,7 +680,14 @@ public class TrainingPlanService : ITrainingPlanService
 
         if (created)
         {
-            await _unitOfWork.SaveChangesAsync(ct);
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Concurrent backfill inserted logs for the same day/trainee; safe to continue.
+            }
         }
     }
 
@@ -745,23 +718,36 @@ public class TrainingPlanService : ITrainingPlanService
         }
 
         var orderBuyerId = exercise.TrainingPlan?.OrderDetails?.Order?.BuyerId;
-        if (orderBuyerId.HasValue && orderBuyerId.Value != traineeId)
+        if (!orderBuyerId.HasValue || orderBuyerId.Value != traineeId)
         {
             throw new ForbiddenException("You are not authorized to mark this exercise.");
         }
 
         ValidateOrderStatusForTraineeAccess(exercise.TrainingPlan?.OrderDetails?.Order);
 
+        var parentPlan = exercise.TrainingPlan;
+        if (parentPlan != null &&
+            (string.Equals(parentPlan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(parentPlan.Status, "PENDING_COACH", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(parentPlan.Status, "DELETED", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new BusinessException("This training plan is not active yet.");
+        }
+
         // Enforce IsToday on the server: only today's scheduled exercises can be marked COMPLETED.
         // Trainees are allowed to submit a missed reason (Notes) for past INCOMPLETE exercises.
-        var parentPlan = exercise.TrainingPlan;
         var businessToday = GetBusinessToday();
         DateTime? scheduledDate = null;
 
         if (parentPlan != null && parentPlan.StartDate.HasValue)
         {
             scheduledDate = ResolveScheduledDate(parentPlan.StartDate, parentPlan.EndDate, exercise.WeekNumber ?? 1, exercise.DayNumber ?? 1);
-            if (scheduledDate.HasValue && scheduledDate.Value.Date != businessToday)
+            if (!scheduledDate.HasValue)
+            {
+                throw new ValidationException("This exercise is outside the scheduled training plan dates.");
+            }
+
+            if (scheduledDate.Value.Date != businessToday)
             {
                 bool isUpdatingPastMissedNote = scheduledDate.Value.Date < businessToday &&
                     string.Equals(dto.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase);
@@ -983,7 +969,7 @@ public class TrainingPlanService : ITrainingPlanService
         }
 
         var orderBuyerId = exercise.TrainingPlan?.OrderDetails?.Order?.BuyerId;
-        if (orderBuyerId.HasValue && orderBuyerId.Value != traineeId)
+        if (!orderBuyerId.HasValue || orderBuyerId.Value != traineeId)
         {
             throw new ForbiddenException("You are not authorized to submit completion for this exercise.");
         }
@@ -991,13 +977,26 @@ public class TrainingPlanService : ITrainingPlanService
         ValidateOrderStatusForTraineeAccess(exercise.TrainingPlan?.OrderDetails?.Order);
 
         var parentPlan = exercise.TrainingPlan;
+        if (parentPlan != null &&
+            (string.Equals(parentPlan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(parentPlan.Status, "PENDING_COACH", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(parentPlan.Status, "DELETED", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new BusinessException("This training plan is not active yet.");
+        }
+
         var businessToday = GetBusinessToday();
         DateTime? scheduledDate = null;
 
         if (parentPlan != null && parentPlan.StartDate.HasValue)
         {
             scheduledDate = ResolveScheduledDate(parentPlan.StartDate, parentPlan.EndDate, exercise.WeekNumber ?? 1, exercise.DayNumber ?? 1);
-            if (scheduledDate.HasValue && scheduledDate.Value.Date != businessToday)
+            if (!scheduledDate.HasValue)
+            {
+                throw new ValidationException("This exercise is outside the scheduled training plan dates.");
+            }
+
+            if (scheduledDate.Value.Date != businessToday)
             {
                 throw new ValidationException($"You can only complete exercises scheduled for today ({businessToday:dd/MM/yyyy}). This exercise is scheduled for {scheduledDate.Value:dd/MM/yyyy}.");
             }
@@ -1019,6 +1018,9 @@ public class TrainingPlanService : ITrainingPlanService
             existingLog.Status = "PENDING_REVIEW";
             existingLog.MediaUrl = mediaUrl;
             if (savedNotes != null) existingLog.Notes = savedNotes;
+            existingLog.CoachFeedback = null;
+            existingLog.ReviewedBy = null;
+            existingLog.ReviewedAt = null;
             existingLog.CreatedAt = now;
             logId = existingLog.WorkoutCompletionLogId;
         }
@@ -1135,40 +1137,35 @@ public class TrainingPlanService : ITrainingPlanService
         }
 
         var parentPlan = exercise.TrainingPlan;
-        if (parentPlan == null || parentPlan.CoachId != coachId)
+        var isCoachOwner = parentPlan != null && (
+            parentPlan.CoachId == coachId ||
+            parentPlan.OrderDetails?.Order?.CoachId == coachId ||
+            parentPlan.OrderDetails?.Package?.CoachId == coachId);
+        if (!isCoachOwner || parentPlan == null)
         {
             throw new ForbiddenException("You are not authorized to review exercises for this training plan.");
         }
 
-        var existingLog = await _trainingPlanRepository.GetWorkoutLogAsync(dto.TrainingPlanExerciseId, dto.TraineeId, ct);
-        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-        Guid logId;
+        var orderBuyerId = parentPlan.OrderDetails?.Order?.BuyerId;
+        if (!orderBuyerId.HasValue || orderBuyerId.Value != dto.TraineeId)
+        {
+            throw new ForbiddenException("You are not authorized to review exercises for this trainee.");
+        }
 
-        if (existingLog == null)
+        ValidateOrderStatusForTraineeAccess(parentPlan.OrderDetails?.Order);
+
+        var existingLog = await _trainingPlanRepository.GetWorkoutLogAsync(dto.TrainingPlanExerciseId, dto.TraineeId, ct);
+        if (existingLog == null || string.Equals(existingLog.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase))
         {
-            existingLog = new WorkoutCompletionLog
-            {
-                WorkoutCompletionLogId = Guid.NewGuid(),
-                TraineeId = dto.TraineeId,
-                TrainingPlanExerciseId = dto.TrainingPlanExerciseId,
-                LogDate = now,
-                Status = normalizedDecision,
-                CoachFeedback = feedback,
-                ReviewedBy = coachId,
-                ReviewedAt = now,
-                CreatedAt = now
-            };
-            await _trainingPlanRepository.AddWorkoutLogAsync(existingLog, ct);
-            logId = existingLog.WorkoutCompletionLogId;
+            throw new BusinessException("Trainee has not submitted a completion request for this exercise yet.");
         }
-        else
-        {
-            existingLog.Status = normalizedDecision;
-            existingLog.CoachFeedback = feedback;
-            existingLog.ReviewedBy = coachId;
-            existingLog.ReviewedAt = now;
-            logId = existingLog.WorkoutCompletionLogId;
-        }
+
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        existingLog.Status = normalizedDecision;
+        existingLog.CoachFeedback = feedback;
+        existingLog.ReviewedBy = coachId;
+        existingLog.ReviewedAt = now;
+        Guid logId = existingLog.WorkoutCompletionLogId;
 
         await _unitOfWork.SaveChangesAsync(ct);
 
@@ -1176,16 +1173,27 @@ public class TrainingPlanService : ITrainingPlanService
         var plan = await _trainingPlanRepository.GetTraineePlanWithLogsAsync(
             parentPlan.OrderDetailsId ?? Guid.Empty, dto.TraineeId, ct);
 
-        int totalCount = plan?.TrainingPlanExercises?.Count ?? 0;
-        int completedCount = plan?.TrainingPlanExercises?
-            .Count(e => e.WorkoutCompletionLogs?.Any(l => l.TraineeId == dto.TraineeId && l.Status == "COMPLETED") == true) ?? 0;
+        var scheduledExercises = (plan?.TrainingPlanExercises ?? new List<TrainingPlanExercise>())
+            .Where(e => !plan!.StartDate.HasValue ||
+                        ResolveScheduledDate(plan.StartDate, plan.EndDate, e.WeekNumber ?? 1, e.DayNumber ?? 1).HasValue)
+            .ToList();
+
+        int totalCount = scheduledExercises.Count;
+        int completedCount = scheduledExercises
+            .Count(e => e.WorkoutCompletionLogs?.Any(l => l.TraineeId == dto.TraineeId && string.Equals(l.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase)) == true);
         double percentage = totalCount > 0 ? Math.Round((double)completedCount / totalCount * 100, 1) : 0;
         bool isPlanFullyCompleted = totalCount > 0 && completedCount >= totalCount;
 
-        // Auto update TrainingPlan.Status to COMPLETED when 100% completed
-        if (isPlanFullyCompleted && parentPlan != null && !string.Equals(parentPlan.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+        // Auto update TrainingPlan.Status to COMPLETED when 100% completed, or revert if rejected below 100%
+        if (isPlanFullyCompleted && !string.Equals(parentPlan.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase))
         {
             parentPlan.Status = "COMPLETED";
+            parentPlan.UpdatedAt = now;
+            await _unitOfWork.SaveChangesAsync(ct);
+        }
+        else if (!isPlanFullyCompleted && string.Equals(parentPlan.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+        {
+            parentPlan.Status = "IN_PROGRESS";
             parentPlan.UpdatedAt = now;
             await _unitOfWork.SaveChangesAsync(ct);
         }
@@ -1330,9 +1338,7 @@ public class TrainingPlanService : ITrainingPlanService
         int totalCount = weeks.Sum(w => w.TotalExercises);
         int completedCount = weeks.Sum(w => w.CompletedExercises);
         int missedCount = weeks.Sum(w => w.MissedExercises);
-        double adherenceRate = (completedCount + missedCount) > 0
-            ? Math.Round((double)completedCount / (completedCount + missedCount) * 100, 1)
-            : (totalCount > 0 ? 100 : 0);
+        double adherenceRate = PlanScheduleHelper.CalculateAdherenceRate(completedCount, missedCount, totalCount);
 
         return new CoachTraineeWorkoutProgressDto
         {
@@ -1366,9 +1372,7 @@ public class TrainingPlanService : ITrainingPlanService
         int totalCount = weeks.Sum(w => w.TotalExercises);
         int completedCount = weeks.Sum(w => w.CompletedExercises);
         int missedCount = weeks.Sum(w => w.MissedExercises);
-        double adherenceRate = (completedCount + missedCount) > 0
-            ? Math.Round((double)completedCount / (completedCount + missedCount) * 100, 1)
-            : (totalCount > 0 ? 100 : 0);
+        double adherenceRate = PlanScheduleHelper.CalculateAdherenceRate(completedCount, missedCount, totalCount);
 
         return new TraineeWorkoutPlanProgressDto
         {
@@ -1509,17 +1513,10 @@ public class TrainingPlanService : ITrainingPlanService
     }
 
     public static DateTime GetStartMonday(DateTime startDate)
-    {
-        int dayOfWeek = (int)startDate.DayOfWeek;
-        int daysSinceMonday = (dayOfWeek == 0 ? 7 : dayOfWeek) - 1;
-        return startDate.Date.AddDays(-daysSinceMonday);
-    }
+        => PlanScheduleHelper.GetStartMonday(startDate);
 
     public static DateTime GetSessionDate(DateTime startDate, short weekNumber, short dayNumber)
-    {
-        var startMonday = GetStartMonday(startDate);
-        return startMonday.AddDays((weekNumber - 1) * 7 + (dayNumber - 1));
-    }
+        => PlanScheduleHelper.GetSessionDate(startDate, weekNumber, dayNumber);
 
     public static void ValidatePlanConstraints(
         OrderDetail? orderDetail,
@@ -1638,19 +1635,5 @@ public class TrainingPlanService : ITrainingPlanService
     /// Returns null when the plan has no StartDate or the date exceeds plan EndDate.
     /// </summary>
     private static DateTime? ResolveScheduledDate(DateTime? planStartDate, DateTime? planEndDate, short weekNumber, short dayNumber)
-    {
-        if (!planStartDate.HasValue)
-        {
-            return null;
-        }
-
-        var date = GetSessionDate(planStartDate.Value.Date, weekNumber, dayNumber);
-
-        if (planEndDate.HasValue && date.Date > planEndDate.Value.Date)
-        {
-            return null;
-        }
-
-        return date;
-    }
+        => PlanScheduleHelper.ResolveScheduledDate(planStartDate, planEndDate, weekNumber, dayNumber);
 }

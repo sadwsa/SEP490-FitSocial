@@ -29,5 +29,6 @@ public interface ITrainingPackageService
     Task<ApiResponse<PackageReviewSummaryDto>> GetPackageReviewsAsync(Guid packageId);
     Task<ApiResponse<List<string>>> UploadReviewImagesAsync(Guid packageId, IBrowserFile[] files);
     Task<ApiResponse<bool>> SubmitPackageReviewAsync(Guid packageId, CreatePackageReviewDto dto);
+    Task<ApiResponse<bool>> UpdatePackageReviewAsync(Guid packageId, Guid reviewId, UpdatePackageReviewDto dto);
     Task<ApiResponse<bool>> ReplyToReviewAsync(Guid packageId, Guid reviewId, ReplyReviewDto dto);
 }

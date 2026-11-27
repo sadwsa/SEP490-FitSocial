@@ -78,7 +78,10 @@ public class TrainingPlanRepository : Repository<TrainingPlan>, ITrainingPlanRep
     {
         return await DbContext.OrderDetails
             .Include(od => od.Order)
+                .ThenInclude(o => o!.Buyer)
             .Include(od => od.Package)
+                .ThenInclude(p => p!.Coach)
+                    .ThenInclude(c => c!.Coach)
             .AsNoTracking()
             .FirstOrDefaultAsync(od => od.OrderDetailsId == orderDetailsId, cancellationToken);
     }
@@ -110,6 +113,7 @@ public class TrainingPlanRepository : Repository<TrainingPlan>, ITrainingPlanRep
     public async Task<TrainingPlan?> GetTraineePlanWithLogsAsync(Guid orderDetailsId, Guid traineeId, CancellationToken cancellationToken = default)
     {
         return await DbContext.TrainingPlans
+            .AsSplitQuery()
             .Include(p => p.Coach)
                 .ThenInclude(c => c.Coach)
             .Include(p => p.OrderDetails)
@@ -122,12 +126,15 @@ public class TrainingPlanRepository : Repository<TrainingPlan>, ITrainingPlanRep
             .Include(p => p.TrainingPlanExercises)
                 .ThenInclude(e => e.WorkoutCompletionLogs.Where(log => log.TraineeId == traineeId))
             .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.OrderDetailsId == orderDetailsId && p.OrderDetails != null && p.OrderDetails.Order.BuyerId == traineeId, cancellationToken);
+            .Where(p => p.OrderDetailsId == orderDetailsId && p.Status != "DELETED" && p.OrderDetails != null && p.OrderDetails.Order.BuyerId == traineeId)
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<TrainingPlan?> GetTraineePlanByPackageIdWithLogsAsync(Guid packageId, Guid traineeId, CancellationToken cancellationToken = default)
     {
         return await DbContext.TrainingPlans
+            .AsSplitQuery()
             .Include(p => p.Coach)
                 .ThenInclude(c => c.Coach)
             .Include(p => p.OrderDetails)
@@ -140,13 +147,14 @@ public class TrainingPlanRepository : Repository<TrainingPlan>, ITrainingPlanRep
             .Include(p => p.TrainingPlanExercises)
                 .ThenInclude(e => e.WorkoutCompletionLogs.Where(log => log.TraineeId == traineeId))
             .AsNoTracking()
+            .Where(p => p.Status != "DELETED" && p.OrderDetails != null && p.OrderDetails.PackageId == packageId && p.OrderDetails.Order.BuyerId == traineeId)
             .OrderByDescending(p => p.CreatedAt)
-            .FirstOrDefaultAsync(p => p.OrderDetails != null && p.OrderDetails.PackageId == packageId && p.OrderDetails.Order.BuyerId == traineeId, cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<TrainingPlanExercise?> GetExerciseByIdAsync(Guid exerciseId, CancellationToken cancellationToken = default)
     {
-        return await DbContext.TrainingPlanExercises
+        var exercise = await DbContext.TrainingPlanExercises
             .Include(e => e.TrainingPlan)
                 .ThenInclude(p => p.OrderDetails)
                     .ThenInclude(od => od!.Order)
@@ -155,11 +163,28 @@ public class TrainingPlanRepository : Repository<TrainingPlan>, ITrainingPlanRep
                 .ThenInclude(p => p.OrderDetails)
                     .ThenInclude(od => od!.Package)
             .FirstOrDefaultAsync(e => e.TrainingPlanExerciseId == exerciseId, cancellationToken);
+
+        if (exercise?.TrainingPlan != null)
+        {
+            await DbContext.Entry(exercise.TrainingPlan)
+                .Reference(p => p.Coach)
+                .LoadAsync(cancellationToken);
+
+            if (exercise.TrainingPlan.Coach != null)
+            {
+                await DbContext.Entry(exercise.TrainingPlan.Coach)
+                    .Reference(c => c.Coach)
+                    .LoadAsync(cancellationToken);
+            }
+        }
+
+        return exercise;
     }
 
     public async Task<WorkoutCompletionLog?> GetWorkoutLogAsync(Guid exerciseId, Guid traineeId, CancellationToken cancellationToken = default)
     {
         return await DbContext.WorkoutCompletionLogs
+            .OrderByDescending(l => l.CreatedAt)
             .FirstOrDefaultAsync(l => l.TrainingPlanExerciseId == exerciseId && l.TraineeId == traineeId, cancellationToken);
     }
 
@@ -176,6 +201,7 @@ public class TrainingPlanRepository : Repository<TrainingPlan>, ITrainingPlanRep
     public async Task<TrainingPlan?> GetCoachTraineePlanWithLogsAsync(Guid orderDetailsId, Guid coachId, CancellationToken cancellationToken = default)
     {
         return await DbContext.TrainingPlans
+            .AsSplitQuery()
             .Include(p => p.OrderDetails)
                 .ThenInclude(od => od!.Order)
                     .ThenInclude(o => o.Buyer)
@@ -186,10 +212,11 @@ public class TrainingPlanRepository : Repository<TrainingPlan>, ITrainingPlanRep
             .Include(p => p.TrainingPlanExercises)
                 .ThenInclude(e => e.WorkoutCompletionLogs)
             .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.OrderDetailsId == orderDetailsId &&
+            .Where(p => p.OrderDetailsId == orderDetailsId && p.Status != "DELETED" &&
                 (p.CoachId == coachId
                  || (p.OrderDetails != null && p.OrderDetails.Order != null && p.OrderDetails.Order.CoachId == coachId)
-                 || (p.OrderDetails != null && p.OrderDetails.Package != null && p.OrderDetails.Package.CoachId == coachId)),
-                cancellationToken);
+                 || (p.OrderDetails != null && p.OrderDetails.Package != null && p.OrderDetails.Package.CoachId == coachId)))
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 }

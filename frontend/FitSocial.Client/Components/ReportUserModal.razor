@@ -67,7 +67,7 @@
                 <textarea @bind="descriptionText"
                           @bind:event="oninput"
                           disabled="@isSubmitting"
-                          maxlength="1000"
+                          maxlength="500"
                           rows="3"
                           placeholder="@(IsOtherSelected ? "Provide specific details regarding the violation..." : "Include any additional context or details for moderators...")"
                           class="w-full text-xs p-3 rounded-xl border @(!string.IsNullOrWhiteSpace(validationError) ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-[#FF5500]") focus:outline-hidden transition resize-none"></textarea>
@@ -80,7 +80,7 @@
                     {
                         <span></span>
                     }
-                    <span>@(descriptionText?.Length ?? 0)/1000</span>
+                    <span>@(descriptionText?.Length ?? 0)/500</span>
                 </div>
             </div>
 
@@ -205,6 +205,7 @@
 
     private bool IsSubmitDisabled =>
         isSubmitting ||
+        isUploadingReportImages ||
         string.IsNullOrWhiteSpace(selectedReason) ||
         (IsOtherSelected && string.IsNullOrWhiteSpace(descriptionText));
 
@@ -248,14 +249,14 @@
     private async Task HandleReportImageSelected(InputFileChangeEventArgs e)
     {
         reportImageUploadError = null;
-        var files = e.GetMultipleFiles(5).ToArray();
-        if (files.Length == 0) return;
-
-        if (reportImageUrls.Count + files.Length > 5)
+        if (e.FileCount + reportImageUrls.Count > 5)
         {
-            reportImageUploadError = "Tối đa 5 ảnh cho mỗi báo cáo.";
+            reportImageUploadError = "Maximum 5 images per report.";
             return;
         }
+
+        var files = e.GetMultipleFiles(5).ToArray();
+        if (files.Length == 0) return;
 
         isUploadingReportImages = true;
         try
@@ -321,9 +322,9 @@
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(descriptionText) && descriptionText.Trim().Length > 1000)
+        if (!string.IsNullOrWhiteSpace(descriptionText) && descriptionText.Trim().Length > 500)
         {
-            validationError = "Description cannot exceed 1000 characters.";
+            validationError = "Description cannot exceed 500 characters.";
             return;
         }
 

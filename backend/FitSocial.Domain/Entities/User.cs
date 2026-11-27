@@ -45,6 +45,8 @@ public partial class User
 
     public virtual CoachProfile? CoachProfileCoach { get; set; }
 
+    public virtual ICollection<CoachBankAccount> CoachBankAccounts { get; set; } = new List<CoachBankAccount>();
+
     public virtual ICollection<User> InverseLockedByNavigation { get; set; } = new List<User>();
 
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();

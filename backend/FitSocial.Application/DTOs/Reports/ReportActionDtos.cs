@@ -38,7 +38,7 @@ public class CreateUserReportRequestDto
     [StringLength(500, MinimumLength = 1)]
     public string Reason { get; set; } = string.Empty;
 
-    [StringLength(1000)]
+    [StringLength(500)]
     public string? Description { get; set; }
 
     [StringLength(30)]

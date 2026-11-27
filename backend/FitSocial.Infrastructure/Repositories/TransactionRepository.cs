@@ -1,3 +1,4 @@
+using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Infrastructure.Data;
@@ -14,6 +15,15 @@ namespace FitSocial.Infrastructure.Repositories
     {
         private readonly FitSocialDbContext _dbContext;
 
+        private static readonly string[] PaidOrderStatuses =
+        {
+            PaymentConstants.OrderStatusPaid,
+            PaymentConstants.OrderStatusCompleted,
+            PaymentConstants.OrderStatusActive,
+            PaymentConstants.OrderStatusRefunded,
+            PaymentConstants.OrderStatusRefundPending
+        };
+
         public TransactionRepository(FitSocialDbContext dbContext)
         {
             _dbContext = dbContext;
@@ -28,18 +38,13 @@ namespace FitSocial.Infrastructure.Repositories
             if (pageSize > 100) pageSize = 100;
 
             var isCoach = string.Equals(userRole, "COACH", StringComparison.OrdinalIgnoreCase);
+            var normalizedType = type?.Trim().ToUpperInvariant();
+            var isAllTypes = string.IsNullOrEmpty(normalizedType) || normalizedType == "ALL";
+            var includeOrders = isAllTypes || normalizedType == "PACKAGE_PURCHASE" || normalizedType == "COACH_ACTIVATION";
+            var includeRefunds = isAllTypes || normalizedType == "REFUND";
+            var includePayouts = isCoach && (isAllTypes || normalizedType == "PAYOUT");
 
             var records = new List<TransactionRecord>();
-
-            var paidStatuses = new[]
-            {
-                FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid,
-                "PAID",
-                FitSocial.Domain.Constants.PaymentConstants.OrderStatusCompleted,
-                "COMPLETED",
-                FitSocial.Domain.Constants.PaymentConstants.OrderStatusActive,
-                "ACTIVE"
-            };
 
             // Chuẩn hóa mốc thời gian lọc theo múi giờ Việt Nam (UTC+7) sang UTC
             DateTime? startUtc = fromDate.HasValue ? fromDate.Value.Date.AddHours(-7) : null;
@@ -48,132 +53,142 @@ namespace FitSocial.Infrastructure.Repositories
             // ================================================================
             // 1. GIAO DỊCH ĐƠN HÀNG (PACKAGE + COACH_ACTIVATION)
             // ================================================================
-            var orderQuery = _dbContext.Set<Order>()
-                .AsNoTracking()
-                .Include(o => o.Payments)
-                .Include(o => o.OrderDetails)
-                    .ThenInclude(od => od.Package)
-                .Where(o => o.OrderStatus != null && paidStatuses.Contains(o.OrderStatus.ToUpper()));
-
-            if (isCoach)
+            if (includeOrders)
             {
-                // Coach: Xem các đơn học viên mua gói của mình HOẶC đơn do chính mình mua/gia hạn
-                orderQuery = orderQuery.Where(o =>
-                    o.CoachId == userId ||
-                    o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == userId) ||
-                    o.BuyerId == userId);
-            }
-            else
-            {
-                // Trainee: Xem các đơn mình đã mua
-                orderQuery = orderQuery.Where(o => o.BuyerId == userId);
-            }
+                var orderQuery = _dbContext.Set<Order>()
+                    .AsNoTracking()
+                    .AsSplitQuery()
+                    .Include(o => o.Payments)
+                    .Include(o => o.OrderDetails)
+                        .ThenInclude(od => od.Package)
+                    .Where(o => o.OrderStatus != null && PaidOrderStatuses.Contains(o.OrderStatus.ToUpper()));
 
-            if (startUtc.HasValue)
-                orderQuery = orderQuery.Where(o => o.CreatedAt.HasValue && o.CreatedAt.Value >= startUtc.Value);
-            if (endUtc.HasValue)
-                orderQuery = orderQuery.Where(o => o.CreatedAt.HasValue && o.CreatedAt.Value <= endUtc.Value);
-
-            var orders = await orderQuery.ToListAsync(cancellationToken);
-            foreach (var order in orders)
-            {
-                var payment = order.Payments?.FirstOrDefault(p => p.Status == "SUCCESS")
-                           ?? order.Payments?.FirstOrDefault();
-                var packageTitle = order.OrderDetails?.FirstOrDefault()?.PackageTitle ?? "Training Package";
-                var isCoachSelling = isCoach && order.BuyerId != userId && (order.CoachId == userId || (order.OrderDetails != null && order.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == userId)));
-
-                if (order.OrderType == FitSocial.Domain.Constants.PaymentConstants.OrderTypeCoachActivation)
+                if (isCoach)
                 {
-                    records.Add(new TransactionRecord
-                    {
-                        TransactionId = payment?.PaymentId ?? order.OrderId,
-                        Date = order.CreatedAt ?? DateTime.UtcNow,
-                        Amount = -(order.TotalAmount ?? 0),
-                        Currency = "VND",
-                        Type = "COACH_ACTIVATION",
-                        Status = order.OrderStatus ?? "COMPLETED",
-                        Description = "Coach subscription activation / renewal",
-                        ReferenceId = payment?.GatewayTransactionId ?? order.OrderId.ToString()
-                    });
+                    orderQuery = orderQuery.Where(o =>
+                        o.CoachId == userId ||
+                        o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == userId) ||
+                        o.BuyerId == userId);
                 }
                 else
                 {
-                    records.Add(new TransactionRecord
+                    orderQuery = orderQuery.Where(o => o.BuyerId == userId);
+                }
+
+                if (normalizedType == "COACH_ACTIVATION")
+                {
+                    orderQuery = orderQuery.Where(o => o.OrderType == PaymentConstants.OrderTypeCoachActivation);
+                }
+                else if (normalizedType == "PACKAGE_PURCHASE")
+                {
+                    orderQuery = orderQuery.Where(o => o.OrderType != PaymentConstants.OrderTypeCoachActivation);
+                }
+
+                if (startUtc.HasValue)
+                    orderQuery = orderQuery.Where(o => o.CreatedAt.HasValue && o.CreatedAt.Value >= startUtc.Value);
+                if (endUtc.HasValue)
+                    orderQuery = orderQuery.Where(o => o.CreatedAt.HasValue && o.CreatedAt.Value <= endUtc.Value);
+
+                var orders = await orderQuery.ToListAsync(cancellationToken);
+                foreach (var order in orders)
+                {
+                    var payment = order.Payments?.FirstOrDefault(p => p.Status == "SUCCESS")
+                               ?? order.Payments?.FirstOrDefault();
+                    var packageTitle = order.OrderDetails?.FirstOrDefault()?.PackageTitle ?? "Training Package";
+                    var isCoachSelling = isCoach && order.BuyerId != userId && (order.CoachId == userId || (order.OrderDetails != null && order.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == userId)));
+
+                    if (order.OrderType == PaymentConstants.OrderTypeCoachActivation)
                     {
-                        TransactionId = payment?.PaymentId ?? order.OrderId,
-                        Date = order.CreatedAt ?? DateTime.UtcNow,
-                        Amount = isCoachSelling ? (order.TotalAmount ?? 0) : -(order.TotalAmount ?? 0),
-                        Currency = "VND",
-                        Type = "PACKAGE_PURCHASE",
-                        Status = order.OrderStatus ?? "COMPLETED",
-                        Description = isCoachSelling
-                            ? $"Package sold: {packageTitle}"
-                            : $"Package purchased: {packageTitle}",
-                        ReferenceId = payment?.GatewayTransactionId ?? order.OrderId.ToString()
-                    });
+                        records.Add(new TransactionRecord
+                        {
+                            TransactionId = payment?.PaymentId ?? order.OrderId,
+                            Date = order.CreatedAt ?? DateTime.UtcNow,
+                            Amount = -(order.TotalAmount ?? 0),
+                            Currency = "VND",
+                            Type = "COACH_ACTIVATION",
+                            Status = order.OrderStatus ?? "COMPLETED",
+                            Description = "Coach subscription activation / renewal",
+                            ReferenceId = payment?.GatewayTransactionId ?? order.OrderId.ToString()
+                        });
+                    }
+                    else
+                    {
+                        records.Add(new TransactionRecord
+                        {
+                            TransactionId = payment?.PaymentId ?? order.OrderId,
+                            Date = order.CreatedAt ?? DateTime.UtcNow,
+                            Amount = isCoachSelling ? (order.TotalAmount ?? 0) : -(order.TotalAmount ?? 0),
+                            Currency = "VND",
+                            Type = "PACKAGE_PURCHASE",
+                            Status = order.OrderStatus ?? "COMPLETED",
+                            Description = isCoachSelling
+                                ? $"Package sold: {packageTitle}"
+                                : $"Package purchased: {packageTitle}",
+                            ReferenceId = payment?.GatewayTransactionId ?? order.OrderId.ToString()
+                        });
+                    }
                 }
             }
 
             // ================================================================
             // 2. HOÀN TRẢ TIỀN (REFUND)
             // ================================================================
-            var refundQuery = _dbContext.Set<RefundRequest>()
-                .AsNoTracking()
-                .Include(r => r.Order)
-                    .ThenInclude(od => od.OrderDetails)
-                .Include(r => r.Payment)
-                .Where(r => r.Status == "APPROVED" || r.Status == "REFUNDED" || r.Status == "PENDING");
+            if (includeRefunds)
+            {
+                var refundQuery = _dbContext.Set<RefundRequest>()
+                    .AsNoTracking()
+                    .Include(r => r.Order)
+                        .ThenInclude(od => od.OrderDetails)
+                            .ThenInclude(od => od.Package)
+                    .Where(r => r.Status == "APPROVED" || r.Status == "REFUNDED" || r.Status == "PENDING");
 
-            if (isCoach)
-            {
-                refundQuery = refundQuery.Where(r => r.Order != null && 
-                    (r.Order.CoachId == userId || r.Order.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == userId)));
-            }
-            else
-            {
-                refundQuery = refundQuery.Where(r => r.RequestedBy == userId);
-            }
-
-            if (startUtc.HasValue)
-            {
-                refundQuery = refundQuery.Where(r =>
-                    (r.RefundedAt.HasValue && r.RefundedAt.Value >= startUtc.Value) ||
-                    (r.RequestedAt.HasValue && r.RequestedAt.Value >= startUtc.Value));
-            }
-            if (endUtc.HasValue)
-            {
-                refundQuery = refundQuery.Where(r =>
-                    (r.RefundedAt.HasValue && r.RefundedAt.Value <= endUtc.Value) ||
-                    (r.RequestedAt.HasValue && r.RequestedAt.Value <= endUtc.Value));
-            }
-
-            var refunds = await refundQuery.ToListAsync(cancellationToken);
-            foreach (var refund in refunds)
-            {
-                var packageTitle = refund.Order?.OrderDetails?.FirstOrDefault()?.PackageTitle ?? "Training Package";
-                var amount = isCoach 
-                    ? -(refund.ApprovedAmount ?? refund.RequestedAmount ?? 0)
-                    : (refund.ApprovedAmount ?? refund.RequestedAmount ?? 0);
-
-                records.Add(new TransactionRecord
+                if (isCoach)
                 {
-                    TransactionId = refund.RefundRequestId,
-                    Date = refund.RefundedAt ?? refund.RequestedAt ?? DateTime.UtcNow,
-                    Amount = amount,
-                    Currency = "VND",
-                    Type = "REFUND",
-                    Status = refund.Status ?? "PENDING",
-                    Description = isCoach
-                        ? $"Refund deducted: {packageTitle}"
-                        : $"Refund received: {packageTitle}",
-                    ReferenceId = refund.RefundTransactionRef ?? refund.OrderId.ToString()
-                });
+                    refundQuery = refundQuery.Where(r => r.RequestedBy == userId ||
+                        (r.Order != null && (r.Order.CoachId == userId || r.Order.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == userId))));
+                }
+                else
+                {
+                    refundQuery = refundQuery.Where(r => r.RequestedBy == userId);
+                }
+
+                if (startUtc.HasValue)
+                {
+                    refundQuery = refundQuery.Where(r => (r.RefundedAt ?? r.RequestedAt) >= startUtc.Value);
+                }
+                if (endUtc.HasValue)
+                {
+                    refundQuery = refundQuery.Where(r => (r.RefundedAt ?? r.RequestedAt) <= endUtc.Value);
+                }
+
+                var refunds = await refundQuery.ToListAsync(cancellationToken);
+                foreach (var refund in refunds)
+                {
+                    var packageTitle = refund.Order?.OrderDetails?.FirstOrDefault()?.PackageTitle ?? "Training Package";
+                    var rawAmount = refund.ApprovedAmount ?? refund.RequestedAmount ?? 0;
+                    var isBuyerRefund = refund.RequestedBy == userId;
+                    var amount = isBuyerRefund ? rawAmount : -rawAmount;
+
+                    records.Add(new TransactionRecord
+                    {
+                        TransactionId = refund.RefundRequestId,
+                        Date = refund.RefundedAt ?? refund.RequestedAt ?? DateTime.UtcNow,
+                        Amount = amount,
+                        Currency = "VND",
+                        Type = "REFUND",
+                        Status = refund.Status ?? "PENDING",
+                        Description = isBuyerRefund
+                            ? $"Refund received: {packageTitle}"
+                            : $"Refund deducted: {packageTitle}",
+                        ReferenceId = refund.RefundTransactionRef ?? refund.OrderId.ToString()
+                    });
+                }
             }
 
             // ================================================================
             // 3. GIẢI NGÂN HỆ THỐNG (PAYOUT) - Dành riêng cho Coach
             // ================================================================
-            if (isCoach)
+            if (includePayouts)
             {
                 var payoutQuery = _dbContext.Set<Payout>()
                     .AsNoTracking()
@@ -183,9 +198,9 @@ namespace FitSocial.Infrastructure.Repositories
                     .Where(p => p.CoachId == userId && (p.Status == "PROCESSED" || p.Status == "COMPLETED" || p.Status == "PENDING"));
 
                 if (startUtc.HasValue)
-                    payoutQuery = payoutQuery.Where(p => (p.ProcessedAt.HasValue && p.ProcessedAt.Value >= startUtc.Value) || (p.CreatedAt.HasValue && p.CreatedAt.Value >= startUtc.Value));
+                    payoutQuery = payoutQuery.Where(p => (p.ProcessedAt ?? p.CreatedAt) >= startUtc.Value);
                 if (endUtc.HasValue)
-                    payoutQuery = payoutQuery.Where(p => (p.ProcessedAt.HasValue && p.ProcessedAt.Value <= endUtc.Value) || (p.CreatedAt.HasValue && p.CreatedAt.Value <= endUtc.Value));
+                    payoutQuery = payoutQuery.Where(p => (p.ProcessedAt ?? p.CreatedAt) <= endUtc.Value);
 
                 var payouts = await payoutQuery.ToListAsync(cancellationToken);
                 foreach (var payout in payouts)
@@ -216,7 +231,7 @@ namespace FitSocial.Infrastructure.Repositories
             // ================================================================
             // 4. LỌC THEO TYPE & SẮP XẾP, PHÂN TRANG
             // ================================================================
-            if (!string.IsNullOrWhiteSpace(type) && !type.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+            if (!isAllTypes)
             {
                 records = records.Where(r => r.Type != null && r.Type.Equals(type, StringComparison.OrdinalIgnoreCase)).ToList();
             }

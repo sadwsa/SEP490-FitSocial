@@ -123,6 +123,10 @@
                                 {
                                     <span class="status-badge locked">Locked</span>
                                 }
+                                else if (string.Equals(r.ReportedUserCoachStatus, "BLOCKED", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="status-badge locked">Blocked</span>
+                                }
                                 else
                                 {
                                     <span class="status-badge active">Active</span>
@@ -215,6 +219,10 @@
                                         {
                                             <span class="status-badge locked">Account Locked</span>
                                         }
+                                        @if (string.Equals(selectedAppeal.ReportedUserCoachStatus, "BLOCKED", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <span class="status-badge locked">Coach Blocked</span>
+                                        }
                                     </div>
                                 </div>
                             </div>
@@ -283,9 +291,27 @@
                                 <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
                                     @foreach (var m in selectedAppeal.AppealMedia)
                                     {
-                                        <a href="@m.MediaUrl" target="_blank" rel="noopener noreferrer" style="display:block;border-radius:6px;overflow:hidden;border:1px solid #f0abfc;" title="Click to view full evidence">
-                                            <img src="@m.MediaUrl" alt="Appeal Evidence" style="width:72px;height:72px;object-fit:cover;" />
-                                        </a>
+                                        var isVideo = string.Equals(m.MediaType, "VIDEO", StringComparison.OrdinalIgnoreCase)
+                                            || (m.MediaUrl?.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ?? false)
+                                            || (m.MediaUrl?.EndsWith(".webm", StringComparison.OrdinalIgnoreCase) ?? false);
+                                        var isDoc = !string.IsNullOrEmpty(m.MediaType) &&
+                                            !string.Equals(m.MediaType, "IMAGE", StringComparison.OrdinalIgnoreCase);
+
+                                        if (isVideo || isDoc)
+                                        {
+                                            <a href="@m.MediaUrl" target="_blank" rel="noopener noreferrer"
+                                               style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:6px;border:1px solid #f0abfc;background:#fff;color:#a21caf;font-size:.75rem;font-weight:600;text-decoration:none;"
+                                               title="Open supporting file">
+                                                <AppIcon Name="doc" />
+                                                <span>@(string.IsNullOrEmpty(m.MediaType) ? "Attachment" : m.MediaType)</span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a href="@m.MediaUrl" target="_blank" rel="noopener noreferrer" style="display:block;border-radius:6px;overflow:hidden;border:1px solid #f0abfc;" title="Click to view full evidence">
+                                                <img src="@m.MediaUrl" alt="Appeal Evidence" style="width:72px;height:72px;object-fit:cover;" />
+                                            </a>
+                                        }
                                     }
                                 </div>
                             </div>
@@ -329,8 +355,9 @@
 
                                 <!-- Review Note -->
                                 <div style="margin-bottom:12px;">
-                                    <label style="font-size:.75rem;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Review Note (optional):</label>
+                                    <label style="font-size:.75rem;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Review Note (optional, max 1,000 chars):</label>
                                     <textarea @bind="reviewNote"
+                                              maxlength="1000"
                                               style="width:100%;font-size:.78rem;padding:8px;border:1px solid #d1d5db;border-radius:8px;resize:vertical;"
                                               rows="2"
                                               placeholder="Explain your decision..."></textarea>
@@ -398,7 +425,8 @@
     private int currentPage = 1;
     private int pageSize = 10;
     private PagedResult<ReportListItemDto> pagedAppeals = new();
-    private System.Timers.Timer? searchDebounceTimer;
+    private CancellationTokenSource? _searchDebounceCts;
+    private int _loadVersion;
     private bool isLoading = false;
 
     private bool showReviewModal = false;
@@ -413,6 +441,7 @@
 
     private async Task LoadAppealsAsync()
     {
+        var version = ++_loadVersion;
         isLoading = true;
         LoadingService.Show("Loading appeals...");
         try
@@ -422,6 +451,8 @@
                 searchTerm: searchTerm,
                 pageNumber: currentPage,
                 pageSize: pageSize);
+
+            if (version != _loadVersion) return;
 
             if (res.Success && res.Data != null)
             {
@@ -441,13 +472,17 @@
         }
         catch (Exception ex)
         {
+            if (version != _loadVersion) return;
             toastMessage = $"Unable to load appeals: {ex.Message}";
             toastType = "error";
         }
         finally
         {
-            isLoading = false;
-            LoadingService.Hide();
+            if (version == _loadVersion)
+            {
+                isLoading = false;
+                LoadingService.Hide();
+            }
         }
     }
 
@@ -462,23 +497,32 @@
     private void OnSearchInput(ChangeEventArgs e)
     {
         searchTerm = e.Value?.ToString() ?? "";
-        searchDebounceTimer?.Stop();
-        searchDebounceTimer?.Dispose();
-        searchDebounceTimer = new System.Timers.Timer(400) { AutoReset = false };
-        searchDebounceTimer.Elapsed += async (_, _) =>
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _searchDebounceCts = cts;
+        _ = DebounceSearchAsync(cts.Token);
+    }
+
+    private async Task DebounceSearchAsync(CancellationToken ct)
+    {
+        try
         {
+            await Task.Delay(400, ct);
             currentPage = 1;
-            await InvokeAsync(LoadAppealsAsync);
-            await InvokeAsync(StateHasChanged);
-        };
-        searchDebounceTimer.Start();
+            await LoadAppealsAsync();
+            StateHasChanged();
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task HandleSearchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
-            searchDebounceTimer?.Stop();
+            _searchDebounceCts?.Cancel();
             currentPage = 1;
             await LoadAppealsAsync();
         }
@@ -491,28 +535,6 @@
         await LoadAppealsAsync();
     }
 
-    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
-    {
-        if (int.TryParse(e.Value?.ToString(), out var s) && s > 0)
-        {
-            pageSize = s;
-            currentPage = 1;
-            await LoadAppealsAsync();
-        }
-    }
-
-    private IEnumerable<int> GetVisiblePageNumbers()
-    {
-        var total = pagedAppeals.TotalPages;
-        if (total <= 1) yield break;
-        var d = 2;
-        var l = Math.Max(1, currentPage - d);
-        var r = Math.Min(total, currentPage + d);
-        if (l > 1) { yield return 1; if (l > 2) yield return -1; }
-        for (var i = l; i <= r; i++) yield return i;
-        if (r < total) { if (r < total - 1) yield return -1; yield return total; }
-    }
-
     private async Task OpenAppealModal(ReportListItemDto appeal)
     {
         selectedAppeal = appeal;
@@ -522,9 +544,21 @@
         try
         {
             var res = await ReportService.GetReportByIdAsync(appeal.ReportId);
-            if (res.Success && res.Data != null) selectedAppeal = res.Data;
+            if (res.Success && res.Data != null)
+            {
+                selectedAppeal = res.Data;
+            }
+            else if (!res.Success && !string.IsNullOrEmpty(res.Message))
+            {
+                toastMessage = $"Unable to refresh appeal details: {res.Message}";
+                toastType = "error";
+            }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            toastMessage = $"Unable to refresh appeal details: {ex.Message}";
+            toastType = "error";
+        }
         finally
         {
             LoadingService.Hide();
@@ -608,7 +642,7 @@
 
     public void Dispose()
     {
-        searchDebounceTimer?.Stop();
-        searchDebounceTimer?.Dispose();
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
     }
 }

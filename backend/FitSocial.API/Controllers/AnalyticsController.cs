@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Coach;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +14,7 @@ namespace FitSocial.API.Controllers;
 
 [ApiController]
 [Route("api/analytics")]
-[Authorize] // Bảo mật route (Admin/Coach)
+[Authorize(Roles = $"{RoleConstants.Coach},{RoleConstants.Admin},{RoleConstants.Staff}")]
 public class AnalyticsController : ControllerBase
 {
     private readonly ICoachDashboardService _dashboardService;
@@ -44,8 +45,9 @@ public class AnalyticsController : ControllerBase
             return Unauthorized(ApiResponseDto<object>.Fail("Unauthorized: Invalid user credentials."));
         }
 
-        var isAuditAuthorized = User.IsInRole("ADMIN") || User.IsInRole("STAFF");
-        if (!isAuditAuthorized && currentUserId != coachId)
+        var isAuditAuthorized = User.IsInRole(RoleConstants.Admin) || User.IsInRole(RoleConstants.Staff);
+        var isOwnCoach = User.IsInRole(RoleConstants.Coach) && currentUserId == coachId;
+        if (!isAuditAuthorized && !isOwnCoach)
         {
             return StatusCode(StatusCodes.Status403Forbidden, ApiResponseDto<object>.Fail("Access denied: You are only allowed to view your own analytics."));
         }

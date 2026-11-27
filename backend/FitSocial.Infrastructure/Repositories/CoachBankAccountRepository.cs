@@ -20,23 +20,23 @@ public class CoachBankAccountRepository : Repository<CoachBankAccount>, ICoachBa
     {
         return DbSet
             .Where(b => b.CoachId == coachId)
-            .OrderByDescending(b => b.IsDefault)
-            .ThenByDescending(b => b.CreatedAt)
+            .OrderByDescending(b => b.IsDefault ?? false)
+            .ThenByDescending(b => b.CreatedAt ?? DateTime.MinValue)
             .ToListAsync(cancellationToken);
     }
 
     public Task<CoachBankAccount?> GetDefaultByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
         return DbSet
-            .FirstOrDefaultAsync(b => b.CoachId == coachId && b.IsDefault == true, cancellationToken);
+            .FirstOrDefaultAsync(b => b.CoachId == coachId && b.IsDefault == true && b.IsActive != false, cancellationToken);
     }
 
     public Task<List<CoachBankAccount>> ListActiveByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
         return DbSet
             .Where(b => b.CoachId == coachId && b.IsActive != false)
-            .OrderByDescending(b => b.IsDefault)
-            .ThenByDescending(b => b.CreatedAt)
+            .OrderByDescending(b => b.IsDefault ?? false)
+            .ThenByDescending(b => b.CreatedAt ?? DateTime.MinValue)
             .ToListAsync(cancellationToken);
     }
 }

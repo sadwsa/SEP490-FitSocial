@@ -205,6 +205,11 @@ public class TrainingPackageService : ITrainingPackageService
         return await _apiClient.PostAsync<CreatePackageReviewDto, bool>($"{BaseEndpoint}/{packageId}/reviews", dto);
     }
 
+    public async Task<ApiResponse<bool>> UpdatePackageReviewAsync(Guid packageId, Guid reviewId, UpdatePackageReviewDto dto)
+    {
+        return await _apiClient.PutAsync<UpdatePackageReviewDto, bool>($"{BaseEndpoint}/{packageId}/reviews/{reviewId}", dto);
+    }
+
     public async Task<ApiResponse<bool>> ReplyToReviewAsync(Guid packageId, Guid reviewId, ReplyReviewDto dto)
     {
         return await _apiClient.PostAsync<ReplyReviewDto, bool>($"{BaseEndpoint}/{packageId}/reviews/{reviewId}/reply", dto);

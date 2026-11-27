@@ -168,6 +168,20 @@ namespace FitSocial.API.Controllers
             return Ok(result);
         }
 
+        // 2b. Cập nhật đánh giá gói tập (1 lần duy nhất)
+        [HttpPut("{id}/reviews/{reviewId}")]
+        [Authorize]
+        public async Task<IActionResult> UpdatePackageReview(Guid id, Guid reviewId, [FromBody] UpdatePackageReviewDto dto, CancellationToken cancellationToken)
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdString, out var traineeId))
+            {
+                return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
+            }
+            var result = await _service.UpdatePackageReviewAsync(id, reviewId, traineeId, dto, cancellationToken);
+            return Ok(result);
+        }
+
         // 2.1 Trainee upload ảnh đánh giá lên Cloudinary (trước khi gửi review)
         [HttpPost("{id}/upload-images")]
         [Authorize]

@@ -2,9 +2,7 @@
 @implements IDisposable
 @attribute [Authorize(Roles = "COACH")]
 @inject ICoachDashboardService DashboardService
-@inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
-@inject FitSocial.Client.Services.Auth.IAuthService AuthService
 @inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Coaches
@@ -12,7 +10,6 @@
 @using FitSocial.Client.Services.Coaches
 @using System.Security.Claims
 @using System.Globalization
-@using Microsoft.AspNetCore.Components.Web
 
 <PageTitle>Coach Dashboard - FitConnect</PageTitle>
 
@@ -237,8 +234,11 @@
                     </h2>
                     <p class="text-gray-500 text-sm mt-0.5">Deep dive into your revenue, retention, and top clients.</p>
                 </div>
-                <button @onclick="LoadAnalyticsAsync" class="p-2.5 rounded-2xl bg-white shadow-sm hover:shadow-md border border-slate-200 text-slate-600 transition-all hover:rotate-180 duration-500" title="Refresh Analytics">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.03 0 01-15.357-2m15.357 2H15"></path></svg>
+                <button @onclick="LoadAnalyticsAsync"
+                        disabled="@isLoadingAnalytics"
+                        class="p-2.5 rounded-2xl bg-white shadow-sm hover:shadow-md border border-slate-200 text-slate-600 transition-all hover:rotate-180 duration-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Refresh Analytics">
+                    <svg class="w-5 h-5 @(isLoadingAnalytics ? "animate-spin" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.03 0 01-15.357-2m15.357 2H15"></path></svg>
                 </button>
             </div>
 
@@ -457,36 +457,18 @@
     private bool isLoading = true;
     private string? errorMessage;
 
-    // Header state
-    private string? headerSearchTerm = "";
-    private string userName = "Coach";
-    private string userInitials = "C";
-    private string userRole = "Coach";
-
     // Analytics state
     private CoachDashboardDto? analytics;
     private bool isLoadingAnalytics = true;
+    private bool _isFetchingAnalytics = false;
     private string? analyticsErrorMessage;
     private Guid currentCoachId;
 
     protected override async Task OnInitializedAsync()
     {
-        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
-        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
-        Shell.SearchInputHandler = e =>
-        {
-            HandleHeaderSearchInput(e);
-            return Task.CompletedTask;
-        };
-        Shell.SearchKeyUpHandler = e =>
-        {
-            HandleHeaderSearchKeyUp(e);
-            return Task.CompletedTask;
-        };
-        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
-        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
+        Shell.ShowSearch = false;
 
-        await LoadUserInfoAsync();
+        await LoadCoachIdentityAsync();
         await LoadMetricsAsync();
         await LoadAnalyticsAsync();
     }
@@ -525,6 +507,9 @@
 
     private async Task LoadAnalyticsAsync()
     {
+        if (_isFetchingAnalytics) return;
+
+        _isFetchingAnalytics = true;
         isLoadingAnalytics = true;
         analyticsErrorMessage = null;
         StateHasChanged();
@@ -533,17 +518,7 @@
         {
             if (currentCoachId == Guid.Empty)
             {
-                var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-                var user = authState.User;
-                if (user.Identity?.IsAuthenticated == true)
-                {
-                    var idStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                                ?? user.FindFirst("sub")?.Value;
-                    if (Guid.TryParse(idStr, out var id))
-                    {
-                        currentCoachId = id;
-                    }
-                }
+                await LoadCoachIdentityAsync();
             }
 
             if (currentCoachId != Guid.Empty)
@@ -569,12 +544,13 @@
         }
         finally
         {
+            _isFetchingAnalytics = false;
             isLoadingAnalytics = false;
             StateHasChanged();
         }
     }
 
-    private async Task LoadUserInfoAsync()
+    private async Task LoadCoachIdentityAsync()
     {
         try
         {
@@ -589,27 +565,11 @@
                 {
                     currentCoachId = id;
                 }
-
-                userName = user.FindFirst(ClaimTypes.Name)?.Value 
-                           ?? user.FindFirst("name")?.Value 
-                           ?? user.FindFirst(ClaimTypes.Email)?.Value 
-                           ?? "Coach";
-
-                var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
-                userRole = roleClaim?.Equals("COACH", StringComparison.OrdinalIgnoreCase) == true ? "Coach" : "User";
-
-                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length > 0)
-                {
-                    userInitials = parts.Length > 1 
-                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper() 
-                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
-                }
             }
         }
         catch
         {
-            userInitials = "C";
+            currentCoachId = Guid.Empty;
         }
     }
 
@@ -626,19 +586,4 @@
         }
         return $"{amount:N2} {currency}";
     }
-
-    private async Task HandleLogout()
-    {
-        await AuthService.LogoutAsync();
-        Navigation.NavigateTo("login");
-    }
-
-    private void HandleHeaderSearchInput(ChangeEventArgs e)
-    {
-        headerSearchTerm = e.Value?.ToString();
-    }
-
-    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
-    private void ExecuteHeaderSearch() { }
-    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
 }

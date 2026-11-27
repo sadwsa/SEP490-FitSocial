@@ -1,7 +1,9 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FitSocial.Domain.Constants;
+using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using FitSocial.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -16,9 +18,28 @@ public class CoachDashboardRepository : ICoachDashboardRepository
 {
     private readonly FitSocialDbContext _context;
 
+    private static readonly string[] PaidAnalyticsStatuses =
+    {
+        PaymentConstants.OrderStatusPaid,
+        PaymentConstants.OrderStatusActive,
+        PaymentConstants.OrderStatusCompleted
+    };
+
     public CoachDashboardRepository(FitSocialDbContext context)
     {
         _context = context;
+    }
+
+    private IQueryable<Order> ValidAnalyticsOrders(Guid coachId)
+    {
+        return _context.Orders
+            .AsNoTracking()
+            .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
+                        && o.OrderType != PaymentConstants.OrderTypeCoachActivation
+                        && o.OrderStatus != null
+                        && PaidAnalyticsStatuses.Contains(o.OrderStatus.ToUpper())
+                        && o.OrderStatus.ToUpper() != PaymentConstants.OrderStatusRefunded
+                        && (o.RefundRequests == null || !o.RefundRequests.Any(r => r.Status != null && r.Status.ToUpper() == "APPROVED")));
     }
 
     /// <inheritdoc/>
@@ -26,14 +47,7 @@ public class CoachDashboardRepository : ICoachDashboardRepository
     {
         // Trainees (BuyerId) who have an order with status PAID/COMPLETED/ACTIVE for this coach
         // that is currently valid (not expired based on package duration) and not refunded.
-        var orders = await _context.Orders
-            .AsNoTracking()
-            .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
-                        && o.OrderStatus != null
-                        && (o.OrderStatus.ToUpper() == "PAID" 
-                            || o.OrderStatus.ToUpper() == "COMPLETED" 
-                            || o.OrderStatus.ToUpper() == "ACTIVE")
-                        && (o.RefundRequests == null || !o.RefundRequests.Any(r => r.Status != null && r.Status.ToUpper() == "APPROVED")))
+        var orders = await ValidAnalyticsOrders(coachId)
             .Select(o => new
             {
                 o.BuyerId,
@@ -43,8 +57,8 @@ public class CoachDashboardRepository : ICoachDashboardRepository
             .ToListAsync(cancellationToken);
 
         return orders
-            .Where(o => o.DurationDays == null 
-                        || o.DurationDays <= 0 
+            .Where(o => o.DurationDays == null
+                        || o.DurationDays <= 0
                         || (o.CreatedAt.HasValue && o.CreatedAt.Value.AddDays((double)o.DurationDays.Value) >= now))
             .Select(o => o.BuyerId)
             .Distinct()
@@ -55,28 +69,15 @@ public class CoachDashboardRepository : ICoachDashboardRepository
     public async Task<int> GetTotalPackagesSoldAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
         // Successful package orders count for this coach
-        return await _context.Orders
-            .AsNoTracking()
-            .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
-                        && o.OrderStatus != null
-                        && (o.OrderStatus.ToUpper() == "PAID" 
-                            || o.OrderStatus.ToUpper() == "COMPLETED" 
-                            || o.OrderStatus.ToUpper() == "ACTIVE"))
-            .CountAsync(cancellationToken);
+        return await ValidAnalyticsOrders(coachId).CountAsync(cancellationToken);
     }
 
     /// <inheritdoc/>
     public async Task<decimal> GetMonthlyRevenueAsync(Guid coachId, DateTime startOfMonth, DateTime endOfMonth, CancellationToken cancellationToken = default)
     {
         // Total revenue from successful package orders created in the current month
-        return await _context.Orders
-            .AsNoTracking()
-            .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
-                        && o.OrderStatus != null
-                        && (o.OrderStatus.ToUpper() == "PAID" 
-                            || o.OrderStatus.ToUpper() == "COMPLETED" 
-                            || o.OrderStatus.ToUpper() == "ACTIVE")
-                        && o.CreatedAt.HasValue
+        return await ValidAnalyticsOrders(coachId)
+            .Where(o => o.CreatedAt.HasValue
                         && o.CreatedAt.Value >= startOfMonth
                         && o.CreatedAt.Value < endOfMonth)
             .SumAsync(o => (decimal?)o.TotalAmount, cancellationToken) ?? 0m;
@@ -125,20 +126,7 @@ public class CoachDashboardRepository : ICoachDashboardRepository
 
     public async Task<(decimal TotalRevenue, int TotalOrders, double RetentionRate)> GetAnalyticsSummaryAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] 
-        { 
-            Domain.Constants.PaymentConstants.OrderStatusPaid, 
-            Domain.Constants.PaymentConstants.OrderStatusActive, 
-            Domain.Constants.PaymentConstants.OrderStatusCompleted 
-        };
-
-        var baseQuery = _context.Orders
-            .AsNoTracking()
-            .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
-                        && o.OrderStatus != null 
-                        && paidStatuses.Contains(o.OrderStatus.ToUpper())
-                        && o.OrderStatus.ToUpper() != Domain.Constants.PaymentConstants.OrderStatusRefunded
-                        && (o.RefundRequests == null || !o.RefundRequests.Any(r => r.Status != null && r.Status.ToUpper() == "APPROVED")));
+        var baseQuery = ValidAnalyticsOrders(coachId);
 
         // 1. Tổng doanh thu & Số đơn
         var summary = await baseQuery
@@ -170,22 +158,8 @@ public class CoachDashboardRepository : ICoachDashboardRepository
 
     public async Task<List<(int Year, int Month, decimal Revenue, int TotalOrders)>> GetMonthlyStatsAsync(Guid coachId, DateTime startDate, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] 
-        { 
-            Domain.Constants.PaymentConstants.OrderStatusPaid, 
-            Domain.Constants.PaymentConstants.OrderStatusActive, 
-            Domain.Constants.PaymentConstants.OrderStatusCompleted 
-        };
-
-        var orders = await _context.Orders
-            .AsNoTracking()
-            .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
-                        && o.OrderStatus != null
-                        && paidStatuses.Contains(o.OrderStatus.ToUpper())
-                        && o.OrderStatus.ToUpper() != Domain.Constants.PaymentConstants.OrderStatusRefunded
-                        && (o.RefundRequests == null || !o.RefundRequests.Any(r => r.Status != null && r.Status.ToUpper() == "APPROVED"))
-                        && o.CreatedAt != null
-                        && o.CreatedAt >= startDate)
+        var orders = await ValidAnalyticsOrders(coachId)
+            .Where(o => o.CreatedAt != null && o.CreatedAt >= startDate)
             .Select(o => new
             {
                 CreatedAt = o.CreatedAt!.Value,
@@ -213,20 +187,7 @@ public class CoachDashboardRepository : ICoachDashboardRepository
 
     public async Task<List<(Guid TraineeId, string TraineeName, decimal TotalSpent, int TotalOrders)>> GetTopTraineesAsync(Guid coachId, int limit, CancellationToken cancellationToken = default)
     {
-        var paidStatuses = new[] 
-        { 
-            Domain.Constants.PaymentConstants.OrderStatusPaid, 
-            Domain.Constants.PaymentConstants.OrderStatusActive, 
-            Domain.Constants.PaymentConstants.OrderStatusCompleted 
-        };
-
-        var topTrainees = await _context.Orders
-            .AsNoTracking()
-            .Where(o => (o.CoachId == coachId || o.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == coachId))
-                        && o.OrderStatus != null
-                        && paidStatuses.Contains(o.OrderStatus.ToUpper())
-                        && o.OrderStatus.ToUpper() != Domain.Constants.PaymentConstants.OrderStatusRefunded
-                        && (o.RefundRequests == null || !o.RefundRequests.Any(r => r.Status != null && r.Status.ToUpper() == "APPROVED")))
+        var topTrainees = await ValidAnalyticsOrders(coachId)
             .GroupBy(o => new { o.BuyerId, o.Buyer.FullName }) // Entity Framework Core join bảng User tự động
             .Select(g => new
             {

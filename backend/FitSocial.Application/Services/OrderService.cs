@@ -122,7 +122,8 @@ public class OrderService : IOrderService
     public async Task<ApiResponseDto<OrderDto>> GetOrderByIdAsync(
         Guid orderId,
         Guid currentUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool isAdmin = false)
     {
         var order = await _orderRepository.GetOrderByIdWithDetailsAsync(orderId, cancellationToken);
         if (order == null)
@@ -130,8 +131,12 @@ public class OrderService : IOrderService
             throw new NotFoundException("Order not found.");
         }
 
-        // Authorization: only the buyer or coach or admin can view the order
-        if (order.BuyerId != currentUserId && order.CoachId != currentUserId)
+        var isOrderCoach = currentUserId != Guid.Empty && (
+            order.CoachId == currentUserId
+            || (order.OrderDetails != null && order.OrderDetails.Any(od => od.Package != null && od.Package.CoachId == currentUserId)));
+
+        // Authorization: only the buyer, package coach, or admin can view the order
+        if (!isAdmin && order.BuyerId != currentUserId && !isOrderCoach)
         {
             throw new ForbiddenException("You do not have access to view this order.");
         }
@@ -218,6 +223,16 @@ public class OrderService : IOrderService
                         var mealPlan = detail.MealPlans?.FirstOrDefault();
                         var thumbnailUrl = pkg?.Media?.OrderBy(m => m.SortOrder).Select(m => m.MediaUrl).FirstOrDefault();
 
+                        var pendingWorkoutReviews = plan?.TrainingPlanExercises?.Count(e =>
+                            e.WorkoutCompletionLogs?.Any(l =>
+                                l.TraineeId == group.Key &&
+                                string.Equals(l.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase)) == true) ?? 0;
+
+                        var pendingMealReviews = mealPlan?.MealPlanItems?.Count(i =>
+                            i.MealCompletionLogs?.Any(l =>
+                                l.TraineeId == group.Key &&
+                                string.Equals(l.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase)) == true) ?? 0;
+
                         var pkgDto = new CoachTraineePackageOrderDto
                         {
                             OrderId = order.OrderId,
@@ -236,7 +251,9 @@ public class OrderService : IOrderService
                             TrainingPlanId = plan?.TrainingPlanId,
                             PlanStatus = plan?.Status,
                             MealPlanId = mealPlan?.MealPlanId,
-                            MealPlanStatus = mealPlan?.Status
+                            MealPlanStatus = mealPlan?.Status,
+                            PendingWorkoutReviewsCount = pendingWorkoutReviews,
+                            PendingMealReviewsCount = pendingMealReviews
                         };
 
                         ComputeScheduleHealth(pkgDto, plan, mealPlan, today);
@@ -257,6 +274,7 @@ public class OrderService : IOrderService
                     TotalOrdersCount = packages.Count,
                     TotalSpent = totalSpent,
                     LatestPurchasedAt = latestDate,
+                    TotalPendingReviewsCount = packages.Sum(p => p.PendingWorkoutReviewsCount + p.PendingMealReviewsCount),
                     PurchasedPackages = packages.OrderByDescending(p => p.PurchasedAt).ToList()
                 };
             })

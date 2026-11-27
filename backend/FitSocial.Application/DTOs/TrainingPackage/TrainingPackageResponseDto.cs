@@ -29,6 +29,7 @@ namespace FitSocial.Application.DTOs.TrainingPackage
 
         // Review state of the current trainee
         public bool HasReviewed { get; set; }
+        public Guid? UserReviewId { get; set; }
         public bool IsReviewEdited { get; set; }
         public int? UserRating { get; set; }
         public string? UserComment { get; set; }

@@ -428,7 +428,7 @@ public class ViewTrainingProgressServiceTests
     #region Boundary Test Cases (UTCID11 - UTCID16)
 
     [Fact]
-    public async Task UTCID11_GetTraineeWorkoutPlanAsync_ZeroExercisesInPlan_ReturnsDefaultAdherence100()
+    public async Task UTCID11_GetTraineeWorkoutPlanAsync_ZeroExercisesInPlan_ReturnsZeroAdherence()
     {
         // Arrange
         var traineeId = Guid.NewGuid();
@@ -445,7 +445,7 @@ public class ViewTrainingProgressServiceTests
         Assert.Equal(0, result.TotalExercisesCount);
         Assert.Equal(0, result.CompletedExercisesCount);
         Assert.Equal(0, result.MissedExercisesCount);
-        Assert.Equal(100.0, result.AdherenceRate);
+        Assert.Equal(0.0, result.AdherenceRate);
         Assert.Empty(result.Weeks);
     }
 

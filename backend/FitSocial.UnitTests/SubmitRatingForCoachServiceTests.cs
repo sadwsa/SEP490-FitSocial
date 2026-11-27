@@ -219,8 +219,8 @@ public class SubmitRatingForCoachServiceTests
         _mockReviewMediaRepo.Verify(r => r.GetMediaByReviewIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact(DisplayName = "UTCID04 - Edit existing unedited review updates review and replaces existing media")]
-    public async Task UTCID04_SubmitPackageReviewAsync_ExistingUneditedReview_UpdatesReviewAndReplacesMedia()
+    [Fact(DisplayName = "UTCID04 - Submitting a duplicate review via POST when an unedited review already exists throws ValidationException")]
+    public async Task UTCID04_SubmitPackageReviewAsync_ExistingUneditedReview_ThrowsValidationException()
     {
         // Arrange
         var packageId = Guid.NewGuid();
@@ -241,84 +241,49 @@ public class SubmitRatingForCoachServiceTests
             Comment = "Initial comment",
             IsEdited = false
         };
-        var oldMedia = new ReviewMedia { ReviewMediaId = Guid.NewGuid(), ReviewId = existingReview.ReviewId, MediaUrl = "https://cdn.example.com/old.jpg" };
 
         var dto = new CreatePackageReviewDto
         {
             OrderId = orderId,
             Rating = 5,
-            Comment = "Updated feedback after finishing sessions",
-            ImageUrls = new List<string> { "https://cdn.example.com/new.jpg" }
+            Comment = "Duplicate submit attempt"
         };
 
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(package);
         _mockOrderRepo.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>())).ReturnsAsync(order);
         _mockReviewRepo.Setup(r => r.GetReviewByOrderIdAndTraineeAsync(orderId, traineeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingReview);
-        _mockReviewMediaRepo.Setup(r => r.GetMediaByReviewIdAsync(existingReview.ReviewId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ReviewMedia> { oldMedia });
-        _mockUserRepo.Setup(r => r.GetByIdAsync(coachId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new User { UserId = coachId, FullName = "Coach Alex", Email = "coach@example.com" });
 
-        // Act
-        var result = await _service.SubmitPackageReviewAsync(packageId, traineeId, dto);
-
-        // Assert
-        Assert.True(result.Success);
-        Assert.Equal(5, existingReview.Rating);
-        Assert.Equal("Updated feedback after finishing sessions", existingReview.Comment);
-        Assert.True(existingReview.IsEdited);
-        Assert.NotNull(existingReview.UpdatedAt);
-        _mockReviewRepo.Verify(r => r.Update(existingReview), Times.Once);
-        _mockReviewMediaRepo.Verify(r => r.Remove(oldMedia), Times.Once);
-        _mockReviewMediaRepo.Verify(r => r.AddAsync(It.Is<ReviewMedia>(m => m.MediaUrl == "https://cdn.example.com/new.jpg"), It.IsAny<CancellationToken>()), Times.Once);
-        _mockNotificationRepo.Verify(r => r.AddAsync(It.Is<Notification>(n => n.Type == "REVIEW_UPDATED"), It.IsAny<CancellationToken>()), Times.Once);
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.SubmitPackageReviewAsync(packageId, traineeId, dto));
+        Assert.Equal("You have already reviewed this order. Please edit your existing review instead.", ex.Message);
+        _mockReviewRepo.Verify(r => r.Update(It.IsAny<Review>()), Times.Never);
+        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact(DisplayName = "UTCID05 - Empty OrderId resolves from existing package review fallback and succeeds")]
-    public async Task UTCID05_SubmitPackageReviewAsync_EmptyOrderIdWithExistingPackageReview_ResolvesOrderIdAndSucceeds()
+    [Fact(DisplayName = "UTCID05 - Empty OrderId throws ValidationException")]
+    public async Task UTCID05_SubmitPackageReviewAsync_EmptyOrderId_ThrowsValidationException()
     {
         // Arrange
         var packageId = Guid.NewGuid();
         var coachId = Guid.NewGuid();
         var traineeId = Guid.NewGuid();
-        var resolvedOrderId = Guid.NewGuid();
-
         var package = CreateEligiblePackage(packageId, coachId);
-        var order = CreateEligibleOrder(resolvedOrderId, traineeId, packageId, PaymentConstants.OrderStatusPaid);
-        var legacyReview = new Review
-        {
-            ReviewId = Guid.NewGuid(),
-            PackageId = packageId,
-            OrderId = resolvedOrderId,
-            TraineeId = traineeId,
-            Rating = 4,
-            IsEdited = false
-        };
-
         var dto = new CreatePackageReviewDto
         {
             OrderId = Guid.Empty,
             Rating = 5,
-            Comment = "Resolved via fallback",
+            Comment = "Missing order",
             ImageUrls = null!
         };
 
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(package);
-        _mockReviewRepo.Setup(r => r.GetReviewByPackageAndTraineeAsync(packageId, traineeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(legacyReview);
-        _mockOrderRepo.Setup(r => r.GetOrderByIdWithDetailsAsync(resolvedOrderId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(order);
-        _mockReviewRepo.Setup(r => r.GetReviewByOrderIdAndTraineeAsync(resolvedOrderId, traineeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(legacyReview);
 
-        // Act
-        var result = await _service.SubmitPackageReviewAsync(packageId, traineeId, dto);
-
-        // Assert
-        Assert.True(result.Success);
-        Assert.Equal(resolvedOrderId, dto.OrderId);
-        Assert.True(legacyReview.IsEdited);
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.SubmitPackageReviewAsync(packageId, traineeId, dto));
+        Assert.Equal("OrderId is required to submit a review.", ex.Message);
     }
 
     [Fact(DisplayName = "UTCID06 - Notification or email exception does not fail review submission")]
@@ -349,8 +314,8 @@ public class SubmitRatingForCoachServiceTests
         Assert.Equal("Review submitted successfully.", result.Message);
     }
 
-    [Fact(DisplayName = "UTCID07 - Unique constraint violation on save falls back to updating concurrent unedited review")]
-    public async Task UTCID07_SubmitPackageReviewAsync_UniqueConstraintViolation_UpdatesConcurrentReview()
+    [Fact(DisplayName = "UTCID07 - Unique constraint violation on duplicate concurrent POST throws ValidationException")]
+    public async Task UTCID07_SubmitPackageReviewAsync_UniqueConstraintViolation_ThrowsValidationException()
     {
         // Arrange
         var packageId = Guid.NewGuid();
@@ -360,35 +325,20 @@ public class SubmitRatingForCoachServiceTests
 
         var package = CreateEligiblePackage(packageId, coachId);
         var order = CreateEligibleOrder(orderId, traineeId, packageId, PaymentConstants.OrderStatusPaid);
-        var concurrentReview = new Review
-        {
-            ReviewId = Guid.NewGuid(),
-            PackageId = packageId,
-            OrderId = orderId,
-            TraineeId = traineeId,
-            Rating = 3,
-            IsEdited = false
-        };
-        var dto = new CreatePackageReviewDto { OrderId = orderId, Rating = 5, Comment = "Concurrent update", ImageUrls = null! };
+        var dto = new CreatePackageReviewDto { OrderId = orderId, Rating = 5, Comment = "Concurrent create", ImageUrls = null! };
 
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(package);
         _mockOrderRepo.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>())).ReturnsAsync(order);
-        _mockReviewRepo.SetupSequence(r => r.GetReviewByOrderIdAndTraineeAsync(orderId, traineeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Review?)null)
-            .ReturnsAsync(concurrentReview);
+        _mockReviewRepo.Setup(r => r.GetReviewByOrderIdAndTraineeAsync(orderId, traineeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Review?)null);
 
-        _mockUow.SetupSequence(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new DbUpdateException("ERROR: 23505 duplicate key value violates unique constraint"))
-            .ReturnsAsync(1);
+        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new DbUpdateException("ERROR: 23505 duplicate key value violates unique constraint"));
 
-        // Act
-        var result = await _service.SubmitPackageReviewAsync(packageId, traineeId, dto);
-
-        // Assert
-        Assert.True(result.Success);
-        Assert.Equal(5, concurrentReview.Rating);
-        Assert.True(concurrentReview.IsEdited);
-        _mockReviewRepo.Verify(r => r.Update(concurrentReview), Times.Once);
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.SubmitPackageReviewAsync(packageId, traineeId, dto));
+        Assert.Equal("You have already reviewed this order. Please edit your existing review instead.", ex.Message);
     }
 
     #endregion
@@ -662,8 +612,8 @@ public class SubmitRatingForCoachServiceTests
         Assert.Equal("This order does not contain the specified package.", ex.Message);
     }
 
-    [Fact(DisplayName = "UTCID19 - Editing a review that was already edited once throws ValidationException")]
-    public async Task UTCID19_SubmitPackageReviewAsync_ReviewAlreadyEditedOnce_ThrowsValidationException()
+    [Fact(DisplayName = "UTCID19 - Submitting via POST when review already exists throws ValidationException")]
+    public async Task UTCID19_SubmitPackageReviewAsync_ReviewAlreadyExists_ThrowsValidationException()
     {
         // Arrange
         var packageId = Guid.NewGuid();
@@ -682,7 +632,7 @@ public class SubmitRatingForCoachServiceTests
             Rating = 4,
             IsEdited = true
         };
-        var dto = new CreatePackageReviewDto { OrderId = orderId, Rating = 5, Comment = "Second edit attempt" };
+        var dto = new CreatePackageReviewDto { OrderId = orderId, Rating = 5, Comment = "Second submit attempt" };
 
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(package);
         _mockOrderRepo.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>())).ReturnsAsync(order);
@@ -692,7 +642,7 @@ public class SubmitRatingForCoachServiceTests
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ValidationException>(() =>
             _service.SubmitPackageReviewAsync(packageId, traineeId, dto));
-        Assert.Equal("This review has been edited once and cannot be edited further.", ex.Message);
+        Assert.Equal("You have already reviewed this order. Please edit your existing review instead.", ex.Message);
     }
 
     [Fact(DisplayName = "UTCID20 - DbUpdateConcurrencyException during SaveChangesAsync throws ValidationException")]
@@ -706,31 +656,12 @@ public class SubmitRatingForCoachServiceTests
 
         var package = CreateEligiblePackage(packageId, coachId);
         var order = CreateEligibleOrder(orderId, traineeId, packageId, PaymentConstants.OrderStatusPaid);
-        var existingReview = new Review
-        {
-            ReviewId = Guid.NewGuid(),
-            PackageId = packageId,
-            OrderId = orderId,
-            TraineeId = traineeId,
-            Rating = 4,
-            IsEdited = false
-        };
-        var concurrentState = new Review
-        {
-            ReviewId = existingReview.ReviewId,
-            PackageId = packageId,
-            OrderId = orderId,
-            TraineeId = traineeId,
-            Rating = 4,
-            IsEdited = false
-        };
-        var dto = new CreatePackageReviewDto { OrderId = orderId, Rating = 5, Comment = "Concurrent edit" };
+        var dto = new CreatePackageReviewDto { OrderId = orderId, Rating = 5, Comment = "Concurrent create" };
 
         _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(package);
         _mockOrderRepo.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>())).ReturnsAsync(order);
-        _mockReviewRepo.SetupSequence(r => r.GetReviewByOrderIdAndTraineeAsync(orderId, traineeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existingReview)
-            .ReturnsAsync(concurrentState);
+        _mockReviewRepo.Setup(r => r.GetReviewByOrderIdAndTraineeAsync(orderId, traineeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Review?)null);
         _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DbUpdateConcurrencyException("Concurrency conflict"));
 

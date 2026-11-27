@@ -12,7 +12,7 @@ namespace FitSocial.UnitTests;
 
 /// <summary>
 /// Unit tests for View Purchased Training Packages List (TrainingPackageService.GetPurchasedPackagesAsync).
-/// Covers Normal (N), Boundary (B), and Abnormal (A) test cases (UTCID01 - UTCID18).
+/// Covers Normal (N), Boundary (B), and Abnormal (A) test cases (UTCID01 - UTCID22).
 /// </summary>
 public class ViewPurchasedTrainingPackagesListServiceTests
 {
@@ -497,6 +497,133 @@ public class ViewPurchasedTrainingPackagesListServiceTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _service.GetPurchasedPackagesAsync(traineeId, 1, 10));
         Assert.Equal("Database connection failed", ex.Message);
+    }
+
+    [Fact(DisplayName = "UTCID19 - Search, filter, and sort parameters invoke filtered repository overload")]
+    public async Task UTCID19_GetPurchasedPackagesAsync_WithSearchFilterAndSort_CallsFilteredRepositoryOverload()
+    {
+        // Arrange
+        var traineeId = Guid.NewGuid();
+        var od = CreateOrderDetail(traineeId, odPackageType: "WORKOUT", pkgPackageType: "WORKOUT");
+        od.PackageTitle = "Fat Loss Bootcamp";
+
+        _mockPackageRepo.Setup(r => r.GetPurchasedOrderDetailsAsync(
+                traineeId,
+                1,
+                10,
+                "Fat Loss",
+                "WORKOUT",
+                "ACTIVE",
+                "PRICE_DESC",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<OrderDetail> { od }, 1));
+
+        // Act
+        var result = await _service.GetPurchasedPackagesAsync(
+            traineeId,
+            1,
+            10,
+            searchKeyword: "Fat Loss",
+            packageType: "WORKOUT",
+            status: "ACTIVE",
+            sortBy: "PRICE_DESC");
+
+        // Assert
+        var item = Assert.Single(result.Items);
+        Assert.Equal("Fat Loss Bootcamp", item.Title);
+        _mockPackageRepo.Verify(r => r.GetPurchasedOrderDetailsAsync(
+            traineeId,
+            1,
+            10,
+            "Fat Loss",
+            "WORKOUT",
+            "ACTIVE",
+            "PRICE_DESC",
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact(DisplayName = "UTCID20 - Completed workout plan resolves EnrollmentStatus COMPLETED and allows review")]
+    public async Task UTCID20_GetPurchasedPackagesAsync_WhenAllPlansCompleted_ResolvesEnrollmentStatusCompletedAndAllowsReview()
+    {
+        // Arrange
+        var traineeId = Guid.NewGuid();
+        var od = CreateOrderDetail(traineeId, odPackageType: "WORKOUT", pkgPackageType: "WORKOUT");
+        od.TrainingPlans.Add(new TrainingPlan
+        {
+            TrainingPlanId = Guid.NewGuid(),
+            OrderDetailsId = od.OrderDetailsId,
+            Status = "COMPLETED",
+            CreatedAt = DateTime.UtcNow.AddDays(-2)
+        });
+
+        _mockPackageRepo.Setup(r => r.GetPurchasedOrderDetailsAsync(traineeId, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<OrderDetail> { od }, 1));
+
+        // Act
+        var result = await _service.GetPurchasedPackagesAsync(traineeId, 1, 10);
+
+        // Assert
+        var item = Assert.Single(result.Items);
+        Assert.Equal("COMPLETED", item.EnrollmentStatus);
+        Assert.True(item.CanReview);
+        Assert.Null(item.CannotReviewReason);
+    }
+
+    [Fact(DisplayName = "UTCID21 - Expired order resolves EnrollmentStatus EXPIRED and RemainingDays 0")]
+    public async Task UTCID21_GetPurchasedPackagesAsync_WhenExpiredOrder_ResolvesEnrollmentStatusExpiredAndZeroRemainingDays()
+    {
+        // Arrange
+        var traineeId = Guid.NewGuid();
+        var od = CreateOrderDetail(traineeId, odPackageType: "WORKOUT", pkgPackageType: "WORKOUT");
+        od.Order.CreatedAt = DateTime.UtcNow.AddDays(-40);
+        od.PackageDurationDays = 30;
+        od.Package!.DurationDays = 30;
+
+        _mockPackageRepo.Setup(r => r.GetPurchasedOrderDetailsAsync(traineeId, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<OrderDetail> { od }, 1));
+
+        // Act
+        var result = await _service.GetPurchasedPackagesAsync(traineeId, 1, 10);
+
+        // Assert
+        var item = Assert.Single(result.Items);
+        Assert.Equal("EXPIRED", item.EnrollmentStatus);
+        Assert.Equal(0, item.RemainingDays);
+    }
+
+    [Fact(DisplayName = "UTCID22 - Rejected refund with [Policy:] prefix hides internal note and allows review when plan active")]
+    public async Task UTCID22_GetPurchasedPackagesAsync_WhenRejectedRefundHasPolicyPrefix_FiltersPolicyNoteAndAllowsReviewIfPlanActive()
+    {
+        // Arrange
+        var traineeId = Guid.NewGuid();
+        var od = CreateOrderDetail(traineeId, odPackageType: "WORKOUT", pkgPackageType: "WORKOUT");
+        od.Order.RefundRequests.Add(new RefundRequest
+        {
+            RefundRequestId = Guid.NewGuid(),
+            OrderId = od.OrderId,
+            Status = "REJECTED",
+            StaffNote = "[Policy: Case 2] Internal note",
+            RequestedAt = DateTime.UtcNow.AddDays(-1)
+        });
+        od.TrainingPlans.Add(new TrainingPlan
+        {
+            TrainingPlanId = Guid.NewGuid(),
+            OrderDetailsId = od.OrderDetailsId,
+            Status = "ACTIVE",
+            CreatedAt = DateTime.UtcNow.AddDays(-3)
+        });
+
+        _mockPackageRepo.Setup(r => r.GetPurchasedOrderDetailsAsync(traineeId, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<OrderDetail> { od }, 1));
+
+        // Act
+        var result = await _service.GetPurchasedPackagesAsync(traineeId, 1, 10);
+
+        // Assert
+        var item = Assert.Single(result.Items);
+        Assert.Equal("REJECTED", item.RefundStatus);
+        Assert.Null(item.RefundStaffNote);
+        Assert.True(item.CanReview);
     }
 
     #endregion

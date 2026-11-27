@@ -3,6 +3,7 @@
 @inject ITrainingPackageService PackageService
 @inject ICartService CartService
 @inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
+@inject FitSocial.Client.Services.Conversations.IConversationService ConversationService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FitSocial.Client.Services.Auth.IAuthService AuthService
@@ -78,9 +79,21 @@
                                 <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                                 <div class="absolute bottom-4 left-6 right-6 text-white">
                                     <h1 class="text-2xl sm:text-3xl font-extrabold mb-1 drop-shadow-md">@package.Title</h1>
-                                    <p class="text-orange-200 font-medium text-sm sm:text-base">
-                                        Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-400 hover:text-white transition">@package.CoachName</a>
-                                    </p>
+                                    <div class="flex items-center gap-3 flex-wrap">
+                                        <p class="text-orange-200 font-medium text-sm sm:text-base">
+                                            Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-400 hover:text-white transition">@package.CoachName</a>
+                                        </p>
+                                        @if (!isOwnPackage)
+                                        {
+                                            <button type="button" @onclick="ContactCoach"
+                                                    class="inline-flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1 rounded-lg backdrop-blur-xs transition cursor-pointer">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                                <span>Contact Coach</span>
+                                            </button>
+                                        }
+                                    </div>
                                 </div>
                             </div>
 
@@ -107,7 +120,19 @@
                                 <svg class="w-40 h-40" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
                             </div>
                             <h1 class="text-3xl font-extrabold text-white mb-2 relative z-10">@package.Title</h1>
-                            <p class="text-orange-50 font-medium text-lg relative z-10">Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-300 hover:text-white transition">@package.CoachName</a></p>
+                            <div class="flex items-center justify-center gap-3 flex-wrap relative z-10">
+                                <p class="text-orange-50 font-medium text-lg">Coach: <a href="/profile/@package.CoachId" class="font-bold underline decoration-orange-300 hover:text-white transition">@package.CoachName</a></p>
+                                @if (!isOwnPackage)
+                                {
+                                    <button type="button" @onclick="ContactCoach"
+                                            class="inline-flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1 rounded-lg backdrop-blur-xs transition cursor-pointer">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
+                                        <span>Contact Coach</span>
+                                    </button>
+                                }
+                            </div>
                         </div>
                     }
                     
@@ -132,8 +157,8 @@
 
                             <div class="bg-orange-50/60 p-4 rounded-xl border border-orange-100 text-center">
                                 <h6 class="text-[11px] uppercase tracking-wider text-orange-600 font-bold mb-1">Sessions</h6>
-                                <p class="text-2xl font-black text-gray-800">@(package.SessionCount.HasValue ? package.SessionCount.Value.ToString() : "--")</p>
-                                <span class="text-xs text-gray-500 font-medium">Sessions</span>
+                                <p class="@(package.SessionCount.HasValue ? "text-2xl" : "text-base sm:text-lg") font-black text-gray-800">@(package.SessionCount.HasValue ? package.SessionCount.Value.ToString() : "Flexible")</p>
+                                <span class="text-xs text-gray-500 font-medium">@(package.SessionCount.HasValue ? "Sessions" : "Linh hoạt")</span>
                             </div>
 
                             <div class="bg-orange-50/60 p-4 rounded-xl border border-orange-100 text-center">
@@ -152,7 +177,26 @@
                         <!-- Package Service Inclusions Banner -->
                         <div class="mb-6 p-4 rounded-xl border flex items-center justify-between gap-3 @(package.PackageType == "WORKOUT" ? "bg-blue-50/70 border-blue-200 text-blue-900" : package.PackageType == "MEAL" ? "bg-emerald-50/70 border-emerald-200 text-emerald-900" : "bg-orange-50/70 border-orange-200 text-orange-900")">
                             <div class="flex items-center gap-3">
-                                <span class="text-2xl">@(package.PackageType == "WORKOUT" ? "🏋️‍♂️" : package.PackageType == "MEAL" ? "🥗" : "🌟")</span>
+                                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 @(package.PackageType == "WORKOUT" ? "bg-blue-100 text-blue-600" : package.PackageType == "MEAL" ? "bg-emerald-100 text-emerald-600" : "bg-orange-100 text-[#FF5500]")">
+                                    @if (package.PackageType == "WORKOUT")
+                                    {
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20M6 7v10M18 7v10M2 10v4M22 10v4" />
+                                        </svg>
+                                    }
+                                    else if (package.PackageType == "MEAL")
+                                    {
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 2v20M6 2v7a3 3 0 006 0V2M9 9v13" />
+                                        </svg>
+                                    }
+                                    else
+                                    {
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                        </svg>
+                                    }
+                                </div>
                                 <div>
                                     <p class="text-xs uppercase font-bold tracking-wider opacity-75">Service Inclusions</p>
                                     <p class="text-sm font-black">
@@ -168,26 +212,21 @@
                         @if (!string.IsNullOrWhiteSpace(package.TargetAudience))
                         {
                             <div class="mb-6 flex items-center gap-3 p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 text-blue-900 text-sm">
-                                <span class="font-bold flex-shrink-0 text-blue-600">🎯 Target Audience:</span>
-                                <span>@package.TargetAudience</span>
+                                <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="9" stroke-width="2" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v3m0 12v3m-9-9h3m12 0h3m-6 0a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <span class="font-bold text-blue-700">Target Audience:</span>
+                                    <span class="ml-1 text-gray-800">@package.TargetAudience</span>
+                                </div>
                             </div>
                         }
 
                         @if (isOwnPackage)
                         {
-                            <!-- Coach is owner: cannot buy own package -->
-                            <div class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div class="flex items-center gap-2.5">
-                                    <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span class="font-medium">You created this training package. Coaches cannot purchase their own packages.</span>
-                                </div>
-                                <a href="/training-packages/edit/@package.PackageId" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs transition shadow-xs text-center flex-shrink-0">
-                                    Edit Package
-                                </a>
-                            </div>
-
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <a href="/training-packages/edit/@package.PackageId" class="flex-1 bg-gradient-to-r from-[#FF8C00] to-[#FF5500] text-white py-3.5 rounded-xl font-bold text-base hover:shadow-lg text-center transition flex items-center justify-center gap-2">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -235,25 +274,6 @@
                                 </div>
                             }
 
-                            <!-- Single Trainee Enrollment Policy (1 Package Max 1) -->
-                            <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/70 p-4 rounded-xl border border-gray-100">
-                                <div>
-                                    <h6 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-0.5">Quantity</h6>
-                                    <p class="text-xs text-gray-400">1-on-1 coaching package applies to a single trainee</p>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <div class="inline-flex items-center gap-2 bg-white border border-gray-200 px-3.5 py-2 rounded-xl shadow-xs">
-                                        <svg class="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                                        </svg>
-                                        <span class="text-xs font-bold text-gray-800">1 Package (Max 1)</span>
-                                    </div>
-                                    <span class="text-xs text-gray-500">
-                                        Total: <span class="font-bold text-[#FF5500]">@(package.Price.ToString("N0")) VND</span>
-                                    </span>
-                                </div>
-                            </div>
-
                             <div class="flex flex-col gap-3">
                                 <div class="flex flex-col sm:flex-row gap-3">
                                     @if (hasPurchased)
@@ -271,6 +291,12 @@
                                             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
                                             <span>Purchased</span>
                                         </button>
+                                    }
+                                    else if (!package.IsActive)
+                                    {
+                                        <div class="w-full bg-gray-100 border border-gray-200 text-gray-500 py-3.5 px-4 rounded-xl font-bold text-sm text-center flex items-center justify-center gap-2 cursor-not-allowed">
+                                            <span>This training package is currently inactive and unavailable for purchase.</span>
+                                        </div>
                                     }
                                     else if (inCart)
                                     {
@@ -352,7 +378,7 @@
                             <!-- Score Box -->
                             <div class="text-center sm:border-r sm:border-orange-200/60 sm:pr-8">
                                 <div class="text-4xl font-extrabold text-[#FF5500] mb-1">
-                                    @(reviewSummary.TotalReviews > 0 ? reviewSummary.AverageRating.ToString("0.0") : "5.0")
+                                    @(reviewSummary.TotalReviews > 0 ? reviewSummary.AverageRating.ToString("0.0") : "0.0")
                                     <span class="text-lg font-medium text-gray-500">/ 5</span>
                                 </div>
                                 <div class="flex items-center justify-center gap-1 text-yellow-400">
@@ -438,38 +464,6 @@
                                                             @FormatDateTime(review.IsEdited && review.UpdatedAt.HasValue ? review.UpdatedAt : review.CreatedAt)
                                                         </span>
 
-                                                        <!-- THREE DOTS MENU FOR OWN REVIEW -->
-                                                        @if (isMyReview)
-                                                        {
-                                                            <div class="relative">
-                                                                <button type="button" @onclick="() => ToggleMenu(review.ReviewId)"
-                                                                        class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-500 transition cursor-pointer">
-                                                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                                                                    </svg>
-                                                                </button>
-
-                                                                @if (openMenuReviewId == review.ReviewId)
-                                                                {
-                                                                    <div class="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 animate-in fade-in zoom-in-95">
-                                                                        @if (!review.IsEdited)
-                                                                        {
-                                                                            <button type="button" @onclick="() => OpenEditReviewModal(review)"
-                                                                                    class="w-full text-left px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition flex items-center gap-2 cursor-pointer">
-                                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                                                                                Edit Review
-                                                                            </button>
-                                                                        }
-                                                                        else
-                                                                        {
-                                                                            <div class="px-3.5 py-2 text-[11px] text-gray-400 italic">
-                                                                                Edited once (Cannot edit again)
-                                                                            </div>
-                                                                        }
-                                                                    </div>
-                                                                }
-                                                            </div>
-                                                        }
                                                     </div>
                                                 </div>
 
@@ -489,6 +483,28 @@
                                                     <p class="text-sm text-gray-700 leading-relaxed mt-1.5 whitespace-pre-line">@review.Comment</p>
                                                 }
 
+                                                <!-- Review images -->
+                                                @if (review.Media != null && review.Media.Any())
+                                                {
+                                                    <div class="flex flex-wrap gap-2 mt-3">
+                                                        @foreach (var m in review.Media.OrderBy(x => x.SortOrder))
+                                                        {
+                                                            var safeUrl = !string.IsNullOrWhiteSpace(m.MediaUrl) &&
+                                                                          (m.MediaUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                                                                           m.MediaUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                                                                           m.MediaUrl.StartsWith("/"))
+                                                                          ? m.MediaUrl
+                                                                          : null;
+                                                            if (safeUrl != null)
+                                                            {
+                                                                <a href="@safeUrl" target="_blank" rel="noopener noreferrer" class="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:opacity-90 transition">
+                                                                    <img src="@safeUrl" alt="review photo" class="w-full h-full object-cover" />
+                                                                </a>
+                                                            }
+                                                        }
+                                                    </div>
+                                                }
+
                                                 <!-- COACH RESPONSE BOX -->
                                                 @if (!string.IsNullOrWhiteSpace(review.Reply))
                                                 {
@@ -504,14 +520,14 @@
                                                     </div>
                                                 }
 
-                                                <!-- COACH REPLY ACTION -->
-                                                @if (isOwnPackage)
+                                                <!-- COACH REPLY ACTION (chỉ hiện khi chưa có reply, khớp rule 1-reply của Backend) -->
+                                                @if (isOwnPackage && string.IsNullOrWhiteSpace(review.Reply))
                                                 {
                                                     @if (activeReplyingReviewId == review.ReviewId)
                                                     {
                                                         <div class="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
                                                             <label class="block text-xs font-bold text-gray-700 mb-1">Your reply:</label>
-                                                            <textarea @bind="replyText" rows="2" class="w-full text-xs p-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500" placeholder="Write a reply to the trainee..."></textarea>
+                                                            <textarea @bind="replyText" maxlength="1000" rows="2" class="w-full text-xs p-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500" placeholder="Write a reply to the trainee..."></textarea>
                                                             <div class="flex justify-end gap-2 mt-2">
                                                                 <button type="button" @onclick="() => activeReplyingReviewId = null" class="px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded-lg transition cursor-pointer">Cancel</button>
                                                                 <button type="button" @onclick="() => SubmitReplyAsync(review.ReviewId)" disabled="@isSubmittingReply" class="px-3 py-1 text-xs font-semibold text-white bg-[#FF5500] hover:bg-orange-600 rounded-lg transition disabled:opacity-50 cursor-pointer">
@@ -524,7 +540,7 @@
                                                     {
                                                         <div class="mt-2 text-right">
                                                             <button type="button" @onclick="() => StartReplying(review)" class="text-xs font-semibold text-[#FF5500] hover:underline cursor-pointer">
-                                                                @(string.IsNullOrWhiteSpace(review.Reply) ? "💬 Reply to review" : "✏️ Edit reply")
+                                                                Reply to review
                                                             </button>
                                                         </div>
                                                     }
@@ -549,63 +565,6 @@
                                PackageTitle="@package?.Title"
                                OnClose="() => showAlreadyInCartModal = false"
                                OnViewCart="NavigateToCart" />
-
-<!-- EDIT REVIEW MODAL (EDITABLE ONCE ONLY) -->
-@if (isEditModalOpen)
-{
-    <div class="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95">
-            <h3 class="text-xl font-bold text-gray-900 mb-2 text-center">Edit Your Review</h3>
-
-            <!-- Notice: Edit once only -->
-            <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl mb-5 flex items-start gap-2.5">
-                <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>
-                <span class="text-xs text-amber-800 font-medium">Notice: You can only edit this review <strong>once</strong>. After saving, you will not be able to modify it again.</span>
-            </div>
-
-            @if (!string.IsNullOrEmpty(editErrorMessage))
-            {
-                <div class="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 font-medium border border-red-100">
-                    @editErrorMessage
-                </div>
-            }
-
-            <EditForm Model="editReviewDto" OnValidSubmit="SubmitEditReview">
-                <!-- Stars Selection -->
-                <div class="flex justify-center gap-2 mb-6">
-                    @for (int i = 1; i <= 5; i++)
-                    {
-                        int star = i;
-                        <button type="button" @onclick="() => editReviewDto.Rating = star" class="focus:outline-none transition-transform hover:scale-110 cursor-pointer">
-                            <svg class="w-10 h-10 @(star <= editReviewDto.Rating ? "text-yellow-400" : "text-gray-200")" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                            </svg>
-                        </button>
-                    }
-                </div>
-
-                <!-- Comment Input -->
-                <div class="mb-6">
-                    <label class="block text-xs font-bold text-gray-700 mb-1">Your Review Comment:</label>
-                    <InputTextArea @bind-Value="editReviewDto.Comment" rows="4" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none text-sm" placeholder="Share your experience with this training package..."></InputTextArea>
-                </div>
-
-                <div class="flex justify-end gap-3">
-                    <button type="button" @onclick="() => isEditModalOpen = false" class="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition cursor-pointer">Cancel</button>
-                    <button type="submit" disabled="@isSubmittingEdit" class="px-5 py-2.5 text-sm font-semibold text-white bg-[#FF5500] hover:bg-orange-600 rounded-xl disabled:opacity-50 transition flex items-center gap-2 cursor-pointer">
-                        @if (isSubmittingEdit)
-                        {
-                            <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                        }
-                        Save Changes
-                    </button>
-                </div>
-            </EditForm>
-        </div>
-    </div>
-}
 
 @code {
     [Parameter]
@@ -666,48 +625,6 @@
     private string replyText = string.Empty;
     private bool isSubmittingReply = false;
 
-    // Edit Review state
-    private Guid? openMenuReviewId = null;
-    private bool isEditModalOpen = false;
-    private CreatePackageReviewDto editReviewDto = new CreatePackageReviewDto();
-    private bool isSubmittingEdit = false;
-    private string? editErrorMessage;
-
-    private void ToggleMenu(Guid reviewId)
-    {
-        openMenuReviewId = (openMenuReviewId == reviewId) ? null : reviewId;
-    }
-
-    private void OpenEditReviewModal(PackageReviewDto review)
-    {
-        openMenuReviewId = null;
-        editReviewDto = new CreatePackageReviewDto
-        {
-            Rating = review.Rating,
-            Comment = review.Comment
-        };
-        editErrorMessage = null;
-        isEditModalOpen = true;
-    }
-
-    private async Task SubmitEditReview()
-    {
-        isSubmittingEdit = true;
-        editErrorMessage = null;
-
-        var res = await PackageService.SubmitPackageReviewAsync(Id, editReviewDto);
-        if (res.Success)
-        {
-            isEditModalOpen = false;
-            ShowSuccessToast("Review updated successfully!");
-            await LoadReviewsAsync();
-        }
-        else
-        {
-            editErrorMessage = res.Message ?? "Failed to update review.";
-        }
-        isSubmittingEdit = false;
-    }
 
     private async Task LoadReviewsAsync()
     {
@@ -872,15 +789,64 @@
             var ordersRes = await CheckoutService.GetMyOrdersAsync();
             if (ordersRes.Success && ordersRes.Data != null)
             {
+                // Only block repurchasing if trainee currently has an active ongoing enrollment (within duration).
+                // Trainees whose package duration has expired / completed can repurchase it.
+                var activePaidStatuses = new[] { "PAID", "COMPLETED", "ACTIVE", "REFUND_PENDING" };
+                var now = DateTime.UtcNow;
+                var reviewOrder = ordersRes.Data.FirstOrDefault(o =>
+                    !string.IsNullOrWhiteSpace(o.OrderStatus) &&
+                    activePaidStatuses.Contains(o.OrderStatus, StringComparer.OrdinalIgnoreCase) &&
+                    o.Details.Any(d => d.PackageId == package.PackageId));
+                if (reviewOrder != null)
+                {
+                }
+
                 hasPurchased = ordersRes.Data.Any(o =>
                     !string.IsNullOrWhiteSpace(o.OrderStatus) &&
-                    (string.Equals(o.OrderStatus, "PAID", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(o.OrderStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(o.OrderStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase)) &&
-                    o.Details.Any(d => d.PackageId == package.PackageId));
+                    activePaidStatuses.Contains(o.OrderStatus, StringComparer.OrdinalIgnoreCase) &&
+                    o.Details.Any(d =>
+                    {
+                        if (d.PackageId != package.PackageId) return false;
+                        var duration = d.PackageDurationDays ?? package.DurationDays;
+                        var start = d.CreatedAt ?? o.CreatedAt ?? DateTime.UtcNow;
+                        return now < start.AddDays(duration);
+                    }));
             }
         }
         catch { }
+    }
+
+    private bool isOpeningChat = false;
+    private async Task ContactCoach()
+    {
+        if (package == null || isOpeningChat) return;
+        if (!isAuthenticated)
+        {
+            Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
+            return;
+        }
+
+        isOpeningChat = true;
+        try
+        {
+            var res = await ConversationService.GetOrCreateDirectConversationAsync(package.CoachId);
+            if (res.Success && res.Data != null)
+            {
+                Navigation.NavigateTo($"messages/{res.Data.ConversationId}");
+            }
+            else
+            {
+                Navigation.NavigateTo("messages");
+            }
+        }
+        catch
+        {
+            Navigation.NavigateTo("messages");
+        }
+        finally
+        {
+            isOpeningChat = false;
+        }
     }
 
     private async Task HandleAddToCart()
@@ -894,6 +860,12 @@
         if (package == null)
         {
             ShowErrorToast("Cannot add an invalid package.");
+            return;
+        }
+
+        if (!package.IsActive)
+        {
+            ShowErrorToast("This training package is no longer active.");
             return;
         }
 
@@ -1032,6 +1004,12 @@
         }
 
         if (package == null) return;
+
+        if (!package.IsActive)
+        {
+            ShowErrorToast("This training package is no longer active.");
+            return;
+        }
 
         if (isOwnPackage)
         {

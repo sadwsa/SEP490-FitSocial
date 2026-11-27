@@ -21,7 +21,10 @@ public partial class Review
 
     public DateTime? UpdatedAt { get; set; }
     public Guid? PackageId { get; set; }
+    public Guid? OrderId { get; set; }
     public bool? IsEdited { get; set; } = false;
+
+    public byte[]? RowVersion { get; set; }
 
 
     public virtual CoachProfile Coach { get; set; } = null!;
@@ -29,4 +32,7 @@ public partial class Review
     public virtual User Trainee { get; set; } = null!;
 
     public virtual TrainingPackage? Package { get; set; }
+    public virtual Order? Order { get; set; }
+
+    public virtual ICollection<ReviewMedia> ReviewMedia { get; set; } = new List<ReviewMedia>();
 }

@@ -146,10 +146,17 @@
         // vào Package List – sidebar không có mục tương ứng nên không tô cam gì cả.
         bool isBuyingFlow = root == "cart" || root == "checkout";
 
-        // /training-packages/... (không phải marketplace) -> về My Packages
-        // purchased bị loại có chủ đích, xem ghi chú ở trên.
+        // Kiểm tra xem có đang xem chi tiết gói tập: /training-packages/{guid} hoặc /packages/{guid}
+        bool isPackageDetail =
+            (root == "training-packages" || root == "packages") &&
+            segments.Length >= 2 &&
+            Guid.TryParse(segments[1], out _);
+
+        // /training-packages/... (dành cho Coach quản lý gói: /training-packages, /training-packages/edit/...)
+        // Xem chi tiết gói thuộc luồng Package List nên loại trừ isPackageDetail.
         bool isCoachPackageFlow =
             root == "training-packages" &&
+            !isPackageDetail &&
             !segments.Contains("marketplace") &&
             !segments.Contains("purchased");
 
@@ -163,6 +170,7 @@
             "package-list" =>
                 root == "packages" ||
                 (root == "training-packages" && segments.Contains("marketplace")) ||
+                isPackageDetail ||
                 isBuyingFlow,
 
             "my-packages" => isCoachPackageFlow || isPlanFlow,

@@ -36,6 +36,11 @@ public class TrainingPackageServiceTests
     private readonly Mock<IUnitOfWork> _mockUow;
     private readonly Mock<IReviewRepository> _mockReviewRepo;
     private readonly Mock<IOrderRepository> _mockOrderRepo;
+    private readonly Mock<IImageService> _mockImageService;
+    private readonly Mock<IReviewMediaRepository> _mockReviewMediaRepo;
+    private readonly Mock<IUserRepository> _mockUserRepo;
+    private readonly Mock<INotificationRepository> _mockNotificationRepo;
+    private readonly Mock<IEmailService> _mockEmailService;
     private readonly TrainingPackageService _service;
 
     public TrainingPackageServiceTests()
@@ -44,7 +49,14 @@ public class TrainingPackageServiceTests
         _mockUow = new Mock<IUnitOfWork>();
         _mockReviewRepo = new Mock<IReviewRepository>();
         _mockOrderRepo = new Mock<IOrderRepository>();
-        _service = new TrainingPackageService(_mockRepo.Object, _mockUow.Object, _mockReviewRepo.Object, _mockOrderRepo.Object);
+        _mockImageService = new Mock<IImageService>();
+        _mockReviewMediaRepo = new Mock<IReviewMediaRepository>();
+        _mockUserRepo = new Mock<IUserRepository>();
+        _mockNotificationRepo = new Mock<INotificationRepository>();
+        _mockEmailService = new Mock<IEmailService>();
+        _service = new TrainingPackageService(
+            _mockRepo.Object, _mockUow.Object, _mockReviewRepo.Object, _mockOrderRepo.Object,
+            _mockReviewMediaRepo.Object, _mockUserRepo.Object, _mockNotificationRepo.Object, _mockEmailService.Object);
     }
 
     #region 1. Application Layer: CreatePackageAsync Tests
@@ -412,7 +424,7 @@ public class TrainingPackageServiceTests
         var coachId = Guid.NewGuid();
         var newPackageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -457,7 +469,7 @@ public class TrainingPackageServiceTests
     {
         // Arrange
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var claims = new List<Claim>();
         if (invalidUserId != null)
@@ -506,7 +518,7 @@ public class TrainingPackageServiceTests
         var coachId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -548,7 +560,7 @@ public class TrainingPackageServiceTests
         var coachId = Guid.NewGuid();
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -585,7 +597,7 @@ public class TrainingPackageServiceTests
         // Arrange
         var packageId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var claims = new List<Claim>();
         if (invalidUserId != null)

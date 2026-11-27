@@ -1,5 +1,27 @@
 namespace FitSocial.Client.Models.SystemOperations;
 
+public class CreatePlanRequest
+{
+    public decimal Amount { get; set; }
+    public string Currency { get; set; } = "VND";
+    public bool IsActive { get; set; } = true;
+    public string? ImageUrl { get; set; }
+    public string? Description { get; set; }
+    public int? SubscriptionDuration { get; set; }
+    public int? TrainingPackageDuration { get; set; }
+}
+
+public class UpdatePlanRequest
+{
+    public decimal? Amount { get; set; }
+    public string? Currency { get; set; } = "VND";
+    public string? ImageUrl { get; set; }
+    public string? Description { get; set; }
+    public int? SubscriptionDuration { get; set; }
+    public int? TrainingPackageDuration { get; set; }
+    public bool? IsActive { get; set; }
+}
+
 public class CoachSubscriptionPlanDto
 {
     public Guid CoachSubscriptionPlansId { get; set; }

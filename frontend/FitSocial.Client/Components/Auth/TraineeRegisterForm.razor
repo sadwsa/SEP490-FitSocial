@@ -1,0 +1,220 @@
+@using System.Timers
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+@implements IDisposable
+@inject IAuthService AuthService
+@inject GoogleSignInService GoogleSignIn
+@inject ITermsService TermsService
+@inject NavigationManager Navigation
+
+<button type="button" class="btn-google" @onclick="HandleGoogleButtonAsync">
+    <AppIcon Name="google" /><span>Sign up with Google</span>
+</button>
+
+<div class="divider"><span>OR SIGN UP WITH EMAIL</span></div>
+
+@if (!string.IsNullOrEmpty(infoMessage))
+{
+    <div class="auth-alert info" role="alert"><AppIcon Name="info" /><span>@infoMessage</span></div>
+}
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="auth-alert error" role="alert"><AppIcon Name="warning" /><span>@errorMessage</span></div>
+}
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="auth-alert success" role="alert"><AppIcon Name="check" /><span>@successMessage</span></div>
+}
+
+<EditForm EditContext="@traineeEditContext" OnSubmit="HandleCompleteRegister">
+    <DataAnnotationsValidator />
+
+    <div class="field">
+        <label>Full name <span class="req">*</span></label>
+        <div class="input-wrap">
+            <span class="input-icon"><AppIcon Name="person" /></span>
+            <InputText @bind-Value="traineeModel.FullName" class="form-control has-icon" placeholder="E.g.: John Smith" />
+        </div>
+        <ValidationMessage For="@(() => traineeModel.FullName)" class="field-error" />
+    </div>
+
+    <div class="field">
+        <label>Email address <span class="req">*</span></label>
+        <div class="input-wrap">
+            <span class="input-icon"><AppIcon Name="envelope" /></span>
+            <InputText @bind-Value="traineeModel.Email" class="form-control has-icon" placeholder="athlete@fitsocial.vn" />
+        </div>
+        <ValidationMessage For="@(() => traineeModel.Email)" class="field-error" />
+    </div>
+
+    <div class="field">
+        <label>Secure password <span class="req">*</span></label>
+        <div class="input-wrap">
+            <span class="input-icon"><AppIcon Name="lock" /></span>
+            <InputText type="@(showPassword ? "text" : "password")" @bind-Value="traineeModel.Password" class="form-control has-icon has-eye" placeholder="Minimum 8 characters" />
+            <button type="button" class="eye-btn" @onclick="() => showPassword = !showPassword" title="Show/hide password">
+                <AppIcon Name="@(showPassword ? "eye-slash" : "eye")" />
+            </button>
+        </div>
+        <ValidationMessage For="@(() => traineeModel.Password)" class="field-error" />
+    </div>
+
+    <div class="field">
+        <label>Confirm password <span class="req">*</span></label>
+        <div class="input-wrap">
+            <span class="input-icon"><AppIcon Name="lock" /></span>
+            <InputText type="@(showConfirmPassword ? "text" : "password")" @bind-Value="traineeModel.ConfirmPassword" class="form-control has-icon has-eye" placeholder="Re-enter your password" />
+            <button type="button" class="eye-btn" @onclick="() => showConfirmPassword = !showConfirmPassword" title="Show/hide password">
+                <AppIcon Name="@(showConfirmPassword ? "eye-slash" : "eye")" />
+            </button>
+        </div>
+        <ValidationMessage For="@(() => traineeModel.ConfirmPassword)" class="field-error" />
+    </div>
+
+    <div class="otp-panel">
+        <div class="otp-head">
+            <span class="otp-icon"><AppIcon Name="envelope" /></span>
+            <div><strong>Secure OTP verification</strong><p>A 6-digit OTP code will be sent to your email to activate your account right after confirmation.</p></div>
+        </div>
+        <div class="otp-boxes">
+            @for (int i = 0; i < 6; i++)
+            {
+                int idx = i;
+                <input maxlength="1" inputmode="numeric" autocomplete="one-time-code" class="otp-box" value="@otpDigits[idx]" @oninput="(e) => OnOtpInput(e, idx)" @onkeydown="(e) => OnOtpKeyDown(e, idx)" @ref="otpRefs[idx]" />
+            }
+        </div>
+        @if (showOtpError && CombinedOtp.Length != 6) { <div class="field-error text-center">Please enter the full 6-digit OTP code.</div> }
+        <div class="otp-foot">
+            <span class="resend-hint">Didn't receive the code?</span>
+            @if (!otpSent) { <button type="button" class="resend-link" @onclick="HandleSendOtp" disabled="@isSendingOtp"><AppIcon Name="refresh" /> Send OTP@(isSendingOtp ? "..." : "")</button> }
+            else if (countdown > 0) { <span class="resend-wait"><AppIcon Name="refresh" /> Resend OTP (@(countdown)s)</span> }
+            else { <button type="button" class="resend-link" @onclick="HandleSendOtp" disabled="@isSendingOtp"><AppIcon Name="refresh" /> Resend OTP@(isSendingOtp ? "..." : "")</button> }
+        </div>
+    </div>
+
+    <label class="terms">
+        <input type="checkbox" @bind="agreedTerms" />
+        <span>I agree to the <a href="" @onclick:preventDefault>Terms of Service</a> and <a href="" @onclick:preventDefault>Privacy Policy</a> of the FitConnect sports platform. @(latestTerm != null ? $"({latestTerm.Version})" : "")</span>
+    </label>
+    @if (latestTerm != null) { <details class="terms-box"><summary>@latestTerm.Title</summary><div class="terms-content">@latestTerm.Content</div></details> }
+    @if (showTermsError && !agreedTerms) { <div class="auth-alert error" style="font-size:0.8rem; margin-top:10px;"><AppIcon Name="warning" /><span>Please agree to the terms of service to continue.</span></div> }
+
+    <button type="submit" class="btn-auth-primary" disabled="@isLoading">
+        @if (isLoading) { <span class="spinner-border spinner-border-sm me-2" role="status"></span><span>Creating account...</span> } else { <span>Create Trainee Account Now →</span> }
+    </button>
+</EditForm>
+
+@code {
+    private RegisterTraineeRequest traineeModel = new();
+    private EditContext traineeEditContext = default!;
+
+    private bool showPassword = false;
+    private bool showConfirmPassword = false;
+    private bool agreedTerms = false;
+    private bool showTermsError = false;
+    private bool showOtpError = false;
+
+    private string? infoMessage;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private bool otpSent = false;
+    private bool isSendingOtp = false;
+    private bool isLoading = false;
+    private string[] otpDigits = new string[6] { "", "", "", "", "", "" };
+    private ElementReference[] otpRefs = new ElementReference[6];
+
+    private int countdown = 60;
+    private Timer? timer;
+
+    private string CombinedOtp => string.Concat(otpDigits);
+    private TermsDto? latestTerm;
+
+    protected override void OnInitialized()
+    {
+        traineeEditContext = new EditContext(traineeModel);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { latestTerm = await TermsService.GetLatestAsync(); } catch { }
+    }
+
+    private async Task HandleGoogleButtonAsync()
+    {
+        errorMessage = null; successMessage = null; infoMessage = null;
+        if (!GoogleSignIn.IsConfigured) { infoMessage = "Google sign-in is not configured."; return; }
+        await GoogleSignIn.BeginRedirectSignInAsync("TRAINEE");
+    }
+
+    private async Task HandleSendOtp()
+    {
+        errorMessage = null; successMessage = null; infoMessage = null;
+        if (string.IsNullOrWhiteSpace(traineeModel.Email) || !traineeModel.Email.Contains("@")) { errorMessage = "Please enter a valid email address before requesting an OTP code."; return; }
+        isSendingOtp = true;
+        var result = await AuthService.SendOtpAsync(new SendOtpRequest { Email = traineeModel.Email.Trim(), Purpose = "REGISTER_TRAINEE" });
+        if (result.Success)
+        {
+            otpSent = true;
+            Array.Clear(otpDigits, 0, otpDigits.Length);
+            StartCountdown();
+            successMessage = "The OTP code has been sent to your email (valid for 15 minutes).";
+            if (otpRefs[0].Context != null) await otpRefs[0].FocusAsync();
+        }
+        else errorMessage = result.Message ?? "Failed to send the OTP code. Please try again.";
+        isSendingOtp = false;
+    }
+
+    private async Task OnOtpInput(ChangeEventArgs e, int idx)
+    {
+        var raw = e.Value?.ToString() ?? ""; var digits = new string(raw.Where(char.IsDigit).ToArray());
+        otpDigits[idx] = digits.Length > 0 ? digits[^1].ToString() : "";
+        if (!string.IsNullOrEmpty(otpDigits[idx]) && idx < 5) await otpRefs[idx + 1].FocusAsync();
+    }
+
+    private async Task OnOtpKeyDown(KeyboardEventArgs e, int idx)
+    {
+        if (e.Key == "Backspace" && string.IsNullOrEmpty(otpDigits[idx]) && idx > 0) await otpRefs[idx - 1].FocusAsync();
+    }
+
+    private async Task HandleCompleteRegister()
+    {
+        errorMessage = null; successMessage = null; showTermsError = true; showOtpError = true;
+        traineeModel.OtpCode = CombinedOtp;
+        bool formValid = traineeEditContext.Validate();
+        bool otpOk = otpSent && CombinedOtp.Length == 6;
+        if (!otpSent) { errorMessage = "Please click \"Send OTP\" to receive a verification code first."; return; }
+        if (!otpOk) { errorMessage = "Please enter the full 6-digit OTP code."; return; }
+        if (!agreedTerms) { return; }
+        if (!formValid) { errorMessage = "Please review the information you entered."; return; }
+
+        if (latestTerm == null)
+        {
+            try { latestTerm = await TermsService.GetLatestAsync(); } catch { }
+        }
+        if (latestTerm == null) { errorMessage = "Terms are still loading. Please try again in a moment."; return; }
+        traineeModel.TermId = latestTerm.TermId;
+
+        isLoading = true;
+        var result = await AuthService.RegisterTraineeAsync(traineeModel);
+        if (result.Success)
+        {
+            successMessage = "Account created successfully! Redirecting...";
+            await Task.Delay(1500);
+            Navigation.NavigateTo("/home");
+        }
+        else errorMessage = result.Message ?? "Registration failed. The OTP code is incorrect or has expired.";
+        isLoading = false;
+    }
+
+    private void StartCountdown()
+    {
+        countdown = 60; timer?.Dispose(); timer = new Timer(1000);
+        timer.Elapsed += (sender, e) => {
+            if (countdown > 0) { countdown--; InvokeAsync(StateHasChanged); } else timer?.Stop();
+        };
+        timer.Start();
+    }
+
+    public void Dispose() { timer?.Dispose(); }
+}

@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="8.0.8" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Moq" Version="4.21.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -22,6 +23,11 @@
 
   <ItemGroup>
     <EmbeddedResource Include="TestData\RegisterTraineeTestCases.csv" />
+    <EmbeddedResource Include="TestData\ViewCoachListTestCases.csv" />
+  </ItemGroup>
+
+  <ItemGroup>
+
   </ItemGroup>
 
   <ItemGroup>

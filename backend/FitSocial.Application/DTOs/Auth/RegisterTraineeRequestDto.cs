@@ -31,6 +31,5 @@ public class RegisterTraineeRequestDto
 
     public DateOnly? DateOfBirth { get; set; }
 
-    /// <summary>Version of terms the user agreed to (TermsAndPolicies.TermID).</summary>
     public Guid? TermId { get; set; }
 }

@@ -4,9 +4,6 @@ using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.Payouts;
 
-/// <summary>
-/// UC-23.1: Staff/Admin coach payout management (authenticated via ApiClient).
-/// </summary>
 public interface IPayoutService
 {
     Task<ApiResponse<List<PayoutHistoryItem>>> GetHistoryAsync(int? month = null, int? year = null, string? status = null);

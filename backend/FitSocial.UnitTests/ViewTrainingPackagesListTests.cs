@@ -11,9 +11,13 @@ using FitSocial.Application.Interfaces;
 using FitSocial.Application.Services;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using FitSocial.Domain.Policies;
+using FitSocial.Infrastructure.Data;
+using FitSocial.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
 
@@ -367,6 +371,144 @@ public class ViewCoachTrainingPackagesListServiceTests
         _mockRepo.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task GetMyPackagesAsync_WhenIsActiveIsNull_ShouldExcludePackage()
+    {
+        // Boundary: Nullable IsActive == null is excluded because filter requires IsActive == true
+        var coachId = Guid.NewGuid();
+        var activePkg = CreatePackage(coachId, title: "Active Plan", isActive: true);
+        var nullStatusPkg = CreatePackage(coachId, title: "Null Status Plan", isActive: true);
+        nullStatusPkg.IsActive = null;
+
+        _mockRepo.Setup(r => r.GetPackagesByCoachIdAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TrainingPackage> { activePkg, nullStatusPkg });
+
+        var result = (await _service.GetMyPackagesAsync(coachId)).ToList();
+
+        Assert.Single(result);
+        Assert.Equal("Active Plan", result[0].Title);
+    }
+
+    [Fact]
+    public async Task GetMyPackagesAsync_WhenPackageTypeAndMediaAreNull_ShouldDefaultPackageTypeToBothAndEmptyMedia()
+    {
+        // Boundary: Null PackageType defaults to "BOTH" and null Media maps to empty list without throwing
+        var coachId = Guid.NewGuid();
+        var package = CreatePackage(coachId, isActive: true);
+        package.PackageType = null;
+        package.Media = null!;
+
+        _mockRepo.Setup(r => r.GetPackagesByCoachIdAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TrainingPackage> { package });
+
+        var result = (await _service.GetMyPackagesAsync(coachId)).ToList();
+
+        Assert.Single(result);
+        Assert.Equal("BOTH", result[0].PackageType);
+        Assert.NotNull(result[0].Media);
+        Assert.Empty(result[0].Media);
+        Assert.Null(result[0].ThumbnailUrl);
+    }
+
+    [Fact]
+    public async Task GetMyPackagesAsync_WhenCoachProfileUserIsNull_ShouldFallbackToUnknownCoachAndEvaluateCertificates()
+    {
+        // Boundary: CoachProfile exists with certificates, but nested Coach (User) navigation is null
+        var coachId = Guid.NewGuid();
+        var package = new TrainingPackage
+        {
+            PackageId = Guid.NewGuid(),
+            CoachId = coachId,
+            Title = "Partial Nav Package",
+            IsActive = true,
+            Coach = new CoachProfile
+            {
+                CoachId = coachId,
+                Coach = null!,
+                CoachCertificates = new List<CoachCertificate>
+                {
+                    CreateCertificate(coachId, "APPROVED", expiryDate: null)
+                }
+            }
+        };
+
+        _mockRepo.Setup(r => r.GetPackagesByCoachIdAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TrainingPackage> { package });
+
+        var result = (await _service.GetMyPackagesAsync(coachId)).ToList();
+
+        Assert.Single(result);
+        Assert.Equal("Unknown Coach", result[0].CoachName);
+        Assert.True(result[0].CoachHasValidCertificates);
+        Assert.False(result[0].CoachHasExpiredCertificates);
+    }
+
+    [Fact]
+    public async Task GetMyPackagesAsync_WhenCertificateExpiresTodayVsYesterday_ShouldApplyBoundaryDateRules()
+    {
+        // Boundary: ExpiryDate == businessToday (UTC+7) is valid & not expired; ExpiryDate == today-1 is expired; PENDING future is neither valid nor expired
+        var coachId = Guid.NewGuid();
+        var businessToday = CoachCertificatePolicy.GetBusinessToday();
+
+        var expiringTodayPkg = CreatePackage(coachId, title: "Expiring Today", certificates: new List<CoachCertificate>
+        {
+            CreateCertificate(coachId, "APPROVED", businessToday)
+        });
+
+        var pendingAndExpiredPkg = CreatePackage(coachId, title: "Pending And Expired", certificates: new List<CoachCertificate>
+        {
+            CreateCertificate(coachId, "PENDING", businessToday.AddDays(30)),
+            CreateCertificate(coachId, "REJECTED", businessToday.AddDays(-1))
+        });
+
+        _mockRepo.Setup(r => r.GetPackagesByCoachIdAsync(coachId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TrainingPackage> { expiringTodayPkg, pendingAndExpiredPkg });
+
+        var result = (await _service.GetMyPackagesAsync(coachId)).ToList();
+
+        Assert.Equal(2, result.Count);
+        Assert.True(result[0].CoachHasValidCertificates);
+        Assert.False(result[0].CoachHasExpiredCertificates);
+        Assert.False(result[1].CoachHasValidCertificates);
+        Assert.True(result[1].CoachHasExpiredCertificates);
+    }
+
+    [Fact]
+    public async Task GetMyPackagesAsync_WhenCoachIdIsGuidEmpty_ShouldPassGuidEmptyToRepository()
+    {
+        // Boundary: Guid.Empty forwards directly to repository and returns empty list
+        _mockRepo.Setup(r => r.GetPackagesByCoachIdAsync(Guid.Empty, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TrainingPackage>());
+
+        var result = (await _service.GetMyPackagesAsync(Guid.Empty)).ToList();
+
+        Assert.Empty(result);
+        _mockRepo.Verify(r => r.GetPackagesByCoachIdAsync(Guid.Empty, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetMyPackagesAsync_WhenRepositoryThrowsException_ShouldPropagateException()
+    {
+        // Abnormal: Database failure from repository propagates to caller
+        var coachId = Guid.NewGuid();
+        _mockRepo.Setup(r => r.GetPackagesByCoachIdAsync(coachId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Database connection failed."));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.GetMyPackagesAsync(coachId));
+        Assert.Equal("Database connection failed.", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetMyPackagesAsync_WhenOperationCanceled_ShouldPropagateOperationCanceledException()
+    {
+        // Abnormal: Cancellation exception propagates from repository call
+        var coachId = Guid.NewGuid();
+        _mockRepo.Setup(r => r.GetPackagesByCoachIdAsync(coachId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => _service.GetMyPackagesAsync(coachId));
+    }
+
     #endregion
 
     #region 2. API Presentation Layer (Controller) Tests
@@ -393,7 +535,7 @@ public class ViewCoachTrainingPackagesListServiceTests
         // Arrange
         var coachId = Guid.NewGuid();
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         // Set up ClaimsPrincipal simulating authenticated COACH
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
@@ -436,7 +578,7 @@ public class ViewCoachTrainingPackagesListServiceTests
     {
         // Arrange
         var mockService = new Mock<ITrainingPackageService>();
-        var controller = new TrainingPackagesController(mockService.Object);
+        var controller = new TrainingPackagesController(mockService.Object, null!);
 
         var claims = new List<Claim>();
         if (invalidUserId != null)
@@ -459,6 +601,239 @@ public class ViewCoachTrainingPackagesListServiceTests
         Assert.False(response.Success);
         Assert.Contains("Invalid token", response.Message);
         mockService.Verify(s => s.GetMyPackagesAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetMyPackages_WhenNameIdentifierIsWhitespace_ShouldReturnUnauthorized()
+    {
+        // Boundary: Whitespace-only NameIdentifier claim -> 401 Unauthorized
+        var mockService = new Mock<ITrainingPackageService>();
+        var controller = new TrainingPackagesController(mockService.Object, null!);
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "   "),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var actionResult = await controller.GetMyPackages();
+
+        var unauthorizedResult = Assert.IsType<UnauthorizedObjectResult>(actionResult);
+        var response = Assert.IsType<ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>>(unauthorizedResult.Value);
+        Assert.False(response.Success);
+        Assert.Equal("Invalid token or user ID", response.Message);
+        mockService.Verify(s => s.GetMyPackagesAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetMyPackages_WhenOnlySubClaimProvided_ShouldReturnUnauthorized()
+    {
+        // Abnormal: Controller requires ClaimTypes.NameIdentifier (does not fall back to "sub") -> 401 Unauthorized
+        var mockService = new Mock<ITrainingPackageService>();
+        var controller = new TrainingPackagesController(mockService.Object, null!);
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var actionResult = await controller.GetMyPackages();
+
+        Assert.IsType<UnauthorizedObjectResult>(actionResult);
+        mockService.Verify(s => s.GetMyPackagesAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetMyPackages_WhenCoachHasEmptyPackageList_ShouldReturnOkWithEmptyData()
+    {
+        // Boundary: Authenticated coach with zero active packages -> 200 OK with empty array
+        var coachId = Guid.NewGuid();
+        var mockService = new Mock<ITrainingPackageService>();
+        var controller = new TrainingPackagesController(mockService.Object, null!);
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.GetMyPackagesAsync(coachId))
+            .ReturnsAsync(Array.Empty<TrainingPackageResponseDto>());
+
+        var actionResult = await controller.GetMyPackages();
+
+        var okResult = Assert.IsType<OkObjectResult>(actionResult);
+        var response = Assert.IsType<ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.NotNull(response.Data);
+        Assert.Empty(response.Data);
+    }
+
+    [Fact]
+    public async Task GetMyPackages_WhenServiceThrowsException_ShouldPropagateException()
+    {
+        // Abnormal: Unhandled service exception propagates through endpoint pipeline
+        var coachId = Guid.NewGuid();
+        var mockService = new Mock<ITrainingPackageService>();
+        var controller = new TrainingPackagesController(mockService.Object, null!);
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, coachId.ToString()),
+            new Claim(ClaimTypes.Role, "COACH")
+        }, "TestAuth"));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        mockService.Setup(s => s.GetMyPackagesAsync(coachId))
+            .ThrowsAsync(new InvalidOperationException("Unexpected failure"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => controller.GetMyPackages());
+    }
+
+    #endregion
+
+    #region 3. Data Access Layer (Repository) Tests
+
+    private static FitSocialDbContext CreateInMemoryDbContext()
+    {
+        var options = new DbContextOptionsBuilder<FitSocialDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new FitSocialDbContext(options);
+    }
+
+    [Fact]
+    public async Task Repository_GetPackagesByCoachIdAsync_WhenCoachHasPackages_ShouldReturnOnlyTargetCoachPackages()
+    {
+        // Normal: Filters strictly by coachId and excludes other coaches' packages
+        using var context = CreateInMemoryDbContext();
+        var targetCoachId = Guid.NewGuid();
+        var otherCoachId = Guid.NewGuid();
+
+        context.Users.AddRange(
+            new User { UserId = targetCoachId, Email = "target@fitsocial.com", FullName = "Target Coach" },
+            new User { UserId = otherCoachId, Email = "other@fitsocial.com", FullName = "Other Coach" });
+        context.CoachProfiles.AddRange(
+            new CoachProfile { CoachId = targetCoachId },
+            new CoachProfile { CoachId = otherCoachId });
+        context.TrainingPackages.AddRange(
+            new TrainingPackage { PackageId = Guid.NewGuid(), CoachId = targetCoachId, Title = "Target Pkg 1", IsActive = true },
+            new TrainingPackage { PackageId = Guid.NewGuid(), CoachId = targetCoachId, Title = "Target Pkg 2", IsActive = true },
+            new TrainingPackage { PackageId = Guid.NewGuid(), CoachId = otherCoachId, Title = "Other Pkg", IsActive = true });
+        await context.SaveChangesAsync();
+
+        var repo = new TrainingPackageRepository(context);
+        var result = (await repo.GetPackagesByCoachIdAsync(targetCoachId)).ToList();
+
+        Assert.Equal(2, result.Count);
+        Assert.All(result, p => Assert.Equal(targetCoachId, p.CoachId));
+        Assert.DoesNotContain(result, p => p.Title == "Other Pkg");
+    }
+
+    [Fact]
+    public async Task Repository_GetPackagesByCoachIdAsync_ShouldIncludeCoachUserAndMediaNavigations()
+    {
+        // Normal: Eager-loads Coach.Coach (User) and Media collection
+        using var context = CreateInMemoryDbContext();
+        var coachId = Guid.NewGuid();
+        var packageId = Guid.NewGuid();
+
+        context.Users.Add(new User { UserId = coachId, Email = "nav@fitsocial.com", FullName = "Included Coach Name" });
+        context.CoachProfiles.Add(new CoachProfile { CoachId = coachId });
+        context.TrainingPackages.Add(new TrainingPackage { PackageId = packageId, CoachId = coachId, Title = "Nav Package", IsActive = true });
+        context.TrainingPackageMedia.AddRange(
+            new TrainingPackageMedium { MediaId = Guid.NewGuid(), PackageId = packageId, MediaUrl = "https://cdn/2.jpg", SortOrder = 2 },
+            new TrainingPackageMedium { MediaId = Guid.NewGuid(), PackageId = packageId, MediaUrl = "https://cdn/1.jpg", SortOrder = 1 });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repo = new TrainingPackageRepository(context);
+        var result = (await repo.GetPackagesByCoachIdAsync(coachId)).ToList();
+
+        Assert.Single(result);
+        Assert.NotNull(result[0].Coach);
+        Assert.NotNull(result[0].Coach.Coach);
+        Assert.Equal("Included Coach Name", result[0].Coach.Coach.FullName);
+        Assert.Equal(2, result[0].Media.Count);
+    }
+
+    [Fact]
+    public async Task Repository_GetPackagesByCoachIdAsync_ShouldUseAsNoTracking()
+    {
+        // Normal: Returned entities are untracked (AsNoTracking)
+        using var context = CreateInMemoryDbContext();
+        var coachId = Guid.NewGuid();
+
+        context.Users.Add(new User { UserId = coachId, Email = "track@fitsocial.com", FullName = "NoTrack Coach" });
+        context.CoachProfiles.Add(new CoachProfile { CoachId = coachId });
+        context.TrainingPackages.Add(new TrainingPackage { PackageId = Guid.NewGuid(), CoachId = coachId, Title = "Tracked Check", IsActive = true });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repo = new TrainingPackageRepository(context);
+        var result = (await repo.GetPackagesByCoachIdAsync(coachId)).ToList();
+
+        Assert.Single(result);
+        Assert.Empty(context.ChangeTracker.Entries<TrainingPackage>());
+    }
+
+    [Fact]
+    public async Task Repository_GetPackagesByCoachIdAsync_WhenCoachHasActiveAndInactivePackages_ShouldReturnAllForServiceFiltering()
+    {
+        // Boundary: Repository returns both active and inactive packages matching CoachId
+        using var context = CreateInMemoryDbContext();
+        var coachId = Guid.NewGuid();
+
+        context.Users.Add(new User { UserId = coachId, Email = "mix@fitsocial.com", FullName = "Mix Coach" });
+        context.CoachProfiles.Add(new CoachProfile { CoachId = coachId });
+        context.TrainingPackages.AddRange(
+            new TrainingPackage { PackageId = Guid.NewGuid(), CoachId = coachId, Title = "Active", IsActive = true },
+            new TrainingPackage { PackageId = Guid.NewGuid(), CoachId = coachId, Title = "Inactive", IsActive = false });
+        await context.SaveChangesAsync();
+
+        var repo = new TrainingPackageRepository(context);
+        var result = (await repo.GetPackagesByCoachIdAsync(coachId)).ToList();
+
+        Assert.Equal(2, result.Count);
+    }
+
+    [Fact]
+    public async Task Repository_GetPackagesByCoachIdAsync_WhenCoachHasNoPackagesOrEmptyGuid_ShouldReturnEmptyList()
+    {
+        // Boundary: Unknown coachId and Guid.Empty return empty sequence
+        using var context = CreateInMemoryDbContext();
+        var repo = new TrainingPackageRepository(context);
+
+        var missingResult = (await repo.GetPackagesByCoachIdAsync(Guid.NewGuid())).ToList();
+        var emptyGuidResult = (await repo.GetPackagesByCoachIdAsync(Guid.Empty)).ToList();
+
+        Assert.Empty(missingResult);
+        Assert.Empty(emptyGuidResult);
+    }
+
+    [Fact]
+    public async Task Repository_GetPackagesByCoachIdAsync_WhenCancellationRequested_ShouldThrowOperationCanceledException()
+    {
+        // Abnormal: Pre-cancelled token throws OperationCanceledException
+        using var context = CreateInMemoryDbContext();
+        var repo = new TrainingPackageRepository(context);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            repo.GetPackagesByCoachIdAsync(Guid.NewGuid(), cts.Token));
     }
 
     #endregion

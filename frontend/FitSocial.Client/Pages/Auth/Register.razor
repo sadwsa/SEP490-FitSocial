@@ -1,0 +1,56 @@
+@page "/register"
+@layout AuthLayout
+@inject PendingCoachRegistration PendingCoach
+
+<PageTitle>Join the FitConnect Community</PageTitle>
+
+<div class="reg-hero">
+    <img src="img/fitconnect-logo.png" alt="FitConnect" class="hero-logo" />
+    <div class="hero-text">
+        <h1 class="hero-title">Join the <span>FitConnect</span> Community</h1>
+        <p class="hero-sub">Unlock your unlimited physical potential, sync your smart training journey and connect with thousands of athletes and top coaches.</p>
+    </div>
+</div>
+
+<div class="reg-card">
+    <div class="role-tabs">
+        <button type="button" class="role-tab @(selectedRole == "TRAINEE" ? "active" : "")" @onclick='() => SelectRole("TRAINEE")'>
+            <span class="role-icon"><AppIcon Name="person" /></span>
+            <span>Trainee</span>
+        </button>
+        <button type="button" class="role-tab @(selectedRole == "COACH" ? "active" : "")" @onclick='() => SelectRole("COACH")'>
+            <span class="role-icon"><AppIcon Name="briefcase" /></span>
+            <span>Coach</span>
+        </button>
+    </div>
+
+    @if (selectedRole == "TRAINEE")
+    {
+        <TraineeRegisterForm />
+    }
+    else
+    {
+        <CoachRegisterWizard />
+    }
+</div>
+
+<div class="reg-footer">
+    Already have an account? <a href="login">Log in now</a>
+</div>
+
+@code {
+    private string selectedRole = "TRAINEE";
+
+    protected override void OnInitialized()
+    {
+        if (PendingCoach.HasDraft && PendingCoach.Draft != null)
+        {
+            selectedRole = "COACH";
+        }
+    }
+
+    private void SelectRole(string role)
+    {
+        selectedRole = role;
+    }
+}

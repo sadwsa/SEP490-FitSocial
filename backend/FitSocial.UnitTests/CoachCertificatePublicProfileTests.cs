@@ -128,9 +128,9 @@ public class CoachCertificatePublicProfileTests
     }
 
     [Fact]
-    public void Policy_MissingExpiryDate_NeverAssumedValid()
+    public void Policy_MissingExpiryDate_ConsideredValidIfApproved()
     {
-        // Case 6: Chứng chỉ không có ngày hết hạn
+        // Case 6: Chứng chỉ không có ngày hết hạn (vô thời hạn / lifetime) được coi là hợp lệ khi đã duyệt
         var noExpiryCert = new CoachCertificate
         {
             CertificateId = Guid.NewGuid(),
@@ -140,7 +140,7 @@ public class CoachCertificatePublicProfileTests
             ExpiryDate = null
         };
 
-        Assert.False(CoachCertificatePolicy.IsCertificateValid(noExpiryCert, _mockToday));
+        Assert.True(CoachCertificatePolicy.IsCertificateValid(noExpiryCert, _mockToday));
         Assert.False(CoachCertificatePolicy.IsCertificateExpired(noExpiryCert, _mockToday));
     }
 

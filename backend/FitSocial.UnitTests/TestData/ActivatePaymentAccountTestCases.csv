@@ -1,4 +1,4 @@
-UTCID,Type,ConfigExists,OtherActiveExists,SaveChangesThrows,AuditThrows,IsPayout,ExpectedThrows,ExpectedSuccess,ExpectedMessage
+UTCID,Type,Result_ConfigExists,Result_OtherActiveExists,Result_SaveChangesThrows,Result_AuditThrows,IsPayout,ExpectedThrows,ExpectedSuccess,ExpectedMessage
 UTCID01,N,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,Payment gateway config activated successfully.
 UTCID02,A,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,Payment gateway config not found.
 UTCID03,A,TRUE,TRUE,FALSE,FALSE,FALSE,TRUE,FALSE,Gateway 'Other' is currently active

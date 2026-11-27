@@ -59,7 +59,15 @@ public class ReportRepository : Repository<Report>, IReportRepository
         if (!string.IsNullOrWhiteSpace(appealStatus))
         {
             var ast = appealStatus.Trim().ToUpper();
-            query = query.Where(r => r.AppealStatus != null && r.AppealStatus.ToUpper() == ast);
+            if (ast == "ALL")
+            {
+                // Khi lọc ALL ở màn hình Appeals, chỉ lấy các báo cáo CÓ KHÁNG CÁO
+                query = query.Where(r => r.AppealStatus != null && r.AppealStatus != "");
+            }
+            else
+            {
+                query = query.Where(r => r.AppealStatus != null && r.AppealStatus.ToUpper() == ast);
+            }
         }
 
         if (reporterId.HasValue && reporterId.Value != Guid.Empty)
@@ -83,8 +91,10 @@ public class ReportRepository : Repository<Report>, IReportRepository
             query = query.Where(r =>
                 (r.Reason != null && EF.Functions.ILike(r.Reason, term)) ||
                 (r.Description != null && EF.Functions.ILike(r.Description, term)) ||
+                (r.AppealContent != null && EF.Functions.ILike(r.AppealContent, term)) ||
                 (r.Reporter != null && ((r.Reporter.FullName != null && EF.Functions.ILike(r.Reporter.FullName, term)) || EF.Functions.ILike(r.Reporter.Email, term))) ||
-                (r.ReportedUser != null && ((r.ReportedUser.FullName != null && EF.Functions.ILike(r.ReportedUser.FullName, term)) || EF.Functions.ILike(r.ReportedUser.Email, term))));
+                (r.ReportedUser != null && ((r.ReportedUser.FullName != null && EF.Functions.ILike(r.ReportedUser.FullName, term)) || EF.Functions.ILike(r.ReportedUser.Email, term))) ||
+                (r.ReportedPost != null && r.ReportedPost.Author != null && ((r.ReportedPost.Author.FullName != null && EF.Functions.ILike(r.ReportedPost.Author.FullName, term)) || EF.Functions.ILike(r.ReportedPost.Author.Email, term))));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -98,11 +108,15 @@ public class ReportRepository : Repository<Report>, IReportRepository
             .Take(pageSize)
             .Include(r => r.Reporter)
             .Include(r => r.ReportedUser)
+                .ThenInclude(u => u!.CoachProfileCoach)
             .Include(r => r.ReportedPost)
                 .ThenInclude(p => p!.Author)
+                    .ThenInclude(u => u.CoachProfileCoach)
             .Include(r => r.ResolvedByNavigation)
             .Include(r => r.AppealReviewedByNavigation)
             .Include(r => r.ReportMedia)
+            .Include(r => r.Appeals)
+                .ThenInclude(a => a.AppealMedia)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
@@ -114,12 +128,15 @@ public class ReportRepository : Repository<Report>, IReportRepository
         return await DbSet
             .Include(r => r.Reporter)
             .Include(r => r.ReportedUser)
+                .ThenInclude(u => u!.CoachProfileCoach)
             .Include(r => r.ReportedPost)
                 .ThenInclude(p => p!.Author)
+                    .ThenInclude(u => u.CoachProfileCoach)
             .Include(r => r.ResolvedByNavigation)
             .Include(r => r.AppealReviewedByNavigation)
             .Include(r => r.ReportMedia)
             .Include(r => r.Appeals)
+                .ThenInclude(a => a.AppealMedia)
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.ReportId == reportId, cancellationToken);
     }
@@ -131,5 +148,26 @@ public class ReportRepository : Repository<Report>, IReportRepository
             && r.Status != null
             && (r.Status.ToUpper() == "PENDING" || r.Status.ToUpper() == "REVIEWED"),
             cancellationToken);
+    }
+
+    public Task<bool> HasPendingReportAsync(Guid reporterId, Guid reportedUserId, CancellationToken cancellationToken = default)
+    {
+        return DbSet.AnyAsync(r =>
+            r.ReporterId == reporterId
+            && r.ReportedUserId == reportedUserId
+            && r.ReportedPostId == null
+            && r.Status != null
+            && r.Status.ToUpper() == "PENDING",
+            cancellationToken);
+    }
+
+    public Task<List<Report>> GetReportsForUserAppealAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return DbSet.AsNoTracking()
+            .Include(r => r.ReportedPost)
+            .Include(r => r.Appeals)
+            .Where(r => (r.ReportedUserId == userId) || (r.ReportedPost != null && r.ReportedPost.AuthorId == userId))
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync(cancellationToken);
     }
 }

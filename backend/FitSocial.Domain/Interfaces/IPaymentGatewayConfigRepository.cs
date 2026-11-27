@@ -8,6 +8,7 @@ namespace FitSocial.Domain.Interfaces;
 
 public interface IPaymentGatewayConfigRepository : IRepository<PaymentGatewayConfig>
 {
-    Task<PaymentGatewayConfig?> GetActiveByNameAsync(string gatewayName, CancellationToken cancellationToken = default);
+    Task<PaymentGatewayConfig?> GetActiveByNameAsync(string gatewayName, CancellationToken cancellationToken = default); 
+
     Task<List<PaymentGatewayConfig>> GetAllConfigsAsync(CancellationToken cancellationToken = default);
 }

@@ -5,6 +5,7 @@ using FitSocial.Client.Services.Http;
 using Microsoft.AspNetCore.Components.Forms;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -66,9 +67,34 @@ public class TrainingPackageService : ITrainingPackageService
         return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}{query}");
     }
 
-    public async Task<ApiResponse<IEnumerable<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync()
+    public async Task<ApiResponse<PagedResult<TrainingPackageResponseDto>>> GetPurchasedPackagesAsync(
+        int pageNumber = 1,
+        int pageSize = 10,
+        string? searchKeyword = null,
+        string? packageType = null,
+        string? status = null,
+        string? sortBy = null)
     {
-        return await _apiClient.GetAsync<IEnumerable<TrainingPackageResponseDto>>($"{BaseEndpoint}/purchased");
+        if (pageNumber < 1) pageNumber = 1;
+        if (pageSize < 1) pageSize = 10;
+
+        var queryParams = new List<string>
+        {
+            $"pageNumber={pageNumber}",
+            $"pageSize={pageSize}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+            queryParams.Add($"searchKeyword={Uri.EscapeDataString(searchKeyword.Trim())}");
+        if (!string.IsNullOrWhiteSpace(packageType) && !string.Equals(packageType, "ALL", StringComparison.OrdinalIgnoreCase))
+            queryParams.Add($"packageType={Uri.EscapeDataString(packageType.Trim())}");
+        if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "ALL", StringComparison.OrdinalIgnoreCase))
+            queryParams.Add($"status={Uri.EscapeDataString(status.Trim())}");
+        if (!string.IsNullOrWhiteSpace(sortBy))
+            queryParams.Add($"sortBy={Uri.EscapeDataString(sortBy.Trim())}");
+
+        return await _apiClient.GetAsync<PagedResult<TrainingPackageResponseDto>>(
+            $"{BaseEndpoint}/purchased?{string.Join("&", queryParams)}");
     }
 
     public async Task<ApiResponse<List<string>>> UploadPackageImagesAsync(IEnumerable<IBrowserFile> files)
@@ -90,8 +116,17 @@ public class TrainingPackageService : ITrainingPackageService
 
             foreach (var file in fileList)
             {
-                var stream = file.OpenReadStream(10 * 1024 * 1024); // max 10MB/file
-                content.Add(new StreamContent(stream), "files", file.Name);
+                using var ms = new MemoryStream();
+                await using var stream = file.OpenReadStream(10 * 1024 * 1024); // max 10MB/file
+                await stream.CopyToAsync(ms);
+                var bytes = ms.ToArray();
+
+                var byteContent = new ByteArrayContent(bytes);
+                if (!string.IsNullOrWhiteSpace(file.ContentType))
+                {
+                    byteContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+                }
+                content.Add(byteContent, "files", file.Name);
             }
 
             var response = await _httpClient.PostAsync("upload/package-media", content);
@@ -124,9 +159,55 @@ public class TrainingPackageService : ITrainingPackageService
         return await _apiClient.GetAsync<PackageReviewSummaryDto>($"{BaseEndpoint}/{packageId}/reviews");
     }
 
+    public async Task<ApiResponse<List<string>>> UploadReviewImagesAsync(Guid packageId, IBrowserFile[] files)
+    {
+        try
+        {
+            var bufferedFiles = new List<(byte[] Bytes, string ContentType, string FileName)>();
+            if (files != null)
+            {
+                for (int i = 0; i < files.Length; i++)
+                {
+                    var file = files[i];
+                    using var ms = new MemoryStream();
+                    await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+                    bufferedFiles.Add((ms.ToArray(), file.ContentType, file.Name));
+                }
+            }
+
+            return await _apiClient.PostMultipartAsync<List<string>>(
+                $"{BaseEndpoint}/{packageId}/upload-images",
+                () =>
+                {
+                    var content = new MultipartFormDataContent();
+                    foreach (var f in bufferedFiles)
+                    {
+                        var byteContent = new ByteArrayContent(f.Bytes);
+                        if (!string.IsNullOrWhiteSpace(f.ContentType))
+                            byteContent.Headers.ContentType = new MediaTypeHeaderValue(f.ContentType);
+                        content.Add(byteContent, "files", f.FileName);
+                    }
+                    return content;
+                });
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<List<string>>
+            {
+                Success = false,
+                Message = $"Image upload error: {ex.Message}"
+            };
+        }
+    }
+
     public async Task<ApiResponse<bool>> SubmitPackageReviewAsync(Guid packageId, CreatePackageReviewDto dto)
     {
         return await _apiClient.PostAsync<CreatePackageReviewDto, bool>($"{BaseEndpoint}/{packageId}/reviews", dto);
+    }
+
+    public async Task<ApiResponse<bool>> UpdatePackageReviewAsync(Guid packageId, Guid reviewId, UpdatePackageReviewDto dto)
+    {
+        return await _apiClient.PutAsync<UpdatePackageReviewDto, bool>($"{BaseEndpoint}/{packageId}/reviews/{reviewId}", dto);
     }
 
     public async Task<ApiResponse<bool>> ReplyToReviewAsync(Guid packageId, Guid reviewId, ReplyReviewDto dto)

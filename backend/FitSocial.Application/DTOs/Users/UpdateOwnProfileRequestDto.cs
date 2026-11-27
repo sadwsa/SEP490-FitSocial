@@ -5,10 +5,9 @@ namespace FitSocial.Application.DTOs.Users;
 
 public class UpdateOwnProfileRequestDto
 {
-    [Required(ErrorMessage = "Full name is required.")]
     [StringLength(100, MinimumLength = 2, ErrorMessage = "Full name must be between 2 and 100 characters.")]
     [RegularExpression(@"^[^\d]+$", ErrorMessage = "Full name cannot contain numbers.")]
-    public string FullName { get; set; } = string.Empty;
+    public string? FullName { get; set; }
 
     [StringLength(2048, ErrorMessage = "Avatar URL must not exceed 2048 characters.")]
     public string? AvatarUrl { get; set; }

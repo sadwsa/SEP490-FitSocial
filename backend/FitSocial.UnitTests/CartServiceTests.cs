@@ -1450,5 +1450,112 @@ public class CartServiceTests
         Assert.Contains("Error clearing cart: Deadlock detected during commit", result.Message);
     }
 
+    [Fact]
+    public async Task GetCartAsync_WhenCoachAccountIsLocked_ShouldMarkItemAsUnavailable()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+        var packageId = Guid.NewGuid();
+
+        var coachUser = new User
+        {
+            UserId = coachId,
+            FullName = "Locked Coach",
+            RoleCode = RoleConstants.Coach,
+            IsLocked = true
+        };
+        var coachProfile = new CoachProfile
+        {
+            CoachId = coachId,
+            Coach = coachUser,
+            ExperienceYears = 3
+        };
+        var package = new TrainingPackage
+        {
+            PackageId = packageId,
+            CoachId = coachId,
+            Coach = coachProfile,
+            Title = "Locked Coach Program",
+            Price = 1000000m,
+            IsActive = true
+        };
+        var cartItem = new Cart
+        {
+            CartId = Guid.NewGuid(),
+            UserId = userId,
+            PackageId = packageId,
+            Package = package,
+            Quantity = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { UserId = userId, RoleCode = RoleConstants.Trainee });
+        _mockCartRepo.Setup(r => r.GetCartByUserIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Cart> { cartItem });
+
+        // Act
+        var result = await _service.GetCartAsync(userId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Single(result.Data!.Items);
+        var item = result.Data.Items[0];
+        Assert.False(item.IsAvailable);
+        Assert.Contains("suspended", item.UnavailableReason, StringComparison.OrdinalIgnoreCase);
+        Assert.True(result.Data.HasUnavailableItems);
+        Assert.Equal(0, result.Data.TotalPrice);
+    }
+
+    [Fact]
+    public async Task AddToCartAsync_WhenCoachAccountIsLocked_ShouldReturnFailure()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+        var packageId = Guid.NewGuid();
+
+        var coachUser = new User
+        {
+            UserId = coachId,
+            FullName = "Suspended Coach",
+            RoleCode = RoleConstants.Coach,
+            IsLocked = true
+        };
+        var coachProfile = new CoachProfile
+        {
+            CoachId = coachId,
+            Coach = coachUser
+        };
+        var package = new TrainingPackage
+        {
+            PackageId = packageId,
+            CoachId = coachId,
+            Coach = coachProfile,
+            Title = "Suspended Package",
+            Price = 500000m,
+            IsActive = true
+        };
+
+        _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(package);
+
+        var dto = new AddToCartDto
+        {
+            PackageId = packageId,
+            Quantity = 1
+        };
+
+        // Act
+        var result = await _service.AddToCartAsync(userId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("suspended", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     #endregion
 }

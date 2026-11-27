@@ -58,6 +58,7 @@ public partial class FitSocialDbContext : DbContext
     public virtual DbSet<UserBlock> UserBlocks { get; set; }
     public virtual DbSet<VideoTutorial> VideoTutorials { get; set; }
     public virtual DbSet<WorkoutCompletionLog> WorkoutCompletionLogs { get; set; }
+    public virtual DbSet<MealCompletionLog> MealCompletionLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -154,8 +155,8 @@ public partial class FitSocialDbContext : DbContext
             entity.Property(e => e.GoogleProviderId)
                 .HasMaxLength(255)
                 .HasColumnName("GoogleProviderID");
-            entity.Property(e => e.IsInternal).HasDefaultValue(false);
-            entity.Property(e => e.IsLocked).HasDefaultValue(false);
+            entity.Property(e => e.IsInternal).HasDefaultValue(false).ValueGeneratedNever();
+            entity.Property(e => e.IsLocked).HasDefaultValue(false).ValueGeneratedNever();
             entity.Property(e => e.LastActiveAt).HasColumnType("timestamp without time zone");
             entity.Property(e => e.LockedBy).HasColumnName("LockedBy");
             entity.Property(e => e.PasswordHash).HasMaxLength(255);
@@ -1115,6 +1116,40 @@ public partial class FitSocialDbContext : DbContext
                 .HasConstraintName("MealPlanItem_MealPlanID_fkey");
         });
 
+        // 35b. MealCompletionLog
+        modelBuilder.Entity<MealCompletionLog>(entity =>
+        {
+            entity.HasKey(e => e.MealCompletionLogId).HasName("MealCompletionLog_pkey");
+            entity.ToTable("MealCompletionLog");
+            entity.Property(e => e.MealCompletionLogId)
+                .HasDefaultValueSql("uuid_generate_v4()")
+                .HasColumnName("MealCompletionLogID");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone");
+            entity.Property(e => e.LogDate).HasColumnType("timestamp without time zone");
+            entity.Property(e => e.Notes).HasMaxLength(300);
+            entity.Property(e => e.MediaUrl).HasMaxLength(500);
+            entity.Property(e => e.CoachFeedback).HasMaxLength(500);
+            entity.Property(e => e.ReviewedBy).HasColumnName("ReviewedBy");
+            entity.Property(e => e.ReviewedAt).HasColumnType("timestamp without time zone");
+            entity.Property(e => e.Status).HasMaxLength(30);
+            entity.Property(e => e.TraineeId).HasColumnName("TraineeID");
+            entity.Property(e => e.MealPlanItemId).HasColumnName("MealPlanItemID");
+
+            entity.HasOne(d => d.Trainee).WithMany()
+                .HasForeignKey(d => d.TraineeId)
+                .HasConstraintName("MealCompletionLog_TraineeID_fkey");
+
+            entity.HasOne(d => d.ReviewedByCoach).WithMany()
+                .HasForeignKey(d => d.ReviewedBy)
+                .HasConstraintName("MealCompletionLog_ReviewedBy_fkey");
+
+            entity.HasOne(d => d.MealPlanItem).WithMany(p => p.MealCompletionLogs)
+                .HasForeignKey(d => d.MealPlanItemId)
+                .HasConstraintName("MealCompletionLog_MealPlanItemID_fkey");
+        });
+
         // 36. BodyMetricLog
         modelBuilder.Entity<BodyMetricLog>(entity =>
         {
@@ -1166,6 +1201,10 @@ public partial class FitSocialDbContext : DbContext
                 .HasColumnType("timestamp without time zone");
             entity.Property(e => e.LogDate).HasColumnType("timestamp without time zone");
             entity.Property(e => e.Notes).HasMaxLength(300);
+            entity.Property(e => e.MediaUrl).HasMaxLength(500);
+            entity.Property(e => e.CoachFeedback).HasMaxLength(500);
+            entity.Property(e => e.ReviewedBy).HasColumnName("ReviewedBy");
+            entity.Property(e => e.ReviewedAt).HasColumnType("timestamp without time zone");
             entity.Property(e => e.Status).HasMaxLength(30);
             entity.Property(e => e.TraineeId).HasColumnName("TraineeID");
             entity.Property(e => e.TrainingPlanExerciseId).HasColumnName("TrainingPlanExerciseID");
@@ -1173,6 +1212,10 @@ public partial class FitSocialDbContext : DbContext
             entity.HasOne(d => d.Trainee).WithMany(p => p.WorkoutCompletionLogs)
                 .HasForeignKey(d => d.TraineeId)
                 .HasConstraintName("WorkoutCompletionLog_TraineeID_fkey");
+
+            entity.HasOne(d => d.ReviewedByCoach).WithMany()
+                .HasForeignKey(d => d.ReviewedBy)
+                .HasConstraintName("WorkoutCompletionLog_ReviewedBy_fkey");
 
             entity.HasOne(d => d.TrainingPlanExercise).WithMany(p => p.WorkoutCompletionLogs)
                 .HasForeignKey(d => d.TrainingPlanExerciseId)
@@ -1191,7 +1234,9 @@ public partial class FitSocialDbContext : DbContext
 
             // THÊM 1: Map cột PackageID
             entity.Property(e => e.PackageId).HasColumnName("PackageID");
+            entity.Property(e => e.OrderId).HasColumnName("OrderID");
             entity.Property(e => e.IsEdited).HasColumnName("IsEdited").HasDefaultValue(false);
+            entity.Property(e => e.RowVersion).HasColumnName("row_version").IsRowVersion();
 
 
             entity.Property(e => e.Comment).HasColumnType("text");
@@ -1217,6 +1262,40 @@ public partial class FitSocialDbContext : DbContext
             entity.HasOne(d => d.Package).WithMany(p => p.Reviews)
                 .HasForeignKey(d => d.PackageId)
                 .HasConstraintName("Reviews_PackageID_fkey")
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Unique: một trainee chỉ được review 1 lần cho 1 order
+            entity.HasIndex(e => new { e.OrderId, e.TraineeId }, "Reviews_OrderID_TraineeID_key")
+                .IsUnique()
+                .HasFilter("\"OrderID\" IS NOT NULL");
+
+            // FK to Order
+            entity.HasOne(d => d.Order).WithMany()
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("Reviews_OrderID_fkey")
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // 39b. ReviewMedia
+        modelBuilder.Entity<ReviewMedia>(entity =>
+        {
+            entity.HasKey(e => e.ReviewMediaId).HasName("ReviewMedia_pkey");
+            entity.ToTable("ReviewMedia");
+            entity.Property(e => e.ReviewMediaId)
+                .HasDefaultValueSql("uuid_generate_v4()")
+                .HasColumnName("ReviewMediaID");
+            entity.Property(e => e.ReviewId).HasColumnName("ReviewID");
+            entity.Property(e => e.MediaUrl).HasColumnName("MediaUrl").HasColumnType("text");
+            entity.Property(e => e.MediaType).HasColumnName("MediaType").HasColumnType("character varying(20)");
+            entity.Property(e => e.SortOrder).HasColumnName("SortOrder");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Review).WithMany(p => p.ReviewMedia)
+                .HasForeignKey(d => d.ReviewId)
+                .HasConstraintName("ReviewMedia_ReviewID_fkey")
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

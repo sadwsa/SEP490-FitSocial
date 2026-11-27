@@ -1,23 +1,23 @@
-using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
 using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FitSocial.Client.Services.Auth;
 
 public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 {
     private readonly ITokenStorage _localStorage;
-    private readonly HttpClient _http;
+    private readonly IServiceProvider _serviceProvider;
     private static readonly ClaimsPrincipal Anonymous = new(new ClaimsIdentity());
     private const string AuthTokenKey = "authToken";
     private const string RefreshTokenKey = "refreshToken";
 
-    public CustomAuthenticationStateProvider(ITokenStorage localStorage, HttpClient http)
+    public CustomAuthenticationStateProvider(ITokenStorage localStorage, IServiceProvider serviceProvider)
     {
         _localStorage = localStorage;
-        _http = http;
+        _serviceProvider = serviceProvider;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -30,11 +30,14 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
                 return new AuthenticationState(Anonymous);
             }
 
-            // Production: if the 15-min access token is expired (or expiring within 60s),
-            // try a silent refresh with the stored refresh token before declaring anonymous.
             if (IsTokenExpired(token, TimeSpan.FromSeconds(60)))
             {
-                token = await TrySilentRefreshAsync() ?? "";
+                var authService = _serviceProvider.GetRequiredService<IAuthService>();
+                var refreshed = await authService.RefreshTokenAsync();
+                if (refreshed)
+                {
+                    token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+                }
                 if (string.IsNullOrWhiteSpace(token))
                 {
                     return new AuthenticationState(Anonymous);
@@ -53,38 +56,6 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         }
     }
 
-    private async Task<string?> TrySilentRefreshAsync()
-    {
-        try
-        {
-            var refreshToken = await _localStorage.GetItemAsync<string>(RefreshTokenKey);
-            if (string.IsNullOrWhiteSpace(refreshToken)) return null;
-
-            using var response = await _http.PostAsJsonAsync("auth/refresh", new { refreshToken });
-            if (!response.IsSuccessStatusCode) return null;
-
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (!root.TryGetProperty("success", out var ok) || !ok.GetBoolean()) return null;
-            if (!root.TryGetProperty("data", out var data)) return null;
-            if (!data.TryGetProperty("accessToken", out var at) || !data.TryGetProperty("refreshToken", out var rt)) return null;
-
-            var newAccess = at.GetString();
-            var newRefresh = rt.GetString();
-            if (string.IsNullOrWhiteSpace(newAccess) || string.IsNullOrWhiteSpace(newRefresh)) return null;
-
-            await _localStorage.SetItemAsync(AuthTokenKey, newAccess);
-            await _localStorage.SetItemAsync(RefreshTokenKey, newRefresh);
-            NotifyUserAuthentication(newAccess);
-            return newAccess;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     internal static bool IsTokenExpired(string jwt, TimeSpan skew)
     {
         try
@@ -92,12 +63,7 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
             var parts = jwt.Split('.');
             if (parts.Length < 2) return true;
             var payload = parts[1];
-            switch (payload.Length % 4)
-            {
-                case 2: payload += "=="; break;
-                case 3: payload += "="; break;
-            }
-            var bytes = Convert.FromBase64String(payload);
+            var bytes = DecodeBase64Url(payload);
             using var doc = JsonDocument.Parse(bytes);
             if (!doc.RootElement.TryGetProperty("exp", out var expEl)) return false;
             var expSeconds = expEl.GetInt64();
@@ -131,7 +97,7 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         if (parts.Length < 2) return claims;
 
         var payload = parts[1];
-        var jsonBytes = ParseBase64WithoutPadding(payload);
+        var jsonBytes = DecodeBase64Url(payload);
         var keyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonBytes);
 
         if (keyValuePairs == null) return claims;
@@ -140,7 +106,6 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         {
             var key = kvp.Key;
 
-            // Normalize the role claim type so Blazor IsInRole and [Authorize(Roles="...")] work correctly
             if (key.Equals("role", StringComparison.OrdinalIgnoreCase) || 
                 key.Equals("roles", StringComparison.OrdinalIgnoreCase) ||
                 key.Equals(ClaimTypes.Role, StringComparison.OrdinalIgnoreCase))
@@ -181,13 +146,16 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         return claims;
     }
 
-    private static byte[] ParseBase64WithoutPadding(string base64)
+    private static byte[] DecodeBase64Url(string base64Url)
     {
+        var base64 = base64Url.Replace('-', '+').Replace('_', '/');
+
         switch (base64.Length % 4)
         {
             case 2: base64 += "=="; break;
             case 3: base64 += "="; break;
         }
+
         return Convert.FromBase64String(base64);
     }
 }

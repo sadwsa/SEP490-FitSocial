@@ -5,12 +5,6 @@ using PayOS.Models.V2.PaymentRequests;
 
 namespace FitSocial.Infrastructure.Services;
 
-/// <summary>
-/// VietQR payment gateway via PayOS SDK (collection channel / thu tiền).
-/// Credentials resolve from the admin-managed PaymentGatewayConfigs table
-/// first (active IsPayout=false row), falling back to the PayOS section
-/// of appsettings.
-/// </summary>
 public class PayOSGateway : IPaymentGateway
 {
     private readonly IConfiguration _configuration;

@@ -8,4 +8,5 @@ namespace FitSocial.Application.Interfaces;
 public interface ITransactionService
 {
     Task<PagedResultDto<TransactionHistoryDto>> GetMyTransactionsAsync(Guid userId, string userRole, TransactionFilterDto filter);
+    Task<PagedResultDto<TransactionHistoryDto>> GetCoachPayoutHistoryAsync(Guid coachId, TransactionFilterDto filter);
 }

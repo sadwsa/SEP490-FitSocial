@@ -10,15 +10,17 @@ public class PagedResultDto<T>
     public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)TotalCount / PageSize) : 0;
     public bool HasNextPage => PageNumber < TotalPages;
     public bool HasPreviousPage => PageNumber > 1;
+    public string? SessionId { get; set; }
 
-    public static PagedResultDto<T> Create(List<T> items, int totalCount, int pageNumber, int pageSize)
+    public static PagedResultDto<T> Create(List<T> items, int totalCount, int pageNumber, int pageSize, string? sessionId = null)
     {
         return new PagedResultDto<T>
         {
             Items = items,
             TotalCount = totalCount,
             PageNumber = pageNumber,
-            PageSize = pageSize
+            PageSize = pageSize,
+            SessionId = sessionId
         };
     }
 }

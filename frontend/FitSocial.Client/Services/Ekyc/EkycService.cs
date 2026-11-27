@@ -1,17 +1,7 @@
-using System.Net.Http.Json;
+using FitSocial.Client.Models.Ekyc;
+using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.Ekyc;
-
-public class EkycRequest
-{
-    public string FrontCardUrl { get; set; } = string.Empty;
-    public string BackCardUrl { get; set; } = string.Empty;
-    public string? FaceImageUrl { get; set; }
-    public string? FaceImageLeftUrl { get; set; }
-    public string? FaceImageRightUrl { get; set; }
-    public string? FaceImageTopUrl { get; set; }
-    public string? FaceImageBottomUrl { get; set; }
-}
 
 public interface IEkycService
 {
@@ -19,74 +9,32 @@ public interface IEkycService
     Task<(bool Success, string? Error)> CheckIdCardAsync(string idCardNumber, string? email);
 }
 
-public class EkycResult
-{
-    public string IdCardNumber { get; set; } = string.Empty;
-    public string FullNameOnCard { get; set; } = string.Empty;
-    public DateOnly? DateOfBirthOnCard { get; set; }
-    public string VerificationStatus { get; set; } = string.Empty;
-}
-
 public class EkycService : IEkycService
 {
-    private readonly HttpClient _http;
+    private readonly ApiClient _apiClient;
 
-    public EkycService(HttpClient http)
+    public EkycService(ApiClient apiClient)
     {
-        _http = http;
+        _apiClient = apiClient;
     }
 
     public async Task<(bool Success, string? Error, EkycResult? Data)> VerifyAsync(EkycRequest request)
     {
-        try
+        var res = await _apiClient.PostAsync<EkycRequest, EkycResult>("ekyc/verify", request);
+        if (res.Success)
         {
-            var resp = await _http.PostAsJsonAsync("ekyc/verify", request);
-            var raw = await resp.Content.ReadAsStringAsync();
-            if (resp.IsSuccessStatusCode)
-            {
-                // backend returns {success, data: EkycExtract}
-                var doc = System.Text.Json.JsonDocument.Parse(raw);
-                if (doc.RootElement.TryGetProperty("data", out var dataEl))
-                {
-                    var r = System.Text.Json.JsonSerializer.Deserialize<EkycResult>(dataEl.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    return (true, null, r);
-                }
-                return (true, null, null);
-            }
-            else
-            {
-                try
-                {
-                    var doc = System.Text.Json.JsonDocument.Parse(raw);
-                    if (doc.RootElement.TryGetProperty("message", out var msg))
-                        return (false, msg.GetString(), null);
-                }
-                catch { }
-                return (false, "ID verification failed.", null);
-            }
+            return (true, null, res.Data);
         }
-        catch (Exception ex)
-        {
-            return (false, ex.Message, null);
-        }
+        return (false, res.Message ?? "ID verification failed.", null);
     }
 
     public async Task<(bool Success, string? Error)> CheckIdCardAsync(string idCardNumber, string? email)
     {
-        try
+        var res = await _apiClient.PostAsync<object, object>("ekyc/check-idcard", new { IdCardNumber = idCardNumber, Email = email });
+        if (res.Success)
         {
-            var resp = await _http.PostAsJsonAsync("ekyc/check-idcard", new { IdCardNumber = idCardNumber, Email = email });
-            var raw = await resp.Content.ReadAsStringAsync();
-            if (resp.IsSuccessStatusCode) return (true, null);
-            try
-            {
-                var doc = System.Text.Json.JsonDocument.Parse(raw);
-                if (doc.RootElement.TryGetProperty("message", out var msg))
-                    return (false, msg.GetString());
-            }
-            catch { }
-            return (false, "This ID card has already been used for another coach.");
+            return (true, null);
         }
-        catch (Exception ex) { return (false, ex.Message); }
+        return (false, res.Message ?? "This ID card has already been used for another coach.");
     }
 }

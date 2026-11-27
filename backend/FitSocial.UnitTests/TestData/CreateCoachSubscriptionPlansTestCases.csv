@@ -1,6 +1,10 @@
-UTCID,Type,Amount,Currency,IsActive,ImageUrl,Description,SubscriptionDuration,TrainingPackageDuration,SaveChangesThrows,ExpectedSuccess,ExpectedMessage
-UTCID01,N,100000,VND,TRUE,http://img.jpg,Basic Plan,30,30,FALSE,TRUE,Subscription plan created successfully.
-UTCID02,N,500000,,TRUE,http://img.jpg,Premium Plan,180,180,FALSE,TRUE,Subscription plan created successfully.
-UTCID03,N,1000000,VND,TRUE,,  spaced desc  ,365,365,FALSE,TRUE,Subscription plan created successfully.
-UTCID04,A,100000,VND,TRUE,http://img.jpg,Basic Plan,30,30,TRUE,FALSE,Could not create subscription plan.
-UTCID05,N,100000,,TRUE,,,,,FALSE,TRUE,Subscription plan created successfully.
+UTCID,Type,DtoNull,Amount,Currency,IsActive,ImageUrl,Description,SubscriptionDuration,TrainingPackageDuration,Result_SaveChangesThrows,ExpectedSuccess,ExpectedMessage
+UTCID01,N,FALSE,100000,VND,TRUE,http://img.jpg,Basic Plan,30,30,FALSE,TRUE,Subscription plan created successfully.
+UTCID02,N,FALSE,500000,,TRUE,http://img.jpg,Premium Plan,180,180,FALSE,TRUE,Subscription plan created successfully.
+UTCID03,N,FALSE,1000000,VND,TRUE,,  spaced desc  ,365,365,FALSE,TRUE,Subscription plan created successfully.
+UTCID04,A,FALSE,100000,VND,TRUE,http://img.jpg,Basic Plan,30,30,TRUE,FALSE,Could not create subscription plan.
+UTCID05,N,FALSE,100000,,TRUE,,,,,FALSE,TRUE,Subscription plan created successfully.
+UTCID06,N,FALSE,100000, vnd ,TRUE,  http://img.jpg  ,  spaced desc  ,30,30,FALSE,TRUE,Subscription plan created successfully.
+UTCID07,N,FALSE,0,usd,TRUE,,, , ,FALSE,TRUE,Subscription plan created successfully.
+UTCID08,A,FALSE,100000,VND,TRUE,http://img.jpg,Basic Plan,30,30,TRUE,FALSE,Could not create subscription plan.
+UTCID09,N,TRUE,0,VND,TRUE,http://img.jpg,Basic Plan,30,30,FALSE,FALSE,Subscription plan data is required.

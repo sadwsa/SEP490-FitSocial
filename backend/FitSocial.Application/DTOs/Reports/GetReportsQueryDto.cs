@@ -14,4 +14,5 @@ public class GetReportsQueryDto
     public string? SearchTerm { get; set; }
     public string? Type { get; set; }
     public string? AppealStatus { get; set; }
+    public Guid? CurrentUserId { get; set; }
 }

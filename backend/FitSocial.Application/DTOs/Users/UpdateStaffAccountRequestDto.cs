@@ -17,7 +17,7 @@ public class UpdateStaffAccountRequestDto
     [RegularExpression(@"^0\d{9}$", ErrorMessage = "Phone number must be a valid 10-digit number starting with 0")]
     public string? PhoneNumber { get; set; }
 
-    [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+    [MinLength(8, ErrorMessage = "Password must be at least 8 characters")]
     public string? Password { get; set; }
 
     [Compare(nameof(Password), ErrorMessage = "Passwords do not match")]

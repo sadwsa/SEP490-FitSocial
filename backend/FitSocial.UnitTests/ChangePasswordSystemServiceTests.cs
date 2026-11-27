@@ -62,11 +62,11 @@ public class ChangePasswordSystemServiceTests
                     CurrentPassword = CsvTestHelper.Get(row, index, "CurrentPassword"),
                     NewPassword = CsvTestHelper.Get(row, index, "NewPassword"),
                     ConfirmPassword = CsvTestHelper.Get(row, index, "ConfirmPassword"),
-                    UserExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "UserExists")),
-                    PasswordHash = CsvTestHelper.Get(row, index, "PasswordHash"),
-                    CurrentPasswordCorrect = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "CurrentPasswordCorrect")),
-                    NewPasswordSameAsCurrent = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "NewPasswordSameAsCurrent")),
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    Result_UserExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_UserExists")),
+                    Result_PasswordHash = CsvTestHelper.Get(row, index, "Result_PasswordHash"),
+                    Result_CurrentPasswordCorrect = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_CurrentPasswordCorrect")),
+                    Result_NewPasswordSameAsCurrent = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_NewPasswordSameAsCurrent")),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -95,25 +95,25 @@ public class ChangePasswordSystemServiceTests
 
         _auditLogService.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new FitSocial.Domain.Entities.AuditLog());
 
-        _passwordHasher.Setup(p => p.VerifyPassword(tc.CurrentPassword, "hashed")).Returns(tc.CurrentPasswordCorrect);
-        _passwordHasher.Setup(p => p.VerifyPassword(tc.NewPassword, "hashed")).Returns(tc.NewPasswordSameAsCurrent);
+        _passwordHasher.Setup(p => p.VerifyPassword(tc.CurrentPassword, "hashed")).Returns(tc.Result_CurrentPasswordCorrect);
+        _passwordHasher.Setup(p => p.VerifyPassword(tc.NewPassword, "hashed")).Returns(tc.Result_NewPasswordSameAsCurrent);
         _passwordHasher.Setup(p => p.HashPassword(It.IsAny<string>())).Returns("hashed");
 
         User? user = null;
-        if (tc.UserExists)
+        if (tc.Result_UserExists)
         {
             user = new User
             {
                 UserId = Guid.NewGuid(),
                 Email = "user@example.com",
-                PasswordHash = string.Equals(tc.PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
+                PasswordHash = string.Equals(tc.Result_PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed",
                 FullName = "Test User",
                 RoleCode = "TRAINEE"
             };
         }
         _users.Setup(u => u.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new DbUpdateException("db fail"));
         }
@@ -143,11 +143,11 @@ public class ChangePasswordSystemServiceTests
         public string CurrentPassword { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
         public string ConfirmPassword { get; set; } = string.Empty;
-        public bool UserExists { get; set; }
-        public string PasswordHash { get; set; } = string.Empty;
-        public bool CurrentPasswordCorrect { get; set; }
-        public bool NewPasswordSameAsCurrent { get; set; }
-        public bool SaveChangesThrows { get; set; }
+        public bool Result_UserExists { get; set; }
+        public string Result_PasswordHash { get; set; } = string.Empty;
+        public bool Result_CurrentPasswordCorrect { get; set; }
+        public bool Result_NewPasswordSameAsCurrent { get; set; }
+        public bool Result_SaveChangesThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

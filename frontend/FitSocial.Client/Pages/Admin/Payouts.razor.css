@@ -291,9 +291,11 @@
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.5);
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
     padding: 32px 16px;
     z-index: 100;
@@ -302,11 +304,11 @@
 
 .modal-card {
     background: #fff;
-    border-radius: 16px;
+    border-radius: 14px;
     max-width: 640px;
     width: 100%;
     padding: 20px 22px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
 }
 
 .modal-head {

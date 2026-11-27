@@ -4,18 +4,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FitSocial.Application.DTOs.Reports;
 
-public class ResolveReportRequestDto
-{
-    [Required]
-    [StringLength(30)]
-    public string Status { get; set; } = "RESOLVED"; // RESOLVED, DISMISSED, REJECTED
-
-    [StringLength(1000)]
-    public string? ResolutionNote { get; set; }
-
-    public bool IssueWarning { get; set; } = true;
-}
-
 public class SubmitAppealRequestDto
 {
     [Required]
@@ -50,7 +38,7 @@ public class CreateUserReportRequestDto
     [StringLength(500, MinimumLength = 1)]
     public string Reason { get; set; } = string.Empty;
 
-    [StringLength(1000)]
+    [StringLength(500)]
     public string? Description { get; set; }
 
     [StringLength(30)]

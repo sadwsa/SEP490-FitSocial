@@ -3,6 +3,7 @@ using System.Text.Json;
 using Blazored.LocalStorage;
 using FitSocial.Client.Models.Auth;
 using FitSocial.Client.Models.Common;
+using FitSocial.Client.Services.Http;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Logging;
 
@@ -18,7 +19,7 @@ public interface IAuthService
     Task<ApiResponse<bool>> ForgotPasswordAsync(string email);
     Task<ApiResponse<bool>> ResetPasswordAsync(ResetPasswordRequest request);
     Task<ApiResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request);
-    Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
+    Task<ApiResponse<AuthResponse>> RegisterTraineeAsync(RegisterTraineeRequest request);
     Task LogoutAsync();
     Task<string?> GetTokenAsync();
     Task<bool> IsAuthenticatedAsync();
@@ -30,6 +31,8 @@ public interface IAuthService
 public class AuthService : IAuthService
 {
     private readonly HttpClient _httpClient;
+    private readonly ApiClient _apiClient;
+    private static readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly ITokenStorage _localStorage;
     private readonly AuthenticationStateProvider _authStateProvider;
     private readonly ILogger<AuthService> _logger;
@@ -38,11 +41,13 @@ public class AuthService : IAuthService
 
     public AuthService(
         HttpClient httpClient,
+        ApiClient apiClient,
         ITokenStorage localStorage,
         AuthenticationStateProvider authStateProvider,
         ILogger<AuthService> logger)
     {
         _httpClient = httpClient;
+        _apiClient = apiClient;
         _localStorage = localStorage;
         _authStateProvider = authStateProvider;
         _logger = logger;
@@ -50,193 +55,67 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request)
     {
-        return await LoginInternalAsync("auth/login", request);
+        var result = await _apiClient.PostAsync<LoginRequest, AuthResponse>("auth/login", request);
+        if (result.Success && result.Data != null)
+        {
+            await PersistAuthAsync(result.Data);
+        }
+        return result;
     }
 
     public async Task<ApiResponse<AuthResponse>> AdminLoginAsync(LoginRequest request)
     {
-        return await LoginInternalAsync("auth/admin-login", request);
-    }
-
-    private async Task<ApiResponse<AuthResponse>> LoginInternalAsync(string endpoint, LoginRequest request)
-    {
-        try
+        var result = await _apiClient.PostAsync<LoginRequest, AuthResponse>("auth/admin-login", request);
+        if (result.Success && result.Data != null)
         {
-            var response = await _httpClient.PostAsJsonAsync(endpoint, request);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
-            if (response.IsSuccessStatusCode && result != null && result.Success)
-            {
-                if (result.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
-                {
-                    await _localStorage.SetItemAsync(AuthTokenKey, result.Data.AccessToken);
-                    await _localStorage.SetItemAsync(RefreshTokenKey, result.Data.RefreshToken);
-                    ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(result.Data.AccessToken);
-                }
-                return result;
-            }
-
-            return result ?? new ApiResponse<AuthResponse>
-            {
-                Success = false,
-                Message = $"Sign-in failed (Code: {response.StatusCode})"
-            };
+            await PersistAuthAsync(result.Data);
         }
-        catch (Exception ex)
-        {
-            return new ApiResponse<AuthResponse>
-            {
-                Success = false,
-                Message = $"Connection error: {ex.Message}"
-            };
-        }
+        return result;
     }
 
     public async Task<ApiResponse<bool>> SendOtpAsync(SendOtpRequest request)
     {
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync("auth/send-otp", request);
-            return await ReadBoolResponseAsync(response, "OTP code sent successfully", "Failed to send OTP code");
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<bool>
-            {
-                Success = false,
-                Message = $"Connection error: {ex.Message}"
-            };
-        }
+        return await _apiClient.PostAsync<SendOtpRequest, bool>("auth/send-otp", request);
     }
 
     public async Task<ApiResponse<bool>> VerifyOtpAsync(string email, string otpCode, string purpose)
     {
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync("auth/verify-otp", new { email, otpCode, purpose });
-            return await ReadBoolResponseAsync(response, "OTP verified successfully", "Verification failed");
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<bool> { Success = false, Message = $"Connection error: {ex.Message}" };
-        }
+        return await _apiClient.PostAsync<object, bool>("auth/verify-otp", new { email, otpCode, purpose });
     }
 
     public async Task<ApiResponse<bool>> ForgotPasswordAsync(string email)
     {
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync("auth/forgot-password", new { email });
-            return await ReadBoolResponseAsync(response, "Password reset email sent", "Request failed");
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<bool>
-            {
-                Success = false,
-                Message = $"Connection error: {ex.Message}"
-            };
-        }
+        return await _apiClient.PostAsync<object, bool>("auth/forgot-password", new { email });
     }
 
     public async Task<ApiResponse<bool>> ResetPasswordAsync(ResetPasswordRequest request)
     {
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync("auth/reset-password", request);
-            return await ReadBoolResponseAsync(response, "Password reset successfully", "Request failed");
-        }
-        catch (Exception ex)
-        {
-            return new ApiResponse<bool>
-            {
-                Success = false,
-                Message = $"Connection error: {ex.Message}"
-            };
-        }
+        return await _apiClient.PostAsync<ResetPasswordRequest, bool>("auth/reset-password", request);
     }
 
     public async Task<ApiResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request)
     {
-        try
-        {
-            var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                return new ApiResponse<bool>
-                {
-                    Success = false,
-                    Message = "Your session has expired. Please sign in again."
-                };
-            }
-
-            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "auth/change-password");
-            httpRequest.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            httpRequest.Content = JsonContent.Create(request);
-
-            var response = await _httpClient.SendAsync(httpRequest);
-
-            // Production: access token may have expired in the 15-min window.
-            // Try one silent refresh and retry before surfacing 401 to the user.
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                var refreshed = await RefreshTokenAsync();
-                if (refreshed)
-                {
-                    token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
-                    using var retryRequest = new HttpRequestMessage(HttpMethod.Post, "auth/change-password");
-                    retryRequest.Headers.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                    retryRequest.Content = JsonContent.Create(request);
-                    response = await _httpClient.SendAsync(retryRequest);
-                }
-            }
-
-            return await ReadBoolResponseAsync(response, "Password changed successfully", "Request failed");
-        }
-        catch (Exception ex)
+        var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+        if (string.IsNullOrWhiteSpace(token))
         {
             return new ApiResponse<bool>
             {
                 Success = false,
-                Message = $"Connection error: {ex.Message}"
+                Message = "Your session has expired. Please sign in again."
             };
         }
+
+        return await _apiClient.PostAsync<ChangePasswordRequest, bool>("auth/change-password", request);
     }
 
-    public async Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request)
+    public async Task<ApiResponse<AuthResponse>> RegisterTraineeAsync(RegisterTraineeRequest request)
     {
-        try
+        var result = await _apiClient.PostAsync<RegisterTraineeRequest, AuthResponse>("auth/register-trainee", request);
+        if (result.Success && result.Data != null)
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/register-trainee", request);
-            var (result, rawPreview) = await ReadResponseAsync<AuthResponse>(response);
-            if (response.IsSuccessStatusCode && result != null && result.Success)
-            {
-                if (result.Data != null && !string.IsNullOrEmpty(result.Data.AccessToken))
-                {
-                    await _localStorage.SetItemAsync(AuthTokenKey, result.Data.AccessToken);
-                    await _localStorage.SetItemAsync(RefreshTokenKey, result.Data.RefreshToken);
-                    ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserAuthentication(result.Data.AccessToken);
-                }
-                return result;
-            }
-
-            if (result != null)
-            {
-                return result;
-            }
-
-            return UnexpectedResponse<AuthResponse>(
-                response, rawPreview, $"Registration failed (Code: {response.StatusCode})");
+            await PersistAuthAsync(result.Data);
         }
-        catch (Exception ex)
-        {
-            return new ApiResponse<AuthResponse>
-            {
-                Success = false,
-                Message = $"Connection error: {ex.Message}"
-            };
-        }
+        return result;
     }
     public async Task PersistLoginAsync(AuthResponse data)
     {
@@ -245,35 +124,12 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponse<AuthResponse>> LoginWithGoogleCodeAsync(string code, string? roleCode = null, string? redirectUri = null)
     {
-        try
+        var result = await _apiClient.PostAsync<object, AuthResponse>("auth/google/code", new { code, roleCode, redirectUri });
+        if (result.Success && result.Data != null)
         {
-            var response = await _httpClient.PostAsJsonAsync("auth/google/code", new { code, roleCode, redirectUri });
-            var (result, rawPreview) = await ReadResponseAsync<AuthResponse>(response);
-            if (response.IsSuccessStatusCode && result != null && result.Success)
-            {
-                if (result.Data != null)
-                {
-                    await PersistAuthAsync(result.Data);
-                }
-                return result;
-            }
-
-            if (result != null)
-            {
-                return result;
-            }
-
-            return UnexpectedResponse<AuthResponse>(
-                response, rawPreview, $"Google sign-in failed (Code: {response.StatusCode})");
+            await PersistAuthAsync(result.Data);
         }
-        catch (Exception ex)
-        {
-            return new ApiResponse<AuthResponse>
-            {
-                Success = false,
-                Message = $"Connection error: {ex.Message}"
-            };
-        }
+        return result;
     }
 
     private async Task PersistAuthAsync(AuthResponse data)
@@ -286,145 +142,35 @@ public class AuthService : IAuthService
         }
     }
 
-    /// <summary>
-    /// Reads the raw body first so a non-JSON server reply (proxy page, crash page, ...)
-    /// surfaces its real content instead of a cryptic "'X' is an invalid start" error.
-    /// </summary>
-    private async Task<(ApiResponse<T>? Result, string? RawPreview)> ReadResponseAsync<T>(HttpResponseMessage response)
-    {
-        string raw;
-        try
-        {
-            raw = await response.Content.ReadAsStringAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Could not read the response body.");
-            return (null, null);
-        }
-
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return (null, null);
-        }
-
-        var preview = raw.Length > 300 ? raw[..300] : raw;
-        try
-        {
-            var parsed = JsonSerializer.Deserialize<ApiResponse<T>>(
-                raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            return (parsed, preview);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Response body is not the expected JSON shape. Preview: {Preview}", preview);
-            return (null, preview);
-        }
-    }
-
-    private static ApiResponse<T> UnexpectedResponse<T>(HttpResponseMessage response, string? rawPreview, string fallback)
-    {
-        if (!string.IsNullOrWhiteSpace(rawPreview))
-        {
-            return new ApiResponse<T>
-            {
-                Success = false,
-                Message = $"Unexpected server response (HTTP {(int)response.StatusCode}): {rawPreview}"
-            };
-        }
-
-        return new ApiResponse<T> { Success = false, Message = fallback };
-    }
-
-    private async Task<ApiResponse<bool>> ReadBoolResponseAsync(HttpResponseMessage response, string defaultSuccessMessage, string defaultFallbackError)
-    {
-        string raw;
-        try
-        {
-            raw = await response.Content.ReadAsStringAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Could not read the response body.");
-            return new ApiResponse<bool>
-            {
-                Success = false,
-                Message = $"Failed to read response (Code: {response.StatusCode})"
-            };
-        }
-
-        if (!string.IsNullOrWhiteSpace(raw))
-        {
-            try
-            {
-                var parsed = JsonSerializer.Deserialize<ApiResponse<bool?>>(
-                    raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-                if (parsed != null)
-                {
-                    return new ApiResponse<bool>
-                    {
-                        Success = parsed.Success,
-                        Message = parsed.Message ?? (parsed.Success ? defaultSuccessMessage : defaultFallbackError),
-                        Data = parsed.Data ?? false,
-                        Errors = parsed.Errors
-                    };
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Response body could not be parsed as ApiResponse<bool?>. Raw: {Raw}", raw);
-            }
-        }
-
-        return new ApiResponse<bool>
-        {
-            Success = response.IsSuccessStatusCode,
-            Message = response.IsSuccessStatusCode ? defaultSuccessMessage : $"{defaultFallbackError} (Code: {(int)response.StatusCode})"
-        };
-    }
-
     public async Task LogoutAsync()
     {
-        // Best effort: revoke the tokens server-side first so they die immediately.
-        // Local sign-out below always runs, even offline.
         string? refreshToken = null;
         try
         {
-            var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
             refreshToken = await _localStorage.GetItemAsync<string>(RefreshTokenKey);
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Post, "auth/logout");
-                request.Headers.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                if (!string.IsNullOrWhiteSpace(refreshToken))
-                {
-                    request.Content = JsonContent.Create(new { refreshToken });
-                }
-                await _httpClient.SendAsync(request);
-            }
+            await _apiClient.PostAsync<object, bool>("auth/logout", new { refreshToken });
         }
         catch (Exception ex)
         {
-            // Ignored on purpose: local sign-out must never be blocked by network errors.
             _logger.LogWarning(ex, "Server-side logout failed. Continuing with local sign-out.");
         }
 
-        _httpClient.DefaultRequestHeaders.Authorization = null;
         await _localStorage.RemoveItemAsync(AuthTokenKey);
         await _localStorage.RemoveItemAsync(RefreshTokenKey);
         ((CustomAuthenticationStateProvider)_authStateProvider).NotifyUserLogout();
     }
 
-    /// <summary>
-    /// Rotates the session using the stored refresh token.
-    /// Returns false when there is no refresh token or the server rejects it
-    /// (caller should send the user back to the login page).
-    /// </summary>
     public async Task<bool> RefreshTokenAsync()
     {
+        await _refreshLock.WaitAsync();
         try
         {
+            var currentToken = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+            if (!string.IsNullOrWhiteSpace(currentToken) && !CustomAuthenticationStateProvider.IsTokenExpired(currentToken, TimeSpan.FromSeconds(60)))
+            {
+                return true;
+            }
+
             var refreshToken = await _localStorage.GetItemAsync<string>(RefreshTokenKey);
             if (string.IsNullOrWhiteSpace(refreshToken))
             {
@@ -432,8 +178,9 @@ public class AuthService : IAuthService
             }
 
             var response = await _httpClient.PostAsJsonAsync("auth/refresh", new { refreshToken });
-            var (result, _) = await ReadResponseAsync<AuthResponse>(response);
-            if (response.IsSuccessStatusCode && result != null && result.Success && result.Data != null)
+            if (!response.IsSuccessStatusCode) return false;
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            if (result != null && result.Success && result.Data != null)
             {
                 await PersistAuthAsync(result.Data);
                 return true;
@@ -444,6 +191,10 @@ public class AuthService : IAuthService
         {
             _logger.LogWarning(ex, "Silent token refresh failed.");
             return false;
+        }
+        finally
+        {
+            _refreshLock.Release();
         }
     }
 
@@ -457,8 +208,6 @@ public class AuthService : IAuthService
         var token = await GetTokenAsync();
         if (string.IsNullOrWhiteSpace(token)) return false;
 
-        // Production: treat an expired 15-min access token as logged-out unless
-        // the refresh token can silently rotate it.
         if (!CustomAuthenticationStateProvider.IsTokenExpired(token, TimeSpan.FromSeconds(60)))
             return true;
 
@@ -467,71 +216,16 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponse<UserInfo>> GetCurrentUserAsync()
     {
-        try
+        var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
+        if (string.IsNullOrWhiteSpace(token))
         {
-            var token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                return new ApiResponse<UserInfo>
-                {
-                    Success = false,
-                    Message = "No authentication token found"
-                };
-            }
-
-            using var request = new HttpRequestMessage(HttpMethod.Get, "auth/me");
-            request.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-            var response = await _httpClient.SendAsync(request);
-
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                var refreshed = await RefreshTokenAsync();
-                if (refreshed)
-                {
-                    token = await _localStorage.GetItemAsync<string>(AuthTokenKey);
-                    using var retryRequest = new HttpRequestMessage(HttpMethod.Get, "auth/me");
-                    retryRequest.Headers.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                    response = await _httpClient.SendAsync(retryRequest);
-                }
-            }
-
-            var (result, raw) = await ReadResponseAsync<UserInfo>(response);
-            if (response.IsSuccessStatusCode && result != null && result.Success && result.Data != null)
-            {
-                return result;
-            }
-
-            if (response.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(raw))
-            {
-                try
-                {
-                    var directUser = JsonSerializer.Deserialize<UserInfo>(raw, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (directUser != null && !string.IsNullOrWhiteSpace(directUser.FullName))
-                    {
-                        return new ApiResponse<UserInfo> { Success = true, Data = directUser };
-                    }
-                }
-                catch { }
-            }
-
-            if (result != null)
-            {
-                return result;
-            }
-
-            return UnexpectedResponse<UserInfo>(response, raw, "Could not fetch current user profile.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetCurrentUserAsync failed");
             return new ApiResponse<UserInfo>
             {
                 Success = false,
-                Message = $"Connection error: {ex.Message}"
+                Message = "No authentication token found"
             };
         }
+
+        return await _apiClient.GetAsync<UserInfo>("auth/me");
     }
 }

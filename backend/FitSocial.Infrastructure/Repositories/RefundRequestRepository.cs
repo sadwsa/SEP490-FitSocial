@@ -172,6 +172,6 @@ public class RefundRequestRepository : Repository<RefundRequest>, IRefundRequest
     public Task<bool> HasApprovedRefundAsync(Guid orderId, CancellationToken cancellationToken = default)
     {
         return DbSet
-            .AnyAsync(r => r.OrderId == orderId && r.Status == "APPROVED", cancellationToken);
+            .AnyAsync(r => r.OrderId == orderId && (r.Status == "APPROVED" || r.Status == "DISBURSEMENT_FAILED"), cancellationToken);
     }
 }

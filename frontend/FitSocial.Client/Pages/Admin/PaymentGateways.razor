@@ -5,7 +5,7 @@
 @using FitSocial.Client.Services.PaymentGateways
 @inject IPaymentGatewayService GatewayService
 
-<PageTitle>Payment Gateways - FitConnect Admin Console</PageTitle>
+<PageTitle>Payment Gateways - FitConnect Management Portal</PageTitle>
 
 <AuthorizeView Roles="ADMIN">
     <Authorized>
@@ -18,17 +18,17 @@
         }
 
         <h2 class="view-title">Payment Gateway Accounts</h2>
-        <p class="view-sub">System payment gateway configurations used for collecting and disbursing (UC-36)</p>
+        <p class="view-sub">System payment gateway configurations used for collecting and disbursing</p>
 
         <div class="cat-tabs">
             <button type="button" class="cat-tab @(channelTab == "all" ? "active" : "")" @onclick='() => SetChannelTab("all")'>
                 All
             </button>
             <button type="button" class="cat-tab @(channelTab == "collect" ? "active" : "")" @onclick='() => SetChannelTab("collect")'>
-                Thu tiền
+                Collections
             </button>
             <button type="button" class="cat-tab @(channelTab == "payout" ? "active" : "")" @onclick='() => SetChannelTab("payout")'>
-                Chi tiền
+                Payouts
             </button>
         </div>
 
@@ -96,11 +96,11 @@
                                 <td>
                                     @if (g.IsPayout)
                                     {
-                                        <span class="status-pill payout">Chi tiền</span>
+                                        <span class="status-pill payout">Payout</span>
                                     }
                                     else
                                     {
-                                        <span class="status-pill collect">Thu tiền</span>
+                                        <span class="status-pill collect">Collect</span>
                                     }
                                 </td>
                                 <td>
@@ -150,50 +150,11 @@
                 </table>
             </div>
 
-            @if (FilteredGateways.Count > 0)
-            {
-                var totalPages = Math.Max(1, (int)Math.Ceiling(FilteredGateways.Count / (double)pageSize));
-                var start = (pageIndex - 1) * pageSize + 1;
-                var end = Math.Min(pageIndex * pageSize, FilteredGateways.Count);
-                <div class="pagination-container">
-                    <div class="pagination-info">
-                        <span>Showing <strong>@start–@end</strong> of <strong>@FilteredGateways.Count</strong> gateways</span>
-                    </div>
-
-                    @if (totalPages > 1)
-                    {
-                        <div class="pagination-controls">
-                            <button type="button" class="page-btn" disabled="@(pageIndex <= 1)" @onclick="() => GoToPage(pageIndex - 1)">‹ Prev</button>
-                            @for (int i = 1; i <= totalPages; i++)
-                            {
-                                var pNum = i;
-                                if (pNum == 1 || pNum == totalPages || Math.Abs(pNum - pageIndex) <= 1)
-                                {
-                                    <button type="button" class="page-btn @(pNum == pageIndex ? "active" : "")" @onclick="() => GoToPage(pNum)">@pNum</button>
-                                }
-                                else if (pNum == 2 && pageIndex > 3)
-                                {
-                                    <span class="page-dots">…</span>
-                                }
-                                else if (pNum == totalPages - 1 && pageIndex < totalPages - 2)
-                                {
-                                    <span class="page-dots">…</span>
-                                }
-                            }
-                            <button type="button" class="page-btn" disabled="@(pageIndex >= totalPages)" @onclick="() => GoToPage(pageIndex + 1)">Next ›</button>
-                        </div>
-                    }
-
-                    <div class="page-size-selector">
-                        <span>Per page:</span>
-                        <select value="@pageSize" @onchange="OnPageSizeChanged" class="page-size-select">
-                            <option value="5">5 / page</option>
-                            <option value="10">10 / page</option>
-                            <option value="20">20 / page</option>
-                        </select>
-                    </div>
-                </div>
-            }
+            <CommonPagination CurrentPage="@pageIndex"
+                              PageSize="@pageSize"
+                              TotalCount="@FilteredGateways.Count"
+                              PageChanged="GoToPage"
+                              ItemName="gateways" />
         }
 
         <!-- Activate / Deactivate confirmation popup -->
@@ -240,7 +201,7 @@
             </div>
         }
 
-        <!-- UC-36.2 Add Gateway popup -->
+        <!-- Add Gateway popup -->
         @if (showAddModal)
         {
             <div class="modal-backdrop" @onclick="CloseAddModal">
@@ -273,8 +234,8 @@
                         <label class="form-field">
                             <span>Channel *</span>
                             <select class="form-input" @bind="addChannel">
-                                <option value="thu">Thu tiền (collection)</option>
-                                <option value="chi">Chi tiền (payout)</option>
+                                <option value="collect">Collection</option>
+                                <option value="payout">Payout</option>
                             </select>
                         </label>
                         <p class="muted-sm">New gateways start as Inactive (only one active gateway per channel). It becomes Active automatically if no other gateway of the same channel is active.</p>
@@ -293,7 +254,7 @@
             </div>
         }
 
-        <!-- UC-36.3 Edit Gateway popup -->
+        <!-- Edit Gateway popup -->
         @if (editGateway != null)
         {
             <div class="modal-backdrop" @onclick="CloseEditModal">
@@ -326,8 +287,8 @@
                         <label class="form-field">
                             <span>Channel *</span>
                             <select class="form-input" @bind="editChannel">
-                                <option value="thu">Thu tiền (collection)</option>
-                                <option value="chi">Chi tiền (payout)</option>
+                                <option value="collect">Collection</option>
+                                <option value="payout">Payout</option>
                             </select>
                         </label>
                         <label class="form-check">
@@ -378,13 +339,13 @@
     private string editChecksumKey = "";
     private string editWebhookUrl = "";
     private bool editIsActive = true;
-    private string editChannel = "thu";
+    private string editChannel = "collect";
     private string newGatewayName = "";
     private string newClientId = "";
     private string newApiKey = "";
     private string newChecksumKey = "";
     private string newWebhookUrl = "";
-    private string addChannel = "thu";
+    private string addChannel = "collect";
 
     private List<PaymentGatewayConfig> FilteredGateways =>
         gateways
@@ -405,15 +366,6 @@
         pageIndex = Math.Clamp(page, 1, totalPages);
     }
 
-    private void OnPageSizeChanged(ChangeEventArgs e)
-    {
-        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
-        {
-            pageSize = size;
-        }
-        pageIndex = 1;
-    }
-
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
@@ -422,19 +374,32 @@
     private async Task LoadAsync()
     {
         isLoading = true;
-        var res = await GatewayService.GetAllAsync();
-        if (res.Success && res.Data != null)
+        LoadingService.Show("Loading payment gateways...");
+        try
         {
-            gateways = res.Data;
+            var res = await GatewayService.GetAllAsync();
+            if (res.Success && res.Data != null)
+            {
+                gateways = res.Data;
+            }
+            else
+            {
+                toastMessage = res.Message ?? "Failed to load payment gateways.";
+                toastType = "error";
+            }
+            var maxPage = Math.Max(1, (int)Math.Ceiling(FilteredGateways.Count / (double)pageSize));
+            if (pageIndex > maxPage) pageIndex = maxPage;
         }
-        else
+        catch (Exception ex)
         {
-            toastMessage = res.Message ?? "Failed to load payment gateways.";
+            toastMessage = $"Error: {ex.Message}";
             toastType = "error";
         }
-        var maxPage = Math.Max(1, (int)Math.Ceiling(gateways.Count / (double)pageSize));
-        if (pageIndex > maxPage) pageIndex = maxPage;
-        isLoading = false;
+        finally
+        {
+            isLoading = false;
+            LoadingService.Hide();
+        }
     }
 
     private void OnSearchInput(ChangeEventArgs e)
@@ -482,25 +447,37 @@
         if (confirmGateway == null || confirmBusy) return;
         actionBusy = true;
         confirmBusy = true;
+        LoadingService.Show(confirmActivate ? "Activating gateway..." : "Deactivating gateway...");
 
-        var res = confirmActivate
-            ? await GatewayService.ActivateAsync(confirmGateway.GatewayId)
-            : await GatewayService.DeactivateAsync(confirmGateway.GatewayId);
+        try
+        {
+            var res = confirmActivate
+                ? await GatewayService.ActivateAsync(confirmGateway.GatewayId)
+                : await GatewayService.DeactivateAsync(confirmGateway.GatewayId);
 
-        if (res.Success)
-        {
-            toastMessage = res.Message ?? (confirmActivate ? "Gateway activated." : "Gateway deactivated.");
-            toastType = "info";
-            confirmGateway = null;
-            confirmError = null;
-            await LoadAsync();
+            if (res.Success)
+            {
+                toastMessage = res.Message ?? (confirmActivate ? "Gateway activated." : "Gateway deactivated.");
+                toastType = "info";
+                confirmGateway = null;
+                confirmError = null;
+                await LoadAsync();
+            }
+            else
+            {
+                confirmError = res.Message ?? "Operation failed.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            confirmError = res.Message ?? "Operation failed.";
+            confirmError = $"Error: {ex.Message}";
         }
-        actionBusy = false;
-        confirmBusy = false;
+        finally
+        {
+            actionBusy = false;
+            confirmBusy = false;
+            LoadingService.Hide();
+        }
     }
 
     private void OpenAddModal()
@@ -512,7 +489,7 @@
         newApiKey = "";
         newChecksumKey = "";
         newWebhookUrl = "";
-        addChannel = channelTab == "payout" ? "chi" : "thu";
+        addChannel = channelTab == "payout" ? "payout" : "collect";
     }
 
     private void CloseAddModal()
@@ -534,29 +511,41 @@
         }
 
         addBusy = true;
-        var res = await GatewayService.CreateAsync(new CreatePaymentGatewayConfig
+        LoadingService.Show("Adding payment gateway...");
+        try
         {
-            GatewayName = newGatewayName.Trim(),
-            ClientId = newClientId.Trim(),
-            ApiKey = newApiKey.Trim(),
-            ChecksumKey = newChecksumKey.Trim(),
-            WebhookUrl = string.IsNullOrWhiteSpace(newWebhookUrl) ? null : newWebhookUrl.Trim(),
-            IsActive = false, // server enforces single-active per channel
-            IsPayout = addChannel == "chi"
-        });
+            var res = await GatewayService.CreateAsync(new CreatePaymentGatewayConfig
+            {
+                GatewayName = newGatewayName.Trim(),
+                ClientId = newClientId.Trim(),
+                ApiKey = newApiKey.Trim(),
+                ChecksumKey = newChecksumKey.Trim(),
+                WebhookUrl = string.IsNullOrWhiteSpace(newWebhookUrl) ? null : newWebhookUrl.Trim(),
+                IsActive = false, 
+                IsPayout = addChannel == "payout"
+            });
 
-        if (res.Success)
-        {
-            toastMessage = "Payment gateway added successfully.";
-            toastType = "info";
-            showAddModal = false;
-            await LoadAsync();
+            if (res.Success)
+            {
+                toastMessage = "Payment gateway added successfully.";
+                toastType = "info";
+                showAddModal = false;
+                await LoadAsync();
+            }
+            else
+            {
+                addError = res.Message ?? "Failed to add payment gateway.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            addError = res.Message ?? "Failed to add payment gateway.";
+            addError = $"Error: {ex.Message}";
         }
-        addBusy = false;
+        finally
+        {
+            addBusy = false;
+            LoadingService.Hide();
+        }
     }
 
     private void OpenEditModal(PaymentGatewayConfig gateway)
@@ -569,7 +558,7 @@
         editChecksumKey = "";
         editWebhookUrl = gateway.WebhookUrl ?? "";
         editIsActive = gateway.IsActive;
-        editChannel = gateway.IsPayout ? "chi" : "thu";
+        editChannel = gateway.IsPayout ? "payout" : "collect";
     }
 
     private void CloseEditModal()
@@ -591,28 +580,40 @@
         }
 
         editBusy = true;
-        var res = await GatewayService.UpdateAsync(editGateway.GatewayId, new UpdatePaymentGatewayConfig
+        LoadingService.Show("Updating payment gateway...");
+        try
         {
-            GatewayName = editGatewayName.Trim(),
-            ClientId = editClientId.Trim(),
-            ApiKey = string.IsNullOrWhiteSpace(editApiKey) ? null : editApiKey.Trim(),
-            ChecksumKey = string.IsNullOrWhiteSpace(editChecksumKey) ? null : editChecksumKey.Trim(),
-            WebhookUrl = string.IsNullOrWhiteSpace(editWebhookUrl) ? null : editWebhookUrl.Trim(),
-            IsActive = editIsActive,
-            IsPayout = editChannel == "chi"
-        });
+            var res = await GatewayService.UpdateAsync(editGateway.GatewayId, new UpdatePaymentGatewayConfig
+            {
+                GatewayName = editGatewayName.Trim(),
+                ClientId = editClientId.Trim(),
+                ApiKey = string.IsNullOrWhiteSpace(editApiKey) ? null : editApiKey.Trim(),
+                ChecksumKey = string.IsNullOrWhiteSpace(editChecksumKey) ? null : editChecksumKey.Trim(),
+                WebhookUrl = string.IsNullOrWhiteSpace(editWebhookUrl) ? null : editWebhookUrl.Trim(),
+                IsActive = editIsActive,
+                IsPayout = editChannel == "payout"
+            });
 
-        if (res.Success)
-        {
-            toastMessage = "Payment gateway updated successfully.";
-            toastType = "info";
-            editGateway = null;
-            await LoadAsync();
+            if (res.Success)
+            {
+                toastMessage = "Payment gateway updated successfully.";
+                toastType = "info";
+                editGateway = null;
+                await LoadAsync();
+            }
+            else
+            {
+                editError = res.Message ?? "Failed to update payment gateway.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            editError = res.Message ?? "Failed to update payment gateway.";
+            editError = $"Error: {ex.Message}";
         }
-        editBusy = false;
+        finally
+        {
+            editBusy = false;
+            LoadingService.Hide();
+        }
     }
 }

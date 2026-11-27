@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using FitSocial.Application.DTOs.CoachCertificate;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Notifications;
@@ -23,6 +24,7 @@ public class CoachCertificateService : ICoachCertificateService
     private readonly IUserRepository? _users;
     private readonly IChatRealtimeNotifier? _realtimeNotifier;
     private readonly IAuditLogService? _auditLogService;
+    private readonly ILogger<CoachCertificateService>? _logger;
 
     public CoachCertificateService(
         ICoachCertificateRepository certificateRepository,
@@ -32,7 +34,8 @@ public class CoachCertificateService : ICoachCertificateService
         INotificationRepository? notifications = null,
         IUserRepository? users = null,
         IChatRealtimeNotifier? realtimeNotifier = null,
-        IAuditLogService? auditLogService = null)
+        IAuditLogService? auditLogService = null,
+        ILogger<CoachCertificateService>? logger = null)
     {
         _certificateRepository = certificateRepository;
         _coachProfileRepository = coachProfileRepository;
@@ -42,6 +45,7 @@ public class CoachCertificateService : ICoachCertificateService
         _users = users;
         _realtimeNotifier = realtimeNotifier;
         _auditLogService = auditLogService;
+        _logger = logger;
     }
 
     public async Task<ApiResponseDto<CoachCertificateAdminListResponseDto>> GetCertificatesAsync(
@@ -182,7 +186,6 @@ public class CoachCertificateService : ICoachCertificateService
 
             _certificateRepository.Update(cert);
 
-            // Coach notification
             var certTitle = !string.IsNullOrWhiteSpace(cert.CertificateName) ? cert.CertificateName : "Coach Certificate";
             var coachNotificationMsg = $"Your coach certificate \"{certTitle}\" has been approved.";
             if (_notifications != null)
@@ -201,13 +204,12 @@ public class CoachCertificateService : ICoachCertificateService
                         CreatedAt = now
                     }, cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal notification failure
+                    _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                 }
             }
 
-            // Audit log
             if (_auditLogService != null)
             {
                 try
@@ -222,9 +224,9 @@ public class CoachCertificateService : ICoachCertificateService
                         newValue: new { status = "APPROVED", verifiedBy = reviewerId, verifiedAt = now },
                         cancellationToken: cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal audit log failure
+                    _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                 }
             }
             else if (_auditLogs != null)
@@ -242,15 +244,14 @@ public class CoachCertificateService : ICoachCertificateService
                         CreatedAt = now
                     }, cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal audit log failure
+                    _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                 }
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Realtime push notification
             if (_realtimeNotifier != null)
             {
                 try
@@ -267,13 +268,12 @@ public class CoachCertificateService : ICoachCertificateService
                         IsRead = false
                     });
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Realtime notification failure is non-fatal
+                    _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                 }
             }
 
-            // Refresh entity with reviewer navigation for response
             var refreshed = await _certificateRepository.GetCertificateWithDetailsAsync(certificateId, cancellationToken) ?? cert;
             var detail = MapToDetailDto(refreshed);
             return ApiResponseDto<CoachCertificateAdminDetailDto>.Ok(detail, "Coach certificate approved successfully.");
@@ -334,7 +334,6 @@ public class CoachCertificateService : ICoachCertificateService
 
             _certificateRepository.Update(cert);
 
-            // Notification for the certificate rejection
             var certTitle = !string.IsNullOrWhiteSpace(cert.CertificateName) ? cert.CertificateName : "Coach Certificate";
             var rejectNotificationMsg = $"Your coach certificate \"{certTitle}\" has been rejected. Reason: {reason}";
             if (_notifications != null)
@@ -353,13 +352,12 @@ public class CoachCertificateService : ICoachCertificateService
                         CreatedAt = now
                     }, cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal
+                    _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                 }
             }
 
-            // Audit log
             if (_auditLogService != null)
             {
                 try
@@ -374,9 +372,9 @@ public class CoachCertificateService : ICoachCertificateService
                         newValue: new { status = "REJECTED", reason, verifiedBy = reviewerId, verifiedAt = now },
                         cancellationToken: cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal
+                    _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                 }
             }
             else if (_auditLogs != null)
@@ -394,13 +392,12 @@ public class CoachCertificateService : ICoachCertificateService
                         CreatedAt = now
                     }, cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal
+                    _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                 }
             }
 
-            // Check if all certificates of this coach are now rejected
             var profile = await _coachProfileRepository.GetCoachApplicationDetailsAsync(cert.CoachId, cancellationToken);
             if (profile != null)
             {
@@ -445,9 +442,9 @@ public class CoachCertificateService : ICoachCertificateService
                                 IsRead = false
                             }, cancellationToken);
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            // Non-fatal
+                            _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                         }
                     }
                 }
@@ -455,7 +452,6 @@ public class CoachCertificateService : ICoachCertificateService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Realtime push notification
             if (_realtimeNotifier != null)
             {
                 try
@@ -472,9 +468,9 @@ public class CoachCertificateService : ICoachCertificateService
                         IsRead = false
                     });
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Non-fatal
+                    _logger?.LogWarning(ex, "Non-fatal operation failed in CoachCertificateService.");
                 }
             }
 
@@ -507,9 +503,9 @@ public class CoachCertificateService : ICoachCertificateService
                     return user.FullName;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Fallback below
+                _logger?.LogWarning(ex, "Failed to get reviewer name; falling back to default.");
             }
         }
         return "Staff / Admin";

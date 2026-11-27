@@ -5,19 +5,11 @@ using PayOS.Models.V1.Payouts;
 
 namespace FitSocial.Infrastructure.Services;
 
-/// <summary>
-/// UC-23.1: real disbursement via PayOS Payout API (POST /v1/payouts).
-/// Credentials resolve from the admin-managed PaymentGatewayConfigs table
-/// first (active IsPayout=true row), falling back to appsettings
-/// (PayOS:Payout* then PayOS:*).
-/// Funding comes from the merchant's payout source (e.g. Bao Kim wallet).
-/// </summary>
 public class PayOSPayoutGateway : IBankTransferGateway
 {
     private readonly IConfiguration _configuration;
     private readonly IPaymentGatewayCredentialProvider _credentials;
 
-    /// <summary>Bank code (or 6-digit BIN) → NAPAS BIN used by PayOS ToBin.</summary>
     private static readonly Dictionary<string, string> BankBins = new(StringComparer.OrdinalIgnoreCase)
     {
         ["MB"] = "970422",
@@ -59,13 +51,6 @@ public class PayOSPayoutGateway : IBankTransferGateway
         _credentials = credentials!;
     }
 
-    /// <summary>
-    /// HttpClient forced onto IPv4. PayOS payout calls are IP-allowlisted
-    /// (IPv4), but .NET prefers IPv6 when the network has it — PayOS would then
-    /// see an unlisted IPv6 source and answer 403 even with correct keys.
-    /// A fresh instance is created per transfer because the PayOS SDK rewrites
-    /// DefaultRequestHeaders on construction, which throws on a reused client.
-    /// </summary>
     private static HttpClient CreateIPv4HttpClient()
     {
         var handler = new System.Net.Http.SocketsHttpHandler
@@ -122,7 +107,6 @@ public class PayOSPayoutGateway : IBankTransferGateway
         apiKey = _configuration["PayOS:PayoutApiKey"];
         checksumKey = _configuration["PayOS:PayoutChecksumKey"];
 
-        // Fall back to the collection-channel keys if dedicated payout keys are absent.
         clientId ??= _configuration["PayOS:ClientId"];
         apiKey ??= _configuration["PayOS:ApiKey"];
         checksumKey ??= _configuration["PayOS:ChecksumKey"];
@@ -300,8 +284,6 @@ public class PayOSPayoutGateway : IBankTransferGateway
             Category = null
         };
 
-        // Pre-check the payout source balance so "insufficient funds" fails
-        // fast with a clear message instead of a generic API error.
         var balanceError = await CheckBalanceAsync(client, amount, cancellationToken);
         if (balanceError != null)
         {
@@ -311,8 +293,6 @@ public class PayOSPayoutGateway : IBankTransferGateway
         Payout payout;
         try
         {
-            // Stable idempotency key per payout: staff retries of the same
-            // payout record never create a duplicate PayOS order.
             payout = await client.Payouts.CreateAsync(payoutRequest, referenceId);
         }
         catch (Exception ex)
@@ -331,12 +311,6 @@ public class PayOSPayoutGateway : IBankTransferGateway
             payout.Id);
     }
 
-    /// <summary>
-    /// Reads the payout source balance (GET /v1/payouts-account/balance).
-    /// Returns an error message when the balance is known-insufficient,
-    /// otherwise null (a failed balance lookup never blocks the transfer —
-    /// the create call itself will surface auth problems).
-    /// </summary>
     private static async Task<string?> CheckBalanceAsync(
         PayOSClient client, long amount, CancellationToken cancellationToken)
     {
@@ -365,10 +339,6 @@ public class PayOSPayoutGateway : IBankTransferGateway
         return null;
     }
 
-    /// <summary>
-    /// The PayOS .NET SDK throws bare ApiException("API request failed")
-    /// without the response desc, so map by exception type to actionable text.
-    /// </summary>
     private static string MapPayOSException(Exception ex, long amount)
     {
         return ex switch

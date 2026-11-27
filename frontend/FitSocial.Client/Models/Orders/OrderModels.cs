@@ -38,6 +38,7 @@ public class CoachTraineeGroupDto
     public int TotalOrdersCount { get; set; }
     public decimal TotalSpent { get; set; }
     public DateTime? LatestPurchasedAt { get; set; }
+    public int TotalPendingReviewsCount { get; set; }
     public List<CoachTraineePackageOrderDto> PurchasedPackages { get; set; } = new();
 }
 
@@ -60,4 +61,15 @@ public class CoachTraineePackageOrderDto
     public string? PlanStatus { get; set; }
     public Guid? MealPlanId { get; set; }
     public string? MealPlanStatus { get; set; }
+    public int PendingWorkoutReviewsCount { get; set; }
+    public int PendingMealReviewsCount { get; set; }
+
+    // Schedule health properties for coach tracking
+    public string? WorkoutScheduleStatus { get; set; } // "COMPLETED", "SAFE", "WARNING", "URGENT", "NO_PLAN"
+    public string? WorkoutScheduleStatusText { get; set; }
+    public string? MealScheduleStatus { get; set; } // "SAFE", "WARNING", "NO_PLAN"
+    public string? MealScheduleStatusText { get; set; }
+    public int? RemainingSessions { get; set; }
+    public int? RemainingDays { get; set; }
+    public DateTime? NextWorkoutDate { get; set; }
 }

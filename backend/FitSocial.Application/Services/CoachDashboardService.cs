@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Coach;
@@ -71,6 +71,11 @@ public class CoachDashboardService : ICoachDashboardService
 
     public async Task<ApiResponseDto<CoachDashboardDto>> GetCoachDashboardAnalyticsAsync(Guid coachId, CancellationToken cancellationToken = default)
     {
+        if (coachId == Guid.Empty)
+        {
+            throw new ValidationException("Coach ID is required.");
+        }
+
         var coach = await _userRepository.GetByIdAsync(coachId, cancellationToken);
         if (coach == null)
         {
@@ -81,23 +86,24 @@ public class CoachDashboardService : ICoachDashboardService
         var summary = await _dashboardRepository.GetAnalyticsSummaryAsync(coachId, cancellationToken);
         var topTrainees = await _dashboardRepository.GetTopTraineesAsync(coachId, 5, cancellationToken);
 
-        // Cấu hình mốc thời gian 6 tháng
-        var now = DateTime.UtcNow;
-        var sixMonthsAgo = now.AddMonths(-5);
-        var startDate = new DateTime(sixMonthsAgo.Year, sixMonthsAgo.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        // Cấu hình mốc thời gian 6 tháng theo múi giờ Việt Nam (UTC+7)
+        var nowVn = DateTime.UtcNow.AddHours(7);
+        var sixMonthsAgoVn = nowVn.AddMonths(-5);
+        var startMonthVn = new DateTime(sixMonthsAgoVn.Year, sixMonthsAgoVn.Month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var startDateUtc = startMonthVn.AddHours(-7);
 
-        var monthlyStatsRaw = await _dashboardRepository.GetMonthlyStatsAsync(coachId, startDate, cancellationToken);
+        var monthlyStatsRaw = await _dashboardRepository.GetMonthlyStatsAsync(coachId, startDateUtc, cancellationToken);
 
-        // Đảm bảo trả về đúng 6 tháng, fill dữ liệu bằng 0 cho tháng không có đơn
+        // Đảm bảo trả về đúng 6 tháng theo lịch Việt Nam, fill dữ liệu bằng 0 cho tháng không có đơn
         var monthlyStats = new List<MonthlyStatDto>();
         for (int i = 0; i < 6; i++)
         {
-            var targetMonth = startDate.AddMonths(i);
-            var stat = monthlyStatsRaw.FirstOrDefault(s => s.Year == targetMonth.Year && s.Month == targetMonth.Month);
+            var targetMonthVn = startMonthVn.AddMonths(i);
+            var stat = monthlyStatsRaw.FirstOrDefault(s => s.Year == targetMonthVn.Year && s.Month == targetMonthVn.Month);
 
             monthlyStats.Add(new MonthlyStatDto
             {
-                Month = targetMonth.ToString("MM/yyyy"),
+                Month = targetMonthVn.ToString("MM/yyyy"),
                 Revenue = stat != default ? stat.Revenue : 0,
                 TotalOrders = stat != default ? stat.TotalOrders : 0
             });

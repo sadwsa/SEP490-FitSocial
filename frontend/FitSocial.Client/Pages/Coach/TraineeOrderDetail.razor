@@ -243,7 +243,7 @@
                                 <div class="flex items-center gap-3 min-w-0">
                                     <AppIcon Name="doc" Size="20" Class="text-gray-500 flex-shrink-0" />
                                     <div>
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
                                             <p class="font-bold text-xs text-gray-900">Custom Training Plan</p>
                                             @if (pkg.TrainingPlanId.HasValue)
                                             {
@@ -259,6 +259,12 @@
                                                     <span>No Plan Created</span>
                                                 </span>
                                             }
+                                            @if (!string.IsNullOrWhiteSpace(pkg.WorkoutScheduleStatusText))
+                                            {
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold @GetStatusBadgeClass(pkg.WorkoutScheduleStatus)">
+                                                    @pkg.WorkoutScheduleStatusText
+                                                </span>
+                                            }
                                         </div>
                                         <p class="text-[11px] text-gray-500">Draft weekly workout schedules and attach video tutorials for your trainee.</p>
                                     </div>
@@ -272,6 +278,12 @@
                                                 class="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
                                             <AppIcon Name="chart" Size="14" Class="text-blue-600" />
                                             <span>Monitor Progress</span>
+                                            @if (pkg.PendingWorkoutReviewsCount > 0)
+                                            {
+                                                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                                                    @pkg.PendingWorkoutReviewsCount
+                                                </span>
+                                            }
                                         </button>
                                         <button type="button"
                                                 @onclick="() => OpenTrainingPlanModal(pkg, trainee?.FullName, isUpdate: true)"
@@ -302,7 +314,7 @@
                                         <AppIcon Name="meal" Size="20" Class="text-emerald-600" />
                                     </div>
                                     <div>
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
                                             <p class="font-bold text-xs text-gray-900">Custom Meal Plan</p>
                                             @if (pkg.MealPlanId.HasValue)
                                             {
@@ -318,6 +330,12 @@
                                                     <span>No Plan Created</span>
                                                 </span>
                                             }
+                                            @if (!string.IsNullOrWhiteSpace(pkg.MealScheduleStatusText))
+                                            {
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold @GetStatusBadgeClass(pkg.MealScheduleStatus)">
+                                                    @pkg.MealScheduleStatusText
+                                                </span>
+                                            }
                                         </div>
                                         <p class="text-[11px] text-gray-500">Draft weekly nutrition schedules, daily meals, calories &amp; macros for your trainee.</p>
                                     </div>
@@ -325,12 +343,26 @@
 
                                 @if (pkg.MealPlanId.HasValue)
                                 {
-                                    <button type="button"
-                                            @onclick="() => OpenMealPlanModal(pkg, trainee?.FullName, isUpdate: true)"
-                                            class="w-full sm:w-auto sm:ml-auto px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0">
-                                        <AppIcon Name="pencil" Size="14" />
-                                        <span>Update Meal Plan</span>
-                                    </button>
+                                    <div class="flex items-center gap-2 flex-wrap sm:ml-auto sm:flex-nowrap sm:flex-shrink-0">
+                                        <button type="button"
+                                                @onclick="() => OpenMonitorMealProgressModal(pkg, trainee?.FullName)"
+                                                class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                            <AppIcon Name="chart" Size="14" Class="text-emerald-600" />
+                                            <span>Monitor Meal Progress</span>
+                                            @if (pkg.PendingMealReviewsCount > 0)
+                                            {
+                                                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                                                    @pkg.PendingMealReviewsCount
+                                                </span>
+                                            }
+                                        </button>
+                                        <button type="button"
+                                                @onclick="() => OpenMealPlanModal(pkg, trainee?.FullName, isUpdate: true)"
+                                                class="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0">
+                                            <AppIcon Name="pencil" Size="14" />
+                                            <span>Update Meal Plan</span>
+                                        </button>
+                                    </div>
                                 }
                                 else
                                 {
@@ -371,6 +403,14 @@
     PackageTitle="@monitorPackageTitle"
     TraineeName="@monitorTraineeName"
     OnClose="@CloseMonitorProgressModal" />
+
+<!-- Coach Monitor Trainee Meal Progress Modal -->
+<CoachMonitorMealProgressModal
+    IsOpen="@showMonitorMealProgressModal"
+    OrderDetailsId="@monitorMealOrderDetailsId"
+    PackageTitle="@monitorMealPackageTitle"
+    TraineeName="@monitorMealTraineeName"
+    OnClose="@CloseMonitorMealProgressModal" />
 
 <!-- Coach Meal Plan Form Modal -->
 <CoachMealPlanFormModal
@@ -436,6 +476,12 @@
     private Guid monitorOrderDetailsId;
     private string monitorPackageTitle = string.Empty;
     private string monitorTraineeName = string.Empty;
+
+    // Monitor Meal Progress Modal State
+    private bool showMonitorMealProgressModal = false;
+    private Guid monitorMealOrderDetailsId;
+    private string monitorMealPackageTitle = string.Empty;
+    private string monitorMealTraineeName = string.Empty;
 
     protected override void OnInitialized()
     {
@@ -531,9 +577,24 @@
         showMonitorProgressModal = true;
     }
 
-    private void CloseMonitorProgressModal()
+    private async Task CloseMonitorProgressModal()
     {
         showMonitorProgressModal = false;
+        await LoadTraineeDetailAsync();
+    }
+
+    private void OpenMonitorMealProgressModal(CoachTraineePackageOrderDto pkg, string? name)
+    {
+        monitorMealOrderDetailsId = pkg.OrderDetailsId;
+        monitorMealPackageTitle = pkg.PackageTitle;
+        monitorMealTraineeName = name ?? "Trainee";
+        showMonitorMealProgressModal = true;
+    }
+
+    private async Task CloseMonitorMealProgressModal()
+    {
+        showMonitorMealProgressModal = false;
+        await LoadTraineeDetailAsync();
     }
 
     private void OpenTrainingPlanModal(CoachTraineePackageOrderDto pkg, string? name, bool isUpdate)
@@ -582,4 +643,13 @@
         showMealPlanModal = false;
         await LoadTraineeDetailAsync();
     }
+
+    private string GetStatusBadgeClass(string? status) => status switch
+    {
+        "COMPLETED" => "bg-blue-50 text-blue-700 border border-blue-200",
+        "SAFE" => "bg-emerald-50 text-emerald-700 border border-emerald-200",
+        "WARNING" => "bg-amber-50 text-amber-800 border border-amber-200",
+        "URGENT" => "bg-red-50 text-red-700 border border-red-200 font-bold",
+        _ => "bg-gray-100 text-gray-600 border border-gray-200"
+    };
 }

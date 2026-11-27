@@ -4,40 +4,56 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FitSocial.Application.DTOs.Payouts;
 
-/// <summary>
-/// UC-23.1: one row of the Payout History management list.
-/// </summary>
 public class PayoutHistoryItemDto
 {
     public Guid PayoutId { get; set; }
+
     public Guid CoachId { get; set; }
+
     public string CoachName { get; set; } = string.Empty;
+
     public string? CoachEmail { get; set; }
+
     public int PayoutMonth { get; set; }
+
     public int PayoutYear { get; set; }
+
     public string CycleLabel => $"{PayoutMonth:D2}/{PayoutYear}";
+
     public decimal TotalGrossAmount { get; set; }
+
     public decimal SystemCommissionAmount { get; set; }
+
     public decimal RefundAdjustmentTotal { get; set; }
+
     public decimal TaxAmount { get; set; }
+
     public decimal NetPayoutAmount { get; set; }
+
     public string? Status { get; set; }
+
     public string? TransactionRef { get; set; }
+
     public string? ProcessedByName { get; set; }
+
     public DateTime? ProcessedAt { get; set; }
+
     public DateTime? CreatedAt { get; set; }
+
     public int OrderCount { get; set; }
+
     public int PaidItemCount { get; set; }
+
     public int TotalItemCount { get; set; }
 
-    /// <summary>TH1: coach currently has unresolved reports.</summary>
     public bool HasBlockingReports { get; set; }
+
     public int BlockingReportCount { get; set; }
 
-    /// <summary>E1: coach has a usable bank account.</summary>
     public bool HasBankAccount { get; set; }
 
     public bool CanProcess { get; set; }
+
     public string? BlockReason { get; set; }
 }
 
@@ -50,9 +66,6 @@ public class GeneratePayoutsRequestDto
     public int Year { get; set; }
 }
 
-/// <summary>
-/// Pay selected payout lines only (one package).
-/// </summary>
 public class ProcessItemsRequestDto
 {
     public List<Guid> PayoutItemIds { get; set; } = new();
@@ -61,111 +74,164 @@ public class ProcessItemsRequestDto
 public class GeneratePayoutsResultDto
 {
     public int Month { get; set; }
+
     public int Year { get; set; }
+
     public int Created { get; set; }
+
     public int Updated { get; set; }
+
     public int SkippedZeroNet { get; set; }
 }
 
 public class PayoutItemDto
 {
     public Guid PayoutItemId { get; set; }
+
     public Guid OrderId { get; set; }
+
     public string? BuyerName { get; set; }
+
     public string? PackageTitle { get; set; }
+
     public DateTime? OrderCreatedAt { get; set; }
+
     public decimal GrossAmount { get; set; }
+
     public decimal CommissionRate { get; set; }
+
     public decimal CommissionAmount { get; set; }
+
     public decimal RefundAdjustment { get; set; }
+
     public decimal TaxAmount { get; set; }
+
     public decimal NetAmount { get; set; }
-    /// <summary>Monthly vesting label, e.g. "Kỳ 2/4". Empty for refund-only lines.</summary>
+
     public string VestingInfo { get; set; } = string.Empty;
+
     public bool IsPaid { get; set; }
+
     public DateTime? ProcessedAt { get; set; }
+
     public string? TransactionRef { get; set; }
-    /// <summary>Month-by-month vesting timeline of the underlying order.</summary>
+
     public List<VestingMonthDto> Timeline { get; set; } = new();
 }
 
 public class VestingMonthDto
 {
     public int Month { get; set; }
+
     public int Year { get; set; }
+
     public string Label => $"{Month:D2}/{Year}";
-    /// <summary>PAID (already paid), PAYABLE (arrived, unpaid) or FUTURE.</summary>
+
     public string State { get; set; } = "FUTURE";
+
     public decimal Amount { get; set; }
-    /// <summary>Payout + item holding this month's tranche (if generated).</summary>
+
     public Guid? PayoutId { get; set; }
+
     public Guid? PayoutItemId { get; set; }
-    /// <summary>True when clicking this month may pay it now.</summary>
+
     public bool CanPay { get; set; }
 }
 
-/// <summary>
-/// One package group inside a payout cycle: its tranches, timeline and
-/// per-package pay action (pay-all for the whole payout is kept too).
-/// </summary>
 public class PayoutPackageGroupDto
 {
     public Guid? PackageId { get; set; }
+
     public string PackageTitle { get; set; } = string.Empty;
+
     public int DurationDays { get; set; }
+
     public int MonthsTotal { get; set; }
+
     public decimal CycleAmount { get; set; }
+
     public decimal CyclePaidAmount { get; set; }
+
     public decimal CycleUnpaidAmount { get; set; }
+
     public bool IsFullyPaid { get; set; }
+
     public List<PayoutItemDto> Items { get; set; } = new();
 }
 
 public class PayoutBankAccountDto
 {
     public Guid BankId { get; set; }
+
     public string? BankName { get; set; }
+
     public string? BankCode { get; set; }
+
     public string? AccountName { get; set; }
+
     public string MaskedAccountNumber { get; set; } = string.Empty;
+
     public string? Branch { get; set; }
+
     public bool IsDefault { get; set; }
 }
 
-/// <summary>
-/// UC-23.1: payout processing modal data (calculation breakdown + bank + guards).
-/// </summary>
 public class PayoutDetailDto
 {
     public Guid PayoutId { get; set; }
+
     public Guid CoachId { get; set; }
+
     public string CoachName { get; set; } = string.Empty;
+
     public string? CoachEmail { get; set; }
+
     public int PayoutMonth { get; set; }
+
     public int PayoutYear { get; set; }
+
     public string CycleLabel => $"{PayoutMonth:D2}/{PayoutYear}";
+
     public decimal TotalGrossAmount { get; set; }
+
     public decimal SystemCommissionAmount { get; set; }
+
     public decimal RefundAdjustmentTotal { get; set; }
+
     public decimal TaxAmount { get; set; }
+
     public decimal NetPayoutAmount { get; set; }
+
     public decimal CommissionRate { get; set; }
+
     public string? Status { get; set; }
+
     public string? TransactionRef { get; set; }
+
     public List<PayoutItemDto> Items { get; set; } = new();
+
     public List<PayoutPackageGroupDto> PackageGroups { get; set; } = new();
+
     public PayoutBankAccountDto? BankAccount { get; set; }
+
     public bool HasBlockingReports { get; set; }
+
     public int BlockingReportCount { get; set; }
+
     public bool CanProcess { get; set; }
+
     public string? BlockReason { get; set; }
 }
 
 public class ProcessPayoutResultDto
 {
     public Guid PayoutId { get; set; }
+
     public string? Status { get; set; }
+
     public string? TransactionRef { get; set; }
+
     public decimal NetPayoutAmount { get; set; }
+
     public DateTime? ProcessedAt { get; set; }
 }

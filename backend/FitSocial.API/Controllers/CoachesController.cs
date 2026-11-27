@@ -44,14 +44,13 @@ public class CoachesController : ControllerBase
 
     /// <summary>
     /// Gets a list of coaches with filtering and sorting.
-    /// Accessible publicly.
+    /// Requires authentication (consistent with the frontend discover page).
     /// </summary>
     [HttpGet]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetAllCoaches([FromQuery] string? searchKeyword, [FromQuery] int? minExperience, [FromQuery] string? sortBy)
+    public async Task<IActionResult> GetAllCoaches([FromQuery] string? searchKeyword, [FromQuery] int? minExperience, [FromQuery] string? sortBy, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 6, CancellationToken cancellationToken = default)
     {
-        var result = await _coachService.GetAllCoachesAsync(searchKeyword, minExperience, sortBy);
-        return Ok(ApiResponseDto<IEnumerable<CoachListDto>>.Ok(result));
+        var result = await _coachService.GetAllCoachesAsync(searchKeyword, minExperience, sortBy, pageNumber, pageSize, cancellationToken);
+        return Ok(ApiResponseDto<PagedResultDto<CoachListDto>>.Ok(result));
     }
 
     /// <summary>
@@ -114,7 +113,8 @@ public class CoachesController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<List<CoachBankAccountDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetBankAccounts(CancellationToken cancellationToken = default)
     {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
         if (!Guid.TryParse(userIdStr, out var currentUserId))
         {
             return Unauthorized(ApiResponseDto<List<CoachBankAccountDto>>.Fail("Unauthorized"));
@@ -133,13 +133,35 @@ public class CoachesController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AddBankAccount([FromBody] CreateCoachBankAccountDto dto, CancellationToken cancellationToken = default)
     {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
         if (!Guid.TryParse(userIdStr, out var currentUserId))
         {
             return Unauthorized(ApiResponseDto<CoachBankAccountDto>.Fail("Unauthorized"));
         }
 
         var result = await _bankAccountService.AddAccountAsync(currentUserId, dto, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Updates an existing bank account.
+    /// </summary>
+    [HttpPut("bank-accounts/{bankId:guid}")]
+    [Authorize(Roles = "COACH,TRAINEE")]
+    [ProducesResponseType(typeof(ApiResponseDto<CoachBankAccountDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateBankAccount(Guid bankId, [FromBody] UpdateCoachBankAccountDto dto, CancellationToken cancellationToken = default)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            return Unauthorized(ApiResponseDto<CoachBankAccountDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _bankAccountService.UpdateAccountAsync(currentUserId, bankId, dto, cancellationToken);
         return Ok(result);
     }
 
@@ -152,7 +174,8 @@ public class CoachesController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetDefaultBankAccount(Guid bankId, CancellationToken cancellationToken = default)
     {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
         if (!Guid.TryParse(userIdStr, out var currentUserId))
         {
             return Unauthorized(ApiResponseDto<bool>.Fail("Unauthorized"));
@@ -171,48 +194,14 @@ public class CoachesController : ControllerBase
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteBankAccount(Guid bankId, CancellationToken cancellationToken = default)
     {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("sub")?.Value;
         if (!Guid.TryParse(userIdStr, out var currentUserId))
         {
             return Unauthorized(ApiResponseDto<bool>.Fail("Unauthorized"));
         }
 
         var result = await _bankAccountService.DeleteAccountAsync(currentUserId, bankId, cancellationToken);
-        return Ok(result);
-    }
-
-    [HttpPost("{id}/reviews")]
-    [Authorize(Roles = "TRAINEE")] // Chỉ Trainee mới được đánh giá
-    public async Task<IActionResult> SubmitReview(Guid id, [FromBody] FitSocial.Application.DTOs.Coaches.CreateReviewDto dto)
-    {
-        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(userIdString, out var traineeId))
-        {
-            return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token or user ID"));
-        }
-
-        var result = await _coachService.SubmitReviewAsync(id, traineeId, dto);
-        return Ok(result);
-    }
-    [HttpPut("reviews/{reviewId}")]
-    [Authorize(Roles = "TRAINEE")]
-    public async Task<IActionResult> UpdateReview(Guid reviewId, [FromBody] FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto)
-    {
-        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(userIdString, out var traineeId)) return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token"));
-
-        var result = await _coachService.UpdateReviewAsync(reviewId, traineeId, dto);
-        return Ok(result);
-    }
-
-    [HttpDelete("reviews/{reviewId}")]
-    [Authorize(Roles = "TRAINEE")]
-    public async Task<IActionResult> DeleteReview(Guid reviewId)
-    {
-        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(userIdString, out var traineeId)) return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token"));
-
-        var result = await _coachService.DeleteReviewAsync(reviewId, traineeId);
         return Ok(result);
     }
 

@@ -22,6 +22,7 @@ public class ReviewRepository : Repository<Review>, IReviewRepository
             .Include(r => r.Trainee)
             .Include(r => r.Coach)
                 .ThenInclude(c => c.Coach)
+            .Include(r => r.ReviewMedia)
             .Where(r => r.PackageId == packageId)
             .OrderByDescending(r => r.CreatedAt)
             .AsNoTracking()
@@ -32,5 +33,11 @@ public class ReviewRepository : Repository<Review>, IReviewRepository
     {
         return DbSet
             .FirstOrDefaultAsync(r => r.PackageId == packageId && r.TraineeId == traineeId, cancellationToken);
+    }
+
+    public Task<Review?> GetReviewByOrderIdAndTraineeAsync(Guid orderId, Guid traineeId, CancellationToken cancellationToken = default)
+    {
+        return DbSet
+            .FirstOrDefaultAsync(r => r.OrderId == orderId && r.TraineeId == traineeId, cancellationToken);
     }
 }

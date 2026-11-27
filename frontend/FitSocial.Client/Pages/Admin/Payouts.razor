@@ -1,13 +1,11 @@
 @page "/admin/payouts"
 @layout AdminLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
-@using FitSocial.Client.Models.Common
 @using FitSocial.Client.Models.Payouts
 @using FitSocial.Client.Services.Payouts
 @inject IPayoutService PayoutService
-@inject NavigationManager Navigation
 
-<PageTitle>Payout History - FitConnect Admin Console</PageTitle>
+<PageTitle>Coach Payouts - FitConnect Management Portal</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
@@ -20,7 +18,7 @@
         }
 
         <h2 class="view-title">Coach Payout History</h2>
-        <p class="view-sub">Monthly earnings disbursement to coaches (UC-23.1)</p>
+        <p class="view-sub">Monthly earnings disbursement to coaches</p>
 
         <!-- Status Filter Tabs -->
         <div class="cat-tabs">
@@ -143,50 +141,11 @@
                 </table>
             </div>
 
-            @if (payouts.Count > 0)
-            {
-                var totalPages = Math.Max(1, (int)Math.Ceiling(payouts.Count / (double)pageSize));
-                var start = (pageIndex - 1) * pageSize + 1;
-                var end = Math.Min(pageIndex * pageSize, payouts.Count);
-                <div class="pagination-container">
-                    <div class="pagination-info">
-                        <span>Showing <strong>@start–@end</strong> of <strong>@payouts.Count</strong> payouts</span>
-                    </div>
-
-                    @if (totalPages > 1)
-                    {
-                        <div class="pagination-controls">
-                            <button type="button" class="page-btn" disabled="@(pageIndex <= 1)" @onclick="() => GoToPage(pageIndex - 1)">‹ Prev</button>
-                            @for (int i = 1; i <= totalPages; i++)
-                            {
-                                var pNum = i;
-                                if (pNum == 1 || pNum == totalPages || Math.Abs(pNum - pageIndex) <= 1)
-                                {
-                                    <button type="button" class="page-btn @(pNum == pageIndex ? "active" : "")" @onclick="() => GoToPage(pNum)">@pNum</button>
-                                }
-                                else if (pNum == 2 && pageIndex > 3)
-                                {
-                                    <span class="page-dots">…</span>
-                                }
-                                else if (pNum == totalPages - 1 && pageIndex < totalPages - 2)
-                                {
-                                    <span class="page-dots">…</span>
-                                }
-                            }
-                            <button type="button" class="page-btn" disabled="@(pageIndex >= totalPages)" @onclick="() => GoToPage(pageIndex + 1)">Next ›</button>
-                        </div>
-                    }
-
-                    <div class="page-size-selector">
-                        <span>Per page:</span>
-                        <select value="@pageSize" @onchange="OnPageSizeChanged" class="page-size-select">
-                            <option value="5">5 / page</option>
-                            <option value="10">10 / page</option>
-                            <option value="20">20 / page</option>
-                        </select>
-                    </div>
-                </div>
-            }
+            <CommonPagination CurrentPage="@pageIndex"
+                              PageSize="@pageSize"
+                              TotalCount="@payouts.Count"
+                              PageChanged="GoToPage"
+                              ItemName="payouts" />
         }
 
         <!-- Processing Modal -->
@@ -212,7 +171,7 @@
                     else if (detail != null)
                     {
                         <!-- Calculation breakdown -->
-                        <p class="muted-sm" style="margin-bottom:8px;">Doanh thu ghi nhận theo kỳ tháng: gói N tháng thì mỗi tháng nhận 1/N giá trị gói.</p>
+                        <p class="muted-sm" style="margin-bottom:8px;">Revenue is recognized per monthly cycle: for an N-month package, each month receives 1/N of the package value.</p>
                         <div class="breakdown">
                             <div class="bd-row"><span>Gross Package Sales (@detail.Items.Count(i => i.GrossAmount > 0) orders)</span><strong>@detail.TotalGrossAmount.ToString("N0") VND</strong></div>
                             <div class="bd-row"><span>Platform Commission (@((detail.CommissionRate * 100).ToString("0"))%)</span><span>-@detail.SystemCommissionAmount.ToString("N0") VND</span></div>
@@ -261,7 +220,7 @@
                                         <div class="pkg-head">
                                             <div class="flex-1">
                                                 <div class="font-bold text-sm">@(!string.IsNullOrWhiteSpace(g.PackageTitle) ? g.PackageTitle : "Training Package")</div>
-                                                <div class="muted-sm">@g.MonthsTotal tháng • Đã trả @g.CyclePaidAmount.ToString("N0") / @g.CycleAmount.ToString("N0") VND</div>
+                                                <div class="muted-sm">@g.MonthsTotal months • Paid @g.CyclePaidAmount.ToString("N0") / @g.CycleAmount.ToString("N0") VND</div>
                                             </div>
                                             @if (g.IsFullyPaid)
                                             {
@@ -325,15 +284,15 @@
                             </div>
                         }
 
-                        @if (PendingRefunds().Count > 0)
+                        @if (PendingRefundsList.Count > 0)
                         {
                             <div class="muted-sm" style="margin:6px 0;">
-                                Refund adjustments (@PendingRefunds().Count): −@PendingRefunds().Sum(i => i.RefundAdjustment).ToString("N0") VND (deducted on pay)
+                                Refund adjustments (@PendingRefundsList.Count): −@PendingRefundsList.Sum(i => i.RefundAdjustment).ToString("N0") VND (deducted on pay)
                             </div>
                         }
 
                         <div class="bd-row total" style="margin-top:8px;">
-                            <span>Còn lại cần trả:</span>
+                            <span>Remaining to pay:</span>
                             <strong>@RemainingAmount().ToString("N0") VND</strong>
                         </div>
 
@@ -374,14 +333,6 @@
         pageIndex = Math.Clamp(page, 1, totalPages);
     }
 
-    private void OnPageSizeChanged(ChangeEventArgs e)
-    {
-        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
-        {
-            pageSize = size;
-        }
-        pageIndex = 1;
-    }
     private bool isLoading = true;
     private bool isGenerating = false;
     private string statusFilter = "";
@@ -428,24 +379,37 @@
     private async Task LoadHistoryAsync()
     {
         isLoading = true;
-        var res = await PayoutService.GetHistoryAsync(filterMonth, filterYear,
-            string.IsNullOrEmpty(statusFilter) ? null : statusFilter);
-        if (res.Success && res.Data != null)
+        LoadingService.Show("Loading payouts...");
+        try
         {
-            payouts = res.Data;
+            var res = await PayoutService.GetHistoryAsync(filterMonth, filterYear,
+                string.IsNullOrEmpty(statusFilter) ? null : statusFilter);
+            if (res.Success && res.Data != null)
+            {
+                payouts = res.Data;
+            }
+            else
+            {
+                ShowToast(res.Message ?? "Failed to load payout history.", "error");
+            }
+            var maxPage = Math.Max(1, (int)Math.Ceiling(payouts.Count / (double)pageSize));
+            if (pageIndex > maxPage) pageIndex = maxPage;
         }
-        else
+        catch (Exception ex)
         {
-            ShowToast(res.Message ?? "Failed to load payout history.", "error");
+            ShowToast($"Error: {ex.Message}", "error");
         }
-        var maxPage = Math.Max(1, (int)Math.Ceiling(payouts.Count / (double)pageSize));
-        if (pageIndex > maxPage) pageIndex = maxPage;
-        isLoading = false;
+        finally
+        {
+            isLoading = false;
+            LoadingService.Hide();
+        }
     }
 
     private async Task HandleGenerateAsync()
     {
         isGenerating = true;
+        LoadingService.Show("Generating payouts...");
         try
         {
             var res = await PayoutService.GenerateAsync(filterMonth, filterYear);
@@ -458,9 +422,14 @@
                 ShowToast(res.Message ?? "Failed to generate payouts.", "error");
             }
         }
+        catch (Exception ex)
+        {
+            ShowToast($"Error generating payouts: {ex.Message}", "error");
+        }
         finally
         {
             isGenerating = false;
+            LoadingService.Hide();
             await LoadHistoryAsync();
         }
     }
@@ -471,17 +440,29 @@
         isLoadingDetail = true;
         modalError = null;
         detail = null;
+        LoadingService.Show("Loading payout details...");
 
-        var res = await PayoutService.GetDetailAsync(payoutId);
-        if (res.Success && res.Data != null)
+        try
         {
-            detail = res.Data;
+            var res = await PayoutService.GetDetailAsync(payoutId);
+            if (res.Success && res.Data != null)
+            {
+                detail = res.Data;
+            }
+            else
+            {
+                modalError = res.Message ?? "Failed to load payout detail.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            modalError = res.Message ?? "Failed to load payout detail.";
+            modalError = $"Error: {ex.Message}";
         }
-        isLoadingDetail = false;
+        finally
+        {
+            isLoadingDetail = false;
+            LoadingService.Hide();
+        }
     }
 
     private void CloseModal()
@@ -517,6 +498,8 @@
         return detail.Items.Where(i => !i.IsPaid && i.GrossAmount <= 0 && i.RefundAdjustment > 0).ToList();
     }
 
+    private List<PayoutItem> PendingRefundsList => PendingRefunds();
+
     private async Task RefreshDetailAsync()
     {
         if (detail == null) return;
@@ -533,42 +516,66 @@
         if (detail == null || isProcessing) return;
         isProcessing = true;
         modalError = null;
+        LoadingService.Show("Processing package payout...");
 
-        var ids = g.Items.Where(i => !i.IsPaid && i.GrossAmount > 0)
-            .Select(i => i.PayoutItemId).ToList();
-        var res = await PayoutService.ProcessItemsAsync(detail.PayoutId, ids);
-        if (res.Success && res.Data != null)
+        try
         {
-            ShowToast($"Package paid: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
-            await RefreshDetailAsync();
+            var ids = g.Items.Where(i => !i.IsPaid && i.GrossAmount > 0)
+                .Select(i => i.PayoutItemId).ToList();
+            var res = await PayoutService.ProcessItemsAsync(detail.PayoutId, ids);
+            if (res.Success && res.Data != null)
+            {
+                ShowToast($"Package paid: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
+                await RefreshDetailAsync();
+            }
+            else
+            {
+                modalError = res.Message ?? "Package payment failed. Kept as PENDING — please retry.";
+                await LoadHistoryAsync();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            modalError = res.Message ?? "Package payment failed. Kept as PENDING — please retry.";
-            await LoadHistoryAsync();
+            modalError = $"Error processing package: {ex.Message}";
         }
-        isProcessing = false;
+        finally
+        {
+            isProcessing = false;
+            LoadingService.Hide();
+        }
     }
 
     private async Task HandlePayMonthAsync(VestingMonth m)
     {
-        if (detail == null || isProcessing) return;
+        if (detail == null || isProcessing || !detail.CanProcess) return;
         if (!m.CanPay || !m.PayoutId.HasValue || !m.PayoutItemId.HasValue) return;
         isProcessing = true;
         modalError = null;
+        LoadingService.Show("Processing month payout...");
 
-        var res = await PayoutService.ProcessItemsAsync(m.PayoutId.Value, new List<Guid> { m.PayoutItemId.Value });
-        if (res.Success && res.Data != null)
+        try
         {
-            ShowToast($"Month {m.Label} paid: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
-            await RefreshDetailAsync();
+            var res = await PayoutService.ProcessItemsAsync(m.PayoutId.Value, new List<Guid> { m.PayoutItemId.Value });
+            if (res.Success && res.Data != null)
+            {
+                ShowToast($"Month {m.Label} paid: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
+                await RefreshDetailAsync();
+            }
+            else
+            {
+                modalError = res.Message ?? "Month payment failed. Kept as PENDING — please retry.";
+                await LoadHistoryAsync();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            modalError = res.Message ?? "Month payment failed. Kept as PENDING — please retry.";
-            await LoadHistoryAsync();
+            modalError = $"Error processing month: {ex.Message}";
         }
-        isProcessing = false;
+        finally
+        {
+            isProcessing = false;
+            LoadingService.Hide();
+        }
     }
 
     private async Task HandleConfirmPayoutAsync()
@@ -576,20 +583,32 @@
         if (detail == null || isProcessing) return;
         isProcessing = true;
         modalError = null;
+        LoadingService.Show("Processing coach payout...");
 
-        var res = await PayoutService.ProcessAsync(detail.PayoutId);
-        if (res.Success && res.Data != null)
+        try
         {
-            ShowToast($"Payout processed: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
-            showModal = false;
-            detail = null;
-            await LoadHistoryAsync();
+            var res = await PayoutService.ProcessAsync(detail.PayoutId);
+            if (res.Success && res.Data != null)
+            {
+                ShowToast($"Payout processed: {res.Data.NetPayoutAmount:N0} VND (Ref: {res.Data.TransactionRef}).", "info");
+                showModal = false;
+                detail = null;
+                await LoadHistoryAsync();
+            }
+            else
+            {
+                modalError = res.Message ?? "Payout failed. Kept as PENDING — please retry.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            modalError = res.Message ?? "Payout failed. Kept as PENDING — please retry.";
+            modalError = $"Error processing payout: {ex.Message}";
         }
-        isProcessing = false;
+        finally
+        {
+            isProcessing = false;
+            LoadingService.Hide();
+        }
     }
 
     private void ShowToast(string message, string type)

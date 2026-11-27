@@ -1,9 +1,12 @@
-UTCID,Type,PlanExists,PlanActive,CoachExists,SaveChangesThrows,PaymentLinkThrows,PlanCurrency,PlanDescription,PlanSubscriptionDuration,PlanTrainingPackageDuration,HasStaleOrders,OriginUrl,ExpectedSuccess,ExpectedMessage
-UTCID01,N,TRUE,TRUE,TRUE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,TRUE,Payment link created. Complete the payment to renew your coach subscription.
-UTCID02,A,FALSE,TRUE,TRUE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Selected subscription plan is not available.
-UTCID03,A,TRUE,FALSE,TRUE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Selected subscription plan is not available.
-UTCID04,A,TRUE,TRUE,FALSE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Coach account not found.
-UTCID05,A,TRUE,TRUE,TRUE,TRUE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Could not save your order. Please try again.
-UTCID06,A,TRUE,TRUE,TRUE,FALSE,TRUE,VND,Plan,,,FALSE,http://localhost,FALSE,Could not create the payment link: boom
-UTCID07,N,TRUE,TRUE,TRUE,FALSE,FALSE,, ,1,,TRUE,,TRUE,Payment link created. Complete the payment to renew your coach subscription.
-UTCID08,N,TRUE,TRUE,TRUE,FALSE,FALSE,VND,Plan,,2,FALSE,http://localhost,TRUE,Payment link created. Complete the payment to renew your coach subscription.
+UTCID,Type,Result_PlanExists,Result_PlanActive,Result_CoachExists,Result_SaveChangesThrows,Result_PaymentLinkThrows,PlanCurrency,PlanDescription,PlanSubscriptionDuration,PlanTrainingPackageDuration,Result_HasStaleOrders,OriginUrl,ExpectedSuccess,ExpectedMessage,PlanAmountNull
+UTCID01,N,TRUE,TRUE,TRUE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,TRUE,Payment link created. Complete the payment to renew your coach subscription.,FALSE
+UTCID02,A,FALSE,TRUE,TRUE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Selected subscription plan is not available.,FALSE
+UTCID03,A,TRUE,FALSE,TRUE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Selected subscription plan is not available.,FALSE
+UTCID04,A,TRUE,TRUE,FALSE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Coach account not found.,FALSE
+UTCID05,A,TRUE,TRUE,TRUE,TRUE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Could not save your order. Please try again.,FALSE
+UTCID06,A,TRUE,TRUE,TRUE,FALSE,TRUE,VND,Plan,,,FALSE,http://localhost,FALSE,Could not create the payment link: boom,FALSE
+UTCID07,N,TRUE,TRUE,TRUE,FALSE,FALSE,, ,1,,TRUE,,TRUE,Payment link created. Complete the payment to renew your coach subscription.,FALSE
+UTCID08,N,TRUE,TRUE,TRUE,FALSE,FALSE,VND,Plan,,2,FALSE,http://localhost,TRUE,Payment link created. Complete the payment to renew your coach subscription.,FALSE
+UTCID09,A,TRUE,TRUE,TRUE,FALSE,FALSE,VND,Plan,,,FALSE,http://localhost,FALSE,Selected subscription plan is not available.,TRUE
+UTCID10,N,TRUE,TRUE,TRUE,FALSE,FALSE,VND,Plan,1,,FALSE,http://localhost,TRUE,Payment link created. Complete the payment to renew your coach subscription.,FALSE
+UTCID11,N,TRUE,TRUE,TRUE,FALSE,FALSE,VND,Plan,,,FALSE,,TRUE,Payment link created. Complete the payment to renew your coach subscription.,FALSE

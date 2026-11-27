@@ -9,6 +9,7 @@ namespace FitSocial.Application.Interfaces
     public interface ITokenBlacklistService
     {
         Task RevokeTokenAsync(string jti, TimeSpan expiresIn);
+
         Task<bool> IsTokenRevokedAsync(string jti);
     }
 }

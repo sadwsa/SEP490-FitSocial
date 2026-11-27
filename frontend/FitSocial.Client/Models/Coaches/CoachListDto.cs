@@ -10,5 +10,7 @@ public class CoachListDto
     public int? ExperienceYears { get; set; }
     public string? Bio { get; set; }
     public string? CertificateUrl { get; set; }
+    public double? Rating { get; set; }
+    public int TotalReviews { get; set; }
 }
 

@@ -1,0 +1,36 @@
+@inject LoadingService LoadingService
+@implements IDisposable
+
+@if (LoadingService.IsLoading)
+{
+    <div class="global-loading-overlay" role="status" aria-live="polite" aria-busy="true">
+        <div class="loading-modal-card">
+            <div class="spinner-container">
+                <div class="spinner-ring"></div>
+                <div class="spinner-dot"></div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(LoadingService.CurrentMessage))
+            {
+                <p class="loading-text">@LoadingService.CurrentMessage</p>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        LoadingService.OnChange += HandleLoadingChanged;
+    }
+
+    private async void HandleLoadingChanged()
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        LoadingService.OnChange -= HandleLoadingChanged;
+    }
+}
+

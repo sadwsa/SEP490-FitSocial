@@ -1424,7 +1424,6 @@ public class LocationServiceTests
             Posts = new List<Post>(),
             Coaches = new List<CoachProfile>
             {
-                new CoachProfile { UserId = Guid.NewGuid() }
                 new CoachProfile { CoachId = Guid.NewGuid() }
             }
         };

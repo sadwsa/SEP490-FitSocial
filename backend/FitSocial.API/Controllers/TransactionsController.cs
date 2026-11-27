@@ -1,9 +1,10 @@
-﻿using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Transactions;
 using FitSocial.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -24,13 +25,20 @@ public class TransactionsController : ControllerBase
     [HttpGet("my-history")]
     public async Task<IActionResult> GetMyTransactionHistory([FromQuery] TransactionFilterDto filter)
     {
-        var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var role = User.FindFirst(ClaimTypes.Role)?.Value ?? "TRAINEE";
+        var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                        ?? User.FindFirst("sub")?.Value;
 
         if (!Guid.TryParse(userIdString, out var currentUserId))
         {
             return Unauthorized(ApiResponseDto<PagedResultDto<TransactionHistoryDto>>.Fail("Invalid token or user ID"));
         }
+
+        // Nhận diện chuẩn xác quyền Coach (hỗ trợ nhiều format claims)
+        var isCoach = User.IsInRole("COACH") 
+                   || User.IsInRole("Coach") 
+                   || User.Claims.Any(c => c.Type.EndsWith("role", StringComparison.OrdinalIgnoreCase) && c.Value.Equals("COACH", StringComparison.OrdinalIgnoreCase));
+
+        var role = isCoach ? "COACH" : "TRAINEE";
 
         var result = await _service.GetMyTransactionsAsync(currentUserId, role, filter);
         return Ok(ApiResponseDto<PagedResultDto<TransactionHistoryDto>>.Ok(result));

@@ -1,7 +1,13 @@
-UTCID,Type,PayoutExists,HasUnpaid,HasRefunded,GatewaySuccess,GuardFail,ExpectedSuccess,ExpectedMessage
-UTCID01,N,TRUE,TRUE,FALSE,TRUE,FALSE,TRUE,Payout processed successfully.
-UTCID02,A,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,Payout record not found.
-UTCID03,B,TRUE,FALSE,FALSE,TRUE,FALSE,TRUE,Payout is already fully paid.
-UTCID04,A,TRUE,TRUE,TRUE,TRUE,FALSE,FALSE,One or more orders in this payout cycle have been refunded. Please regenerate the payout cycle before processing.
-UTCID05,A,TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,PayOS accepted the order but money has not settled yet (state: FAILED). It is recorded — use retry/check again later instead of creating a duplicate order.
-UTCID06,A,TRUE,TRUE,FALSE,TRUE,TRUE,FALSE,Coach has not added or activated a valid bank account. Payout rejected and flagged.
+UTCID,Type,PayoutExists,PayoutStatus,FutureCycle,UnresolvedReports,AmountNonPositive,HasUnpaid,HasRefunded,GatewaySuccess,GatewayThrows,AuditThrows,GuardFail,ExpectedSuccess,ExpectedMessage
+UTCID01,N,TRUE,PENDING,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,TRUE,Payout processed successfully.
+UTCID02,A,FALSE,PENDING,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,Payout record not found.
+UTCID03,B,TRUE,PENDING,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,TRUE,Payout is already fully paid.
+UTCID04,A,TRUE,PENDING,FALSE,FALSE,FALSE,TRUE,TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,One or more orders in this payout cycle have been refunded. Please regenerate the payout cycle before processing.
+UTCID05,A,TRUE,PENDING,FALSE,FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,PayOS accepted the order but money has not settled yet (state: FAILED). It is recorded — use retry/check again later instead of creating a duplicate order.
+UTCID06,A,TRUE,PENDING,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,TRUE,FALSE,Coach has not added or activated a valid bank account. Payout rejected and flagged.
+UTCID07,N,TRUE,PENDING,FALSE,FALSE,FALSE,TRUE,FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,Banking gateway error. Payout kept as PENDING — please retry.
+UTCID08,N,TRUE,PENDING,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,FALSE,TRUE,FALSE,TRUE,Payout processed successfully.
+UTCID09,A,TRUE,COMPLETED,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,Only pending payouts can be processed (current status: COMPLETED).
+UTCID10,A,TRUE,PENDING,TRUE,FALSE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,Cannot pay a future cycle yet. Cycle 12/2099 becomes payable once December 2099 arrives.
+UTCID11,A,TRUE,PENDING,FALSE,TRUE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,Coach has 1 unresolved report(s). Payout is blocked until reports are resolved.
+UTCID12,A,TRUE,PENDING,FALSE,FALSE,TRUE,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,Nothing positive to pay after refund adjustments.

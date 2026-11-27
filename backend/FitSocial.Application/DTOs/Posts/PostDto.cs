@@ -1,4 +1,4 @@
-﻿namespace FitSocial.Application.DTOs.Posts;
+namespace FitSocial.Application.DTOs.Posts;
 
 public class PostDto
 {
@@ -15,6 +15,8 @@ public class PostDto
     public DateTime? UpdatedAt { get; set; }
     public int LikeCount { get; set; }
     public int CommentCount { get; set; }
+    public double HotScore { get; set; }
+    public double EngagementScore { get; set; }
     public bool IsLikedByCurrentUser { get; set; }
     public List<PostMediaDto> Media { get; set; } = new();
 }

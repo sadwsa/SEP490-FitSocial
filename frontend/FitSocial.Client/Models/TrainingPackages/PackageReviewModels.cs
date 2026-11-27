@@ -1,12 +1,21 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace FitSocial.Client.Models.TrainingPackages;
 
 public class CreatePackageReviewDto
 {
+    public Guid OrderId { get; set; }
     public int Rating { get; set; } = 5;
     public string? Comment { get; set; }
+    public List<string> ImageUrls { get; set; } = new();
+}
+
+public class UpdatePackageReviewDto
+{
+    public int Rating { get; set; } = 5;
+    public string? Comment { get; set; }
+    public List<string>? ImageUrls { get; set; } = new();
 }
 
 public class ReplyReviewDto
@@ -14,11 +23,20 @@ public class ReplyReviewDto
     public string Reply { get; set; } = string.Empty;
 }
 
+public class ReviewMediaDto
+{
+    public Guid ReviewMediaId { get; set; }
+    public string MediaUrl { get; set; } = string.Empty;
+    public string MediaType { get; set; } = "image";
+    public int SortOrder { get; set; }
+}
+
 public class PackageReviewDto
 {
     public Guid ReviewId { get; set; }
     public Guid PackageId { get; set; }
     public Guid TraineeId { get; set; }
+    public Guid? OrderId { get; set; }
     public string TraineeName { get; set; } = "FitConnect Member";
     public string? TraineeAvatarUrl { get; set; }
     public int Rating { get; set; }
@@ -29,7 +47,7 @@ public class PackageReviewDto
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public bool IsEdited { get; set; }
-
+    public List<ReviewMediaDto> Media { get; set; } = new();
 }
 
 public class PackageReviewSummaryDto

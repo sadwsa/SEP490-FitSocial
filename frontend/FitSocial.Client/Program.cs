@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Blazored.LocalStorage;
 using FitSocial.Client;
 using FitSocial.Client.Layout;
+using FitSocial.Client.Services;
 using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Http;
 using FitSocial.Client.Services.Posts;
@@ -23,6 +24,8 @@ using FitSocial.Client.Services.SystemOperations;
 using FitSocial.Client.Services.Reports;
 using FitSocial.Client.Services.SubscriptionPriceHistory;
 using FitSocial.Client.Services.Analytics;
+using FitSocial.Client.Services.Toast;
+using FitSocial.Client.Models.Coach;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -36,11 +39,13 @@ builder.Services.AddScoped<ITokenStorage, BrowserTokenStorage>();
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
 
-// HttpClient configured with Backend API Base URL
+// HttpClient configured with Backend API Base URL (Timeout 5 minutes for media uploads)
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7200/api/";
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl), Timeout = TimeSpan.FromMinutes(5) });
 
 // Core Services
+builder.Services.AddScoped<LoadingService>();
+builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 // Shared state giữa AppShellLayout (topbar + 2 sidebar) và các page (tìm kiếm, nội dung sidebar)

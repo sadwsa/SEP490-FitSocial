@@ -1,19 +1,30 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Reports;
+using FitSocial.Client.Services.Auth;
 using FitSocial.Client.Services.Http;
+using Microsoft.AspNetCore.Components.Forms;
 
 namespace FitSocial.Client.Services.Reports;
 
 public class ReportService : IReportService
 {
     private readonly ApiClient _apiClient;
+    private readonly HttpClient _httpClient;
+    private readonly ITokenStorage _tokenStorage;
+    private const string BaseEndpoint = "reports";
 
-    public ReportService(ApiClient apiClient)
+    public ReportService(ApiClient apiClient, HttpClient httpClient, ITokenStorage tokenStorage)
     {
         _apiClient = apiClient;
+        _httpClient = httpClient;
+        _tokenStorage = tokenStorage;
     }
 
     public async Task<ApiResponse<PagedResult<ReportListItemDto>>> GetReportsAsync(
@@ -143,12 +154,9 @@ public class ReportService : IReportService
         {
             var query = new List<string>();
 
-            // "ALL" means no appeal-status filter.
-            if (!string.IsNullOrWhiteSpace(appealStatus) &&
-                !string.Equals(appealStatus.Trim(), "ALL", StringComparison.OrdinalIgnoreCase))
-            {
-                query.Add($"appealStatus={Uri.EscapeDataString(appealStatus.Trim().ToUpperInvariant())}");
-            }
+            // Luôn truyền appealStatus (nếu rỗng hoặc ALL thì truyền ALL để Backend chỉ lọc các bản ghi có kháng cáo)
+            var effectiveStatus = string.IsNullOrWhiteSpace(appealStatus) ? "ALL" : appealStatus.Trim().ToUpperInvariant();
+            query.Add($"appealStatus={Uri.EscapeDataString(effectiveStatus)}");
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -220,6 +228,48 @@ public class ReportService : IReportService
             {
                 Success = false,
                 Message = $"Error reporting user: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<List<string>>> UploadReportImagesAsync(IBrowserFile[] files)
+    {
+        if (files == null || files.Length == 0)
+        {
+            return new ApiResponse<List<string>> { Success = false, Message = "No images selected." };
+        }
+
+        try
+        {
+            var buffered = new List<(byte[] Bytes, string FileName, string ContentType)>(files.Length);
+            foreach (var file in files)
+            {
+                using var ms = new MemoryStream();
+                await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+                var contentType = string.IsNullOrWhiteSpace(file.ContentType)
+                    ? "application/octet-stream"
+                    : file.ContentType;
+                buffered.Add((ms.ToArray(), file.Name, contentType));
+            }
+
+            return await _apiClient.PostMultipartAsync<List<string>>($"{BaseEndpoint}/upload-images", () =>
+            {
+                var content = new MultipartFormDataContent();
+                foreach (var item in buffered)
+                {
+                    var byteContent = new ByteArrayContent(item.Bytes);
+                    byteContent.Headers.ContentType = new MediaTypeHeaderValue(item.ContentType);
+                    content.Add(byteContent, "files", item.FileName);
+                }
+                return content;
+            });
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<List<string>>
+            {
+                Success = false,
+                Message = $"Error uploading images: {ex.Message}"
             };
         }
     }

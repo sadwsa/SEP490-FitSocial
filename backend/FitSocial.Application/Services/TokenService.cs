@@ -42,7 +42,6 @@ public class TokenService : ITokenService
         var (accessToken, expiresAt) = _jwtTokenGenerator.GenerateToken(user);
         var refreshToken = GenerateOpaqueToken();
 
-        // Production tiers: not-remembered = short session (7d), remembered = long session (30d)
         var refreshDaysStr = rememberMe
             ? _configuration["Jwt:RememberRefreshExpiryDays"]
             : _configuration["Jwt:RefreshExpiryDays"];
@@ -61,7 +60,6 @@ public class TokenService : ITokenService
             CreatedAt = DateTime.UtcNow
         }, cancellationToken);
 
-        // NOTE: caller owns the final SaveChangesAsync (same transaction as user changes).
         return new AuthResponseDto
         {
             AccessToken = accessToken,
@@ -99,8 +97,6 @@ public class TokenService : ITokenService
             return ApiResponseDto<AuthResponseDto>.Fail("Account is not available.");
         }
 
-        // Rotation: revoke the used token, issue a brand-new session.
-        // Preserve the original tier (7d vs 30d) by reusing its lifetime (sliding).
         stored.RevokedAt = DateTime.UtcNow;
         var originalDuration = stored.ExpiresAt - (stored.CreatedAt ?? DateTime.UtcNow);
         var rememberMe = originalDuration.TotalDays >= 15;
@@ -136,8 +132,6 @@ public class TokenService : ITokenService
         }
         catch (Exception ex)
         {
-            // Logout must never fail because of bookkeeping, but the failure
-            // is logged: a revoked-missed token stays valid until it expires.
             _logger.LogWarning(ex, "Failed to revoke refresh token on logout.");
         }
     }

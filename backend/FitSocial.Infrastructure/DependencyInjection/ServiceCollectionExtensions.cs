@@ -64,6 +64,8 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<FitSocialDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        services.AddMemoryCache();
+
         // Configure Redis Distributed Cache
         services.AddStackExchangeRedisCache(options =>
         {
@@ -72,6 +74,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddSingleton<IEncryptionService, AesEncryptionService>();
+        services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IEmailService, EmailService>();
@@ -120,6 +123,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ISubscriptionPriceHistoryRepository, SubscriptionPriceHistoryRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
+        services.AddScoped<IReviewMediaRepository, ReviewMediaRepository>();
         services.AddScoped<ITransactionRepository, TransactionRepository>();
         services.AddScoped<IMealPlanRepository, MealPlanRepository>();
 

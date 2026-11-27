@@ -459,6 +459,16 @@
                             Payout Account
                         </a>
                     }
+                    @if (string.Equals(EffectiveUserRole, "Coach", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a href="/wallet/history?type=PAYOUT" @onclick="CloseProfileMenu"
+                           class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-[#FF5500] transition">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Payout History
+                        </a>
+                    }
 
                     <hr class="my-1 border-gray-100" />
 
@@ -520,7 +530,7 @@
     [Parameter] public bool ShowMenuButton { get; set; }
     [Parameter] public EventCallback OnToggleMenu { get; set; }
     [Parameter] public bool ShowSearch { get; set; } = true;
-    [Parameter] public string SearchPlaceholder { get; set; } = "Search posts, coaches, friends...";
+    [Parameter] public string SearchPlaceholder { get; set; } = "Search posts...";
     [Parameter] public string SearchTerm { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> SearchTermChanged { get; set; }
     [Parameter] public EventCallback<ChangeEventArgs> OnSearchInput { get; set; }
@@ -686,6 +696,18 @@
             await NotificationService.MarkAsReadAsync(item.NotificationId);
         }
 
+        if (item.Type != null && item.Type.Contains("SCHEDULE"))
+        {
+            Navigation.NavigateTo("coach/trainee-orders");
+            return;
+        }
+
+        if (item.Type == "POST_COMMENT" || item.Type == "COMMENT_REPLY")
+        {
+            Navigation.NavigateTo("home");
+            return;
+        }
+
         Navigation.NavigateTo("notifications");
     }
 
@@ -706,6 +728,9 @@
         if (string.IsNullOrWhiteSpace(type)) return "Notification";
         return type.Trim().ToUpperInvariant() switch
         {
+            "WORKOUT_SCHEDULE_REMINDER" => "Workout Schedule Reminder",
+            "WORKOUT_SCHEDULE_URGENT" => "Urgent Workout Alert",
+            "MEAL_SCHEDULE_REMINDER" => "Meal Plan Reminder",
             "REFUND_APPROVED" => "Refund Approved",
             "REFUND_REJECTED" => "Refund Rejected",
             "CERTIFICATE_APPROVED" => "Certificate Approved",
@@ -714,6 +739,8 @@
             "USER_WARNED" => "Account Warning",
             "USER_LOCKED" => "Account Locked",
             "REPORT_PROCESSED" => "Report Processed",
+            "POST_COMMENT" => "Post Comment",
+            "COMMENT_REPLY" => "Comment Reply",
             _ => type.Replace("_", " ")
         };
     }

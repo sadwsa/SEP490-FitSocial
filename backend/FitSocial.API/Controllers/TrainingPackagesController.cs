@@ -1,7 +1,10 @@
-﻿using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPackage;
+using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
+using FitSocial.API.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -15,10 +18,12 @@ namespace FitSocial.API.Controllers
     public class TrainingPackagesController : ControllerBase
     {
         private readonly ITrainingPackageService _service;
+        private readonly CloudinaryImageService _imageService;
 
-        public TrainingPackagesController(ITrainingPackageService service)
+        public TrainingPackagesController(ITrainingPackageService service, CloudinaryImageService imageService)
         {
             _service = service;
+            _imageService = imageService;
         }
 
         [HttpGet]
@@ -112,16 +117,31 @@ namespace FitSocial.API.Controllers
         }
         [HttpGet("purchased")]
         [Authorize] // Bất kỳ user nào đăng nhập đều có thể lấy danh sách họ đã mua
-        public async Task<IActionResult> GetPurchasedPackages()
+        public async Task<IActionResult> GetPurchasedPackages(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? searchKeyword = null,
+            [FromQuery] string? packageType = null,
+            [FromQuery] string? status = null,
+            [FromQuery] string? sortBy = null,
+            CancellationToken cancellationToken = default)
         {
             var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdString, out var currentUserId))
             {
-                return Unauthorized(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Fail("Invalid token or user ID"));
+                return Unauthorized(ApiResponseDto<PagedResultDto<TrainingPackageResponseDto>>.Fail("Invalid token or user ID"));
             }
 
-            var packages = await _service.GetPurchasedPackagesAsync(currentUserId);
-            return Ok(ApiResponseDto<IEnumerable<TrainingPackageResponseDto>>.Ok(packages));
+            var packages = await _service.GetPurchasedPackagesAsync(
+                currentUserId,
+                pageNumber,
+                pageSize,
+                searchKeyword,
+                packageType,
+                status,
+                sortBy,
+                cancellationToken);
+            return Ok(ApiResponseDto<PagedResultDto<TrainingPackageResponseDto>>.Ok(packages));
         }
         // ==============================================================
         // REVIEWS & REPLY ENDPOINTS (SHOPEE / TIKTOK STYLE)
@@ -136,7 +156,7 @@ namespace FitSocial.API.Controllers
         }
         // 2. Trainee gửi đánh giá cho gói tập
         [HttpPost("{id}/reviews")]
-        [Authorize(Roles = "TRAINEE")]
+        [Authorize]
         public async Task<IActionResult> SubmitPackageReview(Guid id, [FromBody] CreatePackageReviewDto dto, CancellationToken cancellationToken)
         {
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -147,6 +167,43 @@ namespace FitSocial.API.Controllers
             var result = await _service.SubmitPackageReviewAsync(id, traineeId, dto, cancellationToken);
             return Ok(result);
         }
+
+        // 2b. Cập nhật đánh giá gói tập (1 lần duy nhất)
+        [HttpPut("{id}/reviews/{reviewId}")]
+        [Authorize]
+        public async Task<IActionResult> UpdatePackageReview(Guid id, Guid reviewId, [FromBody] UpdatePackageReviewDto dto, CancellationToken cancellationToken)
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdString, out var traineeId))
+            {
+                return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
+            }
+            var result = await _service.UpdatePackageReviewAsync(id, reviewId, traineeId, dto, cancellationToken);
+            return Ok(result);
+        }
+
+        // 2.1 Trainee upload ảnh đánh giá lên Cloudinary (trước khi gửi review)
+        [HttpPost("{id}/upload-images")]
+        [Authorize]
+        public async Task<IActionResult> UploadReviewImages(Guid id, IFormFileCollection files, CancellationToken cancellationToken = default)
+        {
+            if (files == null || files.Count == 0)
+            {
+                return BadRequest(ApiResponseDto<List<string>>.Fail("No images selected."));
+            }
+            if (files.Count > 5)
+            {
+                return BadRequest(ApiResponseDto<List<string>>.Fail("Maximum 5 images allowed per review."));
+            }
+
+            var uploadedUrls = await _imageService.UploadImagesFromFilesAsync(files, cancellationToken);
+            if (uploadedUrls.Count == 0)
+            {
+                return BadRequest(ApiResponseDto<List<string>>.Fail("No valid images were uploaded (accepted: JPG, PNG, WEBP, GIF up to 10MB)."));
+            }
+            return Ok(ApiResponseDto<List<string>>.Ok(uploadedUrls, "Images uploaded successfully."));
+        }
+
         // 3. Coach phản hồi lại đánh giá của học viên
         [HttpPost("{id}/reviews/{reviewId}/reply")]
         [Authorize(Roles = "COACH")]
@@ -157,6 +214,7 @@ namespace FitSocial.API.Controllers
             {
                 return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
             }
+
             var result = await _service.ReplyToReviewAsync(id, reviewId, coachId, dto, cancellationToken);
             return Ok(result);
         }

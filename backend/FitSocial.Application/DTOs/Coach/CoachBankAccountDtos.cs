@@ -34,11 +34,15 @@ public class CreateCoachBankAccountDto
     public string AccountName { get; set; } = string.Empty;
 
     [Required]
-    [StringLength(50, MinimumLength = 6)]
+    [StringLength(30, MinimumLength = 6)]
     public string AccountNumber { get; set; } = string.Empty;
 
     [StringLength(100)]
     public string? Branch { get; set; }
 
     public bool IsDefault { get; set; } = false;
+}
+
+public class UpdateCoachBankAccountDto : CreateCoachBankAccountDto
+{
 }

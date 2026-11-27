@@ -52,7 +52,8 @@ namespace FitSocial.Application.Services
 
                     var isOwnPackage = (pkg.CoachId == userId);
                     var isPackageActive = pkg.IsActive ?? true;
-                    var isAvailable = isPackageActive && !isOwnPackage;
+                    var isCoachLocked = coachUser?.IsLocked ?? false;
+                    var isAvailable = isPackageActive && !isOwnPackage && !isCoachLocked;
                     string? unavailableReason = null;
 
                     if (isOwnPackage)
@@ -62,6 +63,10 @@ namespace FitSocial.Application.Services
                     else if (!isPackageActive)
                     {
                         unavailableReason = "This package is currently suspended from taking new trainees";
+                    }
+                    else if (isCoachLocked)
+                    {
+                        unavailableReason = "The coach's account is currently suspended";
                     }
 
                     var durationDays = pkg.DurationDays ?? 30;
@@ -206,6 +211,11 @@ namespace FitSocial.Application.Services
                 if (package.IsActive == false)
                 {
                     return ApiResponseDto<CartItemDto>.Fail("This training package is currently suspended from taking trainees.");
+                }
+
+                if (package.Coach?.Coach?.IsLocked == true)
+                {
+                    return ApiResponseDto<CartItemDto>.Fail("This coach's account is currently suspended. You cannot add this package to cart.");
                 }
 
                 var existing = await _cartRepository.GetCartItemAsync(userId, packageId, cancellationToken);

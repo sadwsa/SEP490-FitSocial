@@ -17,7 +17,9 @@ public interface ITrainingPlanService
     Task<TraineeWorkoutPlanProgressDto> GetTraineeWorkoutPlanAsync(Guid traineeId, Guid orderDetailsId, CancellationToken ct = default);
     Task<TraineeWorkoutPlanProgressDto> GetTraineeWorkoutPlanByPackageAsync(Guid traineeId, Guid packageId, CancellationToken ct = default);
     Task<WorkoutCompletionResultDto> ToggleWorkoutCompletionAsync(Guid traineeId, ToggleWorkoutCompletionDto dto, CancellationToken ct = default);
+    Task<WorkoutCompletionResultDto> RequestWorkoutCompletionAsync(Guid traineeId, RequestWorkoutCompletionDto dto, CancellationToken ct = default);
 
-    // Coach Progress Monitoring
+    // Coach Progress Monitoring & Review
     Task<CoachTraineeWorkoutProgressDto> GetCoachTraineeProgressAsync(Guid coachId, Guid orderDetailsId, CancellationToken ct = default);
+    Task<WorkoutCompletionResultDto> ReviewWorkoutCompletionAsync(Guid coachId, CoachReviewWorkoutDto dto, CancellationToken ct = default);
 }

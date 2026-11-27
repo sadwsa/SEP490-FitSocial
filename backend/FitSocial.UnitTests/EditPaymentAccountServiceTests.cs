@@ -44,9 +44,10 @@ public class EditPaymentAccountServiceTests
                 {
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
-                    ConfigExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ConfigExists")),
-                    OtherActiveExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "OtherActiveExists")),
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    Result_ConfigExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_ConfigExists")),
+                    Result_OtherActiveExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_OtherActiveExists")),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
+                    Result_AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_AuditThrows")),
                     ExpectedThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedThrows")),
                     UpdateFields = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "UpdateFields")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
@@ -57,9 +58,16 @@ public class EditPaymentAccountServiceTests
         }
     }
 
-    private PaymentGatewayConfigService CreateSut()
+    private PaymentGatewayConfigService CreateSut(bool auditThrows = false)
     {
-        _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new FitSocial.Domain.Entities.AuditLog());
+        if (auditThrows)
+        {
+            _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("audit boom"));
+        }
+        else
+        {
+            _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new FitSocial.Domain.Entities.AuditLog());
+        }
         _encryption.Setup(e => e.Encrypt(It.IsAny<string>(), It.IsAny<bool>())).Returns(new byte[] { 1, 2, 3 });
         return new PaymentGatewayConfigService(_configRepo.Object, _encryption.Object, _unitOfWork.Object, _auditLog.Object);
     }
@@ -72,12 +80,12 @@ public class EditPaymentAccountServiceTests
         _unitOfWork.Reset();
 
         var id = Guid.NewGuid();
-        if (tc.ConfigExists)
+        if (tc.Result_ConfigExists)
         {
             var config = new PaymentGatewayConfig { GatewayId = id, GatewayName = "Gateway", IsActive = false, IsPayout = false, ClientId = "client", EncryptedApiKey = new byte[] { 1 }, EncryptedChecksumKey = new byte[] { 2 } };
             _configRepo.Setup(c => c.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(config);
 
-            if (tc.OtherActiveExists)
+            if (tc.Result_OtherActiveExists)
             {
                 var other = new PaymentGatewayConfig { GatewayId = Guid.NewGuid(), GatewayName = "Other", IsActive = true, IsPayout = false };
                 _configRepo.Setup(c => c.GetAllConfigsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<PaymentGatewayConfig> { config, other });
@@ -92,7 +100,7 @@ public class EditPaymentAccountServiceTests
             _configRepo.Setup(c => c.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync((PaymentGatewayConfig?)null);
         }
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("boom"));
         }
@@ -112,7 +120,7 @@ public class EditPaymentAccountServiceTests
             WebhookUrl = tc.UpdateFields ? "http://hook" : null
         };
 
-        var sut = CreateSut();
+        var sut = CreateSut(tc.Result_AuditThrows);
         Exception? thrown = null;
         ApiResponseDto<PaymentGatewayConfigDto>? result = null;
         try
@@ -145,9 +153,10 @@ public class EditPaymentAccountServiceTests
     {
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public bool ConfigExists { get; set; }
-        public bool OtherActiveExists { get; set; }
-        public bool SaveChangesThrows { get; set; }
+        public bool Result_ConfigExists { get; set; }
+        public bool Result_OtherActiveExists { get; set; }
+        public bool Result_SaveChangesThrows { get; set; }
+        public bool Result_AuditThrows { get; set; }
         public bool ExpectedThrows { get; set; }
         public bool UpdateFields { get; set; }
         public bool ExpectedSuccess { get; set; }

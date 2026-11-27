@@ -1,8 +1,5 @@
 namespace FitSocial.Application.Interfaces;
 
-/// <summary>
-/// UC-23.1: banking gateway used to disburse coach payouts.
-/// </summary>
 public record BankTransferRequest(
     string BankCode,
     string AccountNumber,
@@ -14,9 +11,6 @@ public record BankTransferRequest(
 
 public record BankTransferResult(bool Success, string? TransactionRef, string? FailureReason);
 
-/// <summary>
-/// Result of creating a payout order (money may still be settling).
-/// </summary>
 public record CreatedTransfer(
     bool Created,
     string? GatewayRef,
@@ -25,9 +19,6 @@ public record CreatedTransfer(
     string? FailureReason,
     string? TransactionRef);
 
-/// <summary>
-/// Live state of a payout order previously accepted by the gateway.
-/// </summary>
 public record BankTransferStatus(
     bool Found,
     bool Succeeded,

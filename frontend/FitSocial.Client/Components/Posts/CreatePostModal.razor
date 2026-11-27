@@ -187,7 +187,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                   d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                         </svg>
-                        Gym / Location <span class="text-red-500">*</span>
+                        Location <span class="text-red-500">*</span>
                     </label>
                     <select @bind="selectedLocationId"
                             class="w-full text-sm bg-gray-50 border @(hasAttemptedSubmit && selectedLocationId == Guid.Empty ? "border-red-500 ring-2 ring-red-200 bg-red-50/20 text-red-900" : "border-gray-200 text-gray-800") rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FF5500] focus:border-[#FF5500] transition">
@@ -507,11 +507,42 @@
                 break;
             }
 
+            var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+            bool isImg = file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+                         ext is ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif";
+            bool isVid = ext is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm" ||
+                         file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase);
+
+            if (!isImg && !isVid)
+            {
+                mediaErrorMessage = $"File '{file.Name}' has an unsupported format.";
+                continue;
+            }
+
+            if (isImg && file.Size > 10 * 1024 * 1024)
+            {
+                mediaErrorMessage = $"Image '{file.Name}' exceeds 10MB limit.";
+                continue;
+            }
+
+            if (isVid && file.Size > 100 * 1024 * 1024)
+            {
+                mediaErrorMessage = $"Video '{file.Name}' exceeds 100MB limit.";
+                continue;
+            }
+
+            long currentTotalBytes = selectedMedia.Sum(m => (long)(m.Data?.Length ?? 0));
+            if (currentTotalBytes + file.Size > 250 * 1024 * 1024)
+            {
+                mediaErrorMessage = "Total size of all selected media files exceeds the 250MB limit.";
+                break;
+            }
+
             try
             {
-                if (file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                if (isImg)
                 {
-                    var isGif = file.ContentType.Equals("image/gif", StringComparison.OrdinalIgnoreCase);
+                    var isGif = ext == ".gif" || file.ContentType.Equals("image/gif", StringComparison.OrdinalIgnoreCase);
 
                     if (isGif)
                     {
@@ -614,9 +645,11 @@
         bool isContentMissing = string.IsNullOrWhiteSpace(contentTrimmed);
         bool isLocationMissing = selectedLocationId == Guid.Empty;
         bool isMediaExceeded = selectedMedia.Count > 10;
+        long totalMediaBytes = selectedMedia.Sum(m => (long)(m.Data?.Length ?? 0));
+        bool isTotalMediaExceeded = totalMediaBytes > 250 * 1024 * 1024;
         bool isContentTooLong = contentTrimmed.Length > 5000;
 
-        if (isPostTypeMissing || isPostTypeUnauthorized || isContentMissing || isLocationMissing || isMediaExceeded || isContentTooLong)
+        if (isPostTypeMissing || isPostTypeUnauthorized || isContentMissing || isLocationMissing || isMediaExceeded || isTotalMediaExceeded || isContentTooLong)
         {
             if (isPostTypeUnauthorized)
             {
@@ -625,6 +658,10 @@
             else if (isMediaExceeded)
             {
                 mediaErrorMessage = "You can select a maximum of 10 media files.";
+            }
+            else if (isTotalMediaExceeded)
+            {
+                mediaErrorMessage = "Total size of all selected media files must not exceed 250MB.";
             }
             else if (isContentTooLong)
             {

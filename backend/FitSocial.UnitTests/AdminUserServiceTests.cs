@@ -1225,4 +1225,153 @@ public class AdminUserServiceTests
         Assert.False(result.Success);
         Assert.Contains("Error retrieving users", result.Message);
     }
+
+    [Fact]
+    public async Task SetUserLockStatusAsync_WhenAdminLocksThemselves_ShouldReturnFailure()
+    {
+        // Arrange
+        var adminId = Guid.NewGuid();
+
+        // Act
+        var result = await _service.SetUserLockStatusAsync(adminId, true, adminId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("cannot lock your own account", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SetUserLockStatusAsync_WhenLockingAdministratorAccount_ShouldReturnFailure()
+    {
+        // Arrange
+        var targetAdminId = Guid.NewGuid();
+        var callerAdminId = Guid.NewGuid();
+        var targetUser = new User
+        {
+            UserId = targetAdminId,
+            FullName = "Main Admin",
+            RoleCode = RoleConstants.Admin,
+            IsLocked = false
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(targetAdminId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(targetUser);
+
+        // Act
+        var result = await _service.SetUserLockStatusAsync(targetAdminId, true, callerAdminId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Administrator accounts cannot be locked", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SetUserLockStatusAsync_WhenStaffLocksStaffAccount_ShouldReturnFailure()
+    {
+        // Arrange
+        var targetStaffId = Guid.NewGuid();
+        var callerStaffId = Guid.NewGuid();
+        var targetUser = new User
+        {
+            UserId = targetStaffId,
+            FullName = "Staff Member B",
+            RoleCode = RoleConstants.Staff,
+            IsInternal = true,
+            IsLocked = false
+        };
+        var callerStaff = new User
+        {
+            UserId = callerStaffId,
+            FullName = "Staff Member A",
+            RoleCode = RoleConstants.Staff,
+            IsInternal = true
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(targetStaffId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(targetUser);
+        _userRepoMock.Setup(r => r.GetByIdAsync(callerStaffId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(callerStaff);
+
+        // Act
+        var result = await _service.SetUserLockStatusAsync(targetStaffId, true, callerStaffId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Only administrators can lock or unlock staff accounts", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SetUserLockStatusAsync_WhenStaffUnlocksStaffAccount_ShouldReturnFailure()
+    {
+        // Arrange
+        var targetStaffId = Guid.NewGuid();
+        var callerStaffId = Guid.NewGuid();
+        var targetUser = new User
+        {
+            UserId = targetStaffId,
+            FullName = "Staff Member B",
+            RoleCode = RoleConstants.Staff,
+            IsInternal = true,
+            IsLocked = true
+        };
+        var callerStaff = new User
+        {
+            UserId = callerStaffId,
+            FullName = "Staff Member A",
+            RoleCode = RoleConstants.Staff,
+            IsInternal = true
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(targetStaffId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(targetUser);
+        _userRepoMock.Setup(r => r.GetByIdAsync(callerStaffId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(callerStaff);
+
+        // Act
+        var result = await _service.SetUserLockStatusAsync(targetStaffId, false, callerStaffId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Contains("Only administrators can lock or unlock staff accounts", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SetUserLockStatusAsync_WhenAdminLocksStaffAccount_ShouldSucceed()
+    {
+        // Arrange
+        var targetStaffId = Guid.NewGuid();
+        var callerAdminId = Guid.NewGuid();
+        var targetUser = new User
+        {
+            UserId = targetStaffId,
+            FullName = "Staff Member B",
+            RoleCode = RoleConstants.Staff,
+            IsInternal = true,
+            IsLocked = false
+        };
+        var callerAdmin = new User
+        {
+            UserId = callerAdminId,
+            FullName = "System Admin",
+            RoleCode = RoleConstants.Admin,
+            IsInternal = true
+        };
+
+        _userRepoMock.Setup(r => r.GetByIdAsync(targetStaffId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(targetUser);
+        _userRepoMock.Setup(r => r.GetByIdAsync(callerAdminId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(callerAdmin);
+
+        // Act
+        var result = await _service.SetUserLockStatusAsync(targetStaffId, true, callerAdminId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.True(targetUser.IsLocked);
+    }
 }

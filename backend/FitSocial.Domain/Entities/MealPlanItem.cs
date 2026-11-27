@@ -22,4 +22,6 @@ public partial class MealPlanItem
     public short? SortOrder { get; set; }
 
     public virtual MealPlan MealPlan { get; set; } = null!;
+
+    public virtual ICollection<MealCompletionLog> MealCompletionLogs { get; set; } = new List<MealCompletionLog>();
 }

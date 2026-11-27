@@ -23,6 +23,8 @@ public class PostDto
     public DateTime? UpdatedAt { get; set; }
     public int LikeCount { get; set; }
     public int CommentCount { get; set; }
+    public double HotScore { get; set; }
+    public double EngagementScore { get; set; }
     public bool IsLikedByCurrentUser { get; set; }
     public List<PostMediaDto> Media { get; set; } = new();
 
@@ -80,6 +82,10 @@ public class GetPostsQuery
     public Guid? LocationId { get; set; }
     public Guid? AuthorId { get; set; }
     public string? SearchTerm { get; set; }
+    public string? SortBy { get; set; } = "hot";
+    public DateTime? AsOf { get; set; }
+    public string? SessionId { get; set; }
+    public Guid? PrioritizedPostId { get; set; }
 }
 
 public class CommentDto

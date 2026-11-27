@@ -8,9 +8,6 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @inject ICoachService CoachService
-@inject AuthenticationStateProvider AuthStateProvider
-@inject FitSocial.Client.Services.Auth.IAuthService AuthService
-@inject NavigationManager Navigation
 @inject AppShellContext Shell
 
 <PageTitle>Payout Account - FitConnect</PageTitle>
@@ -67,7 +64,7 @@
                         <DataAnnotationsValidator />
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                            <!-- 1. Chọn Ngân Hàng (Searchable Combobox) -->
+                            <!-- 1. Select Bank (Searchable Combobox) -->
                             <div class="md:col-span-2 relative">
                                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Bank Name <span class="text-red-500">*</span>
@@ -111,7 +108,7 @@
                                 <ValidationMessage For="@(() => accountForm.BankName)" class="text-red-500 text-xs mt-1" />
                             </div>
 
-                            <!-- 2. Mã BIN ngân hàng -->
+                            <!-- 2. Bank BIN Code -->
                             <div>
                                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Bank BIN Code
@@ -124,7 +121,7 @@
                                 <ValidationMessage For="@(() => accountForm.BankCode)" class="text-red-500 text-xs mt-1" />
                             </div>
 
-                            <!-- 3. Số tài khoản -->
+                            <!-- 3. Account Number -->
                             <div>
                                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Account Number <span class="text-red-500">*</span>
@@ -132,10 +129,11 @@
                                 <InputText @bind-Value="accountForm.AccountNumber"
                                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#FF5500] transition"
                                            placeholder="Enter bank account number" />
+                                <p class="text-[11px] text-gray-400 mt-1">Enter 6–20 digits without spaces or special characters.</p>
                                 <ValidationMessage For="@(() => accountForm.AccountNumber)" class="text-red-500 text-xs mt-1" />
                             </div>
 
-                            <!-- 4. Tên chủ tài khoản -->
+                            <!-- 4. Account Holder Name -->
                             <div>
                                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Account Holder Name <span class="text-red-500">*</span>
@@ -143,10 +141,11 @@
                                 <InputText @bind-Value="accountForm.AccountName"
                                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#FF5500] transition"
                                            placeholder="e.g. NGUYEN VAN A" />
+                                <p class="text-[11px] text-gray-400 mt-1">Automatically normalized to uppercase without diacritics (NAPAS 24/7 standard).</p>
                                 <ValidationMessage For="@(() => accountForm.AccountName)" class="text-red-500 text-xs mt-1" />
                             </div>
 
-                            <!-- 5. Chi nhánh (Không bắt buộc) -->
+                            <!-- 5. Branch (Optional) -->
                             <div class="md:col-span-2">
                                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Branch <span class="text-gray-400 font-normal lowercase">(optional)</span>
@@ -165,16 +164,35 @@
                             <div class="flex items-center gap-3">
                                 @if (hasExistingAccount)
                                 {
-                                    <button type="button"
-                                            disabled="@(isSubmitting || isDeleting)"
-                                            @onclick="HandleDeleteAccount"
-                                            class="px-4 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold border border-red-200 transition duration-200 disabled:opacity-50 flex items-center gap-2">
-                                        @if (isDeleting)
-                                        {
-                                            <div class="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
-                                        }
-                                        <span>Delete Account</span>
-                                    </button>
+                                    @if (confirmingDelete)
+                                    {
+                                        <span class="text-xs font-semibold text-red-600">Confirm delete?</span>
+                                        <button type="button"
+                                                disabled="@(isSubmitting || isDeleting)"
+                                                @onclick="HandleDeleteAccount"
+                                                class="px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 rounded-xl text-sm font-bold transition duration-200 disabled:opacity-50 flex items-center gap-2">
+                                            @if (isDeleting)
+                                            {
+                                                <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            }
+                                            <span>Yes, Delete</span>
+                                        </button>
+                                        <button type="button"
+                                                disabled="@isDeleting"
+                                                @onclick="() => confirmingDelete = false"
+                                                class="px-3 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-sm font-semibold transition">
+                                            Cancel
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                disabled="@(isSubmitting || isDeleting)"
+                                                @onclick="() => confirmingDelete = true"
+                                                class="px-4 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold border border-red-200 transition duration-200 disabled:opacity-50 flex items-center gap-2">
+                                            <span>Delete Account</span>
+                                        </button>
+                                    }
                                 }
                                 <button type="submit"
                                         disabled="@(isSubmitting || isDeleting)"
@@ -198,29 +216,21 @@
     private bool isLoading = true;
     private bool isSubmitting = false;
     private bool isDeleting = false;
+    private bool confirmingDelete = false;
     private bool hasExistingAccount = false;
 
     private string errorMessage = "";
     private string successMessage = "";
 
-    // Bank Dropdown State
     private List<BankItemDto> allBanks = new();
     private List<BankItemDto> filteredBanks = new();
     private string bankSearchTerm = "";
     private bool isBankDropdownOpen = false;
 
-    // Header State
-    private string? headerSearchTerm = "";
-    private string userName = "Coach";
-    private string userInitials = "C";
-    private string userRole = "Coach";
-
     protected override async Task OnInitializedAsync()
     {
-        // Topbar do AppShellLayout render: trang này chỉ dùng ô tìm kiếm, không có callback riêng.
-        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
+        Shell.ShowSearch = false;
 
-        await LoadUserInfoAsync();
         await LoadBankListAsync();
         await LoadBankAccountAsync();
     }
@@ -240,6 +250,8 @@
     {
         bankSearchTerm = e.Value?.ToString() ?? "";
         isBankDropdownOpen = true;
+        accountForm.BankName = string.Empty;
+        accountForm.BankCode = string.Empty;
 
         if (string.IsNullOrWhiteSpace(bankSearchTerm))
         {
@@ -270,40 +282,58 @@
         isLoading = true;
         errorMessage = "";
 
-        var response = await CoachService.GetBankAccountsAsync();
-        if (response.Success && response.Data != null && response.Data.Any())
+        try
         {
-            var existing = response.Data.First();
-            existingBankId = existing.BankId;
-            hasExistingAccount = true;
-
-            accountForm = new CreateCoachBankAccountDto
+            var response = await CoachService.GetBankAccountsAsync();
+            if (!response.Success)
             {
-                BankName = existing.BankName ?? "",
-                BankCode = existing.BankCode ?? "",
-                AccountName = existing.AccountName ?? "",
-                AccountNumber = existing.AccountNumber ?? "",
-                Branch = existing.Branch,
-                IsDefault = true
-            };
+                errorMessage = response.Message ?? "Failed to load bank account details.";
+                hasExistingAccount = false;
+                existingBankId = null;
+                accountForm = new CreateCoachBankAccountDto { IsDefault = true };
+                return;
+            }
 
-            var matchedBank = allBanks.FirstOrDefault(b =>
-                b.Bin == existing.BankCode ||
-                b.ShortName.Equals(existing.BankName, StringComparison.OrdinalIgnoreCase) ||
-                b.Code.Equals(existing.BankCode, StringComparison.OrdinalIgnoreCase));
+            if (response.Data != null && response.Data.Any())
+            {
+                var existing = response.Data.First();
+                existingBankId = existing.BankId;
+                hasExistingAccount = true;
 
-            bankSearchTerm = matchedBank != null
-                ? $"{matchedBank.ShortName} ({matchedBank.Code})"
-                : existing.BankName ?? "";
+                accountForm = new CreateCoachBankAccountDto
+                {
+                    BankName = existing.BankName ?? "",
+                    BankCode = existing.BankCode ?? "",
+                    AccountName = existing.AccountName ?? "",
+                    AccountNumber = existing.AccountNumber ?? "",
+                    Branch = existing.Branch,
+                    IsDefault = true
+                };
+
+                var matchedBank = allBanks.FirstOrDefault(b =>
+                    b.Bin == existing.BankCode ||
+                    b.ShortName.Equals(existing.BankName, StringComparison.OrdinalIgnoreCase) ||
+                    b.Code.Equals(existing.BankCode, StringComparison.OrdinalIgnoreCase));
+
+                bankSearchTerm = matchedBank != null
+                    ? $"{matchedBank.ShortName} ({matchedBank.Code})"
+                    : existing.BankName ?? "";
+            }
+            else
+            {
+                hasExistingAccount = false;
+                existingBankId = null;
+                accountForm = new CreateCoachBankAccountDto { IsDefault = true };
+            }
         }
-        else
+        catch (Exception ex)
         {
-            hasExistingAccount = false;
-            existingBankId = null;
-            accountForm = new CreateCoachBankAccountDto { IsDefault = true };
+            errorMessage = $"Error loading bank account: {ex.Message}";
         }
-
-        isLoading = false;
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private async Task HandleSaveAccount()
@@ -312,27 +342,52 @@
         errorMessage = "";
         successMessage = "";
 
-        if (!string.IsNullOrWhiteSpace(accountForm.AccountName))
+        try
         {
-            accountForm.AccountName = accountForm.AccountName.Trim().ToUpperInvariant();
-        }
-
-        var response = await CoachService.AddBankAccountAsync(accountForm);
-        if (response.Success)
-        {
-            successMessage = hasExistingAccount ? "Bank account updated successfully!" : "Bank account added successfully!";
-            hasExistingAccount = true;
-            if (response.Data != null)
+            if (!string.IsNullOrWhiteSpace(accountForm.AccountNumber))
             {
-                existingBankId = response.Data.BankId;
+                accountForm.AccountNumber = accountForm.AccountNumber.Replace(" ", "").Replace("-", "").Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(accountForm.AccountName))
+            {
+                accountForm.AccountName = accountForm.AccountName.Trim().ToUpperInvariant();
+            }
+
+            FitSocial.Client.Models.Common.ApiResponse<CoachBankAccountDto> response;
+
+            if (hasExistingAccount && existingBankId.HasValue)
+            {
+                response = await CoachService.UpdateBankAccountAsync(existingBankId.Value, accountForm);
+            }
+            else
+            {
+                response = await CoachService.AddBankAccountAsync(accountForm);
+            }
+
+            if (response.Success)
+            {
+                successMessage = hasExistingAccount ? "Bank account updated successfully!" : "Bank account added successfully!";
+                hasExistingAccount = true;
+                confirmingDelete = false;
+                if (response.Data != null)
+                {
+                    existingBankId = response.Data.BankId;
+                }
+            }
+            else
+            {
+                errorMessage = response.Message ?? "Failed to save bank account details.";
             }
         }
-        else
+        catch (Exception ex)
         {
-            errorMessage = response.Message ?? "Failed to save bank account.";
+            errorMessage = $"Error saving bank account: {ex.Message}";
         }
-
-        isSubmitting = false;
+        finally
+        {
+            isSubmitting = false;
+        }
     }
 
     private async Task HandleDeleteAccount()
@@ -343,49 +398,30 @@
         errorMessage = "";
         successMessage = "";
 
-        var response = await CoachService.DeleteBankAccountAsync(existingBankId.Value);
-        if (response.Success)
-        {
-            successMessage = "Bank account deleted successfully.";
-            hasExistingAccount = false;
-            existingBankId = null;
-            accountForm = new CreateCoachBankAccountDto { IsDefault = true };
-            bankSearchTerm = "";
-        }
-        else
-        {
-            errorMessage = response.Message ?? "Failed to delete bank account.";
-        }
-
-        isDeleting = false;
-    }
-
-    private async Task LoadUserInfoAsync()
-    {
         try
         {
-            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-            var user = authState.User;
-            if (user.Identity?.IsAuthenticated == true)
+            var response = await CoachService.DeleteBankAccountAsync(existingBankId.Value);
+            if (response.Success)
             {
-                userName = user.Identity.Name ?? "User";
-                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach");
-                userRole = isCoach ? "Coach" : "Trainee";
-                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length > 0)
-                {
-                    userInitials = parts.Length > 1
-                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
-                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
-                }
+                successMessage = "Bank account deleted successfully.";
+                hasExistingAccount = false;
+                confirmingDelete = false;
+                existingBankId = null;
+                accountForm = new CreateCoachBankAccountDto { IsDefault = true };
+                bankSearchTerm = "";
+            }
+            else
+            {
+                errorMessage = response.Message ?? "Failed to delete bank account.";
             }
         }
-        catch { }
-    }
-
-    private async Task HandleLogout()
-    {
-        await AuthService.LogoutAsync();
-        Navigation.NavigateTo("login");
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting bank account: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
     }
 }

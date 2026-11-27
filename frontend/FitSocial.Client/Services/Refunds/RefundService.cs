@@ -13,6 +13,7 @@ public interface IRefundService
     Task<ApiResponse<PagedResult<RefundRequestItem>>> GetPagedRefundRequestsAsync(GetRefundRequestsQuery query);
     Task<ApiResponse<RefundRequestItem>> GetRefundRequestByIdAsync(Guid id);
     Task<ApiResponse<RefundRequestItem>> ApproveRefundRequestAsync(Guid id, ApproveRefundRequest request);
+    Task<ApiResponse<RefundRequestItem>> RetryDisbursementAsync(Guid id);
     Task<ApiResponse<RefundRequestItem>> RejectRefundRequestAsync(Guid id, RejectRefundRequest request);
     Task<ApiResponse<RefundPolicyCalculation>> CalculatePolicyForOrderAsync(Guid orderId, string? reason = null, Guid? preferredBankAccountId = null);
     Task<ApiResponse<RefundPolicyCalculation>> CalculatePolicyForRefundRequestAsync(Guid id);
@@ -69,6 +70,11 @@ public class RefundApiService : IRefundService
     public Task<ApiResponse<RefundRequestItem>> ApproveRefundRequestAsync(Guid id, ApproveRefundRequest request)
     {
         return _apiClient.PostAsync<ApproveRefundRequest, RefundRequestItem>($"RefundRequests/{id}/approve", request);
+    }
+
+    public Task<ApiResponse<RefundRequestItem>> RetryDisbursementAsync(Guid id)
+    {
+        return _apiClient.PostAsync<object, RefundRequestItem>($"RefundRequests/{id}/retry-disbursement", new { });
     }
 
     public Task<ApiResponse<RefundRequestItem>> RejectRefundRequestAsync(Guid id, RejectRefundRequest request)

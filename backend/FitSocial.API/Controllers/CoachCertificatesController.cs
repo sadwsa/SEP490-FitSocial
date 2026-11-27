@@ -31,10 +31,6 @@ public class CoachCertificatesController : ControllerBase
         return Guid.TryParse(userIdStr, out userId);
     }
 
-    /// <summary>
-    /// UC: View Coach Certificate List with pagination, status filtering, and search.
-    /// Accessible to Staff and Admin.
-    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponseDto<CoachCertificateAdminListResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
@@ -51,10 +47,6 @@ public class CoachCertificatesController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// UC: View Coach Certificate Details.
-    /// Accessible to Staff and Admin.
-    /// </summary>
     [HttpGet("{certificateId:guid}")]
     [ProducesResponseType(typeof(ApiResponseDto<CoachCertificateAdminDetailDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
@@ -76,10 +68,6 @@ public class CoachCertificatesController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// UC: Process (Approve or Reject) a pending Coach Certificate.
-    /// Accessible to Staff and Admin.
-    /// </summary>
     [HttpPut("{certificateId:guid}/process")]
     [HttpPost("{certificateId:guid}/process")]
     [ProducesResponseType(typeof(ApiResponseDto<CoachCertificateAdminDetailDto>), StatusCodes.Status200OK)]
@@ -114,10 +102,6 @@ public class CoachCertificatesController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// UC: Approve a pending Coach Certificate.
-    /// Accessible to Staff and Admin.
-    /// </summary>
     [HttpPut("{certificateId:guid}/approve")]
     [HttpPost("{certificateId:guid}/approve")]
     [ProducesResponseType(typeof(ApiResponseDto<CoachCertificateAdminDetailDto>), StatusCodes.Status200OK)]
@@ -151,10 +135,6 @@ public class CoachCertificatesController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// UC: Reject a pending Coach Certificate with a required reason.
-    /// Accessible to Staff and Admin.
-    /// </summary>
     [HttpPut("{certificateId:guid}/reject")]
     [HttpPost("{certificateId:guid}/reject")]
     [ProducesResponseType(typeof(ApiResponseDto<CoachCertificateAdminDetailDto>), StatusCodes.Status200OK)]

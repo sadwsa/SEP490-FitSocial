@@ -1,4 +1,4 @@
-﻿using FitSocial.Application.DTOs.Common;
+using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPackage;
 using System;
 using System.Collections.Generic;
@@ -14,12 +14,21 @@ namespace FitSocial.Application.Interfaces
         Task<TrainingPackageResponseDto?> UpdatePackageAsync(Guid id, Guid currentUserId, UpdateTrainingPackageDto dto);
         Task<IEnumerable<TrainingPackageResponseDto>> GetMyPackagesAsync(Guid currentUserId);
         Task<IEnumerable<TrainingPackageResponseDto>> GetAllPackagesAsync(string? searchKeyword = null, decimal? maxPrice = null, Guid? coachId = null);
-        Task<IEnumerable<TrainingPackageResponseDto>> GetPurchasedPackagesAsync(Guid currentUserId);
+        Task<PagedResultDto<TrainingPackageResponseDto>> GetPurchasedPackagesAsync(
+            Guid currentUserId,
+            int pageNumber = 1,
+            int pageSize = 10,
+            string? searchKeyword = null,
+            string? packageType = null,
+            string? status = null,
+            string? sortBy = null,
+            CancellationToken cancellationToken = default);
 
 
         // --- CÁC PHƯƠNG THỨC REVIEWS & REPLY GÓI TẬP ---
         Task<ApiResponseDto<PackageReviewSummaryDto>> GetPackageReviewsAsync(Guid packageId, CancellationToken cancellationToken = default);
         Task<ApiResponseDto<bool>> SubmitPackageReviewAsync(Guid packageId, Guid traineeId, CreatePackageReviewDto dto, CancellationToken cancellationToken = default);
+        Task<ApiResponseDto<bool>> UpdatePackageReviewAsync(Guid packageId, Guid reviewId, Guid traineeId, UpdatePackageReviewDto dto, CancellationToken cancellationToken = default);
         Task<ApiResponseDto<bool>> ReplyToReviewAsync(Guid packageId, Guid reviewId, Guid coachId, ReplyReviewDto dto, CancellationToken cancellationToken = default);
 
 

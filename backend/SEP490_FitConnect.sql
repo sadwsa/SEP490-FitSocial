@@ -499,6 +499,10 @@ CREATE TABLE WorkoutCompletionLog (
     LogDate TIMESTAMP,
     Status VARCHAR(30),
     Notes VARCHAR(300),
+    MediaUrl VARCHAR(500),
+    CoachFeedback VARCHAR(500),
+    ReviewedBy UUID REFERENCES Users(UserID),
+    ReviewedAt TIMESTAMP,
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

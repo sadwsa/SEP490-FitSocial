@@ -1,16 +1,62 @@
-<CascadingAuthenticationState>
-    <Router AppAssembly="@typeof(App).Assembly">
-        <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(AppShellLayout)">
-                <NotAuthorized>
-                    <RedirectToLogin />
-                </NotAuthorized>
-            </AuthorizeRouteView>
-            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-        </Found>
-        <NotFound>
-            <PageTitle>Không tìm thấy trang - FitConnect</PageTitle>
-            <RedirectToHome />
-        </NotFound>
-    </Router>
-</CascadingAuthenticationState>
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@using FitSocial.Client.Pages
+
+@if (isChecking)
+{
+    <div class="boot-splash">
+        <img src="img/fitconnect-logo.png" alt="FitConnect" />
+        <div class="boot-brand">FitConnect</div>
+        <div class="boot-spinner"></div>
+        <p>Loading FitConnect...</p>
+    </div>
+}
+else if (!isOnline)
+{
+    <ConnectionError />
+}
+else
+{
+    <CascadingAuthenticationState>
+        <Router AppAssembly="@typeof(App).Assembly">
+            <Found Context="routeData">
+                <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(AppShellLayout)">
+                    <NotAuthorized>
+                        <RedirectToLogin />
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+                <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+            </Found>
+            <NotFound>
+                <PageTitle>Không tìm thấy trang - FitConnect</PageTitle>
+                <RedirectToHome />
+            </NotFound>
+        </Router>
+    </CascadingAuthenticationState>
+}
+
+@code {
+    private bool isChecking = true;
+    private bool isOnline = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var healthTask = Task.Run(async () =>
+        {
+            try { await Http.GetAsync(""); return true; }
+            catch { return false; }
+        });
+
+        var authTask = Task.Run(async () =>
+        {
+            try { await AuthStateProvider.GetAuthenticationStateAsync(); }
+            catch { }
+        });
+
+        await Task.WhenAll(healthTask, authTask);
+
+        isOnline = await healthTask;
+        isChecking = false;
+    }
+}

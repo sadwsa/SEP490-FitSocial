@@ -59,7 +59,6 @@ public class AesEncryptionService : IEncryptionService
         byte[] iv;
         if (deterministic)
         {
-            // Deterministic IV: HMAC of the plaintext using the key ensures identical output for identical input
             using var hmac = new HMACSHA256(_key);
             var hash = hmac.ComputeHash(data);
             iv = new byte[16];

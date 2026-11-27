@@ -189,22 +189,7 @@ public class AppealService : IAppealService
         var effectiveUserId = ResolveEffectiveUserId(currentUserId, appealToken);
 
         // Fetch user's reports (reports where ReportedUserId == effectiveUserId or ReportedPost.AuthorId == effectiveUserId)
-        var (allReports, _) = await _reportRepository.GetPagedReportsAsync(
-            status: null,
-            targetType: null,
-            reporterId: null,
-            fromDate: null,
-            toDate: null,
-            searchTerm: null,
-            pageNumber: 1,
-            pageSize: 100,
-            cancellationToken: cancellationToken);
-
-        var myReports = allReports
-            .Where(r => (r.ReportedUserId.HasValue && r.ReportedUserId.Value == effectiveUserId)
-                     || (r.ReportedPost != null && r.ReportedPost.AuthorId == effectiveUserId))
-            .OrderByDescending(r => r.CreatedAt)
-            .ToList();
+        var myReports = await _reportRepository.GetReportsForUserAppealAsync(effectiveUserId, cancellationToken);
 
         var dtos = new List<AppealableReportDto>();
         foreach (var r in myReports)

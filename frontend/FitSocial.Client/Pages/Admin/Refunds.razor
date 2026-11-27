@@ -1,4 +1,4 @@
-﻿@page "/admin/refunds"
+@page "/admin/refunds"
 @layout AdminLayout
 @attribute [Authorize(Roles = "ADMIN,STAFF")]
 @using FitSocial.Client.Models.Common
@@ -7,19 +7,10 @@
 @inject IRefundService RefundService
 @inject NavigationManager Navigation
 
-<PageTitle>Refund Requests - FitConnect Admin Console</PageTitle>
+<PageTitle>Refund Requests - FitConnect Management Portal</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
-        @if (!string.IsNullOrEmpty(toastMessage))
-        {
-            <div class="auth-alert @toastType" role="alert">
-                <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
-                <span class="alert-text">@toastMessage</span>
-                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
-            </div>
-        }
-
         <div class="header-container">
             <div>
                 <h2 class="view-title">Refund Requests</h2>
@@ -41,6 +32,9 @@
             </button>
             <button type="button" class="cat-tab @(statusFilter == "APPROVED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("APPROVED")'>
                 <span class="status-dot dot-approved"></span> Approved
+            </button>
+            <button type="button" class="cat-tab @(statusFilter == "DISBURSEMENT_FAILED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("DISBURSEMENT_FAILED")'>
+                <span class="status-dot dot-failed"></span> Transfer Failed
             </button>
             <button type="button" class="cat-tab @(statusFilter == "REJECTED" ? "active" : "")" @onclick='() => SetStatusFilterAsync("REJECTED")'>
                 <span class="status-dot dot-rejected"></span> Rejected
@@ -177,6 +171,11 @@
                                                 <span class="badge-dot dot-approved"></span> Approved
                                             </span>
                                             break;
+                                        case "DISBURSEMENT_FAILED":
+                                            <span class="badge badge-failed" title="Staff approved, but automated bank disbursement failed">
+                                                <span class="badge-dot dot-failed"></span> Transfer Failed
+                                            </span>
+                                            break;
                                         case "REJECTED":
                                             <span class="badge badge-rejected">
                                                 <span class="badge-dot dot-rejected"></span> Rejected
@@ -214,6 +213,12 @@
                                                 Reject
                                             </button>
                                         }
+                                        else if (string.Equals(r.Status, "DISBURSEMENT_FAILED", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <button type="button" class="btn-action btn-retry" title="Retry bank disbursement" @onclick="() => HandleRetryDisbursementAsync(r)" disabled="@isProcessing">
+                                                Retry Transfer
+                                            </button>
+                                        }
                                     </div>
                                 </td>
                             </tr>
@@ -223,43 +228,11 @@
             </div>
 
             <!-- Pagination Bar -->
-            <div class="pagination-bar">
-                <div class="pagination-info">
-                    Showing @(((pagedRefunds.PageNumber - 1) * pagedRefunds.PageSize) + 1) to
-                    @(Math.Min(pagedRefunds.PageNumber * pagedRefunds.PageSize, pagedRefunds.TotalCount)) of @pagedRefunds.TotalCount requests
-                </div>
-
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedRefunds.HasPreviousPage)" @onclick="() => ChangePageAsync(pagedRefunds.PageNumber - 1)">
-                        Previous
-                    </button>
-
-                    @for (int i = 1; i <= pagedRefunds.TotalPages; i++)
-                    {
-                        var pageIndex = i;
-                        if (i == 1 || i == pagedRefunds.TotalPages || (i >= pagedRefunds.PageNumber - 2 && i <= pagedRefunds.PageNumber + 2))
-                        {
-                            <button type="button" class="page-btn @(pagedRefunds.PageNumber == pageIndex ? "active" : "")" @onclick="() => ChangePageAsync(pageIndex)">
-                                @pageIndex
-                            </button>
-                        }
-                        else if (i == pagedRefunds.PageNumber - 3 || i == pagedRefunds.PageNumber + 3)
-                        {
-                            <span class="page-ellipsis">…</span>
-                        }
-                    }
-
-                    <button type="button" class="page-btn" disabled="@(!pagedRefunds.HasNextPage)" @onclick="() => ChangePageAsync(pagedRefunds.PageNumber + 1)">
-                        Next
-                    </button>
-
-                    <select class="page-size-select" value="@pageSize" @onchange="OnPageSizeChangedAsync">
-                        <option value="10">10 / page</option>
-                        <option value="20">20 / page</option>
-                        <option value="50">50 / page</option>
-                    </select>
-                </div>
-            </div>
+            <CommonPagination CurrentPage="@pagedRefunds.PageNumber"
+                              PageSize="@pagedRefunds.PageSize"
+                              TotalCount="@pagedRefunds.TotalCount"
+                              PageChanged="ChangePageAsync"
+                              ItemName="requests" />
         }
 
         <!-- DETAIL MODAL -->
@@ -432,20 +405,63 @@
                                 <p>@selectedRefund.Reason</p>
                             </div>
 
-                            @if (selectedRefund.EvidenceUrls != null && selectedRefund.EvidenceUrls.Any())
-                            {
-                                <div class="evidence-list mt-2">
-                                    <span class="detail-label">Attached Evidence (@selectedRefund.EvidenceUrls.Count):</span>
-                                    <div class="evidence-links">
-                                        @foreach (var (url, idx) in selectedRefund.EvidenceUrls.Select((u, i) => (u, i + 1)))
+                            @{
+                                var evidenceUrls = GetEvidenceUrls(selectedRefund);
+                            }
+                            <div class="evidence-gallery-block mt-3">
+                                <div class="evidence-header">
+                                    <span class="detail-label mb-0">Evidence Images</span>
+                                    @if (evidenceUrls.Count > 0)
+                                    {
+                                        <span class="evidence-count-badge">@evidenceUrls.Count @(evidenceUrls.Count == 1 ? "image" : "images")</span>
+                                    }
+                                </div>
+
+                                @if (evidenceUrls.Count == 0)
+                                {
+                                    <div class="evidence-empty-state">
+                                        No evidence images provided
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="evidence-grid">
+                                        @for (int i = 0; i < evidenceUrls.Count; i++)
                                         {
-                                            <a href="@url" target="_blank" rel="noopener noreferrer" class="evidence-link">
-                                                Evidence #@idx ↗
-                                            </a>
+                                            var idx = i;
+                                            var url = evidenceUrls[idx];
+                                            var isValid = IsValidMediaUrl(url) && !failedEvidenceIndices.Contains(idx);
+
+                                            if (isValid)
+                                            {
+                                                <button type="button"
+                                                        class="evidence-item"
+                                                        @onclick="() => OpenEvidenceLightbox(evidenceUrls, idx)"
+                                                        title="Click to preview image">
+                                                    <img src="@url"
+                                                         alt="Refund evidence @(idx + 1)"
+                                                         loading="lazy"
+                                                         @onerror="() => MarkEvidenceImageFailed(idx)" />
+                                                    <span class="evidence-zoom-hint">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path>
+                                                        </svg>
+                                                    </span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <div class="evidence-item-error" title="Unable to load image">
+                                                    <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                    </svg>
+                                                    <span>Image unavailable</span>
+                                                </div>
+                                            }
                                         }
                                     </div>
-                                </div>
-                            }
+                                }
+                            </div>
                         </div>
 
                         <!-- Processing State -->
@@ -502,6 +518,12 @@
                             </button>
                             <button type="button" class="modal-btn modal-btn-approve" @onclick="() => OpenApproveModal(selectedRefund)">
                                 Approve Refund
+                            </button>
+                        }
+                        else if (string.Equals(selectedRefund.Status, "DISBURSEMENT_FAILED", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <button type="button" class="modal-btn modal-btn-approve" @onclick="() => HandleRetryDisbursementAsync(selectedRefund)" disabled="@isProcessing">
+                                @(isProcessing ? "Retrying..." : "Retry Transfer")
                             </button>
                         }
                     </div>
@@ -588,7 +610,7 @@
                         </div>
 
                         <div class="form-group mt-3">
-                            <label class="form-label">Optional Staff Note:</label>
+                            <label class="form-label">Reviewer Note (Optional):</label>
                             <textarea class="form-textarea" @bind="approvalNote" placeholder="Enter processing note or audit details..."></textarea>
                         </div>
                     </div>
@@ -656,6 +678,69 @@
             </div>
         }
 
+        <!-- EVIDENCE IMAGE LIGHTBOX MODAL -->
+        @if (isLightboxOpen && lightboxImages.Count > 0)
+        {
+            <div class="refund-lightbox-overlay" @onclick="CloseLightbox">
+                <div class="refund-lightbox-dialog" @onclick:stopPropagation="true">
+                    <div class="refund-lightbox-topbar">
+                        <div class="refund-lightbox-info">
+                            <span>Evidence Image</span>
+                            @if (lightboxImages.Count > 1)
+                            {
+                                <span class="refund-lightbox-counter">(@(lightboxIndex + 1) / @lightboxImages.Count)</span>
+                            }
+                        </div>
+                        <button type="button" class="refund-lightbox-close-btn" @onclick="CloseLightbox" title="Close">✕</button>
+                    </div>
+
+                    <div class="refund-lightbox-main">
+                        @if (lightboxImages.Count > 1)
+                        {
+                            <button type="button"
+                                    class="refund-lightbox-arrow prev"
+                                    @onclick="PrevLightboxImage"
+                                    disabled="@(lightboxIndex <= 0)"
+                                    title="Previous image">
+                                ‹
+                            </button>
+                        }
+
+                        <div class="refund-lightbox-img-stage">
+                            <img src="@lightboxImages[lightboxIndex]"
+                                 alt="Refund evidence @(lightboxIndex + 1)"
+                                 class="refund-lightbox-img" />
+                        </div>
+
+                        @if (lightboxImages.Count > 1)
+                        {
+                            <button type="button"
+                                    class="refund-lightbox-arrow next"
+                                    @onclick="NextLightboxImage"
+                                    disabled="@(lightboxIndex >= lightboxImages.Count - 1)"
+                                    title="Next image">
+                                ›
+                            </button>
+                        }
+                    </div>
+
+                    @if (lightboxImages.Count > 1)
+                    {
+                        <div class="refund-lightbox-strip">
+                            @for (int k = 0; k < lightboxImages.Count; k++)
+                            {
+                                var stripIdx = k;
+                                <img src="@lightboxImages[stripIdx]"
+                                     alt="Thumbnail @(stripIdx + 1)"
+                                     class="refund-lightbox-strip-item @(stripIdx == lightboxIndex ? "active" : "")"
+                                     @onclick="() => lightboxIndex = stripIdx" />
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
         <!-- PROCESSING OVERLAY SCREEN (APPROVE / REJECT) -->
         @if (isProcessingAction)
         {
@@ -670,7 +755,7 @@
                             }
                             else
                             {
-                                <AppIcon Name="warning" />
+                                <AppIcon Name="shield" />
                             }
                         </div>
                     </div>
@@ -704,10 +789,6 @@
     private DateTime? toDateFilter;
     private int pageSize = 10;
     private int currentPage = 1;
-
-    // Toast alert
-    private string? toastMessage;
-    private string toastType = "info";
 
     // Modals
     private RefundRequestItem? selectedRefund;
@@ -745,6 +826,11 @@
             isReloading = !isSilent;
         }
 
+        if (!isSilent)
+        {
+            LoadingService.Show("Loading refund requests...");
+        }
+
         try
         {
             var query = new GetRefundRequestsQuery
@@ -775,6 +861,10 @@
         {
             isLoading = false;
             isReloading = false;
+            if (!isSilent)
+            {
+                LoadingService.Hide();
+            }
             StateHasChanged();
         }
     }
@@ -834,6 +924,8 @@
     private async Task OpenDetailModal(RefundRequestItem item)
     {
         selectedRefund = item;
+        failedEvidenceIndices.Clear();
+        CloseLightbox();
         isDetailModalOpen = true;
         if (selectedRefund.TraineeRefundAmount == null)
         {
@@ -886,10 +978,86 @@
 
     private void CloseModals()
     {
+        CloseLightbox();
+        failedEvidenceIndices.Clear();
         isDetailModalOpen = false;
         isApproveModalOpen = false;
         isRejectModalOpen = false;
         selectedRefund = null;
+    }
+
+    // Evidence Images & Lightbox State
+    private readonly HashSet<int> failedEvidenceIndices = new();
+    private bool isLightboxOpen = false;
+    private List<string> lightboxImages = new();
+    private int lightboxIndex = 0;
+
+    private static List<string> GetEvidenceUrls(RefundRequestItem refund)
+    {
+        if (refund.EvidenceUrls == null || refund.EvidenceUrls.Count == 0)
+        {
+            return new List<string>();
+        }
+
+        return refund.EvidenceUrls
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u.Trim())
+            .ToList();
+    }
+
+    private static bool IsValidMediaUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        var trimmed = url.Trim();
+        if (trimmed.StartsWith("/")) return true;
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private void MarkEvidenceImageFailed(int index)
+    {
+        failedEvidenceIndices.Add(index);
+    }
+
+    private void OpenEvidenceLightbox(List<string> urls, int clickedIndex)
+    {
+        var validUrls = new List<string>();
+        var targetIndex = 0;
+
+        for (int i = 0; i < urls.Count; i++)
+        {
+            if (IsValidMediaUrl(urls[i]) && !failedEvidenceIndices.Contains(i))
+            {
+                if (i == clickedIndex)
+                {
+                    targetIndex = validUrls.Count;
+                }
+                validUrls.Add(urls[i]);
+            }
+        }
+
+        if (validUrls.Count == 0) return;
+
+        lightboxImages = validUrls;
+        lightboxIndex = Math.Clamp(targetIndex, 0, lightboxImages.Count - 1);
+        isLightboxOpen = true;
+    }
+
+    private void CloseLightbox()
+    {
+        isLightboxOpen = false;
+        lightboxImages.Clear();
+        lightboxIndex = 0;
+    }
+
+    private void PrevLightboxImage()
+    {
+        if (lightboxIndex > 0) lightboxIndex--;
+    }
+
+    private void NextLightboxImage()
+    {
+        if (lightboxIndex < lightboxImages.Count - 1) lightboxIndex++;
     }
 
     private async Task ExecuteApproveAsync()
@@ -900,6 +1068,7 @@
         isProcessingAction = true;
         processingActionType = "APPROVE";
         processingTitle = "Processing & Disbursing Refund...";
+        LoadingService.Show("Processing & disbursing refund...");
         var amountStr = FormatCurrency(selectedRefund.TraineeRefundAmount ?? selectedRefund.RequestedAmount ?? 0);
         var bankTarget = !string.IsNullOrWhiteSpace(selectedRefund.BankName)
             ? $"to {selectedRefund.BankName} ({selectedRefund.MaskedAccountNumber})"
@@ -923,16 +1092,26 @@
                 var targetId = selectedRefund.RefundRequestId;
                 var approvedAmt = req.ApprovedAmount;
                 var found = pagedRefunds?.Items?.FirstOrDefault(x => x.RefundRequestId == targetId);
+                var isFailedDisbursement = string.Equals(response.Data?.Status, "DISBURSEMENT_FAILED", StringComparison.OrdinalIgnoreCase);
                 if (found != null)
                 {
-                    found.Status = "APPROVED";
-                    found.ApprovedAmount = approvedAmt;
+                    found.Status = response.Data?.Status ?? (isFailedDisbursement ? "DISBURSEMENT_FAILED" : "APPROVED");
+                    found.ApprovedAmount = response.Data?.ApprovedAmount ?? approvedAmt;
                     found.ReviewedAt = DateTime.UtcNow;
                 }
 
-                processingTitle = "Refund Approved & Disbursed!";
-                processingDescription = "Bank transfer completed successfully. Refreshing requests list...";
-                processingSubtext = "Finalizing in a moment...";
+                if (isFailedDisbursement)
+                {
+                    processingTitle = "Refund Approved - Transfer Failed";
+                    processingDescription = response.Message ?? "Bank transfer failed. You can retry the transfer from the list.";
+                    processingSubtext = "Action saved. Refreshing...";
+                }
+                else
+                {
+                    processingTitle = "Refund Approved & Disbursed!";
+                    processingDescription = "Bank transfer completed successfully. Refreshing requests list...";
+                    processingSubtext = "Finalizing in a moment...";
+                }
                 StateHasChanged();
 
                 isApproveModalOpen = false;
@@ -940,22 +1119,85 @@
 
                 await LoadRefundRequestsAsync(isSilent: true);
 
-                ShowToast("Refund request approved and disbursed successfully.", "success");
+                if (isFailedDisbursement)
+                {
+                    ToastService.ShowWarning(response.Message ?? "Refund approved, but bank transfer failed. Please retry.");
+                }
+                else
+                {
+                    ToastService.ShowSuccess("Refund request approved and disbursed successfully.");
+                }
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to approve refund request.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to approve refund request.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error processing refund approval: {ex.Message}", "error");
+            ToastService.ShowError($"Error processing refund approval: {ex.Message}");
         }
         finally
         {
             isProcessing = false;
             isProcessingAction = false;
             selectedRefund = null;
+            LoadingService.Hide();
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleRetryDisbursementAsync(RefundRequestItem item)
+    {
+        if (item == null || isProcessing) return;
+
+        isProcessing = true;
+        isProcessingAction = true;
+        processingTitle = "Retrying Bank Transfer...";
+        LoadingService.Show("Retrying automated bank disbursement...");
+        var amountStr = FormatCurrency(item.ApprovedAmount ?? item.RequestedAmount ?? 0);
+        var bankTarget = !string.IsNullOrWhiteSpace(item.BankName)
+            ? $"to {item.BankName} ({item.MaskedAccountNumber})"
+            : "";
+        processingDescription = $"Re-submitting transfer instruction for {amountStr} {bankTarget} via interbank gateway.";
+        processingSubtext = "Please wait while the gateway processes the payout...";
+        StateHasChanged();
+
+        try
+        {
+            var response = await RefundService.RetryDisbursementAsync(item.RefundRequestId);
+            if (response.Success)
+            {
+                var found = pagedRefunds?.Items?.FirstOrDefault(x => x.RefundRequestId == item.RefundRequestId);
+                if (found != null)
+                {
+                    found.Status = "APPROVED";
+                    found.RefundedAt = DateTime.UtcNow;
+                }
+
+                processingTitle = "Disbursement Succeeded!";
+                processingDescription = "Funds have been transferred to trainee bank account successfully.";
+                processingSubtext = "Refreshing...";
+                StateHasChanged();
+
+                isDetailModalOpen = false;
+                await LoadRefundRequestsAsync(isSilent: true);
+                ToastService.ShowSuccess("Bank disbursement retry succeeded.");
+            }
+            else
+            {
+                ToastService.ShowError(response.Message ?? "Retry bank disbursement failed.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error retrying disbursement: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+            isProcessingAction = false;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
@@ -1008,6 +1250,7 @@
         isProcessingAction = true;
         processingActionType = "REJECT";
         processingTitle = "Processing Refund Rejection...";
+        LoadingService.Show("Processing refund rejection...");
         processingDescription = $"Recording rejection reason and sending notification to trainee {selectedRefund.RequestedByName ?? selectedRefund.RequestedByEmail}...";
         processingSubtext = "Please wait a moment...";
         StateHasChanged();
@@ -1040,30 +1283,46 @@
 
                 await LoadRefundRequestsAsync(isSilent: true);
 
-                ShowToast("Refund request rejected.", "info");
+                // Successful operation displays green toast notification
+                ToastService.ShowSuccess("Refund request rejected successfully.");
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to reject refund request.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to reject refund request.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error rejecting refund request: {ex.Message}", "error");
+            ToastService.ShowError($"Error rejecting refund request: {ex.Message}");
         }
         finally
         {
             isProcessing = false;
             isProcessingAction = false;
             selectedRefund = null;
+            LoadingService.Hide();
             StateHasChanged();
         }
     }
 
     private void ShowToast(string message, string type)
     {
-        toastMessage = message;
-        toastType = type;
+        switch (type?.ToLowerInvariant())
+        {
+            case "success":
+                ToastService.ShowSuccess(message);
+                break;
+            case "error":
+                ToastService.ShowError(message);
+                break;
+            case "warning":
+                ToastService.ShowWarning(message);
+                break;
+            case "info":
+            default:
+                ToastService.ShowInfo(message);
+                break;
+        }
     }
 
     private static string FormatReferenceCode(RefundRequestItem? r)

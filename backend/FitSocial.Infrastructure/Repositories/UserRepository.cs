@@ -56,7 +56,8 @@ public class UserRepository : Repository<User>, IUserRepository
             var s = search.Trim().ToLower();
             query = query.Where(u =>
                 (u.FullName != null && u.FullName.ToLower().Contains(s)) ||
-                u.Email.ToLower().Contains(s));
+                u.Email.ToLower().Contains(s) ||
+                (u.PhoneNumber != null && u.PhoneNumber.Contains(s)));
         }
 
         if (!string.IsNullOrWhiteSpace(role))

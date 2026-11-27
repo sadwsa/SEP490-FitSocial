@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Reports;
+using Microsoft.AspNetCore.Components.Forms;
 
 namespace FitSocial.Client.Services.Reports;
 
@@ -30,6 +31,8 @@ public interface IReportService
     Task<ApiResponse<ReportListItemDto>> ReviewAppealAsync(Guid reportId, ReviewAppealRequest request);
 
     Task<ApiResponse<ReportListItemDto>> ReportUserAsync(CreateUserReportRequest request);
+
+    Task<ApiResponse<List<string>>> UploadReportImagesAsync(IBrowserFile[] files);
 }
 
 

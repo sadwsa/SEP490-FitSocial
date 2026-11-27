@@ -28,9 +28,11 @@ public class ReportListItemDto
     public string? ReportedPostContent { get; set; }
     public Guid? ReportedPostAuthorId { get; set; }
     public string? ReportedPostAuthorName { get; set; }
+    public bool ReportedPostIsDeleted { get; set; }
 
     // Reported User Moderation & Status Details
     public string? ReportedUserRole { get; set; }
+    public string? ReportedUserCoachStatus { get; set; }
     public int ReportedUserViolationCount { get; set; }
     public bool? ReportedUserIsLocked { get; set; }
     public bool? HasSoldTrainingPackage { get; set; }
@@ -60,6 +62,9 @@ public class ReportListItemDto
 
     // Attached Evidence Media
     public List<ReportMediaItemDto> Media { get; set; } = new();
+
+    // Attached Appeal Evidence Media
+    public List<ReportMediaItemDto> AppealMedia { get; set; } = new();
 
     // Timestamp
     public DateTime? CreatedAt { get; set; }

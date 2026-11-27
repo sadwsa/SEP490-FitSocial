@@ -73,7 +73,7 @@ public class OrdersController : ControllerBase
             return Unauthorized(ApiResponseDto<OrderDto>.Fail("Unauthorized"));
         }
 
-        var result = await _orderService.GetOrderByIdAsync(id, currentUserId, cancellationToken);
+        var result = await _orderService.GetOrderByIdAsync(id, currentUserId, cancellationToken, User.IsInRole("ADMIN"));
         return Ok(result);
     }
 

@@ -58,7 +58,6 @@ public class PostReportService : IPostReportService
         CancellationToken cancellationToken = default)
     {
         // 1. Authentication check
-        // BR-01: Authentication check
         if (reporterId == Guid.Empty)
         {
             throw new ValidationException("User is not authenticated.");
@@ -70,7 +69,6 @@ public class PostReportService : IPostReportService
         }
 
         // 2. Validation on Reason
-        // BR-08: Validation on Reason
         if (request == null || string.IsNullOrWhiteSpace(request.Reason))
         {
             throw new ValidationException("Report reason is required and cannot be empty.");
@@ -83,7 +81,6 @@ public class PostReportService : IPostReportService
         }
 
         // 3. Check reporter account status
-        // Check reporter account status
         var reporter = await _userRepository.GetByIdAsync(reporterId, cancellationToken);
         if (reporter == null)
         {
@@ -96,21 +93,18 @@ public class PostReportService : IPostReportService
         }
 
         // 4. Check post exists and not deleted
-        // BR-02: Check post exists
         var post = await _postRepository.GetByIdAsync(postId, cancellationToken);
         if (post == null)
         {
             throw new NotFoundException($"Post with ID '{postId}' was not found.");
         }
 
-        // BR-03: Cannot report deleted post
         if (post.IsDeleted == true)
         {
             throw new BusinessException("Cannot report a post that has been deleted.");
         }
 
         // 5. Cannot report own post
-        // BR-04: Cannot report own post
         if (post.AuthorId == reporterId)
         {
             throw new BusinessException("You cannot report your own post.");
@@ -119,7 +113,6 @@ public class PostReportService : IPostReportService
         // 6. Duplicate-report check: Scoped strictly to ReporterId + PostId.
         // It does NOT use ReporterId + PostOwnerId.
         // A report on Post 1 from Author B does NOT prevent reporting Post 2 from Author B.
-        // BR-05: Can report the same post only once while pending/active
         var hasActiveReport = await _reportRepository.HasActiveReportAsync(postId, reporterId, cancellationToken);
         if (hasActiveReport)
         {
@@ -137,24 +130,6 @@ public class PostReportService : IPostReportService
             report.Type = request.Type.Trim();
         }
 
-        if (request.MediaUrls != null && request.MediaUrls.Any())
-        {
-            short sortOrder = 0;
-            foreach (var url in request.MediaUrls.Where(u => !string.IsNullOrWhiteSpace(u)))
-            {
-                report.ReportMedia.Add(new ReportMedium
-                {
-                    MediaId = Guid.NewGuid(),
-                    ReportId = report.ReportId,
-                    MediaUrl = url.Trim(),
-                    MediaType = "IMAGE",
-                    MediaFor = "REPORT",
-                    SortOrder = sortOrder++,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-        }
-
         await _reportRepository.AddAsync(report, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -170,7 +145,7 @@ public class PostReportService : IPostReportService
             Description = report.Description,
             Type = report.Type,
             Status = report.Status ?? string.Empty,
-            MediaUrls = report.ReportMedia.Select(m => m.MediaUrl ?? string.Empty).Where(u => !string.IsNullOrEmpty(u)).ToList(),
+            MediaUrls = new List<string>(),
             CreatedAt = report.CreatedAt
         };
 

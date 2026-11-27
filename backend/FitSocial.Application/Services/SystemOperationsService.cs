@@ -14,6 +14,7 @@ public class SystemOperationsService : ISystemOperationsService
     private readonly ICoachUpgradeRepository _upgrades;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogRepository? _auditLogs;
+    private readonly IAuditLogService? _auditLogService;
     private readonly ILogger<SystemOperationsService> _logger;
 
     public SystemOperationsService(
@@ -21,13 +22,15 @@ public class SystemOperationsService : ISystemOperationsService
         ICoachUpgradeRepository upgrades,
         IUnitOfWork unitOfWork,
         ILogger<SystemOperationsService> logger,
-        IAuditLogRepository? auditLogs = null)
+        IAuditLogRepository? auditLogs = null,
+        IAuditLogService? auditLogService = null)
     {
         _planRepository = planRepository;
         _upgrades = upgrades;
         _unitOfWork = unitOfWork;
         _logger = logger;
         _auditLogs = auditLogs;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDto<CoachSubscriptionPlansResponseDto>> GetCoachSubscriptionPlansAsync(
@@ -39,30 +42,7 @@ public class SystemOperationsService : ISystemOperationsService
     {
         try
         {
-            var allPlans = await _planRepository.GetAllPlansAsync(cancellationToken);
-            var query = allPlans.AsQueryable();
-
-            if (isActive.HasValue)
-            {
-                query = query.Where(p => p.IsActive == isActive.Value);
-            }
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var s = search.Trim().ToLower();
-                query = query.Where(p => 
-                    (p.Currency != null && p.Currency.ToLower().Contains(s)) || 
-                    (p.Amount.HasValue && p.Amount.Value.ToString().Contains(s)) || 
-                    (p.Description != null && p.Description.ToLower().Contains(s)));
-            }
-
-            var totalPlans = query.Count();
-            var activePlansCount = allPlans.Count(p => p.IsActive == true);
-            var pagedPlans = query
-                .OrderByDescending(p => p.CreatedAt)
-                .Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100))
-                .Take(Math.Clamp(pageSize, 1, 100))
-                .ToList();
+            var (pagedPlans, totalPlans, activePlansCount) = await _planRepository.GetPlansAsync(isActive, search, page, pageSize, cancellationToken);
 
             var planIds = pagedPlans.Select(p => p.CoachSubscriptionPlansId).ToList();
             var countDict = await _upgrades.GetCountsByPriceIdsAsync(planIds, cancellationToken);
@@ -128,6 +108,11 @@ public class SystemOperationsService : ISystemOperationsService
 
     public async Task<ApiResponseDto<CoachSubscriptionPlanDto>> CreatePlanAsync(CreateCoachSubscriptionPlanDto dto, CancellationToken cancellationToken = default)
     {
+        if (dto == null)
+        {
+            return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Subscription plan data is required.");
+        }
+
         try
         {
             var plan = new FitSocial.Domain.Entities.CoachSubscriptionPlan
@@ -145,6 +130,34 @@ public class SystemOperationsService : ISystemOperationsService
 
             await _planRepository.AddAsync(plan, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: null,
+                        action: "CREATE_COACH_SUBSCRIPTION_PLAN",
+                        entityType: "CoachSubscriptionPlan",
+                        entityId: plan.CoachSubscriptionPlansId.ToString(),
+                        description: $"Created coach subscription plan ({plan.Amount} {plan.Currency}).",
+                        oldValue: null,
+                        newValue: new
+                        {
+                            amount = plan.Amount,
+                            currency = plan.Currency,
+                            isActive = plan.IsActive,
+                            subscriptionDuration = plan.SubscriptionDuration,
+                            trainingPackageDuration = plan.TrainingPackageDuration,
+                            planDescription = plan.Description
+                        },
+                        cancellationToken: cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to log create subscription plan audit log");
+                }
+            }
 
             var resultDto = new CoachSubscriptionPlanDto
             {
@@ -184,15 +197,52 @@ public class SystemOperationsService : ISystemOperationsService
                 return ApiResponseDto<CoachSubscriptionPlanDto>.Fail("Description is required.");
 
             var oldAmount = plan.Amount ?? 0m;
+            var oldSnapshot = new
+            {
+                amount = plan.Amount,
+                currency = plan.Currency,
+                isActive = plan.IsActive,
+                subscriptionDuration = plan.SubscriptionDuration,
+                trainingPackageDuration = plan.TrainingPackageDuration,
+                planDescription = plan.Description
+            };
+
             plan.Amount = dto.Amount;
             plan.Currency = string.IsNullOrWhiteSpace(dto.Currency) ? plan.Currency : dto.Currency.Trim().ToUpper();
-            plan.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+            plan.Description = dto.Description!.Trim();
             plan.ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
             if (dto.IsActive.HasValue) plan.IsActive = dto.IsActive.Value;
             if (dto.SubscriptionDuration.HasValue) plan.SubscriptionDuration = dto.SubscriptionDuration.Value;
             if (dto.TrainingPackageDuration.HasValue) plan.TrainingPackageDuration = dto.TrainingPackageDuration.Value;
 
-            if (_auditLogs != null && dto.Amount.HasValue && dto.Amount.Value != oldAmount)
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: null,
+                        action: "UPDATE_COACH_SUBSCRIPTION_PLAN",
+                        entityType: "CoachSubscriptionPlan",
+                        entityId: plan.CoachSubscriptionPlansId.ToString(),
+                        description: $"Updated coach subscription plan {plan.CoachSubscriptionPlansId}.",
+                        oldValue: oldSnapshot,
+                        newValue: new
+                        {
+                            amount = plan.Amount,
+                            currency = plan.Currency,
+                            isActive = plan.IsActive,
+                            subscriptionDuration = plan.SubscriptionDuration,
+                            trainingPackageDuration = plan.TrainingPackageDuration,
+                            planDescription = plan.Description
+                        },
+                        cancellationToken: cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to log update subscription plan audit log for plan {PlanId}", planId);
+                }
+            }
+            else if (_auditLogs != null && dto.Amount.HasValue && dto.Amount.Value != oldAmount)
             {
                 try
                 {
@@ -231,8 +281,6 @@ public class SystemOperationsService : ISystemOperationsService
                 ActiveSubscriberCount = 0
             };
 
-            // Active subscribers keep their historical tier: CoachUpgrade holds the price snapshot at purchase
-            // time (Order/Payment rows), so changing this plan does NOT alter past transactions.
             return ApiResponseDto<CoachSubscriptionPlanDto>.Ok(result, "Subscription plan updated successfully.");
         }
         catch (Exception ex)
@@ -250,18 +298,77 @@ public class SystemOperationsService : ISystemOperationsService
             if (plan == null)
                 return ApiResponseDto<bool>.Fail("Subscription plan not found.");
 
-            // 33.3.E1: preserve financial audit logs — never hard-delete referenced plans.
+            var oldSnapshot = new
+            {
+                amount = plan.Amount,
+                currency = plan.Currency,
+                isActive = plan.IsActive,
+                subscriptionDuration = plan.SubscriptionDuration,
+                trainingPackageDuration = plan.TrainingPackageDuration,
+                planDescription = plan.Description
+            };
+
             var (upgrades, details) = await _planRepository.CountReferencesAsync(planId, cancellationToken);
             if (upgrades > 0 || details > 0)
             {
                 plan.IsActive = false;
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                if (_auditLogService != null)
+                {
+                    try
+                    {
+                        await _auditLogService.LogAsync(
+                            actorAccountId: null,
+                            action: "UPDATE_COACH_SUBSCRIPTION_PLAN",
+                            entityType: "CoachSubscriptionPlan",
+                            entityId: plan.CoachSubscriptionPlansId.ToString(),
+                            description: $"Deactivated referenced subscription plan {plan.CoachSubscriptionPlansId}.",
+                            oldValue: oldSnapshot,
+                            newValue: new
+                            {
+                                amount = plan.Amount,
+                                currency = plan.Currency,
+                                isActive = false,
+                                subscriptionDuration = plan.SubscriptionDuration,
+                                trainingPackageDuration = plan.TrainingPackageDuration,
+                                planDescription = plan.Description
+                            },
+                            cancellationToken: cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", "UPDATE_COACH_SUBSCRIPTION_PLAN", planId);
+                    }
+                }
+
                 return ApiResponseDto<bool>.Ok(true,
                     $"Plan has {upgrades + details} linked subscription record(s); it was deactivated instead of deleted to preserve billing history.");
             }
 
             _planRepository.Remove(plan);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: null,
+                        action: "DELETE_COACH_SUBSCRIPTION_PLAN",
+                        entityType: "CoachSubscriptionPlan",
+                        entityId: planId.ToString(),
+                        description: $"Deleted subscription plan {planId}.",
+                        oldValue: oldSnapshot,
+                        newValue: null,
+                        cancellationToken: cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", "DELETE_COACH_SUBSCRIPTION_PLAN", planId);
+                }
+            }
+
             return ApiResponseDto<bool>.Ok(true, "Subscription plan deleted successfully.");
         }
         catch (Exception ex)
@@ -271,4 +378,3 @@ public class SystemOperationsService : ISystemOperationsService
         }
     }
 }
-

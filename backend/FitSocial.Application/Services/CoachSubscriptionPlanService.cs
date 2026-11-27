@@ -182,11 +182,6 @@ public class CoachSubscriptionPlanService : ICoachSubscriptionPlanService
         return ApiResponseDto<bool>.Ok(true, "Coach subscription plan deactivated successfully.");
     }
 
-    /// <summary>
-    /// UC_33.2/33.3/33.4: every create/edit/delete of a coach subscription plan is
-    /// traced in the shared "AuditLogs" table. Actor (Staff/Admin), role and IP are
-    /// auto-resolved from the current request by IAuditLogService.
-    /// </summary>
     private async Task WriteAuditAsync(
         string action,
         Guid entityId,
@@ -198,7 +193,7 @@ public class CoachSubscriptionPlanService : ICoachSubscriptionPlanService
         try
         {
             await _auditLogService.LogAsync(
-                actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                actorAccountId: null,
                 action: action,
                 entityType: "CoachSubscriptionPlan",
                 entityId: entityId.ToString(),

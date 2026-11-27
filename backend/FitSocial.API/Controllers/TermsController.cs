@@ -16,9 +16,6 @@ public class TermsController : ControllerBase
         _termsService = termsService;
     }
 
-    /// <summary>
-    /// Get the latest effective terms and policies (for registration agreement).
-    /// </summary>
     [HttpGet("latest")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<TermsDto>), StatusCodes.Status200OK)]

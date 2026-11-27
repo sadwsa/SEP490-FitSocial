@@ -561,10 +561,17 @@
                     continue;
                 }
 
-                if (isVideo && file.Size > 50 * 1024 * 1024)
+                if (isVideo && file.Size > 100 * 1024 * 1024)
                 {
-                    editMediaErrorMessage = $"Video '{file.Name}' exceeds 50MB limit.";
+                    editMediaErrorMessage = $"Video '{file.Name}' exceeds 100MB limit.";
                     continue;
+                }
+
+                long currentTotalBytes = editNewSelectedMedia.Sum(m => (long)(m.Data?.Length ?? 0));
+                if (currentTotalBytes + file.Size > 250 * 1024 * 1024)
+                {
+                    editMediaErrorMessage = "Total size of all new media files exceeds the 250MB limit.";
+                    break;
                 }
 
                 bool isDuplicate = editNewSelectedMedia.Any(m =>
@@ -620,7 +627,7 @@
                     else
                     {
                         using var ms = new MemoryStream();
-                        await using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+                        await using var stream = file.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
                         await stream.CopyToAsync(ms);
                         var data = ms.ToArray();
 
@@ -681,9 +688,11 @@
         bool isContentMissing = string.IsNullOrWhiteSpace(contentTrimmed);
         bool isLocationMissing = editLocationId == Guid.Empty;
         bool isMediaExceeded = TotalEditMediaCount > 10;
+        long totalNewMediaBytes = editNewSelectedMedia.Sum(m => (long)(m.Data?.Length ?? 0));
+        bool isTotalNewMediaExceeded = totalNewMediaBytes > 250 * 1024 * 1024;
         bool isContentTooLong = contentTrimmed.Length > 5000;
 
-        if (isPostTypeMissing || isPostTypeUnauthorized || isContentMissing || isLocationMissing || isMediaExceeded || isContentTooLong)
+        if (isPostTypeMissing || isPostTypeUnauthorized || isContentMissing || isLocationMissing || isMediaExceeded || isTotalNewMediaExceeded || isContentTooLong)
         {
             if (isPostTypeUnauthorized)
             {
@@ -696,6 +705,10 @@
             else if (isMediaExceeded)
             {
                 editPostErrorMessage = "A post can have at most 10 media items in total.";
+            }
+            else if (isTotalNewMediaExceeded)
+            {
+                editMediaErrorMessage = "Total size of all new media files must not exceed 250MB.";
             }
             else if (isContentTooLong)
             {

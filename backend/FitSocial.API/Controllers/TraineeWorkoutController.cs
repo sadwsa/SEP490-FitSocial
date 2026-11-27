@@ -44,16 +44,8 @@ public class TraineeWorkoutController : ControllerBase
             return Unauthorized(ApiResponseDto<TraineeWorkoutPlanProgressDto>.Fail("Unauthorized: Invalid user identity."));
         }
 
-        try
-        {
-            var result = await _trainingPlanService.GetTraineeWorkoutPlanAsync(traineeId, orderDetailsId, cancellationToken);
-            return Ok(ApiResponseDto<TraineeWorkoutPlanProgressDto>.Ok(result, "Workout plan retrieved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[TraineeWorkout] Error getting plan for order detail {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
-            throw;
-        }
+        var result = await _trainingPlanService.GetTraineeWorkoutPlanAsync(traineeId, orderDetailsId, cancellationToken);
+        return Ok(ApiResponseDto<TraineeWorkoutPlanProgressDto>.Ok(result, "Workout plan retrieved successfully."));
     }
 
     /// <summary>
@@ -73,20 +65,12 @@ public class TraineeWorkoutController : ControllerBase
             return Unauthorized(ApiResponseDto<TraineeWorkoutPlanProgressDto>.Fail("Unauthorized: Invalid user identity."));
         }
 
-        try
-        {
-            var result = await _trainingPlanService.GetTraineeWorkoutPlanByPackageAsync(traineeId, packageId, cancellationToken);
-            return Ok(ApiResponseDto<TraineeWorkoutPlanProgressDto>.Ok(result, "Workout plan retrieved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[TraineeWorkout] Error getting plan for package {PackageId}: {Message}", packageId, ex.Message);
-            throw;
-        }
+        var result = await _trainingPlanService.GetTraineeWorkoutPlanByPackageAsync(traineeId, packageId, cancellationToken);
+        return Ok(ApiResponseDto<TraineeWorkoutPlanProgressDto>.Ok(result, "Workout plan retrieved successfully."));
     }
 
     /// <summary>
-    /// Mark Daily Workout: Marks an exercise as completed or toggles its status, with optional trainee notes.
+    /// Mark Daily Workout: Marks an exercise as incomplete (missed reason), with optional trainee notes.
     /// </summary>
     [HttpPost("complete")]
     [ProducesResponseType(typeof(ApiResponseDto<WorkoutCompletionResultDto>), StatusCodes.Status200OK)]
@@ -104,16 +88,36 @@ public class TraineeWorkoutController : ControllerBase
             return Unauthorized(ApiResponseDto<WorkoutCompletionResultDto>.Fail("Unauthorized: Invalid user identity."));
         }
 
-        try
+        if (!string.Equals(dto?.Status?.Trim(), "INCOMPLETE", StringComparison.OrdinalIgnoreCase))
         {
-            var result = await _trainingPlanService.ToggleWorkoutCompletionAsync(traineeId, dto, cancellationToken);
-            return Ok(ApiResponseDto<WorkoutCompletionResultDto>.Ok(result, "Workout completion updated successfully."));
+            return BadRequest(ApiResponseDto<object>.Fail("Direct workout self-completion is disabled. Please submit completion proof for coach review."));
         }
-        catch (Exception ex)
+
+        var result = await _trainingPlanService.ToggleWorkoutCompletionAsync(traineeId, dto!, cancellationToken);
+        return Ok(ApiResponseDto<WorkoutCompletionResultDto>.Ok(result, "Workout completion updated successfully."));
+    }
+
+    /// <summary>
+    /// Request Training Completion: Trainee submits proof photo/video and notes for Coach to review.
+    /// </summary>
+    [HttpPost("request-completion")]
+    [ProducesResponseType(typeof(ApiResponseDto<WorkoutCompletionResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RequestWorkoutCompletion(
+        [FromBody] RequestWorkoutCompletionDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var traineeId = GetCurrentUserId();
+        if (traineeId == Guid.Empty)
         {
-            _logger.LogError(ex, "[TraineeWorkout] Error toggling completion for exercise {ExerciseId}: {Message}", dto?.TrainingPlanExerciseId, ex.Message);
-            throw;
+            return Unauthorized(ApiResponseDto<WorkoutCompletionResultDto>.Fail("Unauthorized: Invalid user identity."));
         }
+
+        var result = await _trainingPlanService.RequestWorkoutCompletionAsync(traineeId, dto, cancellationToken);
+        return Ok(ApiResponseDto<WorkoutCompletionResultDto>.Ok(result, "Workout completion request submitted successfully. Waiting for coach review."));
     }
 
     private Guid GetCurrentUserId()

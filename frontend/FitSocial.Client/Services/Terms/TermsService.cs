@@ -1,16 +1,7 @@
-using System.Net.Http.Json;
-using FitSocial.Client.Models.Common;
+using FitSocial.Client.Models.Terms;
+using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.Terms;
-
-public class TermsDto
-{
-    public Guid TermId { get; set; }
-    public string Version { get; set; } = string.Empty;
-    public string Title { get; set; } = string.Empty;
-    public string Content { get; set; } = string.Empty;
-    public DateTime EffectiveDate { get; set; }
-}
 
 public interface ITermsService
 {
@@ -19,25 +10,16 @@ public interface ITermsService
 
 public class TermsService : ITermsService
 {
-    private readonly HttpClient _http;
+    private readonly ApiClient _apiClient;
 
-    public TermsService(HttpClient http)
+    public TermsService(ApiClient apiClient)
     {
-        _http = http;
+        _apiClient = apiClient;
     }
 
     public async Task<TermsDto?> GetLatestAsync()
     {
-        try
-        {
-            var resp = await _http.GetAsync("terms/latest");
-            if (!resp.IsSuccessStatusCode) return null;
-            var wrap = await resp.Content.ReadFromJsonAsync<ApiResponse<TermsDto>>();
-            return wrap?.Data;
-        }
-        catch
-        {
-            return null;
-        }
+        var res = await _apiClient.GetAsync<TermsDto>("terms/latest");
+        return res.Success ? res.Data : null;
     }
 }

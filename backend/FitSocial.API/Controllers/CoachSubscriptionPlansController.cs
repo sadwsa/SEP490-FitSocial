@@ -23,9 +23,6 @@ public class CoachSubscriptionPlansController : ControllerBase
         _planService = planService;
     }
 
-    /// <summary>
-    /// Gets all active subscription plans available for coaches to view and purchase.
-    /// </summary>
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<List<CoachSubscriptionPlanDto>>), StatusCodes.Status200OK)]
@@ -35,9 +32,6 @@ public class CoachSubscriptionPlansController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Gets all subscription plans (Admin/Staff only).
-    /// </summary>
     [HttpGet("all")]
     [Authorize(Roles = $"{RoleConstants.Admin},{RoleConstants.Staff}")]
     [ProducesResponseType(typeof(ApiResponseDto<List<CoachSubscriptionPlanDto>>), StatusCodes.Status200OK)]
@@ -47,9 +41,6 @@ public class CoachSubscriptionPlansController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Gets a single subscription plan by ID.
-    /// </summary>
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<CoachSubscriptionPlanDto>), StatusCodes.Status200OK)]
@@ -60,9 +51,6 @@ public class CoachSubscriptionPlansController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Creates a new coach subscription plan (Admin only).
-    /// </summary>
     [HttpPost]
     [Authorize(Roles = RoleConstants.Admin)]
     [ProducesResponseType(typeof(ApiResponseDto<CoachSubscriptionPlanDto>), StatusCodes.Status200OK)]
@@ -73,9 +61,6 @@ public class CoachSubscriptionPlansController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Updates an existing coach subscription plan (Admin only).
-    /// </summary>
     [HttpPut("{id:guid}")]
     [Authorize(Roles = RoleConstants.Admin)]
     [ProducesResponseType(typeof(ApiResponseDto<CoachSubscriptionPlanDto>), StatusCodes.Status200OK)]
@@ -86,9 +71,6 @@ public class CoachSubscriptionPlansController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Deactivates a coach subscription plan (Admin only).
-    /// </summary>
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = RoleConstants.Admin)]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]

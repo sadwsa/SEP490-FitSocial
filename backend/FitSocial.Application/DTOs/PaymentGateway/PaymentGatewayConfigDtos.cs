@@ -6,17 +6,29 @@ namespace FitSocial.Application.DTOs.PaymentGateway;
 public class PaymentGatewayConfigDto
 {
     public Guid GatewayId { get; set; }
+
     public string? GatewayName { get; set; }
+
     public string? ClientId { get; set; }
+
     public string? ClientIdMasked { get; set; }
+
     public string? ApiKey { get; set; }
+
     public string? ApiKeyMasked { get; set; }
+
     public string? ChecksumKey { get; set; }
+
     public string? ChecksumKeyMasked { get; set; }
+
     public string? WebhookUrl { get; set; }
+
     public bool IsActive { get; set; }
+
     public bool IsPayout { get; set; }
+
     public Guid? UpdatedBy { get; set; }
+
     public DateTime? UpdatedAt { get; set; }
 }
 
@@ -43,7 +55,6 @@ public class CreatePaymentGatewayConfigDto
 
     public bool IsActive { get; set; } = true;
 
-    /// <summary>false = thu tiền (collection), true = chi tiền (payout).</summary>
     public bool IsPayout { get; set; } = false;
 }
 
@@ -66,6 +77,5 @@ public class UpdatePaymentGatewayConfigDto
 
     public bool? IsActive { get; set; }
 
-    /// <summary>false = thu tiền (collection), true = chi tiền (payout).</summary>
     public bool? IsPayout { get; set; }
 }

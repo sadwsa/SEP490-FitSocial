@@ -1,4 +1,4 @@
-﻿namespace FitSocial.Application.DTOs.Posts;
+namespace FitSocial.Application.DTOs.Posts;
 
 public class GetPostsQueryDto
 {
@@ -17,6 +17,26 @@ public class GetPostsQueryDto
     /// Backward-compatible alias for Keyword
     /// </summary>
     public string? SearchTerm { get; set; }
+
+    /// <summary>
+    /// Feed sorting mode: "hot" (default trending), "newest"
+    /// </summary>
+    public string? SortBy { get; set; } = "hot";
+
+    /// <summary>
+    /// Anchor timestamp for the feed session to ensure consistent HoursElapsed calculation across paginated requests.
+    /// </summary>
+    public DateTime? AsOf { get; set; }
+
+    /// <summary>
+    /// Feed session identifier for snapshot-based ranking freeze.
+    /// </summary>
+    public string? SessionId { get; set; }
+
+    /// <summary>
+    /// Optional post ID to prioritize at the head of the feed for the post's author.
+    /// </summary>
+    public Guid? PrioritizedPostId { get; set; }
 
     /// <summary>
     /// Returns the effective trimmed keyword if provided, otherwise null.

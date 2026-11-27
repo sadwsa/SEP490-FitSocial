@@ -45,4 +45,9 @@ public class CoachUpgradeRepository : Repository<CoachUpgrade>, ICoachUpgradeRep
         => DbSet.Where(cu => cu.CoachId == coachId)
                .OrderByDescending(cu => cu.CreatedAt)
                .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<CoachUpgrade?> GetLatestFinishedByCoachIdAsync(Guid coachId, CancellationToken cancellationToken = default)
+        => DbSet.Where(cu => cu.CoachId == coachId && cu.Status != "PENDING" && cu.Status != "CANCELLED")
+               .OrderByDescending(cu => cu.CreatedAt)
+               .FirstOrDefaultAsync(cancellationToken);
 }

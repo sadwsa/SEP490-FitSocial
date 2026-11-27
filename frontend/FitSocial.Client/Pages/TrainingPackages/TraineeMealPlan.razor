@@ -3,6 +3,7 @@
 @implements IDisposable
 @attribute [Authorize]
 @inject FitSocial.Client.Services.MealPlans.IMealPlanClientService MealPlanService
+@inject FitSocial.Client.Services.Files.IFileUploadService FileUploadService
 @inject NavigationManager Navigation
 @inject AppShellContext Shell
 @using FitSocial.Client.Layout
@@ -24,10 +25,13 @@
 
                 <!-- Program Quick Switcher Tabs -->
                 <div class="flex items-center gap-2">
-                    <a href="/training-packages/workout/@OrderDetailsId"
-                       class="px-3.5 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-xl hover:bg-orange-50 hover:text-[#FF5500] hover:border-orange-200 transition shadow-2xs flex items-center gap-1.5">
-                        <span>Workout Hub</span>
-                    </a>
+                    @if (mealPlan == null || !string.Equals(mealPlan.PackageType, "MEAL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a href="/training-packages/workout/@OrderDetailsId"
+                           class="px-3.5 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-xl hover:bg-orange-50 hover:text-[#FF5500] hover:border-orange-200 transition shadow-2xs flex items-center gap-1.5">
+                            <span>Workout Hub</span>
+                        </a>
+                    }
                     <span class="px-3.5 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5">
                         <span>Meal Plan</span>
                     </span>
@@ -53,7 +57,7 @@
                     </button>
                 </div>
             }
-            else if (mealPlan == null || !mealPlan.Weeks.Any())
+            else if (mealPlan == null || mealPlan.Status == "DRAFT" || !mealPlan.Weeks.Any())
             {
                 <!-- Empty / Pending Meal Plan State -->
                 <div class="bg-white rounded-2xl p-12 shadow-xs border border-gray-100 flex flex-col items-center text-center">
@@ -70,9 +74,12 @@
                         Coach <strong class="text-gray-800">@(mealPlan?.CoachName ?? "Your Coach")</strong> has not yet assigned a meal plan for this package. Stay tuned or check your workout schedule in the meantime!
                     </p>
                     <div class="flex items-center gap-3">
-                        <a href="/training-packages/workout/@OrderDetailsId" class="px-5 py-2.5 bg-[#FF5500] hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5">
-                            <span>Go to Workout Hub</span>
-                        </a>
+                        @if (mealPlan == null || !string.Equals(mealPlan.PackageType, "MEAL", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <a href="/training-packages/workout/@OrderDetailsId" class="px-5 py-2.5 bg-[#FF5500] hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5">
+                                <span>Go to Workout Hub</span>
+                            </a>
+                        }
                         <a href="/training-packages/purchased" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl transition">
                             Purchased Packages
                         </a>
@@ -117,23 +124,58 @@
                                 <p class="text-xs sm:text-sm text-gray-500 mt-1 line-clamp-2">
                                     @(string.IsNullOrWhiteSpace(mealPlan.Description) ? "Follow your customized daily nutrition plan to optimize your fitness goals and recovery." : mealPlan.Description)
                                 </p>
+                                @if (mealPlan.StartDate.HasValue || mealPlan.EndDate.HasValue)
+                                {
+                                    <div class="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 font-semibold border border-gray-200/80">
+                                            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                            <span>@(mealPlan.StartDate?.ToString("dd/MM/yyyy") ?? "—") → @(mealPlan.EndDate?.ToString("dd/MM/yyyy") ?? "—")</span>
+                                        </span>
+                                        @if (mealPlan.RemainingDays.HasValue)
+                                        {
+                                            if (mealPlan.RemainingDays.Value > 0)
+                                            {
+                                                <span class="px-2.5 py-1 rounded-lg font-bold border @(mealPlan.RemainingDays.Value <= 3 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200")">
+                                                    @mealPlan.RemainingDays.Value day(s) remaining
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="px-2.5 py-1 rounded-lg font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                                    Plan Period Ended
+                                                </span>
+                                            }
+                                        }
+                                    </div>
+                                }
                             </div>
                         </div>
 
                         <!-- Statistics Badge Card -->
-                        <div class="grid grid-cols-3 gap-2 bg-gray-50 border border-gray-200/70 rounded-2xl p-3.5 md:min-w-[280px]">
+                        <div class="grid grid-cols-3 gap-2 bg-gray-50 border border-gray-200/70 rounded-2xl p-3.5 md:min-w-[300px]">
                             <div class="text-center p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
-                                <span class="text-[10px] uppercase font-bold text-gray-400 block">Weeks</span>
-                                <span class="text-base font-black text-gray-900">@mealPlan.Weeks.Count</span>
+                                <span class="text-[10px] uppercase font-bold text-gray-400 block">Progress</span>
+                                <span class="text-base font-black text-emerald-600">@($"{mealPlan.ProgressPercentage:N0}%")</span>
+                            </div>
+                            <div class="text-center p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
+                                <span class="text-[10px] uppercase font-bold text-gray-400 block">Approved</span>
+                                <span class="text-base font-black text-gray-900">@mealPlan.CompletedMealsCount / @mealPlan.TotalMealsCount</span>
                             </div>
                             <div class="text-center p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
                                 <span class="text-[10px] uppercase font-bold text-gray-400 block">Day Cal</span>
-                                <span class="text-base font-black text-emerald-600">@(CurrentDay?.TotalCalories ?? 0)</span>
+                                <span class="text-base font-black text-orange-600">@(CurrentDay?.TotalCalories ?? 0)</span>
                             </div>
-                            <div class="text-center p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
-                                <span class="text-[10px] uppercase font-bold text-gray-400 block">Meals</span>
-                                <span class="text-base font-black text-gray-900">@(CurrentDay?.Items.Count ?? 0)</span>
-                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Overall Progress Bar -->
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <div class="flex items-center justify-between text-xs mb-1.5">
+                            <span class="font-bold text-gray-700">Meal Plan Completion Progress</span>
+                            <span class="font-bold text-emerald-600">@mealPlan.CompletedMealsCount / @mealPlan.TotalMealsCount meals approved (@($"{mealPlan.ProgressPercentage:N0}%"))</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500" style="width: @($"{mealPlan.ProgressPercentage}%")"></div>
                         </div>
                     </div>
 
@@ -145,13 +187,12 @@
                             @foreach (var week in mealPlan.Weeks)
                             {
                                 bool isSelectedWeek = week.WeekNumber == selectedWeekNumber;
-                                int weekMealsCount = week.Days.SelectMany(d => d.Items).Count();
                                 <button type="button"
                                         @onclick="() => SelectWeek(week.WeekNumber)"
                                         class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap @(isSelectedWeek ? "bg-emerald-600 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200")">
                                     <span>Week @week.WeekNumber</span>
                                     <span class="text-[10px] px-1.5 py-0.2 rounded-full @(isSelectedWeek ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700")">
-                                        @weekMealsCount meals
+                                        @week.CompletedMeals/@week.TotalMeals
                                     </span>
                                 </button>
                             }
@@ -168,9 +209,13 @@
                                     <button type="button"
                                             @onclick="() => SelectDay(day.DayNumber)"
                                             class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap @(isSelectedDay ? "bg-gray-900 text-white shadow-xs" : "bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100")">
-                                        <span>Day @day.DayNumber</span>
+                                        @if (day.IsAllCompleted)
+                                        {
+                                            <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                        }
+                                        <span>@FormatDayLabel(day)</span>
                                         <span class="text-[10px] px-1.5 py-0.2 rounded-full @(isSelectedDay ? "bg-white/20 text-emerald-300" : "bg-emerald-50 text-emerald-700")">
-                                            @day.TotalCalories kcal
+                                            @day.CompletedMeals/@day.TotalMeals • @day.TotalCalories kcal
                                         </span>
                                     </button>
                                 }
@@ -183,21 +228,21 @@
                 <div class="space-y-6">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
                                 <h2 class="text-lg font-black text-gray-900">
-                                    Week @selectedWeekNumber • Day @selectedDayNumber Nutrition Plan
+                                    Week @selectedWeekNumber • @FormatDayTitle(CurrentDay) Nutrition Plan
                                 </h2>
                                 <span class="text-xs px-2.5 py-0.5 font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     Total: @(CurrentDay?.TotalCalories ?? 0) kcal
                                 </span>
                             </div>
-                            <p class="text-xs text-gray-500 mt-0.5">Structured meals and portions prepared by Coach @mealPlan.CoachName</p>
+                            <p class="text-xs text-gray-500 mt-0.5">Upload a photo of each meal you finish on today's schedule so your coach can verify and approve completion.</p>
                         </div>
 
                         <!-- Calorie Target Pill -->
                         <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700 self-start sm:self-auto shadow-2xs">
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                            <span>Target: <strong class="text-gray-900 font-bold">@(CurrentDay?.TotalCalories ?? 0) kcal</strong> / day</span>
+                            <span>Completed: <strong class="text-gray-900 font-bold">@(CurrentDay?.CompletedMeals ?? 0) / @(CurrentDay?.TotalMeals ?? 0)</strong></span>
                         </div>
                     </div>
 
@@ -220,24 +265,40 @@
                             @foreach (var meal in CurrentDay.Items)
                             {
                                 var (badgeColor, mealLabel) = GetMealTypeBadge(meal.MealType);
+                                var isPendingReview = string.Equals(meal.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase);
+                                var isUncomplete = string.Equals(meal.Status, "UNCOMPLETE", StringComparison.OrdinalIgnoreCase);
 
-                                <div class="bg-white rounded-2xl p-5 border border-gray-100 hover:border-emerald-200 hover:shadow-md transition-all duration-200 flex flex-col justify-between group">
+                                <div class="bg-white rounded-2xl p-5 border @(meal.IsCompleted ? "border-emerald-200 bg-emerald-50/15" : isPendingReview ? "border-amber-200 bg-amber-50/15" : isUncomplete ? "border-rose-200 bg-rose-50/15" : "border-gray-100") hover:border-emerald-200 hover:shadow-md transition-all duration-200 flex flex-col justify-between group">
                                     <div>
                                         <!-- Meal Header -->
                                         <div class="flex items-center justify-between gap-2 mb-3 pb-3 border-b border-gray-100">
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="px-2.5 py-1 rounded-lg @badgeColor text-xs font-bold uppercase tracking-wide">
                                                     @mealLabel
                                                 </span>
-                                                @if (meal.SortOrder.HasValue)
+                                                @if (meal.IsCompleted)
                                                 {
-                                                    <span class="text-[10px] text-gray-400 font-medium">Meal #@meal.SortOrder</span>
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                                        ✓ Completed
+                                                    </span>
+                                                }
+                                                else if (isPendingReview)
+                                                {
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                                                        ⏳ Pending Coach Review
+                                                    </span>
+                                                }
+                                                else if (isUncomplete)
+                                                {
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                                        ⚠️ Needs Work / Retry
+                                                    </span>
                                                 }
                                             </div>
 
                                             @if (meal.Calories.HasValue)
                                             {
-                                                <span class="px-2.5 py-1 rounded-xl bg-orange-50 border border-orange-100 text-orange-700 text-xs font-bold flex items-center gap-1 shadow-2xs">
+                                                <span class="px-2.5 py-1 rounded-xl bg-orange-50 border border-orange-100 text-orange-700 text-xs font-bold flex items-center gap-1 shadow-2xs flex-shrink-0">
                                                     @meal.Calories kcal
                                                 </span>
                                             }
@@ -254,15 +315,106 @@
                                                 <span class="text-gray-400 italic">No specific food description provided.</span>
                                             }
                                         </div>
+
+                                        <!-- Trainee Notes -->
+                                        @if (!string.IsNullOrWhiteSpace(meal.TraineeNotes) && !IsDayPast(meal))
+                                        {
+                                            <div class="mt-3 text-xs text-emerald-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/60">
+                                                <strong class="font-semibold text-emerald-900">Your Note:</strong> @meal.TraineeNotes
+                                            </div>
+                                        }
+
+                                        <!-- Meal Photo Proof (if submitted) -->
+                                        @if (!string.IsNullOrWhiteSpace(meal.MediaUrl))
+                                        {
+                                            <div class="mt-3 p-2.5 bg-gray-50 rounded-xl border border-gray-200/70">
+                                                <div class="flex items-center justify-between text-xs mb-1.5">
+                                                    <span class="text-gray-600 font-semibold">Meal Photo Proof:</span>
+                                                    <a href="@meal.MediaUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 underline font-bold">
+                                                        View full photo
+                                                    </a>
+                                                </div>
+                                                <img src="@meal.MediaUrl" alt="Meal photo proof" class="w-full max-h-40 object-cover rounded-lg border border-gray-200" />
+                                            </div>
+                                        }
+
+                                        <!-- Coach Feedback -->
+                                        @if (!string.IsNullOrWhiteSpace(meal.CoachFeedback))
+                                        {
+                                            <div class="mt-3 p-2.5 rounded-xl border text-xs @(isUncomplete ? "bg-rose-50 border-rose-200 text-rose-900" : "bg-blue-50 border-blue-200 text-blue-900")">
+                                                <div class="font-bold mb-0.5">Coach Feedback:</div>
+                                                <p class="italic">"@meal.CoachFeedback"</p>
+                                            </div>
+                                        }
+
+                                        <!-- Missed Reason for Past Meal -->
+                                        @if (!meal.IsCompleted && IsDayPast(meal))
+                                        {
+                                            <div class="mt-3 flex flex-col gap-1.5">
+                                                @if (!string.IsNullOrWhiteSpace(meal.TraineeNotes))
+                                                {
+                                                    <div class="text-xs text-rose-800 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                                                        <strong class="font-semibold text-rose-900">Missed Reason:</strong> @meal.TraineeNotes
+                                                    </div>
+                                                }
+                                                <div class="flex items-center gap-2">
+                                                    <input type="text"
+                                                           maxlength="300"
+                                                           placeholder="Enter reason why you missed this meal..."
+                                                           value="@GetMealNote(meal.MealPlanItemId)"
+                                                           @oninput="(e) => SetMealNote(meal.MealPlanItemId, e.Value?.ToString())"
+                                                           class="flex-1 text-xs px-3 py-1.5 rounded-xl border border-gray-200 focus:outline-none focus:border-rose-400 bg-white" />
+                                                    <button type="button"
+                                                            disabled="@(savingMissedMealId == meal.MealPlanItemId)"
+                                                            @onclick="() => HandleSaveMissedReason(meal)"
+                                                            class="px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50">
+                                                        @(savingMissedMealId == meal.MealPlanItemId ? "Saving..." : "Save reason")
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
                                     </div>
 
-                                    <!-- Bottom Tip / Macro hint -->
-                                    <div class="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between text-[11px] text-gray-400">
-                                        <span class="flex items-center gap-1">
-                                            <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                            Coach Approved
+                                    <!-- Bottom Actions & Date -->
+                                    <div class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2 text-xs">
+                                        <span class="text-[11px] text-gray-400">
+                                            Week @meal.WeekNumber • Day @meal.DayNumber
+                                            @if (meal.ScheduledDate.HasValue)
+                                            {
+                                                <span> (@meal.ScheduledDate.Value.ToString("dd/MM"))</span>
+                                            }
                                         </span>
-                                        <span class="text-gray-400">Day @meal.DayNumber • Week @meal.WeekNumber</span>
+
+                                        @if (meal.IsCompleted)
+                                        {
+                                            <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 select-none">
+                                                ✓ Approved
+                                            </span>
+                                        }
+                                        else if (isPendingReview)
+                                        {
+                                            <button type="button"
+                                                    @onclick="() => OpenSubmitProofModal(meal)"
+                                                    class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition cursor-pointer"
+                                                    title="Click to view or replace meal photo">
+                                                ⏳ Needs Review
+                                            </button>
+                                        }
+                                        else if (!(CurrentDay?.IsToday ?? false))
+                                        {
+                                            <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold border select-none @(IsDayPast(meal) ? "bg-gray-100 text-gray-500 border-gray-200" : "bg-blue-50 text-blue-600 border-blue-100")">
+                                                @(IsDayPast(meal) ? "Missed" : "Upcoming")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    @onclick="() => OpenSubmitProofModal(meal)"
+                                                    class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                                <span>@(isUncomplete ? "Resubmit Photo" : "Complete")</span>
+                                            </button>
+                                        }
                                     </div>
                                 </div>
                             }
@@ -284,11 +436,14 @@
                                         </p>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2 self-end sm:self-center">
-                                    <a href="/training-packages/workout/@OrderDetailsId" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 whitespace-nowrap">
-                                        <span>Start Day Workout</span>
-                                    </a>
-                                </div>
+                                @if (mealPlan == null || !string.Equals(mealPlan.PackageType, "MEAL", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <div class="flex items-center gap-2 self-end sm:self-center">
+                                        <a href="/training-packages/workout/@OrderDetailsId" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 whitespace-nowrap">
+                                            <span>Start Day Workout</span>
+                                        </a>
+                                    </div>
+                                }
                             </div>
                         </div>
                     }
@@ -317,6 +472,83 @@
                          OnReportSubmitted="HandleCoachReportSubmitted" />
     }
 
+    <!-- Modal Submit Meal Photo Proof -->
+    @if (showProofModal && submittingMeal != null)
+    {
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+                <div class="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-emerald-50/50 to-white">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+                            🥗
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-black text-gray-900">Complete Meal: @submittingMeal.MealType</h3>
+                            <p class="text-[11px] text-gray-400">Upload a photo of your meal for coach verification</p>
+                        </div>
+                    </div>
+                    <button type="button" @onclick="CloseSubmitProofModal" class="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center cursor-pointer">
+                        &times;
+                    </button>
+                </div>
+
+                <div class="p-5 flex flex-col gap-4 text-xs">
+                    <div>
+                        <label class="font-bold text-gray-700 block mb-1">Meal Photo Proof: <span class="text-red-500">*</span></label>
+                        <InputFile OnChange="HandleProofFileUpload" accept="image/*" class="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+                        @if (isUploadingProof)
+                        {
+                            <div class="mt-2 flex items-center gap-2 text-emerald-600 font-semibold">
+                                <span class="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></span>
+                                <span>Uploading meal photo...</span>
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(proofMediaUrl))
+                        {
+                            <div class="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col gap-2 text-emerald-800">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="truncate max-w-xs font-medium">✓ Meal photo attached</span>
+                                    <div class="flex items-center gap-3 flex-shrink-0">
+                                        <a href="@proofMediaUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 font-bold underline">View</a>
+                                        <button type="button" @onclick="() => proofMediaUrl = null" class="text-rose-600 hover:text-rose-700 font-bold cursor-pointer">Remove</button>
+                                    </div>
+                                </div>
+                                <img src="@proofMediaUrl" alt="Meal proof preview" class="w-full max-h-44 object-cover rounded-lg border border-emerald-200" />
+                            </div>
+                        }
+                    </div>
+
+                    <div>
+                        <label class="font-bold text-gray-700 block mb-1">Your Meal Notes (optional):</label>
+                        <textarea @bind="proofNotes"
+                                  maxlength="300"
+                                  rows="3"
+                                  placeholder="e.g. Prepared 150g grilled chicken breast with steamed broccoli and brown rice..."
+                                  class="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500 resize-none"></textarea>
+                        <div class="text-right text-[10px] text-gray-400">@((proofNotes?.Length ?? 0))/300</div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button type="button" @onclick="CloseSubmitProofModal" disabled="@isSubmittingProof" class="px-4 py-2 bg-gray-200 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-300 transition cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="button" @onclick="SubmitProofAsync" disabled="@(isSubmittingProof || isUploadingProof || string.IsNullOrWhiteSpace(proofMediaUrl))" class="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl text-xs hover:bg-emerald-700 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50">
+                        @if (isSubmittingProof)
+                        {
+                            <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Submitting...</span>
+                        }
+                        else
+                        {
+                            <span>Submit for Review</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
 @code {
     [Parameter]
     public Guid OrderDetailsId { get; set; }
@@ -330,15 +562,77 @@
     private short selectedWeekNumber = 1;
     private short selectedDayNumber = 1;
 
-    private MealPlanWeekModel? CurrentWeek => mealPlan?.Weeks.FirstOrDefault(w => w.WeekNumber == selectedWeekNumber);
-    private MealPlanDayModel? CurrentDay => CurrentWeek?.Days.FirstOrDefault(d => d.DayNumber == selectedDayNumber);
+    private MealPlanWeekModel? CurrentWeek => mealPlan?.Weeks.FirstOrDefault(w => w.WeekNumber == selectedWeekNumber) ?? mealPlan?.Weeks.FirstOrDefault();
+    private MealPlanDayModel? CurrentDay => CurrentWeek?.Days.FirstOrDefault(d => d.DayNumber == selectedDayNumber) ?? CurrentWeek?.Days.FirstOrDefault();
+
+    private static readonly TimeSpan BusinessTimeZoneOffset = TimeSpan.FromHours(7);
+    private static DateTime BusinessToday => DateTime.UtcNow.Add(BusinessTimeZoneOffset).Date;
+
+    private readonly Dictionary<Guid, string> mealNotes = new();
+    private Guid? savingMissedMealId;
+
+    private bool showProofModal = false;
+    private MealPlanItemModel? submittingMeal;
+    private string? proofMediaUrl;
+    private string? proofNotes;
+    private bool isUploadingProof = false;
+    private bool isSubmittingProof = false;
+
+    private string GetMealNote(Guid itemId) => mealNotes.TryGetValue(itemId, out var n) ? n : string.Empty;
+
+    private void SetMealNote(Guid itemId, string? val)
+    {
+        if (string.IsNullOrWhiteSpace(val))
+            mealNotes.Remove(itemId);
+        else
+            mealNotes[itemId] = val;
+    }
+
+    private static string FormatDayLabel(MealPlanDayModel day)
+    {
+        if (!day.ScheduledDate.HasValue)
+            return $"Day {day.DayNumber}";
+
+        var date = day.ScheduledDate.Value;
+        var dayOfWeek = date.ToString("ddd");
+        var label = date.ToString("dd/MM");
+
+        return day.IsToday ? $"{dayOfWeek} ({label}) · Today" : $"{dayOfWeek} ({label})";
+    }
+
+    private static string FormatDayTitle(MealPlanDayModel? day)
+    {
+        if (day == null || !day.ScheduledDate.HasValue)
+            return $"Day {day?.DayNumber ?? 1}";
+
+        var date = day.ScheduledDate.Value;
+        return day.IsToday
+            ? $"Day {day.DayNumber} ({date:ddd, dd/MM/yyyy}) · Today"
+            : $"Day {day.DayNumber} ({date:ddd, dd/MM/yyyy})";
+    }
+
+    private bool IsDayPast(MealPlanItemModel meal)
+    {
+        var date = meal.ScheduledDate ?? CurrentDay?.ScheduledDate;
+        return date.HasValue && date.Value.Date < BusinessToday;
+    }
+
+    private Guid _loadedOrderDetailsId;
 
     protected override async Task OnInitializedAsync()
     {
-        // Trang này không có ô tìm kiếm riêng -> tắt ô tìm kiếm ở topbar dùng chung
+        // This page has no search bar -> disable shared topbar search
         Shell.ShowSearch = false;
+        await Task.CompletedTask;
+    }
 
-        await LoadMealPlanAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrderDetailsId != Guid.Empty && OrderDetailsId != _loadedOrderDetailsId)
+        {
+            _loadedOrderDetailsId = OrderDetailsId;
+            await LoadMealPlanAsync();
+        }
     }
 
     public void Dispose()
@@ -360,13 +654,28 @@
 
                 if (mealPlan.Weeks.Any())
                 {
-                    selectedWeekNumber = mealPlan.Weeks.First().WeekNumber;
-                    var firstWeek = mealPlan.Weeks.First();
-                    if (firstWeek.Days.Any())
+                    var todayWeek = mealPlan.Weeks.FirstOrDefault(w => w.Days.Any(d => d.IsToday));
+                    var todayDay = todayWeek?.Days.FirstOrDefault(d => d.IsToday);
+                    if (todayWeek != null && todayDay != null)
                     {
-                        selectedDayNumber = firstWeek.Days.First().DayNumber;
+                        selectedWeekNumber = todayWeek.WeekNumber;
+                        selectedDayNumber = todayDay.DayNumber;
+                    }
+                    else
+                    {
+                        selectedWeekNumber = mealPlan.Weeks.First().WeekNumber;
+                        var firstWeek = mealPlan.Weeks.First();
+                        if (firstWeek.Days.Any())
+                        {
+                            selectedDayNumber = firstWeek.Days.First().DayNumber;
+                        }
                     }
                 }
+            }
+            else if (!res.Success)
+            {
+                mealPlan = null;
+                errorMessage = res.Message ?? "Unable to load meal plan.";
             }
             else
             {
@@ -389,7 +698,6 @@
         var week = CurrentWeek;
         if (week != null && week.Days.Any())
         {
-            // Reset day to first day of selected week
             selectedDayNumber = week.Days.First().DayNumber;
         }
     }
@@ -397,6 +705,138 @@
     private void SelectDay(short dayNumber)
     {
         selectedDayNumber = dayNumber;
+    }
+
+    private async Task HandleSaveMissedReason(MealPlanItemModel meal)
+    {
+        var note = GetMealNote(meal.MealPlanItemId);
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            ShowToast("Please enter the reason for missing this meal.");
+            return;
+        }
+
+        savingMissedMealId = meal.MealPlanItemId;
+        try
+        {
+            var res = await MealPlanService.SaveMealMissedReasonAsync(new SaveMealMissedReasonDto
+            {
+                MealPlanItemId = meal.MealPlanItemId,
+                Notes = note.Trim()
+            });
+
+            if (res.Success && res.Data != null)
+            {
+                meal.Status = "INCOMPLETE";
+                meal.TraineeNotes = res.Data.Notes;
+                mealNotes.Remove(meal.MealPlanItemId);
+                ShowToast("Missed meal reason saved successfully!");
+            }
+            else
+            {
+                ShowToast(res.Message ?? "Failed to save missed meal reason.");
+            }
+        }
+        finally
+        {
+            savingMissedMealId = null;
+        }
+    }
+
+    private void OpenSubmitProofModal(MealPlanItemModel meal)
+    {
+        submittingMeal = meal;
+        proofMediaUrl = meal.MediaUrl;
+        proofNotes = meal.TraineeNotes;
+        showProofModal = true;
+    }
+
+    private void CloseSubmitProofModal() => ResetSubmitProofModal(false);
+
+    private void ResetSubmitProofModal(bool force)
+    {
+        if (!force && (isSubmittingProof || isUploadingProof)) return;
+        showProofModal = false;
+        submittingMeal = null;
+        proofMediaUrl = null;
+        proofNotes = null;
+    }
+
+    private async Task HandleProofFileUpload(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        isUploadingProof = true;
+        try
+        {
+            var res = await FileUploadService.UploadAsync(file);
+            if (res.Success && !string.IsNullOrWhiteSpace(res.Data))
+            {
+                proofMediaUrl = res.Data;
+                ShowToast("Meal photo uploaded successfully!");
+            }
+            else
+            {
+                ShowToast(res.Message ?? "Failed to upload meal photo.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Upload error: {ex.Message}");
+        }
+        finally
+        {
+            isUploadingProof = false;
+        }
+    }
+
+    private async Task SubmitProofAsync()
+    {
+        if (submittingMeal == null || isSubmittingProof) return;
+
+        if (string.IsNullOrWhiteSpace(proofMediaUrl))
+        {
+            ShowToast("Please upload a photo of your meal before submitting.");
+            return;
+        }
+
+        isSubmittingProof = true;
+        try
+        {
+            var dto = new RequestMealCompletionDto
+            {
+                MealPlanItemId = submittingMeal.MealPlanItemId,
+                LogDate = submittingMeal.ScheduledDate ?? CurrentDay?.ScheduledDate ?? BusinessToday,
+                MediaUrl = proofMediaUrl.Trim(),
+                Notes = string.IsNullOrWhiteSpace(proofNotes) ? null : proofNotes.Trim()
+            };
+
+            var res = await MealPlanService.RequestMealCompletionAsync(dto);
+            if (res.Success && res.Data != null)
+            {
+                submittingMeal.IsCompleted = false;
+                submittingMeal.Status = "PENDING_REVIEW";
+                submittingMeal.MediaUrl = res.Data.MediaUrl;
+                submittingMeal.TraineeNotes = res.Data.Notes;
+                submittingMeal.MealCompletionLogId = res.Data.MealCompletionLogId;
+
+                ResetSubmitProofModal(force: true);
+                ShowToast("🎉 Meal proof submitted! Please wait for coach review.");
+            }
+            else
+            {
+                ShowToast(res.Message ?? "Failed to submit meal completion proof.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isSubmittingProof = false;
+        }
     }
 
     private void HandleCoachReportSubmitted(Guid coachId)

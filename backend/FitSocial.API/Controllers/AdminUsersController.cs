@@ -133,6 +133,31 @@ public class AdminUsersController : ControllerBase
     }
 
     /// <summary>
+    /// Lock or unlock a staff account (Admin only - UC_34.3 & UC_34.4)
+    /// </summary>
+    [HttpPut("staff/{userId:guid}/lock")]
+    [HttpPut("~/api/admin/staff/{userId:guid}/lock")]
+    [Authorize(Roles = RoleConstants.Admin)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SetStaffLockStatus([FromRoute] Guid userId, [FromBody] UpdateUserLockStatusRequest request, CancellationToken cancellationToken)
+    {
+        Guid? adminId = null;
+        var subClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+        if (Guid.TryParse(subClaim, out var parsedAdminId))
+        {
+            adminId = parsedAdminId;
+        }
+
+        var result = await _adminUserService.SetUserLockStatusAsync(userId, request.IsLocked, adminId, cancellationToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Lock or unlock a user account (Admin / Staff only)
     /// </summary>
     [HttpPut("{userId:guid}/lock")]

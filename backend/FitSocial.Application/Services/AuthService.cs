@@ -7,6 +7,7 @@ using FitSocial.Domain.Interfaces;
 using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Net.Http;
 
 namespace FitSocial.Application.Services;
@@ -27,10 +28,12 @@ public class AuthService : IAuthService
     private readonly ICoachEkycVerificationRepository _ekycs;
     private readonly ICoachCertificateRepository _certificates;
     private readonly ICoachProfileRepository _coachProfiles;
+    private readonly ICoachUpgradeRepository? _coachUpgrades;
     private readonly IEkycService _ekycService;
     private readonly IEncryptionService _encryptionService;
     private readonly IAppealService _appealService;
     private readonly IAuditLogService _auditLogService;
+    private readonly ILogger<AuthService>? _logger;
 
     public AuthService(
         IUserRepository users,
@@ -50,7 +53,9 @@ public class AuthService : IAuthService
         IEkycService ekycService,
         IEncryptionService encryptionService,
         IAppealService appealService,
-        IAuditLogService auditLogService)
+        IAuditLogService auditLogService,
+        ICoachUpgradeRepository? coachUpgrades = null,
+        ILogger<AuthService>? logger = null)
     {
         _users = users;
         _unitOfWork = unitOfWork;
@@ -66,10 +71,12 @@ public class AuthService : IAuthService
         _ekycs = ekycs;
         _certificates = certificates;
         _coachProfiles = coachProfiles;
+        _coachUpgrades = coachUpgrades;
         _ekycService = ekycService;
         _encryptionService = encryptionService;
         _appealService = appealService;
         _auditLogService = auditLogService;
+        _logger = logger;
     }
 
     public async Task<ApiResponseDto<bool>> SendOtpAsync(SendOtpRequestDto request)
@@ -93,7 +100,7 @@ public class AuthService : IAuthService
         var body = $@"
             <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;"">
                 <div style=""text-align: center; margin-bottom: 20px;"">
-                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitConnect"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
+                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1795368774/fitsocial/posts/images/b9ptdmtfuuawi3kxv4k7.png"" alt=""FitConnect"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
                     <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitConnect</h2>
                     <p style=""color: #666; margin: 5px 0 0;"">Sports & Fitness Community</p>
                 </div>
@@ -118,18 +125,26 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponseDto<bool>> VerifyOtpAsync(VerifyOtpRequestDto request)
     {
+        if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.OtpCode))
+        {
+            return ApiResponseDto<bool>.Fail("Email and OTP code are required.");
+        }
+
         var normalizedEmail = request.Email.Trim().ToLower();
-        var purpose = string.IsNullOrWhiteSpace(request.Purpose) ? OtpConstants.PurposeRegisterTrainee : request.Purpose;
+        var purpose = string.IsNullOrWhiteSpace(request.Purpose)
+            ? OtpConstants.PurposeRegisterTrainee
+            : request.Purpose;
+
         var (ok, msg) = await _otpService.CheckOtpAsync(normalizedEmail, request.OtpCode.Trim(), purpose);
-        if (!ok) return ApiResponseDto<bool>.Fail(msg);
+
+        if (!ok)
+        {
+            return ApiResponseDto<bool>.Fail(msg);
+        }
+
         return ApiResponseDto<bool>.Ok(true, "OTP verified.");
     }
 
-    /// <summary>
-    /// Server-side sign-out (UC_03): puts the access token ID on the Redis
-    /// blacklist until its natural expiry, and revokes the refresh token.
-    /// The JWT middleware rejects the access token afterwards.
-    /// </summary>
     public async Task<ApiResponseDto<bool>> LogoutAsync(string? jti, DateTime? expiresAtUtc, string? refreshToken = null)
     {
         if (!string.IsNullOrWhiteSpace(jti) && expiresAtUtc.HasValue)
@@ -149,11 +164,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, "Signed out successfully.");
     }
 
-    /// <summary>
-    /// Email + password sign-in shared by all roles (Trainee, Coach, ...).
-    /// The role travels in the JWT (ClaimTypes.Role) and AuthResponse.User.
-    /// Coach with Pending Approval is blocked with a specific message per FitConnect spec.
-    /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> LoginAsync(LoginRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -168,7 +178,6 @@ public class AuthService : IAuthService
 
         if (user.IsLocked == true)
         {
-            // Blocked due to reports threshold
             if (user.WarningCount >= 3)
             {
                 var appealToken = _appealService.GenerateAppealToken(user);
@@ -187,9 +196,19 @@ public class AuthService : IAuthService
                 };
             }
 
-            // Coach pending approval: specific message per spec Step 5 abnormal flow
             if (string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
             {
+                var hasActiveSubscription = false;
+                if (_coachUpgrades != null)
+                {
+                    var latestUpgrade = await _coachUpgrades.GetLatestFinishedByCoachIdAsync(user.UserId);
+                    hasActiveSubscription = latestUpgrade != null && latestUpgrade.Status == "ACTIVE";
+                }
+                if (!hasActiveSubscription)
+                {
+                    return ApiResponseDto<AuthResponseDto>.Fail("Payment required to activate your coach account.");
+                }
+
                 var profile = await _coachProfiles.GetByIdAsync(user.UserId);
                 var approval = profile?.ApprovalStatus?.Trim().ToUpperInvariant();
                 if (approval == "PENDING")
@@ -207,7 +226,7 @@ public class AuthService : IAuthService
         }
 
         if (!string.IsNullOrWhiteSpace(request.RoleCode) &&
-            !string.Equals(user.RoleCode?.Trim(), request.RoleCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            !string.Equals(user.RoleCode!.Trim(), request.RoleCode.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("Invalid email or password.");
         }
@@ -220,10 +239,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<AuthResponseDto>.Ok(loginResponse, "Signed in successfully!");
     }
 
-    /// <summary>
-    /// Back-office sign-in for Staff/Admin only (UC_28 Management Portal).
-    /// Same credentials flow as client login, but Trainee/Coach are rejected here.
-    /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> AdminLoginAsync(LoginRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -276,9 +291,7 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("Passwords do not match.");
         }
 
-        var emailExists = await _users.ExistsByEmailAsync(normalizedEmail);
-
-        if (emailExists)
+        if (await _users.ExistsByEmailAsync(normalizedEmail))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("This email is already in use.");
         }
@@ -295,8 +308,7 @@ public class AuthService : IAuthService
         }
 
         var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-        if (normalizedPhone != null &&
-            await _users.ExistsByPhoneAsync(normalizedPhone))
+        if (normalizedPhone != null && await _users.ExistsByPhoneAsync(normalizedPhone))
         {
             return ApiResponseDto<AuthResponseDto>.Fail("This phone number is already in use.");
         }
@@ -312,13 +324,14 @@ public class AuthService : IAuthService
         }
 
         var now = DateTime.UtcNow;
+
         var newUser = new User
         {
             UserId = Guid.NewGuid(),
             Email = normalizedEmail,
             FullName = request.FullName.Trim(),
             PasswordHash = _passwordHasher.HashPassword(request.Password),
-            PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
+            PhoneNumber = normalizedPhone,
             Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
             DateOfBirth = request.DateOfBirth,
             RoleCode = RoleConstants.Trainee,
@@ -330,7 +343,6 @@ public class AuthService : IAuthService
 
         await _users.AddAsync(newUser);
 
-        // Record agreement (same as Coach flow, without IP)
         await _agreements.AddAsync(new UserAgreement
         {
             AgreementId = Guid.NewGuid(),
@@ -338,6 +350,8 @@ public class AuthService : IAuthService
             TermId = term.TermId,
             AcceptedAt = now
         });
+
+        var responseData = await _tokenService.CreateSessionAsync(newUser);
 
         try
         {
@@ -348,43 +362,69 @@ public class AuthService : IAuthService
             return ApiResponseDto<AuthResponseDto>.Fail("Could not create the account. The email or phone number may already be in use.");
         }
 
-        var responseData = await _tokenService.CreateSessionAsync(newUser);
-
         return ApiResponseDto<AuthResponseDto>.Ok(responseData, "Trainee account registered successfully!");
     }
 
-    /// <summary>
-    /// Register a Coach account (pending, locked until payment). Creates User (locked), CoachProfile PENDING,
-    /// eKYC verification, certificates, and terms agreement. Used by the 5-step coach flow before payment.
-    /// </summary>
     public async Task<ApiResponseDto<User>> RegisterCoachAsync(RegisterCoachRequestDto request, string? ipAddress = null)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
 
         if (request.Password != request.ConfirmPassword)
+        {
             return ApiResponseDto<User>.Fail("Passwords do not match.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.FrontCardUrl) || string.IsNullOrWhiteSpace(request.BackCardUrl))
+        {
             return ApiResponseDto<User>.Fail("Front and back ID card images are required.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.FaceImageUrl))
+        {
             return ApiResponseDto<User>.Fail("Live face image is required.");
-        if (request.TermId == null || request.TermId == Guid.Empty)
+        }
+
+        if (request.TermId.GetValueOrDefault() == Guid.Empty)
+        {
             return ApiResponseDto<User>.Fail("You must agree to the Terms and Privacy Policy.");
+        }
 
         var term = await _terms.GetByIdAsync(request.TermId.Value);
         if (term == null)
+        {
             return ApiResponseDto<User>.Fail("Selected terms version is not valid.");
-
+        }
+            
         var existing = await _users.FindByEmailAsync(normalizedEmail);
-        if (existing != null && existing.IsLocked != true)
+        if (existing != null)
+        {
+            if (existing.IsLocked == true)
+            {
+                var hasActiveSubscription = false;
+                if (_coachUpgrades != null)
+                {
+                    var latestUpgrade = await _coachUpgrades.GetLatestFinishedByCoachIdAsync(existing.UserId);
+                    hasActiveSubscription = latestUpgrade != null && latestUpgrade.Status == "ACTIVE";
+                }
+                if (!hasActiveSubscription)
+                {
+                    return ApiResponseDto<User>.Fail("This email is already registered but payment is pending. Please sign in to complete payment.");
+                }
+            }
             return ApiResponseDto<User>.Fail("This email is already in use.");
+        }
 
         var normalizedPhone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-        if (normalizedPhone != null && await _users.ExistsByPhoneAsync(normalizedPhone, existing?.UserId))
+        if (normalizedPhone != null && await _users.ExistsByPhoneAsync(normalizedPhone, null))
+        {
             return ApiResponseDto<User>.Fail("This phone number is already in use.");
+        }   
 
         var (otpValid, otpMessage) = await _otpService.ValidateOtpAsync(normalizedEmail, request.OtpCode.Trim(), OtpConstants.PurposeRegisterCoach);
         if (!otpValid)
+        {
             return ApiResponseDto<User>.Fail(otpMessage);
+        }
 
         var ekycResult = await _ekycService.VerifyAsync(new FitSocial.Application.DTOs.Coach.EkycVerificationDto
         {
@@ -393,57 +433,39 @@ public class AuthService : IAuthService
             FaceImageUrl = request.FaceImageUrl,
             FaceImageLeftUrl = request.FaceImageLeftUrl,
             FaceImageRightUrl = request.FaceImageRightUrl,
-            FaceImageTopUrl = request.FaceImageTopUrl,
-            FaceImageBottomUrl = request.FaceImageBottomUrl
+            Email = normalizedEmail
         });
-        if (!ekycResult.Success)
+        var ekycOk = ekycResult.Success;
+        if (!ekycOk)
+        {
             return ApiResponseDto<User>.Fail(ekycResult.Error ?? "ID verification failed.");
+        }
 
-        // 1 person = 1 CCCD: block if this IdCardNumber already belongs to another coach
-        if (await _ekycs.ExistsByIdCardNumberAsync(ekycResult.Result.IdCardNumber, existing?.UserId))
+        if (await _ekycs.ExistsByIdCardNumberAsync(ekycResult.Result.IdCardNumber, null))
+        {
             return ApiResponseDto<User>.Fail("This ID card has already been used for another coach.");
+        }
 
         var now = DateTime.UtcNow;
-        User user;
-        CoachProfile? profile;
-        if (existing == null)
+        var user = new User
         {
-            user = new User
-            {
-                UserId = Guid.NewGuid(),
-                Email = normalizedEmail,
-                FullName = request.FullName.Trim(),
-                PasswordHash = _passwordHasher.HashPassword(request.Password),
-                PhoneNumber = normalizedPhone,
-                Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
-                DateOfBirth = request.DateOfBirth,
-                RoleCode = RoleConstants.Coach,
-                IsInternal = false,
-                IsLocked = true,
-                CreatedAt = now,
-                UpdatedAt = now,
-                CoachProfileCoach = new CoachProfile { ApprovalStatus = "PENDING", Status = "ACTIVE", UpdatedAt = now }
-            };
-            user.CoachProfileCoach.CoachId = user.UserId;
-            await _users.AddAsync(user);
-            profile = user.CoachProfileCoach;
-        }
-        else
-        {
-            user = existing;
-            user.FullName = request.FullName.Trim();
-            user.PasswordHash = _passwordHasher.HashPassword(request.Password);
-            user.PhoneNumber = normalizedPhone;
-            user.Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim();
-            user.DateOfBirth = request.DateOfBirth;
-            user.UpdatedAt = now;
-            profile = await _coachProfiles.GetByIdAsync(user.UserId);
-            if (profile == null)
-            {
-                profile = new CoachProfile { CoachId = user.UserId };
-                await _coachProfiles.AddAsync(profile);
-            }
-        }
+            UserId = Guid.NewGuid(),
+            Email = normalizedEmail,
+            FullName = request.FullName.Trim(),
+            PasswordHash = _passwordHasher.HashPassword(request.Password),
+            PhoneNumber = normalizedPhone,
+            Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
+            DateOfBirth = request.DateOfBirth,
+            RoleCode = RoleConstants.Coach,
+            IsInternal = false,
+            IsLocked = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+            CoachProfileCoach = new CoachProfile { ApprovalStatus = "PENDING", Status = "ACTIVE", UpdatedAt = now }
+        };
+        user.CoachProfileCoach.CoachId = user.UserId;
+        await _users.AddAsync(user);
+        var profile = user.CoachProfileCoach;
 
         profile.ApprovalStatus = "PENDING";
         profile.Status = "ACTIVE";
@@ -453,15 +475,6 @@ public class AuthService : IAuthService
         profile.CertificateUrl = string.IsNullOrWhiteSpace(firstCertUrl) ? null : firstCertUrl.Trim();
         profile.IdentityCardUrl = request.FrontCardUrl!.Trim();
         profile.UpdatedAt = now;
-
-        // Replace old eKYC/certificates on retry (each person has only 1 CCCD)
-        if (existing != null)
-        {
-            var oldEkycs = await _ekycs.ListByCoachIdAsync(user.UserId);
-            if (oldEkycs.Any()) _ekycs.RemoveRange(oldEkycs);
-            var oldCerts = await _certificates.ListByCoachIdAsync(user.UserId);
-            if (oldCerts.Any()) _certificates.RemoveRange(oldCerts);
-        }
 
         await _ekycs.AddAsync(new CoachEkycVerification
         {
@@ -490,10 +503,10 @@ public class AuthService : IAuthService
             DocumentType = ekycResult.Result.DocumentType,
             LivenessScore = ekycResult.Result.LivenessScore,
             FaceMatchConfidence = ekycResult.Result.FaceMatchConfidence,
-            EncryptedRawInformationJson = _encryptionService.Encrypt(ekycResult.Result.RawInformationJson ?? ""),
+            EncryptedRawInformationJson = _encryptionService.Encrypt(string.IsNullOrEmpty(ekycResult.Result.RawInformationJson) ? "" : ekycResult.Result.RawInformationJson),
             FrontCardUrl = request.FrontCardUrl!.Trim(),
             BackCardUrl = request.BackCardUrl!.Trim(),
-            FaceImageUrl = request.FaceImageUrl?.Trim(),
+            FaceImageUrl = request.FaceImageUrl!.Trim(),
             VerificationStatus = ekycResult.Result.VerificationStatus,
             FailureReason = ekycResult.Result.FailureReason,
             CreatedAt = now,
@@ -561,11 +574,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<User>.Ok(user);
     }
 
-    /// <summary>
-    /// OAuth2 authorization-code flow (popup, no FedCM): exchanges the code for tokens
-    /// server-side, then signs the user in with the same link-or-create rules as ID-token login.
-    /// Works in Guest/Incognito windows where the FedCM button flow is blocked.
-    /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> GoogleCodeLoginAsync(GoogleCodeRequestDto request)
     {
         var clientId = _configuration["Google:ClientId"];
@@ -686,6 +694,27 @@ public class AuthService : IAuthService
                         Data = blockedData
                     };
                 }
+                if (string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
+                {
+                    var hasActiveSubscription = false;
+                    if (_coachUpgrades != null)
+                    {
+                        var latestUpgrade = await _coachUpgrades.GetLatestFinishedByCoachIdAsync(user.UserId);
+                        hasActiveSubscription = latestUpgrade != null && latestUpgrade.Status == "ACTIVE";
+                    }
+                    if (!hasActiveSubscription)
+                    {
+                        return ApiResponseDto<AuthResponseDto>.Fail("Payment required to activate your coach account.");
+                    }
+
+                    var profile = await _coachProfiles.GetByIdAsync(user.UserId);
+                    var approval = profile?.ApprovalStatus?.Trim().ToUpperInvariant();
+                    if (approval == "PENDING")
+                        return ApiResponseDto<AuthResponseDto>.Fail("Your account application is currently under credential verification. Please check back later.");
+                    if (approval == "REJECTED")
+                        return ApiResponseDto<AuthResponseDto>.Fail("Your coach application has been rejected. Please check your email for details and resubmission instructions.");
+                }
+
                 return ApiResponseDto<AuthResponseDto>.Fail("This account has been locked. Please contact an administrator.");
             }
 
@@ -725,18 +754,11 @@ public class AuthService : IAuthService
         }
     }
 
-    /// <summary>
-    /// Exchanges a valid refresh token for a brand-new session (rotation).
-    /// </summary>
     public async Task<ApiResponseDto<AuthResponseDto>> RefreshAsync(RefreshRequestDto request)
     {
         return await _tokenService.RefreshSessionAsync(request.RefreshToken);
     }
 
-    /// <summary>
-    /// Step 1 of UC_04: send a password-reset OTP to the email.
-    /// Always returns success to avoid revealing which emails are registered.
-    /// </summary>
     public async Task<ApiResponseDto<bool>> ForgotPasswordAsync(ForgotPasswordRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -748,13 +770,13 @@ public class AuthService : IAuthService
             return ApiResponseDto<bool>.Ok(true, genericOk);
         }
 
-        var otpCode = await _otpService.GenerateOtpAsync(normalizedEmail, OtpConstants.PurposeResetPassword);
+        var otpCode = await _otpService.GenerateOtpAsync(normalizedEmail, OtpConstants.PurposeResetPassword, 5);
 
         var subject = "[FitConnect] Password reset verification code";
         var body = $@"
             <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;"">
                 <div style=""text-align: center; margin-bottom: 20px;"">
-                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1789397609/fitsocial/credentials/Logo_FitSocial_agntvx.jpg"" alt=""FitConnect"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
+                    <img src=""https://res.cloudinary.com/avvuvfw6/image/upload/v1795368774/fitsocial/posts/images/b9ptdmtfuuawi3kxv4k7.png"" alt=""FitConnect"" style=""width: 72px; height: 72px; border-radius: 16px;"" />
                     <h2 style=""color: #FF5722; margin: 8px 0 0;"">FitConnect</h2>
                     <p style=""color: #666; margin: 5px 0 0;"">Sports & Fitness Community</p>
                 </div>
@@ -777,11 +799,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, genericOk);
     }
 
-    /// <summary>
-    /// Step 2 of UC_04: verify the OTP and set the new password.
-    /// Bumps TokenVersion so every existing session/token dies immediately.
-    /// Also works for Google-created accounts (gives them a usable password).
-    /// </summary>
     public async Task<ApiResponseDto<bool>> ResetPasswordAsync(ResetPasswordRequestDto request)
     {
         var normalizedEmail = request.Email.Trim().ToLower();
@@ -829,12 +846,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, "Password reset successfully. Please sign in with your new password.");
     }
 
-    /// <summary>
-    /// UC_05.2: change password while signed in. Requires the current password
-    /// (except passwordless Google accounts, which may set one directly).
-    /// Bumps TokenVersion so every other session/token dies immediately;
-    /// the client signs out locally and asks for a fresh sign-in.
-    /// </summary>
     public async Task<ApiResponseDto<bool>> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request)
     {
         if (request.NewPassword != request.ConfirmPassword)
@@ -873,9 +884,6 @@ public class AuthService : IAuthService
             return ApiResponseDto<bool>.Fail("Could not change the password. Please try again.");
         }
 
-        // Staff/Admin (and any other signed-in account) changing its own password
-        // is a sensitive action and is always traced. Password values are never
-        // logged - only the resulting token version that invalidates old sessions.
         await WriteAuditAsync(
             action: "CHANGE_PASSWORD",
             entityId: user.UserId,
@@ -891,10 +899,6 @@ public class AuthService : IAuthService
         return ApiResponseDto<bool>.Ok(true, "Password changed successfully. Please sign in again.");
     }
 
-    /// <summary>
-    /// Writes to the shared "AuditLogs" table. Actor (Staff/Admin), role and IP are
-    /// auto-resolved from the current request by IAuditLogService.
-    /// </summary>
     private async Task WriteAuditAsync(
         string action,
         Guid entityId,
@@ -905,7 +909,7 @@ public class AuthService : IAuthService
         try
         {
             await _auditLogService.LogAsync(
-                actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                actorAccountId: null,
                 action: action,
                 entityType: "User",
                 entityId: entityId.ToString(),
@@ -913,9 +917,9 @@ public class AuthService : IAuthService
                 oldValue: oldValue,
                 newValue: newValue);
         }
-        catch
+        catch (Exception ex)
         {
-            // Audit log failure is non-fatal - the business operation already succeeded.
+            _logger?.LogWarning(ex, "Audit log failed for action {Action} on entity {EntityId}", action, entityId);
         }
     }
 

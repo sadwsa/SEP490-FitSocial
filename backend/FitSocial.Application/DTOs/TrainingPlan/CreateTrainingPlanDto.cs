@@ -16,6 +16,7 @@ public class CreateTrainingPlanDto
     [MaxLength(500, ErrorMessage = "Mô tả tối đa 500 ký tự.")]
     public string? Description { get; set; }
 
+    [Required(ErrorMessage = "Ngày bắt đầu (StartDate) là bắt buộc.")]
     public DateTime? StartDate { get; set; }
 
     public DateTime? EndDate { get; set; }

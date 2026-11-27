@@ -8,7 +8,7 @@ public interface ICoachProfileRepository : IRepository<CoachProfile>
 
     Task<List<CoachRatingSummary>> GetTopCoachesAsync(int count, CancellationToken cancellationToken = default);
 
-    Task<IEnumerable<CoachProfile>> GetAllCoachesWithDetailsAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, CancellationToken cancellationToken = default);
+    Task<(List<CoachProfile> Items, int TotalCount)> GetAllCoachesWithDetailsAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, int pageNumber = 1, int pageSize = 6, CancellationToken cancellationToken = default);
 
     Task<(List<CoachProfile> Items, int TotalCount)> GetPagedCoachApplicationsAsync(
         string? search = null,

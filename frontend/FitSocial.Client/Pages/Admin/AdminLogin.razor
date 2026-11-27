@@ -3,8 +3,11 @@
 @inject IAuthService AuthService
 @inject ITokenStorage TokenStorage
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@using FitSocial.Client.Models.Auth
+@using Microsoft.AspNetCore.Components.Authorization
 
-<PageTitle>Management Portal - FitConnect</PageTitle>
+<PageTitle>Sign In - FitConnect Management Portal</PageTitle>
 
 <div class="login-hero">
     <img src="img/fitconnect-logo.png" alt="FitConnect" class="hero-logo" />
@@ -82,7 +85,20 @@
 
         if (await AuthService.IsAuthenticatedAsync())
         {
-            Navigation.NavigateTo("/admin");
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.IsInRole(AppRoles.Admin))
+            {
+                Navigation.NavigateTo("/admin");
+            }
+            else if (user.IsInRole(AppRoles.Staff))
+            {
+                Navigation.NavigateTo("/admin/users");
+            }
+            else
+            {
+                Navigation.NavigateTo("/admin/users");
+            }
         }
     }
 
@@ -90,20 +106,44 @@
     {
         isLoading = true;
         errorMessage = null;
+        LoadingService.Show("Signing in to portal...");
 
-        await TokenStorage.SetRememberMeAsync(rememberMe);
-
-        loginModel.RememberMe = rememberMe;
-        var result = await AuthService.AdminLoginAsync(loginModel);
-        if (result.Success)
+        try
         {
-            Navigation.NavigateTo("/admin");
-        }
-        else
-        {
-            errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";
-        }
+            await TokenStorage.SetRememberMeAsync(rememberMe);
 
-        isLoading = false;
+            loginModel.RememberMe = rememberMe;
+            var result = await AuthService.AdminLoginAsync(loginModel);
+            if (result.Success)
+            {
+                var role = result.Data?.User?.RoleCode;
+
+                if (string.Equals(role?.Trim(), AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    Navigation.NavigateTo("/admin");
+                }
+                else if (string.Equals(role?.Trim(), AppRoles.Staff, StringComparison.OrdinalIgnoreCase))
+                {
+                    Navigation.NavigateTo("/admin/users");
+                }
+                else
+                {
+                    Navigation.NavigateTo("/home");
+                }
+            }
+            else
+            {
+                errorMessage = result.Message ?? "Sign-in failed. Please check your information and try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Sign-in error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            LoadingService.Hide();
+        }
     }
 }

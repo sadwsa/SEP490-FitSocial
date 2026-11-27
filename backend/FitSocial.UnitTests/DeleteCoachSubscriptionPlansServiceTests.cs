@@ -23,6 +23,7 @@ public class DeleteCoachSubscriptionPlansServiceTests
     private readonly Mock<ICoachUpgradeRepository> _upgrades = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Mock<ILogger<SystemOperationsService>> _logger = new();
+    private readonly Mock<IAuditLogService> _auditLogService = new();
 
     public static TheoryData<DeleteCoachSubscriptionPlansTestCase> TestCases
     {
@@ -44,10 +45,12 @@ public class DeleteCoachSubscriptionPlansServiceTests
                 {
                     UtcId = CsvTestHelper.Get(row, index, "UTCID"),
                     Type = CsvTestHelper.Get(row, index, "Type"),
-                    PlanExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "PlanExists")),
-                    Upgrades = int.TryParse(CsvTestHelper.Get(row, index, "Upgrades"), out var u) ? u : 0,
-                    OrderDetails = int.TryParse(CsvTestHelper.Get(row, index, "OrderDetails"), out var o) ? o : 0,
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    Result_PlanExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_PlanExists")),
+                    Result_Upgrades = int.TryParse(CsvTestHelper.Get(row, index, "Result_Upgrades"), out var u) ? u : 0,
+                    Result_OrderDetails = int.TryParse(CsvTestHelper.Get(row, index, "Result_OrderDetails"), out var o) ? o : 0,
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
+                    Result_AuditThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_AuditThrows")),
+                    Result_AuditLogServiceNull = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_AuditLogServiceNull")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -69,21 +72,21 @@ public class DeleteCoachSubscriptionPlansServiceTests
         _unitOfWork.Reset();
 
         var planId = Guid.NewGuid();
-        if (tc.PlanExists)
+        if (tc.Result_PlanExists)
         {
             _planRepo.Setup(p => p.GetByIdAsync(planId, It.IsAny<CancellationToken>())).ReturnsAsync(new CoachSubscriptionPlan
             {
                 CoachSubscriptionPlansId = planId,
                 Amount = 100000
             });
-            _planRepo.Setup(p => p.CountReferencesAsync(planId, It.IsAny<CancellationToken>())).ReturnsAsync((tc.Upgrades, tc.OrderDetails));
+            _planRepo.Setup(p => p.CountReferencesAsync(planId, It.IsAny<CancellationToken>())).ReturnsAsync((tc.Result_Upgrades, tc.Result_OrderDetails));
         }
         else
         {
             _planRepo.Setup(p => p.GetByIdAsync(planId, It.IsAny<CancellationToken>())).ReturnsAsync((CoachSubscriptionPlan?)null);
         }
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("boom"));
         }
@@ -103,10 +106,12 @@ public class DeleteCoachSubscriptionPlansServiceTests
     {
         public string UtcId { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public bool PlanExists { get; set; }
-        public int Upgrades { get; set; }
-        public int OrderDetails { get; set; }
-        public bool SaveChangesThrows { get; set; }
+        public bool Result_PlanExists { get; set; }
+        public int Result_Upgrades { get; set; }
+        public int Result_OrderDetails { get; set; }
+        public bool Result_SaveChangesThrows { get; set; }
+        public bool Result_AuditThrows { get; set; }
+        public bool Result_AuditLogServiceNull { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

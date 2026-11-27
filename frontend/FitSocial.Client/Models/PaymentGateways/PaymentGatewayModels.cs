@@ -1,8 +1,5 @@
 namespace FitSocial.Client.Models.PaymentGateways;
 
-/// <summary>
-/// UC-36: one row of the admin payment gateway configs list (keys masked).
-/// </summary>
 public class PaymentGatewayConfig
 {
     public Guid GatewayId { get; set; }
@@ -20,9 +17,6 @@ public class PaymentGatewayConfig
     public DateTime? UpdatedAt { get; set; }
 }
 
-/// <summary>
-/// UC-36.2: payload for admin creating a payment gateway configuration.
-/// </summary>
 public class CreatePaymentGatewayConfig
 {
     public string GatewayName { get; set; } = string.Empty;
@@ -31,14 +25,9 @@ public class CreatePaymentGatewayConfig
     public string ChecksumKey { get; set; } = string.Empty;
     public string? WebhookUrl { get; set; }
     public bool IsActive { get; set; } = true;
-    /// <summary>false = thu tiền (collection), true = chi tiền (payout).</summary>
     public bool IsPayout { get; set; } = false;
 }
 
-/// <summary>
-/// UC-36.3: payload for admin updating a payment gateway configuration.
-/// Null key fields mean "keep current".
-/// </summary>
 public class UpdatePaymentGatewayConfig
 {
     public string? GatewayName { get; set; }
@@ -47,6 +36,5 @@ public class UpdatePaymentGatewayConfig
     public string? ChecksumKey { get; set; }
     public string? WebhookUrl { get; set; }
     public bool? IsActive { get; set; }
-    /// <summary>false = thu tiền (collection), true = chi tiền (payout).</summary>
     public bool? IsPayout { get; set; }
 }

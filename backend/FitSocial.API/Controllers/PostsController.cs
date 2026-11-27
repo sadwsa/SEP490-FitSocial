@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Posts;
 using FitSocial.Application.Interfaces;
+using FitSocial.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -124,14 +125,21 @@ public class PostsController : ControllerBase
     [HttpGet]
     [HttpGet("search")]
     [HttpGet("filter")]
-    [AllowAnonymous]
+    [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
     [ProducesResponseType(typeof(ApiResponseDto<PagedResultDto<PostDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPosts([FromQuery] GetPostsQueryDto query)
     {
         var currentUserId = GetCurrentUserId();
-        var result = await _postService.GetPostsAsync(query, currentUserId, HttpContext.RequestAborted);
+        if (!currentUserId.HasValue || currentUserId.Value == Guid.Empty)
+        {
+            return Unauthorized(ApiResponseDto<object>.Fail("User is not authenticated."));
+        }
+
+        var result = await _postService.GetPostsAsync(query, currentUserId.Value, HttpContext.RequestAborted);
         return Ok(result);
     }
 

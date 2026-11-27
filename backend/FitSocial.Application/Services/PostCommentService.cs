@@ -14,6 +14,8 @@ public class PostCommentService : IPostCommentService
     private readonly IPostRepository _postRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly INotificationRepository? _notificationRepository;
+    private readonly INotificationRealtimeNotifier? _realtimeNotifier;
     private readonly ILogger<PostCommentService>? _logger;
 
     public PostCommentService(
@@ -22,11 +24,25 @@ public class PostCommentService : IPostCommentService
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         ILogger<PostCommentService>? logger = null)
+        : this(commentRepository, postRepository, userRepository, unitOfWork, null, null, logger)
+    {
+    }
+
+    public PostCommentService(
+        ICommentRepository commentRepository,
+        IPostRepository postRepository,
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        INotificationRepository? notificationRepository,
+        INotificationRealtimeNotifier? realtimeNotifier,
+        ILogger<PostCommentService>? logger = null)
     {
         _commentRepository = commentRepository;
         _postRepository = postRepository;
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _notificationRepository = notificationRepository;
+        _realtimeNotifier = realtimeNotifier;
         _logger = logger;
     }
 
@@ -209,6 +225,57 @@ public class PostCommentService : IPostCommentService
 
         _logger?.LogInformation("User {UserId} commented on Post {PostId}, CommentId {CommentId}", authorId, postId, comment.Id);
 
+        // Notify post author if commenter is not the post author
+        if (post.AuthorId != authorId)
+        {
+            var commenterName = !string.IsNullOrWhiteSpace(user.FullName)
+                ? user.FullName
+                : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitConnect Member");
+
+            var previewContent = trimmedContent.Length > 80
+                ? trimmedContent.Substring(0, 77) + "..."
+                : trimmedContent;
+
+            var notificationMessage = $"{commenterName} commented on your post: \"{previewContent}\"";
+
+            if (_notificationRepository != null)
+            {
+                try
+                {
+                    var notification = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = post.AuthorId,
+                        ActorId = authorId,
+                        ReferenceId = postId,
+                        Type = "POST_COMMENT",
+                        Description = notificationMessage.Length > 500 ? notificationMessage.Substring(0, 497) + "..." : notificationMessage,
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _notificationRepository.AddAsync(notification, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to persist comment notification for post owner {OwnerId}", post.AuthorId);
+                }
+            }
+
+            if (_realtimeNotifier != null)
+            {
+                try
+                {
+                    await _realtimeNotifier.SendNotificationAsync(post.AuthorId, "POST_COMMENT", notificationMessage);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to send realtime comment notification to post owner {OwnerId}", post.AuthorId);
+                }
+            }
+        }
+
         var resultDto = new CommentDto
         {
             Id = comment.Id,
@@ -298,6 +365,100 @@ public class PostCommentService : IPostCommentService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger?.LogInformation("User {UserId} replied to Comment {CommentId}, New ReplyId {ReplyId}", authorId, commentId, reply.Id);
+
+        var replierName = !string.IsNullOrWhiteSpace(user.FullName)
+            ? user.FullName
+            : (!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "FitConnect Member");
+
+        var replyPreview = trimmedContent.Length > 80
+            ? trimmedContent.Substring(0, 77) + "..."
+            : trimmedContent;
+
+        // 1. Notify the author of the comment being replied to
+        if (parentComment.AuthorId != authorId)
+        {
+            var replyMessage = $"{replierName} replied to your comment: \"{replyPreview}\"";
+
+            if (_notificationRepository != null)
+            {
+                try
+                {
+                    var notification = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = parentComment.AuthorId,
+                        ActorId = authorId,
+                        ReferenceId = parentComment.PostId,
+                        Type = "COMMENT_REPLY",
+                        Description = replyMessage.Length > 500 ? replyMessage.Substring(0, 497) + "..." : replyMessage,
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _notificationRepository.AddAsync(notification, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to persist reply notification for comment author {CommentAuthorId}", parentComment.AuthorId);
+                }
+            }
+
+            if (_realtimeNotifier != null)
+            {
+                try
+                {
+                    await _realtimeNotifier.SendNotificationAsync(parentComment.AuthorId, "COMMENT_REPLY", replyMessage);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to send realtime reply notification to comment author {CommentAuthorId}", parentComment.AuthorId);
+                }
+            }
+        }
+
+        // 2. Notify the post author if different from replier and parent comment author
+        if (post.AuthorId != authorId && post.AuthorId != parentComment.AuthorId)
+        {
+            var postCommentMessage = $"{replierName} commented on your post: \"{replyPreview}\"";
+
+            if (_notificationRepository != null)
+            {
+                try
+                {
+                    var notification = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = post.AuthorId,
+                        ActorId = authorId,
+                        ReferenceId = parentComment.PostId,
+                        Type = "POST_COMMENT",
+                        Description = postCommentMessage.Length > 500 ? postCommentMessage.Substring(0, 497) + "..." : postCommentMessage,
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _notificationRepository.AddAsync(notification, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to persist reply notification for post owner {PostAuthorId}", post.AuthorId);
+                }
+            }
+
+            if (_realtimeNotifier != null)
+            {
+                try
+                {
+                    await _realtimeNotifier.SendNotificationAsync(post.AuthorId, "POST_COMMENT", postCommentMessage);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to send realtime reply notification to post owner {PostAuthorId}", post.AuthorId);
+                }
+            }
+        }
 
         var resultDto = new CommentDto
         {

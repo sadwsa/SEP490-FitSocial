@@ -19,15 +19,13 @@ public class OtpService : IOtpService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<string> GenerateOtpAsync(string email, string purpose)
+    public async Task<string> GenerateOtpAsync(string email, string purpose, int expiryMinutes = 15)
     {
         var normalizedEmail = email.Trim().ToLower();
 
-        // 1. Generate a random 6-digit OTP code (100000 - 999999)
         var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
         var otpHash = ComputeSha256Hash(otpCode);
 
-        // 2. Invalidate old unverified OTPs for this email and purpose
         var oldOtps = await _otpLogs.ListUnverifiedAsync(normalizedEmail, purpose);
 
         if (oldOtps.Any())
@@ -35,14 +33,13 @@ public class OtpService : IOtpService
             _otpLogs.RemoveRange(oldOtps);
         }
 
-        // 3. Create a new record in OTPLogs
         var newOtp = new Otplog
         {
             OtpId = Guid.NewGuid(),
             Email = normalizedEmail,
             OtpHash = otpHash,
             Purpose = purpose,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(OtpConstants.ExpiryMinutes),
+            ExpiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes > 0 ? expiryMinutes : OtpConstants.ExpiryMinutes),
             AttemptCount = 0,
             CreatedAt = DateTime.UtcNow
         };
@@ -84,7 +81,6 @@ public class OtpService : IOtpService
             return (false, $"Incorrect OTP code. You have {remainingAttempts} attempts left.");
         }
 
-        // Mark as verified
         activeOtp.VerifiedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
 
@@ -122,7 +118,6 @@ public class OtpService : IOtpService
             return (false, $"Incorrect OTP code. You have {remainingAttempts} attempts left.");
         }
 
-        // Check only - do not mark as verified, so the final step can still consume it
         return (true, "OTP is valid.");
     }
 

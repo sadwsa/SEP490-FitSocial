@@ -5,10 +5,15 @@ namespace FitSocial.Domain.Interfaces;
 public interface IUserRepository : IRepository<User>
 {
     Task<bool> ExistsByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default);
+
     Task<bool> ExistsByEmailAsync(string normalizedEmail, Guid? excludingUserId, CancellationToken cancellationToken = default);
+
     Task<bool> ExistsByPhoneAsync(string phoneNumber, Guid? excludingUserId = null, CancellationToken cancellationToken = default);
+
     Task<User?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default);
+
     Task<User?> FindByGoogleSubAsync(string googleSub, CancellationToken cancellationToken = default);
+
     Task<(List<User> Items, int TotalCount)> ListUsersForAdminAsync(
         string? search = null,
         string? role = null,
@@ -16,13 +21,17 @@ public interface IUserRepository : IRepository<User>
         int pageNumber = 1,
         int pageSize = 10,
         CancellationToken cancellationToken = default);
+
     Task<(List<User> Items, int TotalCount)> ListStaffForAdminAsync(
         string? search = null,
         bool? isLocked = null,
         int pageNumber = 1,
         int pageSize = 10,
         CancellationToken cancellationToken = default);
+
     Task<User?> FindWithCoachProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default);
+
     Task<User?> FindUserProfileByIdAsync(Guid userId, CancellationToken cancellationToken = default);
+
     Task<User?> GetUserForUpdateAsync(Guid userId, CancellationToken cancellationToken = default);
 }

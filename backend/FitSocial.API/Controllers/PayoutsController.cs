@@ -9,9 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FitSocial.API.Controllers;
 
-/// <summary>
-/// UC-23.1 Process Coach Payout (Staff, Admin).
-/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = $"{RoleConstants.Staff},{RoleConstants.Admin}")]
@@ -30,9 +27,6 @@ public class PayoutsController : ControllerBase
         return Guid.TryParse(userIdStr, out userId);
     }
 
-    /// <summary>
-    /// Payout History management list with optional cycle/status/coach filters.
-    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponseDto<List<PayoutHistoryItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetHistory(
@@ -46,9 +40,6 @@ public class PayoutsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Builds (or refreshes pending) payout snapshots for a settlement cycle.
-    /// </summary>
     [HttpPost("generate")]
     [ProducesResponseType(typeof(ApiResponseDto<GeneratePayoutsResultDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Generate([FromBody] GeneratePayoutsRequestDto request, CancellationToken cancellationToken = default)
@@ -67,9 +58,6 @@ public class PayoutsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Payout processing modal data: breakdown, bank account, report/bank guards.
-    /// </summary>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ApiResponseDto<PayoutDetailDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
@@ -84,9 +72,6 @@ public class PayoutsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Confirm payout execution: transfers via banking gateway, marks PROCESSED.
-    /// </summary>
     [HttpPost("{id:guid}/process")]
     [ProducesResponseType(typeof(ApiResponseDto<ProcessPayoutResultDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Process(Guid id, CancellationToken cancellationToken = default)
@@ -106,10 +91,6 @@ public class PayoutsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Pay selected lines only (one package): transfers just their net amount.
-    /// The payout stays PENDING until every line is paid.
-    /// </summary>
     [HttpPost("{id:guid}/process-items")]
     [ProducesResponseType(typeof(ApiResponseDto<ProcessPayoutResultDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ProcessItems(Guid id, [FromBody] ProcessItemsRequestDto request, CancellationToken cancellationToken = default)

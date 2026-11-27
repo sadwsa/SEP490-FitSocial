@@ -11,11 +11,11 @@ public interface IPaymentService
 
     Task<ApiResponseDto<ActivationLinkDto>> CreateActivationLinkAsync(RegisterCoachRequestDto request, string originUrl, string? ipAddress = null);
 
-    /// <summary>
-    /// Renew/re-activate a coach subscription for an existing coach account.
-    /// Creates a new pending order + CoachUpgrade and returns a PayOS payment link.
-    /// </summary>
     Task<ApiResponseDto<ActivationLinkDto>> RenewCoachSubscriptionAsync(Guid coachId, Guid planId, string originUrl, string? ipAddress = null);
+
+    Task<ApiResponseDto<ActivationLinkDto>> RegenerateCoachActivationAsync(Guid coachId, string originUrl, string? ipAddress = null);
+
+    Task<ApiResponseDto<ActivationLinkDto>> RegenerateCoachActivationByEmailAsync(string email, string originUrl, string? ipAddress = null);
 
     Task<ApiResponseDto<CoachSubscriptionStatusDto>> GetCurrentCoachSubscriptionAsync(Guid coachId);
 
@@ -23,7 +23,6 @@ public interface IPaymentService
 
     Task<ApiResponseDto<bool>> CancelActivationAsync(long orderCode);
 
-    // UC-20: Purchase Training Package via PayOS VietQR
     Task<ApiResponseDto<PackagePurchasePreviewDto>> PreparePackagePurchaseAsync(Guid buyerId, Guid packageId);
 
     Task<ApiResponseDto<PackagePaymentLinkDto>> CreatePackagePaymentLinkAsync(Guid buyerId, Guid packageId, string originUrl);
@@ -32,10 +31,5 @@ public interface IPaymentService
 
     Task<ApiResponseDto<bool>> CancelPackagePurchaseAsync(long orderCode, Guid? requesterId = null);
 
-    /// <summary>
-    /// PayOS webhook dispatch (backup for the return-url flow).
-    /// Routes by OrderType: COACH_ACTIVATION unlocks the account, PACKAGE activates enrollment.
-    /// Never throws: returns false instead so the webhook handshake never fails because of our errors.
-    /// </summary>
     Task<bool> HandlePayOsWebhookAsync(string? code, long orderCode, CancellationToken cancellationToken = default);
 }

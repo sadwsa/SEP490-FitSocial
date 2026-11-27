@@ -3,11 +3,6 @@ using FitSocial.Domain.Interfaces;
 
 namespace FitSocial.Infrastructure.Services;
 
-/// <summary>
-/// Reads gateway credentials from the admin-managed PaymentGatewayConfigs
-/// table (keys stored AES-encrypted), filtered by channel purpose.
-/// Returns null when no usable row exists, letting callers fall back.
-/// </summary>
 public class DbPaymentGatewayCredentialProvider : IPaymentGatewayCredentialProvider
 {
     private readonly IPaymentGatewayConfigRepository _configs;
@@ -63,7 +58,6 @@ public class DbPaymentGatewayCredentialProvider : IPaymentGatewayCredentialProvi
             }
         }
 
-        // Deterministic fallback: most recently updated row of this purpose.
         foreach (var candidate in candidates.OrderByDescending(c => c.UpdatedAt))
         {
             var creds = TryDecrypt(candidate);

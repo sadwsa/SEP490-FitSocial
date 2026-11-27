@@ -5,11 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.TrainingPlan;
+using FitSocial.Application.DTOs.Transactions;
 using FitSocial.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-
+using Microsoft.Extensions.DependencyInjection;
 namespace FitSocial.API.Controllers;
 
 /// <summary>
@@ -23,14 +24,24 @@ namespace FitSocial.API.Controllers;
 public class CoachTrainingPlansController : ControllerBase
 {
     private readonly ITrainingPlanService _trainingPlanService;
+    private readonly ITransactionService _transactionService;
     private readonly ILogger<CoachTrainingPlansController> _logger;
+     [ActivatorUtilitiesConstructor]
+    public CoachTrainingPlansController(
+        ITrainingPlanService trainingPlanService,
+        ITransactionService transactionService,
+        ILogger<CoachTrainingPlansController>? logger = null)
+    {
+        _trainingPlanService = trainingPlanService;
+        _transactionService = transactionService;
+        _logger = logger!;
+    }
 
     public CoachTrainingPlansController(
         ITrainingPlanService trainingPlanService,
         ILogger<CoachTrainingPlansController> logger)
+        : this(trainingPlanService, null!, logger)
     {
-        _trainingPlanService = trainingPlanService;
-        _logger = logger;
     }
 
     /// <summary>
@@ -52,16 +63,8 @@ public class CoachTrainingPlansController : ControllerBase
             return Unauthorized(ApiResponseDto<TrainingPlanDetailDto>.Fail("Unauthorized: Invalid coach identity in token."));
         }
 
-        try
-        {
-            var result = await _trainingPlanService.CreateTrainingPlanAsync(coachId, dto, cancellationToken);
-            return Ok(ApiResponseDto<TrainingPlanDetailDto>.Ok(result, "Training plan created successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachTrainingPlans] Error creating training plan for coach {CoachId}: {Message}", coachId, ex.Message);
-            throw;
-        }
+        var result = await _trainingPlanService.CreateTrainingPlanAsync(coachId, dto, cancellationToken);
+        return Ok(ApiResponseDto<TrainingPlanDetailDto>.Ok(result, "Training plan created successfully."));
     }
 
     /// <summary>
@@ -84,16 +87,8 @@ public class CoachTrainingPlansController : ControllerBase
             return Unauthorized(ApiResponseDto<TrainingPlanDetailDto>.Fail("Unauthorized: Invalid coach identity in token."));
         }
 
-        try
-        {
-            var result = await _trainingPlanService.UpdateTrainingPlanAsync(coachId, planId, dto, cancellationToken);
-            return Ok(ApiResponseDto<TrainingPlanDetailDto>.Ok(result, "Training plan updated successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachTrainingPlans] Error updating training plan {PlanId} for coach {CoachId}: {Message}", planId, coachId, ex.Message);
-            throw;
-        }
+        var result = await _trainingPlanService.UpdateTrainingPlanAsync(coachId, planId, dto, cancellationToken);
+        return Ok(ApiResponseDto<TrainingPlanDetailDto>.Ok(result, "Training plan updated successfully."));
     }
 
     /// <summary>
@@ -114,16 +109,8 @@ public class CoachTrainingPlansController : ControllerBase
             return Unauthorized(ApiResponseDto<TrainingPlanDetailDto?>.Fail("Unauthorized: Invalid coach identity in token."));
         }
 
-        try
-        {
-            var result = await _trainingPlanService.GetTrainingPlanByOrderDetailsIdAsync(coachId, orderDetailsId, cancellationToken);
-            return Ok(ApiResponseDto<TrainingPlanDetailDto?>.Ok(result, "Training plan retrieved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachTrainingPlans] Error getting training plan for order detail {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
-            throw;
-        }
+        var result = await _trainingPlanService.GetTrainingPlanByOrderDetailsIdAsync(coachId, orderDetailsId, cancellationToken);
+        return Ok(ApiResponseDto<TrainingPlanDetailDto?>.Ok(result, "Training plan retrieved successfully."));
     }
 
     /// <summary>
@@ -140,16 +127,8 @@ public class CoachTrainingPlansController : ControllerBase
             return Unauthorized(ApiResponseDto<List<VideoTutorialDto>>.Fail("Unauthorized: Invalid coach identity in token."));
         }
 
-        try
-        {
-            var result = await _trainingPlanService.GetCoachVideoTutorialsAsync(coachId, cancellationToken);
-            return Ok(ApiResponseDto<List<VideoTutorialDto>>.Ok(result, "Video tutorials retrieved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachTrainingPlans] Error getting video tutorials for coach {CoachId}: {Message}", coachId, ex.Message);
-            throw;
-        }
+        var result = await _trainingPlanService.GetCoachVideoTutorialsAsync(coachId, cancellationToken);
+        return Ok(ApiResponseDto<List<VideoTutorialDto>>.Ok(result, "Video tutorials retrieved successfully."));
     }
 
     /// <summary>
@@ -170,16 +149,52 @@ public class CoachTrainingPlansController : ControllerBase
             return Unauthorized(ApiResponseDto<CoachTraineeWorkoutProgressDto>.Fail("Unauthorized: Invalid coach identity in token."));
         }
 
-        try
+        var result = await _trainingPlanService.GetCoachTraineeProgressAsync(coachId, orderDetailsId, cancellationToken);
+        return Ok(ApiResponseDto<CoachTraineeWorkoutProgressDto>.Ok(result, "Trainee workout progress retrieved successfully."));
+    }
+
+    /// <summary>
+    /// Review Workout Completion: Coach reviews trainee's workout submission and approves (COMPLETED) or rejects (UNCOMPLETE) with feedback.
+    /// </summary>
+    [HttpPost("review-workout")]
+    [ProducesResponseType(typeof(ApiResponseDto<WorkoutCompletionResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReviewWorkout(
+        [FromBody] CoachReviewWorkoutDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var coachId = GetCurrentCoachId();
+        if (coachId == Guid.Empty)
         {
-            var result = await _trainingPlanService.GetCoachTraineeProgressAsync(coachId, orderDetailsId, cancellationToken);
-            return Ok(ApiResponseDto<CoachTraineeWorkoutProgressDto>.Ok(result, "Trainee workout progress retrieved successfully."));
+            return Unauthorized(ApiResponseDto<WorkoutCompletionResultDto>.Fail("Unauthorized: Invalid coach identity in token."));
         }
-        catch (Exception ex)
+
+        var result = await _trainingPlanService.ReviewWorkoutCompletionAsync(coachId, dto, cancellationToken);
+        return Ok(ApiResponseDto<WorkoutCompletionResultDto>.Ok(result, "Workout completion reviewed successfully."));
+    }
+
+    /// <summary>
+    /// View Payout History: Lịch sử tiền hệ thống gửi coach (payout) và tiền bị trừ khi hoàn tiền (refund deducted).
+    /// Chỉ role COACH mới xem được.
+    /// </summary>
+    [HttpGet("payout-history")]
+    [ProducesResponseType(typeof(ApiResponseDto<PagedResultDto<TransactionHistoryDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetCoachPayoutHistory(
+        [FromQuery] TransactionFilterDto filter,
+        CancellationToken cancellationToken = default)
+    {
+        var coachId = GetCurrentCoachId();
+        if (coachId == Guid.Empty)
         {
-            _logger.LogError(ex, "[CoachTrainingPlans] Error getting progress for order detail {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
-            throw;
+            return Unauthorized(ApiResponseDto<PagedResultDto<TransactionHistoryDto>>.Fail("Unauthorized: Invalid coach identity."));
         }
+
+        var result = await _transactionService.GetCoachPayoutHistoryAsync(coachId, filter);
+        return Ok(ApiResponseDto<PagedResultDto<TransactionHistoryDto>>.Ok(result, "Coach payout history retrieved successfully."));
     }
 
     private Guid GetCurrentCoachId()

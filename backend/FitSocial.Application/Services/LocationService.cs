@@ -15,11 +15,19 @@ public class LocationService : ILocationService
 {
     private readonly ILocationRepository _locationRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IAuditLogService? _auditLogService;
+    private readonly ICurrentUserContext? _currentUserContext;
 
-    public LocationService(ILocationRepository locationRepository, IUnitOfWork unitOfWork)
+    public LocationService(
+        ILocationRepository locationRepository,
+        IUnitOfWork unitOfWork,
+        IAuditLogService? auditLogService = null,
+        ICurrentUserContext? currentUserContext = null)
     {
         _locationRepository = locationRepository;
         _unitOfWork = unitOfWork;
+        _auditLogService = auditLogService;
+        _currentUserContext = currentUserContext;
     }
 
     public async Task<ApiResponseDto<PagedResultDto<LocationDto>>> GetPagedLocationsAsync(
@@ -130,6 +138,30 @@ public class LocationService : ILocationService
             await _locationRepository.AddAsync(newLocation, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: _currentUserContext?.UserId,
+                        action: "CREATE_LOCATION",
+                        entityType: "Location",
+                        entityId: newLocation.LocationId.ToString(),
+                        description: $"Created training location '{newLocation.LocationName}'.",
+                        oldValue: null,
+                        newValue: new
+                        {
+                            locationName = newLocation.LocationName,
+                            address = newLocation.Address
+                        },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log failure is non-fatal
+                }
+            }
+
             var resultDto = new LocationDto
             {
                 LocationId = newLocation.LocationId,
@@ -191,10 +223,40 @@ public class LocationService : ILocationService
                 return ApiResponseDto<LocationDto>.Fail($"Location '{trimmedName}' already exists.");
             }
 
+            var oldValues = new
+            {
+                locationName = location.LocationName,
+                address = location.Address
+            };
+
             location.LocationName = trimmedName;
             location.Address = trimmedAddress;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: _currentUserContext?.UserId,
+                        action: "UPDATE_LOCATION",
+                        entityType: "Location",
+                        entityId: location.LocationId.ToString(),
+                        description: $"Updated training location '{location.LocationName}'.",
+                        oldValue: oldValues,
+                        newValue: new
+                        {
+                            locationName = location.LocationName,
+                            address = location.Address
+                        },
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log failure is non-fatal
+                }
+            }
 
             var resultDto = new LocationDto
             {
@@ -231,8 +293,35 @@ public class LocationService : ILocationService
                 return ApiResponseDto<bool>.Fail("Cannot delete this location because it is currently linked to coaches.");
             }
 
+            var deletedSnapshot = new
+            {
+                locationName = location.LocationName,
+                address = location.Address
+            };
+            var deletedName = location.LocationName;
+
             _locationRepository.Remove(location);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_auditLogService != null)
+            {
+                try
+                {
+                    await _auditLogService.LogAsync(
+                        actorAccountId: _currentUserContext?.UserId,
+                        action: "DELETE_LOCATION",
+                        entityType: "Location",
+                        entityId: locationId.ToString(),
+                        description: $"Deleted training location '{deletedName}'.",
+                        oldValue: deletedSnapshot,
+                        newValue: null,
+                        cancellationToken: cancellationToken);
+                }
+                catch
+                {
+                    // Audit log failure is non-fatal
+                }
+            }
 
             return ApiResponseDto<bool>.Ok(true, "Location deleted successfully.");
         }

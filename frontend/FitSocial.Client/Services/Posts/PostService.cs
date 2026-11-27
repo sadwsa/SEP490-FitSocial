@@ -59,6 +59,26 @@ public class PostService : IPostService
             queryParams.Add($"authorId={query.AuthorId.Value}");
         }
 
+        if (!string.IsNullOrWhiteSpace(query.SortBy))
+        {
+            queryParams.Add($"sortBy={Uri.EscapeDataString(query.SortBy.Trim())}");
+        }
+
+        if (query.AsOf.HasValue)
+        {
+            queryParams.Add($"asOf={Uri.EscapeDataString(query.AsOf.Value.ToString("o"))}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.SessionId))
+        {
+            queryParams.Add($"sessionId={Uri.EscapeDataString(query.SessionId.Trim())}");
+        }
+
+        if (query.PrioritizedPostId.HasValue && query.PrioritizedPostId.Value != Guid.Empty)
+        {
+            queryParams.Add($"prioritizedPostId={query.PrioritizedPostId.Value}");
+        }
+
         var url = $"posts?{string.Join("&", queryParams)}";
         var response = await _apiClient.GetAsync<PagedResult<PostDto>>(url);
 

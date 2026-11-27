@@ -21,6 +21,8 @@ public interface IRefundRequestService
 
     Task<ApiResponseDto<RefundRequestDto>> ApproveRefundRequestAsync(Guid id, Guid staffUserId, ApproveRefundRequestDto dto, string? ipAddress = null, CancellationToken cancellationToken = default);
 
+    Task<ApiResponseDto<RefundRequestDto>> RetryDisbursementAsync(Guid id, Guid staffUserId, CancellationToken cancellationToken = default);
+
     Task<ApiResponseDto<RefundRequestDto>> RejectRefundRequestAsync(Guid id, Guid staffUserId, RejectRefundRequestDto dto, string? ipAddress = null, CancellationToken cancellationToken = default);
 
     Task<ApiResponseDto<RefundRequestDto>> ProcessRefundRequestAsync(Guid id, Guid staffUserId, ProcessRefundRequestDto dto, CancellationToken cancellationToken = default);

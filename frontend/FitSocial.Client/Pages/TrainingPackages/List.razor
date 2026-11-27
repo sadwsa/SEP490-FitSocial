@@ -154,19 +154,87 @@
                             </div>
                         </div>
 
-                        <!-- SessionCount & MinAge -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">
-                                    Session Count
+                        <!-- PackageType Selection -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                Package Service Inclusions <span class="text-red-500">*</span>
+                            </label>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(createDto.PackageType == "BOTH" ? "border-[#FF5500] bg-orange-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="w-8 h-8 rounded-lg bg-orange-100 text-[#FF5500] flex items-center justify-center">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                            </svg>
+                                        </div>
+                                        <input type="radio" name="packageType" value="BOTH" checked="@(createDto.PackageType == "BOTH")" @onchange='() => SelectCreatePackageType("BOTH")' class="text-[#FF5500] focus:ring-[#FF5500]" />
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-black text-gray-900">Workout + Meal Plan</p>
+                                        <p class="text-[11px] text-gray-500 mt-0.5">Full coaching: workout routines &amp; nutrition plan</p>
+                                    </div>
                                 </label>
-                                <InputNumber @bind-Value="createDto.SessionCount"
-                                             class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF5500] focus:border-transparent outline-none transition text-sm"
-                                             placeholder="e.g. 12" />
-                                <ValidationMessage For="@(() => createDto.SessionCount)" class="text-red-500 text-xs mt-1" />
-                            </div>
 
-                            <div>
+                                <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(createDto.PackageType == "WORKOUT" ? "border-blue-500 bg-blue-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20M6 7v10M18 7v10M2 10v4M22 10v4" />
+                                            </svg>
+                                        </div>
+                                        <input type="radio" name="packageType" value="WORKOUT" checked="@(createDto.PackageType == "WORKOUT")" @onchange='() => SelectCreatePackageType("WORKOUT")' class="text-blue-600 focus:ring-blue-500" />
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-black text-gray-900">Workout Plan Only</p>
+                                        <p class="text-[11px] text-gray-500 mt-0.5">Custom exercises &amp; video tutorials</p>
+                                    </div>
+                                </label>
+
+                                <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(createDto.PackageType == "MEAL" ? "border-emerald-500 bg-emerald-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 2v20M6 2v7a3 3 0 006 0V2M9 9v13" />
+                                            </svg>
+                                        </div>
+                                        <input type="radio" name="packageType" value="MEAL" checked="@(createDto.PackageType == "MEAL")" @onchange='() => SelectCreatePackageType("MEAL")' class="text-emerald-600 focus:ring-emerald-500" />
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-black text-gray-900">Meal Plan Only</p>
+                                        <p class="text-[11px] text-gray-500 mt-0.5">Personalized daily nutrition schedule</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- SessionCount & MinAge (SessionCount hidden if PackageType is MEAL) -->
+                        @if (createDto.PackageType != "MEAL")
+                        {
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                        Session Count <span class="text-xs font-normal text-gray-400">(leave blank for flexible sessions)</span>
+                                    </label>
+                                    <InputNumber @bind-Value="createDto.SessionCount"
+                                                 class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF5500] focus:border-transparent outline-none transition text-sm"
+                                                 placeholder="e.g. 12" />
+                                    <ValidationMessage For="@(() => createDto.SessionCount)" class="text-red-500 text-xs mt-1" />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                        Minimum Age (Years)
+                                    </label>
+                                    <InputNumber @bind-Value="createDto.MinAge"
+                                                 class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF5500] focus:border-transparent outline-none transition text-sm"
+                                                 placeholder="e.g. 16" />
+                                    <ValidationMessage For="@(() => createDto.MinAge)" class="text-red-500 text-xs mt-1" />
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-4">
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">
                                     Minimum Age (Years)
                                 </label>
@@ -175,7 +243,7 @@
                                              placeholder="e.g. 16" />
                                 <ValidationMessage For="@(() => createDto.MinAge)" class="text-red-500 text-xs mt-1" />
                             </div>
-                        </div>
+                        }
 
                         <!-- TargetAudience -->
                         <div class="mb-4">
@@ -186,47 +254,6 @@
                                        class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#FF5500] focus:border-transparent outline-none transition text-sm"
                                        placeholder="e.g. Men aiming for muscle hypertrophy, Women seeking fat loss, Beginners..." />
                             <ValidationMessage For="@(() => createDto.TargetAudience)" class="text-red-500 text-xs mt-1" />
-                        </div>
-
-                        <!-- PackageType Selection -->
-                        <div class="mb-5">
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                Package Service Inclusions <span class="text-red-500">*</span>
-                            </label>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(createDto.PackageType == "BOTH" ? "border-[#FF5500] bg-orange-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-lg">🌟</span>
-                                        <input type="radio" name="packageType" value="BOTH" checked="@(createDto.PackageType == "BOTH")" @onchange='() => createDto.PackageType = "BOTH"' class="text-[#FF5500] focus:ring-[#FF5500]" />
-                                    </div>
-                                    <div>
-                                        <p class="text-xs font-black text-gray-900">Workout + Meal Plan</p>
-                                        <p class="text-[11px] text-gray-500 mt-0.5">Full coaching: workout routines &amp; nutrition plan</p>
-                                    </div>
-                                </label>
-
-                                <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(createDto.PackageType == "WORKOUT" ? "border-blue-500 bg-blue-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-lg">🏋️‍♂️</span>
-                                        <input type="radio" name="packageType" value="WORKOUT" checked="@(createDto.PackageType == "WORKOUT")" @onchange='() => createDto.PackageType = "WORKOUT"' class="text-blue-600 focus:ring-blue-500" />
-                                    </div>
-                                    <div>
-                                        <p class="text-xs font-black text-gray-900">Workout Plan Only</p>
-                                        <p class="text-[11px] text-gray-500 mt-0.5">Custom exercises &amp; video tutorials</p>
-                                    </div>
-                                </label>
-
-                                <label class="p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between @(createDto.PackageType == "MEAL" ? "border-emerald-500 bg-emerald-50/50 shadow-xs" : "border-gray-200 bg-gray-50 hover:bg-gray-100/70")">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-lg">🥗</span>
-                                        <input type="radio" name="packageType" value="MEAL" checked="@(createDto.PackageType == "MEAL")" @onchange='() => createDto.PackageType = "MEAL"' class="text-emerald-600 focus:ring-emerald-500" />
-                                    </div>
-                                    <div>
-                                        <p class="text-xs font-black text-gray-900">Meal Plan Only</p>
-                                        <p class="text-[11px] text-gray-500 mt-0.5">Personalized meal schedule &amp; calories</p>
-                                    </div>
-                                </label>
-                            </div>
                         </div>
 
                         <!-- IsActive Switch -->
@@ -381,8 +408,8 @@
                                     </span>
                                 </div>
                                 <div class="absolute top-3 right-3">
-                                    <span class="px-2.5 py-1 rounded-full bg-orange-500 text-white text-[10px] font-bold whitespace-nowrap">
-                                        @(pkg.SessionCount ?? 3) Sessions
+                                    <span class="px-2.5 py-1 rounded-full @(pkg.SessionCount.HasValue ? "bg-orange-500" : "bg-emerald-600") text-white text-[10px] font-bold whitespace-nowrap">
+                                        @(pkg.SessionCount.HasValue ? $"{pkg.SessionCount.Value} Sessions" : "Flexible Sessions")
                                     </span>
                                 </div>
 
@@ -396,11 +423,45 @@
                             <!-- Content -->
                             <div class="p-5">
                                 <!-- Type tag -->
-                                <div class="mb-3">
-                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-orange-50 text-[#FF5500] border border-orange-200">
-                                        <svg class="w-3 h-3 fill-current" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-                                        Workout + Meal
-                                    </span>
+                                <div class="mb-3 flex items-center gap-1.5 flex-wrap">
+                                    @if (pkg.PackageType == "WORKOUT")
+                                    {
+                                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20M6 7v10M18 7v10M2 10v4M22 10v4" />
+                                            </svg>
+                                            Workout
+                                        </span>
+                                    }
+                                    else if (pkg.PackageType == "MEAL")
+                                    {
+                                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 2v20M6 2v7a3 3 0 006 0V2M9 9v13" />
+                                            </svg>
+                                            Meal Plan
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-orange-50 text-[#FF5500] border border-orange-200">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                            </svg>
+                                            Workout + Meal
+                                        </span>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(pkg.TargetAudience))
+                                    {
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-600">
+                                            <svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <circle cx="12" cy="12" r="9" stroke-width="2" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v3m0 12v3m-9-9h3m12 0h3m-6 0a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                            @pkg.TargetAudience
+                                        </span>
+                                    }
                                 </div>
 
                                 <!-- Short description -->
@@ -560,6 +621,15 @@
         if (e.Value is bool val)
         {
             createDto.IsActive = val;
+        }
+    }
+
+    private void SelectCreatePackageType(string type)
+    {
+        createDto.PackageType = type;
+        if (type == "MEAL")
+        {
+            createDto.SessionCount = null;
         }
     }
 

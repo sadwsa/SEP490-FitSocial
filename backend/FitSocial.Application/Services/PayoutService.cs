@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using FitSocial.Application.DTOs.Common;
 using FitSocial.Application.DTOs.Payouts;
 using FitSocial.Application.Interfaces;
@@ -6,12 +6,10 @@ using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FitSocial.Application.Services;
 
-/// <summary>
-/// UC-23.1 Process Coach Payout (Staff/Admin).
-/// </summary>
 public class PayoutService : IPayoutService
 {
     private readonly IPayoutRepository _payouts;
@@ -25,11 +23,7 @@ public class PayoutService : IPayoutService
     private readonly IEmailService _emailService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserContext? _currentUserContext;
-
-    /// <summary>
-    /// Serializes cycle generation: two concurrent Generate clicks must not
-    /// insert the same (coach, month, year) snapshot twice (unique index).
-    /// </summary>
+    private readonly ILogger<PayoutService>? _logger;
     private static readonly SemaphoreSlim _generateLock = new(1, 1);
 
     public PayoutService(
@@ -43,7 +37,8 @@ public class PayoutService : IPayoutService
         INotificationRepository notifications,
         IUnitOfWork unitOfWork,
         IEmailService? emailService = null,
-        ICurrentUserContext? currentUserContext = null)
+        ICurrentUserContext? currentUserContext = null,
+        ILogger<PayoutService>? logger = null)
     {
         _payouts = payouts;
         _users = users;
@@ -56,6 +51,7 @@ public class PayoutService : IPayoutService
         _emailService = emailService!;
         _unitOfWork = unitOfWork;
         _currentUserContext = currentUserContext;
+        _logger = logger;
     }
 
     private static (DateTime from, DateTime to) CycleRange(int month, int year)
@@ -63,8 +59,6 @@ public class PayoutService : IPayoutService
         var from = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
         return (from, from.AddMonths(1));
     }
-
-    // ---------- History ----------
 
     public async Task<ApiResponseDto<List<PayoutHistoryItemDto>>> GetPayoutHistoryAsync(
         int? month, int? year, string? status, Guid? coachId, CancellationToken cancellationToken = default)
@@ -130,10 +124,6 @@ public class PayoutService : IPayoutService
         return $"Cannot pay a future cycle yet. Cycle {month:D2}/{year} becomes payable once {MonthNames[month - 1]} {year} arrives.";
     }
 
-    /// <summary>
-    /// An item counts as paid when marked PROCESSED, or (legacy rows) when it
-    /// belongs to an already-PROCESSED payout.
-    /// </summary>
     private static bool IsItemPaid(PayoutItem item, string? payoutStatus)
     {
         if (string.Equals(item.Status, PayoutConstants.StatusProcessed, StringComparison.OrdinalIgnoreCase))
@@ -154,7 +144,7 @@ public class PayoutService : IPayoutService
     {
         if (!string.Equals(status, PayoutConstants.StatusPending, StringComparison.OrdinalIgnoreCase))
         {
-            return (false, null); // processed/failed records show no action
+            return (false, null); 
         }
         if (IsFutureCycle(month, year))
         {
@@ -174,8 +164,6 @@ public class PayoutService : IPayoutService
         }
         return (true, null);
     }
-
-    // ---------- Generate ----------
 
     public async Task<ApiResponseDto<GeneratePayoutsResultDto>> GenerateMonthlyPayoutsAsync(
         int month, int year, CancellationToken cancellationToken = default)
@@ -206,8 +194,6 @@ public class PayoutService : IPayoutService
     private async Task<ApiResponseDto<GeneratePayoutsResultDto>> GenerateMonthlyPayoutsCoreAsync(
         int month, int year, DateTime from, DateTime to, DateTime now, CancellationToken cancellationToken)
     {
-        // Monthly vesting: a cycle also collects older orders whose revenue
-        // vests into this month, so scan back up to MaxVestingMonths.
         var windowFrom = from.AddMonths(-PayoutConstants.MaxVestingMonths);
         var coachIds = await _payouts.ListCoachesWithSalesAsync(windowFrom, to, cancellationToken);
 
@@ -229,11 +215,9 @@ public class PayoutService : IPayoutService
             {
                 if (!string.Equals(existing.Status, PayoutConstants.StatusPending, StringComparison.OrdinalIgnoreCase))
                 {
-                    continue; // never recalculate a PROCESSED cycle
+                    continue;
                 }
 
-                // Rebuild pending snapshot but KEEP already-paid lines
-                // (per-package payments must survive regeneration).
                 var kept = existing.PayoutItems.Where(i => IsItemPaid(i, existing.Status)).ToList();
                 var coveredOrders = kept
                     .Where(i => (i.GrossAmount ?? 0) > 0)
@@ -291,8 +275,6 @@ public class PayoutService : IPayoutService
             return ApiResponseDto<GeneratePayoutsResultDto>.Fail("Could not generate payouts. Please try again.");
         }
 
-        // UC-23.1: generating the monthly snapshot is a Staff/Admin money-touching
-        // operation, so it is traced just like processing it.
         await WriteAuditAsync(_currentUserContext?.UserId, "GENERATE_COACH_PAYOUT", null, "GENERATED",
             new { month, year, created, updated, skippedZeroNet = skipped, generatedAt = now },
             _currentUserContext?.IpAddress, cancellationToken);
@@ -331,12 +313,12 @@ public class PayoutService : IPayoutService
         var n = PayoutConstants.VestingMonths(durationDays);
         if (k < 0 || k >= n || n <= 1)
         {
-            return n <= 1 ? "100% kỳ này" : string.Empty;
+            return n <= 1 ? "100% this cycle" : string.Empty;
         }
         var pct = packageTotal > 0
             ? (trancheAmount / packageTotal * 100m).ToString("0.##")
             : "?";
-        return $"Kỳ {k + 1}/{n} • {pct}%";
+        return $"Cycle {k + 1}/{n} • {pct}%";
     }
 
     private static string PackageGroupKey(Payout payout, Guid orderId)
@@ -375,11 +357,6 @@ public class PayoutService : IPayoutService
         };
     }
 
-    /// <summary>
-    /// Full month-by-month vesting timeline of one order, marked with what
-    /// has already been paid in any cycle. A PAYABLE month carrying an unpaid
-    /// item of a still-pending payout can be paid directly (CanPay).
-    /// </summary>
     private static List<VestingMonthDto> BuildOrderTimeline(
         Order? order,
         HashSet<(Guid, int, int)> paidCycles,
@@ -423,8 +400,6 @@ public class PayoutService : IPayoutService
         var orders = await _payouts.ListCompletedOrdersForCycleAsync(coachId, windowFrom, windowTo, ct);
         var cycleStart = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        // Monthly vesting: each order contributes 1/N of its price to every
-        // month in [purchase month, purchase month + N - 1].
         var lines = new List<VestingLine>();
         foreach (var order in orders)
         {
@@ -450,11 +425,7 @@ public class PayoutService : IPayoutService
 
         var (from, to) = CycleRange(month, year);
         var refunds = await _payouts.ListApprovedRefundsForCycleAsync(coachId, from, to, ct);
-
         var vestedIds = lines.Select(l => l.Order.OrderId).ToHashSet();
-        // Refunds of orders vesting this cycle are already excluded from gross
-        // when the order flips to REFUNDED; only deduct refunds of orders
-        // counted in an earlier cycle.
         var priorRefunds = refunds
             .Where(r => !vestedIds.Contains(r.OrderId))
             .Select(r => (Refund: r, Amount: r.ApprovedAmount ?? r.RequestedAmount ?? 0))
@@ -479,10 +450,6 @@ public class PayoutService : IPayoutService
         payout.NetPayoutAmount = calc.Net;
     }
 
-    /// <summary>
-    /// Recomputes snapshot totals from the actual item set (used when kept
-    /// paid lines survive a regeneration).
-    /// </summary>
     private static void ApplyItemTotals(Payout payout)
     {
         payout.TotalGrossAmount = payout.PayoutItems.Sum(i => i.GrossAmount ?? 0);
@@ -505,10 +472,7 @@ public class PayoutService : IPayoutService
                 continue;
             }
             var commission = Math.Round(line.Amount * PayoutConstants.CommissionRate, 2);
-            // NOTE: PayoutItemId intentionally left unset (DB default uuid_generate_v4()).
-            // These items attach via the tracked Payout collection; an explicitly
-            // assigned store-generated key would make EF treat them as EXISTING
-            // rows (UPDATE) instead of new rows (INSERT).
+
             items.Add(new PayoutItem
             {
                 PayoutId = payoutId,
@@ -529,7 +493,7 @@ public class PayoutService : IPayoutService
             {
                 continue;
             }
-            // Same note as above: leave PayoutItemId for the DB default.
+
             items.Add(new PayoutItem
             {
                 PayoutId = payoutId,
@@ -546,8 +510,6 @@ public class PayoutService : IPayoutService
 
         return items;
     }
-
-    // ---------- Detail (processing modal) ----------
 
     public async Task<ApiResponseDto<PayoutDetailDto>> GetPayoutDetailAsync(Guid payoutId, CancellationToken cancellationToken = default)
     {
@@ -597,8 +559,6 @@ public class PayoutService : IPayoutService
                 .ToList()
         };
 
-        // Paid months across ALL cycles of this coach (for per-package timelines).
-        // Value: payout + item holding that month's tranche, and whether it is paid.
         var coachPayouts = await _payouts.ListHistoryAsync(null, null, null, payout.CoachId, cancellationToken);
         var monthLedger = new Dictionary<(Guid, int, int), (Guid, Guid, bool, bool)>();
         foreach (var cp in coachPayouts)
@@ -660,8 +620,6 @@ public class PayoutService : IPayoutService
         return ApiResponseDto<PayoutDetailDto>.Ok(dto, "Payout detail retrieved successfully.");
     }
 
-    // ---------- Process ----------
-
     private static List<PayoutItem> UnpaidGrossItems(Payout payout)
     {
         return payout.PayoutItems
@@ -678,10 +636,6 @@ public class PayoutService : IPayoutService
 
     private sealed record ProcessGuards(CoachBankAccount Bank, string AccountNumber);
 
-    /// <summary>
-    /// Shared guards for any payout disbursement (full or per-package):
-    /// pending status, arrived cycle, active bank account, no blocking reports.
-    /// </summary>
     private async Task<(ProcessGuards? guards, string? error)> CheckProcessGuardsAsync(
         Payout payout, Guid staffId, string? ipAddress, CancellationToken ct)
     {
@@ -690,13 +644,11 @@ public class PayoutService : IPayoutService
             return (null, $"Only pending payouts can be processed (current status: {payout.Status}).");
         }
 
-        // Future cycles are not payable yet; overdue (past, still pending) ones are.
         if (IsFutureCycle(payout.PayoutMonth, payout.PayoutYear))
         {
             return (null, FutureCycleMessage(payout.PayoutMonth, payout.PayoutYear));
         }
 
-        // 23.1.E1 Missing or Inactive Coach Payment Account (UC-36.1: inactive excluded)
         var banks = await _bankAccounts.ListActiveByCoachIdAsync(payout.CoachId, ct);
         var bank = banks.FirstOrDefault(b => b.IsDefault == true) ?? banks.FirstOrDefault();
         if (bank == null)
@@ -706,7 +658,6 @@ public class PayoutService : IPayoutService
             return (null, "Coach has not added or activated a valid bank account. Payout rejected and flagged.");
         }
 
-        // TH1: unresolved reports block the transfer
         var reportCount = await _reports.CountUnresolvedAgainstUserAsync(payout.CoachId, ct);
         if (reportCount > 0)
         {
@@ -725,10 +676,6 @@ public class PayoutService : IPayoutService
             string.Equals(item.Order.OrderStatus, PaymentConstants.OrderStatusRefunded, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Pay-all: transfers the REMAINING balance (unpaid tranches minus
-    /// unconsumed refund adjustments) in one transfer.
-    /// </summary>
     public async Task<ApiResponseDto<ProcessPayoutResultDto>> ProcessPayoutAsync(
         Guid payoutId, Guid staffId, string? ipAddress = null, CancellationToken cancellationToken = default)
     {
@@ -762,7 +709,6 @@ public class PayoutService : IPayoutService
                 "Payout is already fully paid.");
         }
 
-        // Mutual Consistency: refunded orders require regeneration first.
         if (unpaid.Any(IsOrderRefunded))
         {
             await WriteAuditAsync(staffId, "PAYOUT_BLOCKED", payout, payout.Status,
@@ -777,10 +723,6 @@ public class PayoutService : IPayoutService
             staffId, ipAddress, $"PO{payout.PayoutId:N}", cancellationToken);
     }
 
-    /// <summary>
-    /// Pay selected lines only (one package group): transfers just their
-    /// net amount. The payout stays PENDING until every line is paid.
-    /// </summary>
     public async Task<ApiResponseDto<ProcessPayoutResultDto>> ProcessPackageItemsAsync(
         Guid payoutId, List<Guid> payoutItemIds, Guid staffId, string? ipAddress = null, CancellationToken cancellationToken = default)
     {
@@ -824,7 +766,6 @@ public class PayoutService : IPayoutService
         var orderIds = targets.Select(t => t.OrderId).ToHashSet();
         var refunds = PendingRefundItems(payout).Where(r => orderIds.Contains(r.OrderId)).ToList();
 
-        // Stable idempotency key for this exact selection (safe retries).
         var first = targets.OrderBy(t => t.PayoutItemId).First().PayoutItemId.ToString("N")[..8];
         var reference = $"PO{payout.PayoutId:N}-{first}x{targets.Count}";
 
@@ -849,8 +790,6 @@ public class PayoutService : IPayoutService
 
         var now = DateTime.UtcNow;
 
-        // 1. Reconcile first: some targets may already carry a gateway order
-        // from an earlier attempt whose response never reached us.
         var withRef = grossTargets.Where(t => !string.IsNullOrWhiteSpace(t.GatewayRef)).ToList();
         foreach (var grp in withRef.GroupBy(t => t.GatewayRef!))
         {
@@ -877,7 +816,6 @@ public class PayoutService : IPayoutService
         var remaining = grossTargets.Where(t => !IsItemPaid(t, payout.Status)).ToList();
         if (remaining.Count == 0)
         {
-            // Everything was already settled on PayOS by earlier attempts.
             return await FinalizeSettlementAsync(
                 payout, 0, null, staffId, ipAddress,
                 "Already settled on PayOS by an earlier attempt — records reconciled, no new transfer.", ct);
@@ -907,7 +845,6 @@ public class PayoutService : IPayoutService
         }
         catch (Exception ex)
         {
-            // 23.1.E2 Banking Gateway failure
             await WriteAuditAsync(staffId, "PAYOUT_FAILED", payout, "PENDING",
                 new { reason = "E2: gateway exception", error = ex.Message }, ipAddress, ct);
             return ApiResponseDto<ProcessPayoutResultDto>.Fail("Banking gateway error. Payout kept as PENDING — please retry.");
@@ -915,9 +852,6 @@ public class PayoutService : IPayoutService
 
         if (!created.Created)
         {
-            // Create failed (e.g. "idempotency key exists"): the order may
-            // already exist on PayOS — look it up by our reference instead of
-            // failing blindly, so money is never paid twice nor lost track of.
             BankTransferStatus? found = null;
             try
             {
@@ -965,7 +899,6 @@ public class PayoutService : IPayoutService
                 $"Payout transfer failed ({created.FailureReason}). Payout kept as PENDING — please retry.");
         }
 
-        // Order accepted — remember its gateway id on every touched line.
         foreach (var t in remaining.Concat(remainingRefunds))
         {
             t.GatewayRef = created.GatewayRef;
@@ -973,8 +906,6 @@ public class PayoutService : IPayoutService
 
         if (!created.Succeeded)
         {
-            // Async settlement: PayOS received the order (PROCESSING...).
-            // Persist the gateway ref now; staff re-checks via retry.
             try
             {
                 await _unitOfWork.SaveChangesAsync(ct);
@@ -1006,6 +937,7 @@ public class PayoutService : IPayoutService
         Guid staffId, string? ipAddress, string? customMessage, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
+        var previousStatus = payout.Status;
         var fullyPaid = !UnpaidGrossItems(payout).Any();
         if (fullyPaid)
         {
@@ -1017,11 +949,8 @@ public class PayoutService : IPayoutService
 
         await WriteAuditAsync(staffId, fullyPaid ? "PAYOUT_PROCESSED" : "PAYOUT_PARTIAL", payout,
             fullyPaid ? "PROCESSED" : "PENDING",
-            new { transactionRef, amount, processedAt = now }, ipAddress, ct);
+            new { transactionRef, amount, processedAt = now }, ipAddress, ct, previousStatus);
 
-        // Notify the coach for EVERY disbursement, not only full settlements:
-        // a partial payout (per-package pay) still moves real money to their bank
-        // account, so it must surface in the coach notification bell as well.
         try
         {
             await _notifications.AddAsync(new Notification
@@ -1147,7 +1076,7 @@ public class PayoutService : IPayoutService
         }
     }
 
-    private async Task WriteAuditAsync(Guid? actorId, string action, Payout? payout, string? newStatus, object details, string? ipAddress, CancellationToken ct)
+    private async Task WriteAuditAsync(Guid? actorId, string action, Payout? payout, string? newStatus, object details, string? ipAddress, CancellationToken ct, string? oldStatus = null)
     {
         try
         {
@@ -1157,16 +1086,16 @@ public class PayoutService : IPayoutService
                 Action = action,
                 EntityType = "Payout",
                 EntityId = payout?.PayoutId.ToString(),
-                OldValue = payout == null ? null : JsonSerializer.Serialize(new { status = payout.Status }),
+                OldValue = payout == null ? null : JsonSerializer.Serialize(new { status = oldStatus ?? payout.Status }),
                 NewValue = JsonSerializer.Serialize(new { status = newStatus, details }),
                 Ipaddress = ipAddress,
                 CreatedAt = DateTime.UtcNow
             }, ct);
             await _unitOfWork.SaveChangesAsync(ct);
         }
-        catch
+        catch (Exception ex)
         {
-            // Audit failures must not break the payout flow itself
+            _logger?.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", action, payout?.PayoutId);
         }
     }
 

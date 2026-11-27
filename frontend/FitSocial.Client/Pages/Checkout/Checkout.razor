@@ -4,13 +4,10 @@
 @inject FitSocial.Client.Services.Cart.ICartService CartService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
-@inject FitSocial.Client.Services.Auth.IAuthService AuthService
-@inject IJSRuntime JS
 @inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Cart
 @using FitSocial.Client.Models.Payments
-@using System.Security.Claims
 
 <PageTitle>Checkout &amp; Package Activation - FitConnect</PageTitle>
 
@@ -199,11 +196,6 @@
     private string? infoMessage;
     private CancellationTokenSource? pollCts;
 
-    private string? headerSearchTerm = "";
-    private string userName = "User";
-    private string userInitials = "U";
-    private string userRole = "Trainee";
-
     private string QrImageUrl
     {
         get
@@ -221,25 +213,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
-        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
-        Shell.SearchInputHandler = e =>
-        {
-            HandleHeaderSearchInput(e);
-            return Task.CompletedTask;
-        };
-        Shell.SearchKeyUpHandler = e =>
-        {
-            HandleHeaderSearchKeyUp(e);
-            return Task.CompletedTask;
-        };
-        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
-        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
-
         await LoadUserInfoAsync();
         await LoadCheckoutData();
 
-        // PayOS cancel redirect lands here: ?cancel=true&orderCode=xxx
         if ((CancelledQuery == true || string.Equals(PayOsCode, "99", StringComparison.OrdinalIgnoreCase))
             && OrderCodeQuery.HasValue && OrderCodeQuery.Value > 0)
         {
@@ -269,10 +245,6 @@
         isAutoChecking = false;
     }
 
-    /// <summary>
-    /// Polls PayOS every few seconds so a successful transfer
-    /// automatically moves to the success page (no manual click needed).
-    /// </summary>
     private async Task AutoVerifyLoopAsync(CancellationToken token)
     {
         try
@@ -280,6 +252,7 @@
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
             while (await timer.WaitForNextTickAsync(token))
             {
+                if (isProcessing) continue;
                 if (paymentLink == null || step != CheckoutStep.Qr) break;
 
                 FitSocial.Client.Models.Common.ApiResponse<FitSocial.Client.Models.Orders.OrderDto>? res = null;
@@ -289,7 +262,7 @@
                 }
                 catch
                 {
-                    continue; // transient network error -> keep polling
+                    continue;
                 }
 
                 if (token.IsCancellationRequested) break;
@@ -330,27 +303,8 @@
             if (PackageId.HasValue && PackageId.Value != Guid.Empty)
             {
                 selectedPackageId = PackageId.Value;
-                var cartRes = await CartService.GetCartAsync();
-                if (cartRes.Success && cartRes.Data != null)
-                {
-                    cartItems = cartRes.Data.Items.Where(i => i.IsAvailable).ToList();
-                }
-
-                var res = await CheckoutService.PrepareAsync(selectedPackageId);
-                if (res.Success && res.Data != null)
-                {
-                    preview = res.Data;
-                }
-                else if (IsAlreadyPurchasedError(res.Message))
-                {
-                    // Already owned: skip the error panel, go to My Packages instead.
-                    Navigation.NavigateTo("/training-packages/purchased");
-                    return;
-                }
-                else
-                {
-                    errorMessage = res.Message ?? "Could not prepare the order.";
-                }
+                var stop = await PrepareSelectedPackageAsync(selectedPackageId);
+                if (stop) return;
             }
             else
             {
@@ -371,20 +325,8 @@
                     else
                     {
                         selectedPackageId = cartItems[0].PackageId;
-                        var res = await CheckoutService.PrepareAsync(selectedPackageId);
-                        if (res.Success && res.Data != null)
-                        {
-                            preview = res.Data;
-                        }
-                        else if (IsAlreadyPurchasedError(res.Message))
-                        {
-                            Navigation.NavigateTo("/training-packages/purchased");
-                            return;
-                        }
-                        else
-                        {
-                            errorMessage = res.Message ?? "Could not prepare the order.";
-                        }
+                        var stop = await PrepareSelectedPackageAsync(selectedPackageId);
+                        if (stop) return;
                     }
                 }
             }
@@ -397,27 +339,21 @@
         isLoading = false;
     }
 
-    private async Task OnSelectPackageChanged(ChangeEventArgs e)
+    private async Task<bool> PrepareSelectedPackageAsync(Guid pkgId)
     {
-        if (Guid.TryParse(e.Value?.ToString(), out var id) && id != Guid.Empty && id != selectedPackageId)
+        var res = await CheckoutService.PrepareAsync(pkgId);
+        if (res.Success && res.Data != null)
         {
-            selectedPackageId = id;
-            errorMessage = null;
-            var res = await CheckoutService.PrepareAsync(selectedPackageId);
-            if (res.Success && res.Data != null)
-            {
-                preview = res.Data;
-            }
-            else if (IsAlreadyPurchasedError(res.Message))
-            {
-                Navigation.NavigateTo("/training-packages/purchased");
-                return;
-            }
-            else
-            {
-                errorMessage = res.Message ?? "Could not prepare the order.";
-            }
+            preview = res.Data;
+            return false;
         }
+        if (IsAlreadyPurchasedError(res.Message))
+        {
+            Navigation.NavigateTo("/training-packages/purchased");
+            return true;
+        }
+        errorMessage = res.Message ?? "Could not prepare the order.";
+        return false;
     }
 
     private async Task HandleProceedToPay()
@@ -514,39 +450,11 @@
         {
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var user = authState.User;
-            if (user.Identity?.IsAuthenticated == true)
-            {
-                userName = user.Identity.Name ?? "User";
-                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
-                userRole = isCoach ? "Coach" : "Trainee";
-                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length > 0)
-                {
-                    userInitials = parts.Length > 1
-                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
-                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
-                }
-            }
-            else
+            if (user.Identity?.IsAuthenticated != true)
             {
                 Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
             }
         }
-        catch
-        {
-            userInitials = "U";
-        }
+        catch { }
     }
-
-    private async Task HandleLogout()
-    {
-        StopAutoVerify();
-        await AuthService.LogoutAsync();
-        Navigation.NavigateTo("login");
-    }
-
-    private void HandleHeaderSearchInput(ChangeEventArgs e) { headerSearchTerm = e.Value?.ToString(); }
-    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
-    private void ExecuteHeaderSearch() { }
-    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
 }

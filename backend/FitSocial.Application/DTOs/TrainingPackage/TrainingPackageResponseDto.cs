@@ -29,16 +29,24 @@ namespace FitSocial.Application.DTOs.TrainingPackage
 
         // Review state of the current trainee
         public bool HasReviewed { get; set; }
+        public Guid? UserReviewId { get; set; }
         public bool IsReviewEdited { get; set; }
         public int? UserRating { get; set; }
         public string? UserComment { get; set; }
+        public List<string> UserReviewImageUrls { get; set; } = new();
+        public bool CanReview { get; set; }
+        public string? CannotReviewReason { get; set; }
 
         // Training Plan, Meal Plan & Order Details state
         public Guid? OrderDetailsId { get; set; }
         public Guid? OrderId { get; set; }
         public DateTime? OrderCreatedAt { get; set; }
+        public DateTime? ExpiresAt { get; set; }
+        public int? RemainingDays { get; set; }
+        public string? EnrollmentStatus { get; set; }
         public string? OrderStatus { get; set; }
         public string? RefundStatus { get; set; }
+        public string? RefundStaffNote { get; set; }
         public Guid? TrainingPlanId { get; set; }
         public string? PlanStatus { get; set; }
         public Guid? MealPlanId { get; set; }

@@ -5,6 +5,8 @@ using System.Text.Json;
 using Blazored.LocalStorage;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Services.Auth;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FitSocial.Client.Services.Http;
 
@@ -12,14 +14,16 @@ public class ApiClient
 {
     private readonly HttpClient _http;
     private readonly ITokenStorage _localStorage;
-    private readonly IAuthService _authService;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly NavigationManager _navigation;
     private const string AuthTokenKey = "authToken";
 
-    public ApiClient(HttpClient http, ITokenStorage localStorage, IAuthService authService)
+    public ApiClient(HttpClient http, ITokenStorage localStorage, IServiceProvider serviceProvider, NavigationManager navigation)
     {
         _http = http;
         _localStorage = localStorage;
-        _authService = authService;
+        _serviceProvider = serviceProvider;
+        _navigation = navigation;
     }
 
     /// <summary>
@@ -92,8 +96,36 @@ public class ApiClient
         }
     }
 
-    private static bool IsAuthEndpoint(string endpoint) =>
-        endpoint.StartsWith("auth/", StringComparison.OrdinalIgnoreCase);
+    private void HandleNetworkError()
+    {
+        try
+        {
+            var current = _navigation.Uri;
+            if (!current.Contains("/connection-error", StringComparison.OrdinalIgnoreCase))
+            {
+                _navigation.NavigateTo("/connection-error", forceLoad: false);
+            }
+        }
+        catch { }
+    }
+
+    private static bool ShouldSkipRefresh(string endpoint)
+    {
+        var path = endpoint.Split('?')[0].Trim().TrimStart('/');
+        return path.Equals("auth/login", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/admin-login", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/refresh", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/logout", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/register-trainee", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("auth/google/code", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("ekyc/verify", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("ekyc/check-idcard", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("payments/coach-activation/prepare", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("payments/coach-activation/create-link", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("payments/coach-activation/complete", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("payments/coach-activation/cancel", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("payments/coach-activation/regenerate-by-email", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// On 401 tries one silent refresh (except for auth endpoints themselves),
@@ -101,36 +133,56 @@ public class ApiClient
     /// </summary>
     private async Task<bool> TryRefreshOnceAsync(string endpoint, HttpStatusCode status)
     {
-        if (status != HttpStatusCode.Unauthorized || IsAuthEndpoint(endpoint))
+        if (status != HttpStatusCode.Unauthorized || ShouldSkipRefresh(endpoint))
         {
             return false;
         }
 
         try
         {
-            return await _authService.RefreshTokenAsync();
+            var authService = _serviceProvider.GetRequiredService<IAuthService>();
+            var refreshed = await authService.RefreshTokenAsync();
+            if (!refreshed)
+            {
+                RedirectToLogin();
+            }
+            return refreshed;
         }
         catch
         {
+            RedirectToLogin();
             return false;
         }
     }
 
-    public async Task<ApiResponse<T>> GetAsync<T>(string endpoint)
+    private void RedirectToLogin()
+    {
+        try
+        {
+            var current = _navigation.Uri;
+            if (current.Contains("/admin", StringComparison.OrdinalIgnoreCase))
+                _navigation.NavigateTo("/admin/login", forceLoad: true);
+            else
+                _navigation.NavigateTo("/login", forceLoad: true);
+        }
+        catch { }
+    }
+
+    public async Task<ApiResponse<T>> GetAsync<T>(string endpoint, CancellationToken cancellationToken = default)
     {
         try
         {
             await AttachBearerTokenAsync();
-            var response = await _http.GetAsync(endpoint);
+            var response = await _http.GetAsync(endpoint, cancellationToken);
             if (response.StatusCode == HttpStatusCode.Unauthorized &&
                 await TryRefreshOnceAsync(endpoint, response.StatusCode))
             {
                 await AttachBearerTokenAsync();
-                response = await _http.GetAsync(endpoint);
+                response = await _http.GetAsync(endpoint, cancellationToken);
             }
             if (response.IsSuccessStatusCode)
             {
-                var json = await response.Content.ReadAsStringAsync();
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 try
                 {
@@ -155,8 +207,12 @@ public class ApiClient
 
             try
             {
-                var errorJson = await response.Content.ReadAsStringAsync();
+                var errorJson = await response.Content.ReadAsStringAsync(cancellationToken);
                 return ErrorFrom<T>(errorJson, response.StatusCode);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -167,8 +223,13 @@ public class ApiClient
                 };
             }
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<T>
             {
                 Success = false,
@@ -230,6 +291,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -291,6 +353,44 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"Network Error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<TResult>> PostMultipartAsync<TResult>(string endpoint, Func<HttpContent> contentFactory)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            using var initialContent = contentFactory();
+            var response = await _http.PostAsync(endpoint, initialContent);
+            if (response.StatusCode == HttpStatusCode.Unauthorized &&
+                await TryRefreshOnceAsync(endpoint, response.StatusCode))
+            {
+                await AttachBearerTokenAsync();
+                using var retryContent = contentFactory();
+                response = await _http.PostAsync(endpoint, retryContent);
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var json = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(json, options);
+                return apiResponse ?? new ApiResponse<TResult> { Success = true };
+            }
+
+            var errorJson = await response.Content.ReadAsStringAsync();
+            return ErrorFrom<TResult>(errorJson, response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -333,6 +433,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -375,6 +476,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -436,6 +538,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse<TResult>
             {
                 Success = false,
@@ -464,6 +567,7 @@ public class ApiClient
         }
         catch (Exception ex)
         {
+            HandleNetworkError();
             return new ApiResponse
             {
                 Success = false,

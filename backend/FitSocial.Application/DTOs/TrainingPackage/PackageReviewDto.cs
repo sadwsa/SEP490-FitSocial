@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -7,11 +7,36 @@ namespace FitSocial.Application.DTOs.TrainingPackage;
 public class CreatePackageReviewDto
 {
     [Required]
+    public Guid OrderId { get; set; }
+
+    [Required]
     [Range(1, 5, ErrorMessage = "Rating must be between 1 and 5.")]
     public int Rating { get; set; } = 5;
 
     [MaxLength(1000, ErrorMessage = "Comment cannot exceed 1000 characters.")]
     public string? Comment { get; set; }
+
+    public List<string> ImageUrls { get; set; } = new();
+}
+
+public class UpdatePackageReviewDto
+{
+    [Required]
+    [Range(1, 5, ErrorMessage = "Rating must be between 1 and 5.")]
+    public int Rating { get; set; } = 5;
+
+    [MaxLength(1000, ErrorMessage = "Comment cannot exceed 1000 characters.")]
+    public string? Comment { get; set; }
+
+    public List<string>? ImageUrls { get; set; }
+}
+
+public class ReviewMediaDto
+{
+    public Guid ReviewMediaId { get; set; }
+    public string MediaUrl { get; set; } = string.Empty;
+    public string MediaType { get; set; } = "image";
+    public int SortOrder { get; set; }
 }
 
 public class ReplyReviewDto
@@ -26,6 +51,7 @@ public class PackageReviewDto
     public Guid ReviewId { get; set; }
     public Guid PackageId { get; set; }
     public Guid TraineeId { get; set; }
+    public Guid? OrderId { get; set; }
     public string TraineeName { get; set; } = "FitConnect Member";
     public string? TraineeAvatarUrl { get; set; }
     public int Rating { get; set; }
@@ -36,6 +62,8 @@ public class PackageReviewDto
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public bool IsEdited { get; set; }
+
+    public List<ReviewMediaDto> Media { get; set; } = new();
 }
 
 public class PackageReviewSummaryDto

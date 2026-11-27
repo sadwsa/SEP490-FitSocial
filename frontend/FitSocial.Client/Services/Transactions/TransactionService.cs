@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Threading.Tasks;
 using FitSocial.Client.Models.Common;
 using FitSocial.Client.Models.Transactions;
@@ -15,7 +15,7 @@ public class TransactionService : ITransactionService
         _apiClient = apiClient;
     }
 
-    public async Task<PagedResult<TransactionHistoryDto>?> GetMyTransactionsAsync(TransactionFilterDto filter)
+    public async Task<ApiResponse<PagedResult<TransactionHistoryDto>>> GetMyTransactionsAsync(TransactionFilterDto filter)
     {
         var sb = new StringBuilder("transactions/my-history?");
         sb.Append($"PageIndex={filter.PageIndex}&PageSize={filter.PageSize}");
@@ -27,15 +27,13 @@ public class TransactionService : ITransactionService
             sb.Append($"&ToDate={filter.ToDate.Value:yyyy-MM-dd}");
 
         if (!string.IsNullOrWhiteSpace(filter.Type))
-            sb.Append($"&Type={filter.Type}");
+            sb.Append($"&Type={Uri.EscapeDataString(filter.Type.Trim())}");
 
         var response = await _apiClient.GetAsync<PagedResult<TransactionHistoryDto>>(sb.ToString());
-
-        if (response != null && response.Success)
+        return response ?? new ApiResponse<PagedResult<TransactionHistoryDto>>
         {
-            return response.Data;
-        }
-
-        return null;
+            Success = false,
+            Message = "Unable to load transactions."
+        };
     }
 }

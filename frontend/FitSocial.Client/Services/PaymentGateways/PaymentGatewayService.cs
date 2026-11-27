@@ -4,9 +4,6 @@ using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.PaymentGateways;
 
-/// <summary>
-/// UC-36/36.1/36.2: Admin management of payment gateway configurations.
-/// </summary>
 public interface IPaymentGatewayService
 {
     Task<ApiResponse<List<PaymentGatewayConfig>>> GetAllAsync();

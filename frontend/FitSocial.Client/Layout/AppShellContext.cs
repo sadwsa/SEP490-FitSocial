@@ -37,7 +37,7 @@ public sealed class AppShellContext
     public string SearchTerm { get; set; } = string.Empty;
 
     /// <summary>Placeholder của ô tìm kiếm, do page tuỳ biến.</summary>
-    public string SearchPlaceholder { get; set; } = "Search posts, coaches, friends...";
+    public string SearchPlaceholder { get; set; } = "Search posts...";
 
     /// <summary>Page có dùng ô tìm kiếm ở topbar hay không.</summary>
     public bool ShowSearch { get; set; } = true;
@@ -84,7 +84,7 @@ public sealed class AppShellContext
     public void Reset()
     {
         SearchTerm = string.Empty;
-        SearchPlaceholder = "Search posts, coaches, friends...";
+        SearchPlaceholder = "Search posts...";
         ShowSearch = true;
         SearchInputHandler = null;
         SearchKeyUpHandler = null;

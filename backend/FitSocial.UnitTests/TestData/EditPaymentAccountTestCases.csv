@@ -1,5 +1,6 @@
-UTCID,Type,ConfigExists,OtherActiveExists,SaveChangesThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage,UpdateFields
-UTCID01,N,TRUE,FALSE,FALSE,FALSE,TRUE,Payment gateway config updated successfully.,TRUE
-UTCID02,A,FALSE,FALSE,FALSE,TRUE,FALSE,Payment gateway config not found.,FALSE
-UTCID03,A,TRUE,TRUE,FALSE,TRUE,FALSE,Gateway 'Other' is currently active,FALSE
-UTCID04,A,TRUE,FALSE,TRUE,TRUE,FALSE,,FALSE
+UTCID,Type,Result_ConfigExists,Result_OtherActiveExists,Result_SaveChangesThrows,Result_AuditThrows,ExpectedThrows,ExpectedSuccess,ExpectedMessage,UpdateFields
+UTCID01,N,TRUE,FALSE,FALSE,FALSE,FALSE,TRUE,Payment gateway config updated successfully.,TRUE
+UTCID02,A,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,Payment gateway config not found.,FALSE
+UTCID03,A,TRUE,TRUE,FALSE,FALSE,TRUE,FALSE,Gateway 'Other' is currently active,FALSE
+UTCID04,A,TRUE,FALSE,TRUE,FALSE,TRUE,FALSE,,FALSE
+UTCID05,N,TRUE,FALSE,FALSE,TRUE,FALSE,TRUE,Payment gateway config updated successfully.,TRUE

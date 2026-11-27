@@ -9,20 +9,10 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-<PageTitle>Coach Certificate Management - FitConnect Admin Console</PageTitle>
+<PageTitle>Coach Certificates - FitConnect Management Portal</PageTitle>
 
 <AuthorizeView Roles="STAFF,ADMIN">
     <Authorized>
-        <!-- Toast / Alert Message -->
-        @if (!string.IsNullOrEmpty(toastMessage))
-        {
-            <div class="auth-alert @(toastType == "error" ? "error" : "info")" role="alert">
-                <AppIcon Name="@(toastType == "error" ? "warning" : "shield")" />
-                <span class="alert-text">@toastMessage</span>
-                <button type="button" class="alert-close" @onclick="() => toastMessage = null">✕</button>
-            </div>
-        }
-
         <!-- Page Header -->
         <div class="view-header">
             <div class="title-with-badge">
@@ -165,7 +155,7 @@
                                         @if (string.Equals(cert.VerificationStatus, "APPROVED", StringComparison.OrdinalIgnoreCase))
                                         {
                                             <div class="reviewed-text text-success">
-                                                <span>✓ Verified by @(cert.VerifiedByName ?? "Staff")</span>
+                                                <span>✓ Verified by @(cert.VerifiedByName ?? "Reviewer")</span>
                                                 @if (cert.VerifiedAt.HasValue)
                                                 {
                                                     <small class="text-muted d-block">@FormatDateTime(cert.VerifiedAt)</small>
@@ -175,7 +165,7 @@
                                         else if (string.Equals(cert.VerificationStatus, "REJECTED", StringComparison.OrdinalIgnoreCase))
                                         {
                                             <div class="reviewed-text text-danger">
-                                                <span>✕ Rejected by @(cert.VerifiedByName ?? "Staff")</span>
+                                                <span>✕ Rejected by @(cert.VerifiedByName ?? "Reviewer")</span>
                                                 @if (!string.IsNullOrWhiteSpace(cert.RejectedReason))
                                                 {
                                                     <div class="reject-reason-snippet" title="@cert.RejectedReason">
@@ -213,43 +203,11 @@
             </div>
 
             <!-- Pagination Bar -->
-            <div class="pagination-bar">
-                <div class="pagination-info">
-                    Showing @(((pagedCertificates.PageNumber - 1) * pagedCertificates.PageSize) + 1) to
-                    @(Math.Min(pagedCertificates.PageNumber * pagedCertificates.PageSize, pagedCertificates.TotalCount)) of @pagedCertificates.TotalCount certificates
-                </div>
-
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedCertificates.HasPreviousPage)" @onclick="() => ChangePageAsync(pagedCertificates.PageNumber - 1)">
-                        Previous
-                    </button>
-
-                    @for (int i = 1; i <= pagedCertificates.TotalPages; i++)
-                    {
-                        var pageIndex = i;
-                        if (i == 1 || i == pagedCertificates.TotalPages || (i >= pagedCertificates.PageNumber - 2 && i <= pagedCertificates.PageNumber + 2))
-                        {
-                            <button type="button" class="page-btn @(pagedCertificates.PageNumber == pageIndex ? "active" : "")" @onclick="() => ChangePageAsync(pageIndex)">
-                                @pageIndex
-                            </button>
-                        }
-                        else if (i == pagedCertificates.PageNumber - 3 || i == pagedCertificates.PageNumber + 3)
-                        {
-                            <span class="page-ellipsis">…</span>
-                        }
-                    }
-
-                    <button type="button" class="page-btn" disabled="@(!pagedCertificates.HasNextPage)" @onclick="() => ChangePageAsync(pagedCertificates.PageNumber + 1)">
-                        Next
-                    </button>
-
-                    <select class="page-size-select" value="@pageSize" @onchange="OnPageSizeChangedAsync">
-                        <option value="10">10 / page</option>
-                        <option value="20">20 / page</option>
-                        <option value="50">50 / page</option>
-                    </select>
-                </div>
-            </div>
+            <CommonPagination CurrentPage="@pagedCertificates.PageNumber"
+                              PageSize="@pagedCertificates.PageSize"
+                              TotalCount="@pagedCertificates.TotalCount"
+                              PageChanged="ChangePageAsync"
+                              ItemName="certificates" />
         }
 
         <!-- DETAIL MODAL -->
@@ -313,7 +271,7 @@
                                 <div class="alert-box alert-success mt-3">
                                     <span class="alert-icon">✓</span>
                                     <div>
-                                        <strong>Approved</strong> by @(selectedDetail.VerifiedByName ?? selectedDetail.VerifiedByEmail ?? "Staff") on @FormatDateTime(selectedDetail.VerifiedAt).
+                                        <strong>Approved</strong> by @(selectedDetail.VerifiedByName ?? selectedDetail.VerifiedByEmail ?? "Reviewer") on @FormatDateTime(selectedDetail.VerifiedAt).
                                     </div>
                                 </div>
                             }
@@ -322,7 +280,7 @@
                                 <div class="alert-box alert-danger mt-3">
                                     <span class="alert-icon">✕</span>
                                     <div>
-                                        <strong>Rejected</strong> by @(selectedDetail.VerifiedByName ?? selectedDetail.VerifiedByEmail ?? "Staff") on @FormatDateTime(selectedDetail.VerifiedAt).
+                                        <strong>Rejected</strong> by @(selectedDetail.VerifiedByName ?? selectedDetail.VerifiedByEmail ?? "Reviewer") on @FormatDateTime(selectedDetail.VerifiedAt).
                                         @if (!string.IsNullOrWhiteSpace(selectedDetail.RejectedReason))
                                         {
                                             <div class="reject-reason-full mt-1">
@@ -507,6 +465,36 @@
                 </div>
             </div>
         }
+
+        <!-- PROCESSING OVERLAY SCREEN (APPROVE / REJECT) -->
+        @if (isProcessingAction)
+        {
+            <div class="processing-overlay-backdrop">
+                <div class="processing-card">
+                    <div class="processing-icon-container @(processingActionType == "APPROVE" ? "theme-approve" : "theme-reject")">
+                        <div class="processing-ring"></div>
+                        <div class="processing-center-icon">
+                            <AppIcon Name="shield" />
+                        </div>
+                    </div>
+
+                    <h3 class="processing-card-title">@processingTitle</h3>
+                    <p class="processing-card-desc">@processingDescription</p>
+
+                    @if (!string.IsNullOrWhiteSpace(processingSubtext))
+                    {
+                        <div class="processing-note-box">
+                            <span class="processing-pulse-dot"></span>
+                            <span class="processing-note-text">@processingSubtext</span>
+                        </div>
+                    }
+
+                    <div class="processing-progress-bar">
+                        <div class="processing-progress-indeterminate bar-approve"></div>
+                    </div>
+                </div>
+            </div>
+        }
     </Authorized>
     <NotAuthorized>
         <div class="empty-state">
@@ -529,8 +517,11 @@
 
     private bool isLoading = true;
     private bool isProcessing = false;
-    private string? toastMessage;
-    private string toastType = "info";
+    private bool isProcessingAction = false;
+    private string processingActionType = "APPROVE";
+    private string processingTitle = "";
+    private string processingDescription = "";
+    private string processingSubtext = "";
 
     // Modals
     private CoachCertificateDetailModel? selectedDetail;
@@ -558,6 +549,7 @@
     private async Task LoadCertificatesAsync()
     {
         isLoading = true;
+        LoadingService.Show("Loading certificates...");
         try
         {
             var query = new GetCoachCertificatesQueryModel
@@ -587,6 +579,7 @@
         finally
         {
             isLoading = false;
+            LoadingService.Hide();
         }
     }
 
@@ -655,6 +648,7 @@
 
     private async Task OpenDetailModalAsync(Guid certificateId)
     {
+        LoadingService.Show("Loading certificate details...");
         try
         {
             var response = await CertificateService.GetCertificateByIdAsync(certificateId);
@@ -671,6 +665,10 @@
         catch (Exception ex)
         {
             ShowToast($"Error loading details: {ex.Message}", "error");
+        }
+        finally
+        {
+            LoadingService.Hide();
         }
     }
 
@@ -709,12 +707,24 @@
         if (targetCertificate == null) return;
 
         isProcessing = true;
+        isProcessingAction = true;
+        processingActionType = "APPROVE";
+        processingTitle = "Approving Coach Certificate...";
+        LoadingService.Show("Approving certificate...");
+        processingDescription = $"Verifying credentials and approving certificate \"{targetCertificate.CertificateName}\" for coach {targetCertificate.CoachName ?? targetCertificate.CoachEmail}...";
+        processingSubtext = "Please wait a moment while the certificate is being verified...";
+        StateHasChanged();
+
         try
         {
             var response = await CertificateService.ApproveCertificateAsync(targetCertificate.CertificateId);
             if (response.Success)
             {
-                ShowToast("Coach certificate approved successfully.", "info");
+                processingTitle = "Certificate Approved!";
+                processingDescription = "Coach certificate has been approved and verified successfully. Refreshing list...";
+                processingSubtext = "Finalizing in a moment...";
+                StateHasChanged();
+
                 isApproveModalOpen = false;
 
                 // Update detail view if open
@@ -728,19 +738,26 @@
                 }
 
                 await LoadCertificatesAsync();
+
+                // Success displays green toast notification
+                ToastService.ShowSuccess("Coach certificate approved successfully.");
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to approve certificate.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to approve certificate.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error: {ex.Message}", "error");
+            ToastService.ShowError($"Error approving certificate: {ex.Message}");
         }
         finally
         {
             isProcessing = false;
+            isProcessingAction = false;
+            targetCertificate = null;
+            LoadingService.Hide();
+            StateHasChanged();
         }
     }
 
@@ -756,13 +773,25 @@
 
         rejectionValidationFailed = false;
         isProcessing = true;
+        isProcessingAction = true;
+        processingActionType = "REJECT";
+        processingTitle = "Rejecting Coach Certificate...";
+        LoadingService.Show("Rejecting certificate...");
+        processingDescription = $"Recording rejection reason and updating certificate \"{targetCertificate.CertificateName}\" for coach {targetCertificate.CoachName ?? targetCertificate.CoachEmail}...";
+        processingSubtext = "Please wait a moment...";
+        StateHasChanged();
+
         try
         {
             var req = new RejectCoachCertificateModel { Reason = rejectionReason.Trim() };
             var response = await CertificateService.RejectCertificateAsync(targetCertificate.CertificateId, req);
             if (response.Success)
             {
-                ShowToast("Coach certificate rejected successfully.", "info");
+                processingTitle = "Certificate Rejected!";
+                processingDescription = "Rejection recorded and coach has been notified. Refreshing list...";
+                processingSubtext = "Finalizing in a moment...";
+                StateHasChanged();
+
                 isRejectModalOpen = false;
 
                 if (selectedDetail != null && selectedDetail.CertificateId == targetCertificate.CertificateId && response.Data != null)
@@ -775,19 +804,26 @@
                 }
 
                 await LoadCertificatesAsync();
+
+                // Successful operation displays green toast notification (both approve and reject)
+                ToastService.ShowSuccess("Coach certificate rejected successfully.");
             }
             else
             {
-                ShowToast(response.Message ?? "Failed to reject certificate.", "error");
+                ToastService.ShowError(response.Message ?? "Failed to reject certificate.");
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error: {ex.Message}", "error");
+            ToastService.ShowError($"Error rejecting certificate: {ex.Message}");
         }
         finally
         {
             isProcessing = false;
+            isProcessingAction = false;
+            targetCertificate = null;
+            LoadingService.Hide();
+            StateHasChanged();
         }
     }
 
@@ -815,8 +851,22 @@
 
     private void ShowToast(string message, string type)
     {
-        toastMessage = message;
-        toastType = type;
+        switch (type?.ToLowerInvariant())
+        {
+            case "success":
+                ToastService.ShowSuccess(message);
+                break;
+            case "error":
+                ToastService.ShowError(message);
+                break;
+            case "warning":
+                ToastService.ShowWarning(message);
+                break;
+            case "info":
+            default:
+                ToastService.ShowInfo(message);
+                break;
+        }
     }
 
     private static string FormatDate(DateTime? dt) => dt.HasValue ? dt.Value.ToString("dd/MM/yyyy") : "—";

@@ -42,19 +42,51 @@ public class TraineeMealPlanController : ControllerBase
         if (traineeId == Guid.Empty)
             return Unauthorized(ApiResponseDto<TraineeMealPlanDto>.Fail("Unauthorized: Invalid user identity."));
 
-        try
-        {
-            var result = await _mealPlanService.GetTraineeMealPlanAsync(traineeId, orderDetailsId, cancellationToken);
-            if (result == null)
-                return Ok(ApiResponseDto<TraineeMealPlanDto?>.Ok(null, "No meal plan assigned yet."));
+        var result = await _mealPlanService.GetTraineeMealPlanAsync(traineeId, orderDetailsId, cancellationToken);
+        if (result == null)
+            return Ok(ApiResponseDto<TraineeMealPlanDto?>.Ok(null, "No meal plan assigned yet."));
 
-            return Ok(ApiResponseDto<TraineeMealPlanDto>.Ok(result, "Meal plan retrieved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[MealPlan] Error getting meal plan for order {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
-            throw;
-        }
+        return Ok(ApiResponseDto<TraineeMealPlanDto>.Ok(result, "Meal plan retrieved successfully."));
+    }
+
+    /// <summary>
+    /// Request Meal Completion: Trainee uploads meal photo and notes for Coach to review.
+    /// </summary>
+    [HttpPost("request-completion")]
+    [ProducesResponseType(typeof(ApiResponseDto<MealCompletionResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RequestMealCompletion(
+        [FromBody] RequestMealCompletionDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var traineeId = GetCurrentUserId();
+        if (traineeId == Guid.Empty)
+            return Unauthorized(ApiResponseDto<MealCompletionResultDto>.Fail("Unauthorized: Invalid user identity."));
+
+        var result = await _mealPlanService.RequestMealCompletionAsync(traineeId, dto, cancellationToken);
+        return Ok(ApiResponseDto<MealCompletionResultDto>.Ok(result, "Meal completion proof submitted! Waiting for coach review."));
+    }
+
+    /// <summary>
+    /// Save Missed Meal Reason: Allows trainee to record a reason for a past missed meal.
+    /// </summary>
+    [HttpPost("missed-reason")]
+    [ProducesResponseType(typeof(ApiResponseDto<MealCompletionResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> SaveMealMissedReason(
+        [FromBody] SaveMealMissedReasonDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var traineeId = GetCurrentUserId();
+        if (traineeId == Guid.Empty)
+            return Unauthorized(ApiResponseDto<MealCompletionResultDto>.Fail("Unauthorized: Invalid user identity."));
+
+        var result = await _mealPlanService.SaveMealMissedReasonAsync(traineeId, dto, cancellationToken);
+        return Ok(ApiResponseDto<MealCompletionResultDto>.Ok(result, "Missed meal reason saved successfully."));
     }
 
     private Guid GetCurrentUserId()

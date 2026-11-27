@@ -1,0 +1,156 @@
+.reg-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.hero-logo {
+    width: 35%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 22px;
+    mix-blend-mode: multiply;
+    flex-shrink: 0;
+}
+
+.hero-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.hero-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--primary-color);
+    background: #fff1ea;
+    border: 1px solid #ffd9c7;
+    border-radius: 999px;
+    padding: 4px 14px;
+    margin-bottom: 10px;
+}
+
+.hero-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0 0 8px;
+    line-height: 1.25;
+}
+
+.hero-title span {
+    color: var(--primary-color);
+}
+
+.hero-sub {
+    font-size: 0.83rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.55;
+}
+
+.reg-card {
+    background: #fff;
+    border-radius: 16px;
+    border: 1px solid #e6ecf3;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    padding: 22px 22px 20px;
+}
+
+.role-tabs {
+    display: flex;
+    gap: 8px;
+    background: #eef3fa;
+    border-radius: 10px;
+    padding: 6px;
+    margin-bottom: 14px;
+}
+
+.role-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    padding: 9px 6px;
+    cursor: pointer;
+    text-align: center;
+    line-height: 1.35;
+}
+
+.role-tab.active {
+    background: #fff;
+    color: #1e293b;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+
+.role-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.role-tab.active .role-icon {
+    color: var(--primary-color);
+}
+
+.role-icon ::deep svg {
+    width: 16px;
+    height: 16px;
+}
+
+.reg-footer {
+    text-align: center;
+    font-size: 0.83rem;
+    color: #64748b;
+    margin-top: 16px;
+}
+
+.reg-footer a {
+    color: var(--primary-color);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.reg-footer a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+    .reg-hero {
+        flex-direction: column;
+        text-align: center;
+        gap: 12px;
+    }
+
+    .hero-text {
+        align-items: center;
+    }
+
+    .hero-logo {
+        width: 40%;
+        height: auto;
+    }
+
+    .hero-title {
+        font-size: 1.35rem;
+    }
+
+    .reg-card {
+        padding: 18px 14px 16px;
+    }
+}

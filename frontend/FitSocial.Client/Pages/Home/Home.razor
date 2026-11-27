@@ -1,0 +1,265 @@
+@page "/home"
+@attribute [Authorize(Roles = "TRAINEE,COACH")]
+@implements IAsyncDisposable
+
+@inject IPostService PostService
+@inject ICoachService CoachService
+@inject ILocationService LocationService
+@inject IAuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AppShellContext Shell
+@inject IPostHubClient PostHubClient
+@using System.Security.Claims
+@using FitSocial.Client.Components.Posts
+@using FitSocial.Client.Services.Realtime
+
+<PageTitle>Home Feed - FitConnect</PageTitle>
+
+<!-- Header / Navigation Bar do AppShellLayout cung cap -->
+    <!-- Floating Success Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastSuccessMessage))
+    {
+        <div
+            class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-emerald-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <span>@toastSuccessMessage</span>
+            <button type="button" @onclick="DismissToast"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer"
+                    title="Close">&times;</button>
+        </div>
+    }
+
+    <!-- Floating Warning Toast Notification -->
+    @if (!string.IsNullOrWhiteSpace(toastWarningMessage))
+    {
+        <div
+            class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-amber-600 text-white font-medium text-sm rounded-2xl shadow-xl border border-amber-500/50 backdrop-blur transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            <span>@toastWarningMessage</span>
+            <button type="button" @onclick="DismissWarningToast"
+                    class="ml-2 text-white/80 hover:text-white text-lg font-bold transition cursor-pointer"
+                    title="Close">&times;</button>
+        </div>
+    }
+<style>
+                    .post-content-text {
+                        word-break: break-word;
+                        overflow-wrap: anywhere;
+                        word-wrap: break-word;
+                        white-space: pre-line;
+                    }
+            </style>
+
+            <!-- Center Column: Main Feed -->
+            <div class="flex flex-col gap-4">
+                    <!-- Create Post Box -->
+                    <CreatePostBox UserInitials="@userInitials" UserAvatarUrl="@currentUserAvatarUrl" IsCoach="@isCoach" OnOpen="HandleCreatePostBoxOpen" />
+
+                    <!-- Mobile Search & Filter (visible only on mobile where header search is hidden) -->
+                    <div class="md:hidden bg-white rounded-2xl shadow-xs border border-gray-100 p-2.5 flex items-center gap-2">
+                        <div class="relative flex-1">
+                            <input type="text" placeholder="Search posts..." value="@searchInput"
+                                   @oninput="HandleSearchInput" @onkeyup="HandleSearchKeyUp"
+                                   class="w-full bg-gray-100 rounded-full py-2 pl-3.5 pr-8 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF5500]" />
+                            @if (!string.IsNullOrWhiteSpace(searchInput))
+                            {
+                                <button type="button" @onclick="ClearSearch" class="absolute right-2 top-2 text-gray-400 hover:text-gray-600 p-0.5" title="Clear search text">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            }
+                        </div>
+                        <button type="button" @onclick="ExecuteSearch"
+                                class="h-8 px-3 bg-[#FF5500] hover:bg-[#e04b00] text-white rounded-full text-xs font-semibold flex items-center gap-1 transition cursor-pointer flex-shrink-0 shadow-xs" title="Search">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            <span>Search</span>
+                        </button>
+                        <PostFilterBar SelectedPostType="@appliedPostType"
+                                       SelectedLocationId="@appliedLocationId"
+                                       AvailableLocations="@availableLocations"
+                                       OnDraftFilterChanged="HandleDraftFilterChanged"
+                                       OnApplyFilters="HandleApplyFilters" />
+                    </div>
+
+                    <!-- Active Search & Filter Chips (Feed View) -->
+                    @if (HasAppliedSearch || HasAppliedFilter)
+                    {
+                        <div class="bg-white rounded-2xl shadow-xs border border-gray-100 px-4 py-2.5 flex items-center gap-2 flex-wrap text-xs animate-in fade-in">
+                            <span class="text-gray-400 font-medium text-[11px] flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5 text-[#FF5500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                                </svg>
+                                <span>Filtered by:</span>
+                            </span>
+
+                            @if (HasAppliedSearch)
+                            {
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-[#FF5500] border border-orange-200/60 rounded-full font-medium">
+                                    <span>Keyword: "<strong>@appliedSearchTerm</strong>"</span>
+                                    <button type="button" @onclick="RemoveAppliedSearch" class="hover:text-red-600 font-bold ml-0.5 cursor-pointer" title="Remove keyword">&times;</button>
+                                </span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(appliedPostType))
+                            {
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-[#FF5500] border border-orange-200/60 rounded-full font-medium">
+                                    <span>Type: <strong>@FormatPostType(appliedPostType)</strong></span>
+                                    <button type="button" @onclick="RemoveFilterPostType" class="hover:text-red-600 font-bold ml-0.5 cursor-pointer" title="Remove type filter">&times;</button>
+                                </span>
+                            }
+                            @if (appliedLocationId.HasValue && appliedLocationId != Guid.Empty)
+                            {
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-[#FF5500] border border-orange-200/60 rounded-full font-medium">
+                                    <span>Location: <strong>@GetLocationName(appliedLocationId.Value)</strong></span>
+                                    <button type="button" @onclick="RemoveFilterLocation" class="hover:text-red-600 font-bold ml-0.5 cursor-pointer" title="Remove location filter">&times;</button>
+                                </span>
+                            }
+
+                            <button type="button" @onclick="ResetAllSearchAndFilters"
+                                    class="text-[11px] text-gray-400 hover:text-red-600 font-semibold underline ml-auto cursor-pointer">
+                                Reset all
+                            </button>
+                        </div>
+                    }
+
+                    <!-- Feed Posts Stream -->
+                    @if (isLoading)
+                    {
+                        <div class="flex flex-col gap-4">
+                            @for (int i = 0; i < 2; i++)
+                            {
+                                <div class="bg-white rounded-xl shadow-sm p-4 animate-pulse">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="w-10 h-10 rounded-full bg-gray-200"></div>
+                                        <div class="flex-1 space-y-2">
+                                            <div class="h-3.5 bg-gray-200 rounded w-1/4"></div>
+                                            <div class="h-2.5 bg-gray-200 rounded w-1/3"></div>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-2 mb-4">
+                                        <div class="h-3 bg-gray-200 rounded"></div>
+                                        <div class="h-3 bg-gray-200 rounded w-5/6"></div>
+                                    </div>
+                                    <div class="h-48 bg-gray-100 rounded-lg mb-3"></div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (posts == null || !posts.Any())
+                    {
+                        <div class="bg-white rounded-xl shadow-sm p-10 text-center text-gray-500">
+                            <div class="w-16 h-16 mx-auto mb-3 text-orange-400">
+                                <svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                          d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z">
+                                    </path>
+                                </svg>
+                            </div>
+                            <h3 class="text-base font-bold text-gray-800 mb-1">No posts found</h3>
+                            <p class="text-xs text-gray-400 mb-4">
+                                @(HasAppliedFilter || HasAppliedSearch
+                                    ? "No posts match your search query or filter criteria. Try adjusting your search or filters."
+                                    : "Be the first to share your workout journey today!")
+                            </p>
+                            @if (HasAppliedSearch || HasAppliedFilter)
+                            {
+                                <button @onclick="ResetAllSearchAndFilters"
+                                        class="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-50 text-[#FF5500] hover:bg-orange-100 rounded-xl text-xs font-semibold transition cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                        </path>
+                                    </svg>
+                                    Reset Search & Filters
+                                </button>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var post in posts)
+                        {
+                            <div id="@(post.Id == currentTriggerPostId ? $"post-prefetch-trigger-{post.Id}" : null)" class="w-full">
+                                <PostCard @key="post.Id" Post="post" CurrentUserId="currentUserId"
+                                          CurrentUserName="@userName" CurrentUserAvatarUrl="@currentUserAvatarUrl"
+                                          OnLike="ToggleLike" OnEdit="OpenEditPostModal" OnDelete="OpenDeletePostModal"
+                                          OnReport="HandleReportPost" OnAuthorClick="NavigateToAuthorProfile" />
+                            </div>
+                        }
+                    }
+
+                    <!-- Prefetch Loading Indicator -->
+                    @if (isLoadingMore && !isLoading)
+                    {
+                        <div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 font-medium animate-in fade-in">
+                            <span class="w-4 h-4 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin"></span>
+                            <span>Loading trending posts...</span>
+                        </div>
+                    }
+
+                    <!-- Prefetch Error / Retry State -->
+                    @if (prefetchError)
+                    {
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 my-2 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-xs">
+                            <div class="flex items-center gap-2 text-amber-800">
+                                <svg class="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                                <span>@(prefetchErrorMessage ?? "Failed to load more posts.")</span>
+                            </div>
+                            <button type="button" @onclick="RetryPrefetchAsync"
+                                    class="px-4 py-1.5 bg-[#FF5500] hover:bg-[#e04b00] text-white rounded-xl font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                <span>Retry</span>
+                            </button>
+                        </div>
+                    }
+
+                    <!-- End of Feed State -->
+                    @if (!hasNextPage && posts != null && posts.Any())
+                    {
+                        <div class="flex flex-col items-center justify-center py-8 text-center text-gray-400">
+                            <div class="w-8 h-8 rounded-full bg-orange-50 text-[#FF5500] flex items-center justify-center mb-2 shadow-xs">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                            </div>
+                            <p class="text-xs font-semibold text-gray-600">You're all caught up!</p>
+                            <p class="text-[11px] text-gray-400 mt-0.5">You've seen all the trending posts for now.</p>
+                        </div>
+                    }
+
+    </div>
+
+                                     <!-- Create Post Modal Dialog -->
+                                     <CreatePostModal IsVisible="@showCreatePostModal" InitialPostType="@createPostInitialType" IsCoach="@isCoach"
+                                                      UserName="@userName" UserInitials="@userInitials" UserAvatarUrl="@currentUserAvatarUrl"
+                                                      AvailableLocations="@availableLocations" OnClose="CloseCreatePostModal" OnPostCreated="OnPostCreated" />
+
+                                    <!-- Edit Post Modal Dialog -->
+                                    <EditPostModal IsVisible="@showEditPostModal" Post="@editingPost" IsCoach="@isCoach"
+                                                   AvailableLocations="@availableLocations" OnClose="CloseEditPostModal"
+                                                   OnPostUpdated="OnPostUpdated" />
+
+                                    <!-- Delete Confirmation Modal Dialog -->
+                                    <DeletePostModal IsVisible="@showDeleteModal" Post="@postToDelete" OnClose="CloseDeleteModal"
+                                                     OnPostDeleted="OnPostDeleted" />
+
+                                    <!-- Report Post Modal Dialog -->
+                                    <ReportPostModal IsVisible="@showReportModal" PostId="@reportPostId" OnClose="CloseReportModal"
+                                                     OnReportSubmitted="OnPostReported" />

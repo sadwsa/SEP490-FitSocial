@@ -1,0 +1,64 @@
+@page "/login-callback"
+@layout EmptyLayout
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+@code {
+    [SupplyParameterFromQuery(Name = "code")]
+    public string? Code { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "state")]
+    public string? State { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrEmpty(Error))
+        {
+            GoLogin("Google sign-in was cancelled or denied. Please try again.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Code))
+        {
+            GoLogin("Missing authorization code from Google. Please go back and try again.");
+            return;
+        }
+
+        var rolePart = State?.Split('.')[0];
+        var role = rolePart == "TRAINEE" ? "TRAINEE" : null;
+        var redirectUri = Navigation.BaseUri.TrimEnd('/') + "/login-callback";
+
+        var result = await AuthService.LoginWithGoogleCodeAsync(Code, role, redirectUri);
+        if (result.Success)
+        {
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            if (result.Data?.IsBlockedDueToReports == true && !string.IsNullOrWhiteSpace(result.Data.AppealToken))
+            {
+                Navigation.NavigateTo($"/appeal?token={Uri.EscapeDataString(result.Data.AppealToken)}");
+                return;
+            }
+            if (result.Data?.IsPaymentPending == true ||
+                (result.Message != null && result.Message.Contains("Payment required", StringComparison.OrdinalIgnoreCase)))
+            {
+                var email = result.Data?.User?.Email;
+                var url = string.IsNullOrWhiteSpace(email)
+                    ? "/coach-activation"
+                    : $"/coach-activation?email={Uri.EscapeDataString(email)}";
+                Navigation.NavigateTo(url, forceLoad: true);
+                return;
+            }
+            GoLogin(result.Message ?? "Google sign-in failed. Please try again.");
+        }
+    }
+
+    private void GoLogin(string message)
+    {
+        Navigation.NavigateTo($"/login?authError={Uri.EscapeDataString(message)}");
+    }
+}

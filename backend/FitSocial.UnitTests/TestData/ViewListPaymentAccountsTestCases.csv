@@ -1,4 +1,7 @@
-UTCID,Type,ConfigCount,ExpectedSuccess,ExpectedMessage,ExpectedConfigCount
-UTCID01,N,0,TRUE,Payment gateway configs retrieved.,0
-UTCID02,N,1,TRUE,Payment gateway configs retrieved.,1
-UTCID03,N,3,TRUE,Payment gateway configs retrieved.,3
+UTCID,Type,ConfigCount,NullApiKey,NullChecksumKey,Result_DecryptThrows,ExpectedSuccess,ExpectedMessage,ExpectedConfigCount
+UTCID01,N,0,FALSE,FALSE,FALSE,TRUE,Payment gateway configs retrieved.,0
+UTCID02,N,1,FALSE,FALSE,FALSE,TRUE,Payment gateway configs retrieved.,1
+UTCID03,N,3,FALSE,FALSE,FALSE,TRUE,Payment gateway configs retrieved.,3
+UTCID04,N,1,TRUE,FALSE,FALSE,TRUE,Payment gateway configs retrieved.,1
+UTCID05,N,1,FALSE,TRUE,FALSE,TRUE,Payment gateway configs retrieved.,1
+UTCID06,N,1,FALSE,FALSE,TRUE,TRUE,Payment gateway configs retrieved.,1

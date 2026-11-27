@@ -18,9 +18,6 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    /// <summary>
-    /// Send the OTP verification code via Email (UC_01)
-    /// </summary>
     [HttpPost("send-otp")]
     [EnableRateLimiting("OtpPolicy")]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
@@ -42,10 +39,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Verify OTP without consuming it (for multi-step flows like Coach registration).
-    /// The final step will consume it via Validate.
-    /// </summary>
     [HttpPost("verify-otp")]
     [EnableRateLimiting("OtpPolicy")]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
@@ -67,9 +60,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Register a Trainee account with OTP verification (UC_01)
-    /// </summary>
     [HttpPost("register-trainee")]
     [EnableRateLimiting("OtpPolicy")]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
@@ -91,9 +81,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Sign in with email + password, shared by all roles (UC_02)
-    /// </summary>
     [HttpPost("login")]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
@@ -114,9 +101,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Back-office sign-in for Staff/Admin only (UC_28 Management Portal)
-    /// </summary>
     [HttpPost("admin-login")]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
@@ -137,11 +121,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Server-side sign-out (UC_03): revokes the calling access token
-    /// and, when provided, the refresh token.
-    /// The client still clears its own storage afterwards.
-    /// </summary>
     [HttpPost("logout")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
@@ -160,9 +139,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Rotates a valid refresh token into a brand-new session (new access + refresh tokens).
-    /// </summary>
     [HttpPost("refresh")]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
@@ -183,9 +159,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Step 1 of UC_04: request a password-reset OTP (always returns success).
-    /// </summary>
     [HttpPost("forgot-password")]
     [EnableRateLimiting("OtpPolicy")]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
@@ -207,9 +180,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Step 2 of UC_04: verify the OTP and set the new password (kills all sessions).
-    /// </summary>
     [HttpPost("reset-password")]
     [EnableRateLimiting("OtpPolicy")]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
@@ -231,9 +201,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// UC_05.2: change password while signed in (kills all sessions, client signs in again).
-    /// </summary>
     [HttpPost("change-password")]
     [Microsoft.AspNetCore.Authorization.Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
@@ -261,9 +228,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Sign in / Sign up with a Google authorization code (redirect flow, works without FedCM)
-    /// </summary>
     [HttpPost("google/code")]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status400BadRequest)]
@@ -284,9 +248,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Gets the current authenticated user's profile and database data (including AvatarUrl).
-    /// </summary>
     [HttpGet("me")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponseDto<UserDto>), StatusCodes.Status200OK)]

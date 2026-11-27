@@ -10,4 +10,7 @@ public interface ITransactionRepository
 {
     Task<(IEnumerable<TransactionRecord> Items, int TotalCount)> GetUserTransactionsAsync(
         Guid userId, string userRole, DateTime? fromDate, DateTime? toDate, string? type, int pageIndex, int pageSize, CancellationToken cancellationToken = default);
+
+    Task<(IEnumerable<TransactionRecord> Items, int TotalCount)> GetCoachPayoutHistoryAsync(
+        Guid coachId, DateTime? fromDate, DateTime? toDate, string? type, int pageIndex, int pageSize, CancellationToken cancellationToken = default);
 }

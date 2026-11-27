@@ -5,10 +5,6 @@ using FitSocial.Client.Services.Http;
 
 namespace FitSocial.Client.Services.Checkout;
 
-/// <summary>
-/// UC-20: Purchase Training Package via PayOS VietQR (authenticated).
-/// Uses ApiClient so the JWT is attached + silently refreshed.
-/// </summary>
 public interface ICheckoutService
 {
     Task<ApiResponse<PackagePurchasePreview>> PrepareAsync(Guid packageId);

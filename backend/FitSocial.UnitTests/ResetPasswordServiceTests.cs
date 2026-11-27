@@ -63,12 +63,12 @@ public class ResetPasswordServiceTests
                     OtpCode = CsvTestHelper.Get(row, index, "OtpCode"),
                     NewPassword = CsvTestHelper.Get(row, index, "NewPassword"),
                     ConfirmPassword = CsvTestHelper.Get(row, index, "ConfirmPassword"),
-                    UserExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "UserExists")),
-                    PasswordHash = CsvTestHelper.Get(row, index, "PasswordHash"),
-                    NewPasswordSameAsCurrent = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "NewPasswordSameAsCurrent")),
-                    OtpValid = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "OtpValid")),
-                    OtpMessage = string.IsNullOrWhiteSpace(CsvTestHelper.Get(row, index, "OtpMessage")) ? "Invalid or expired OTP code." : CsvTestHelper.Get(row, index, "OtpMessage"),
-                    SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "SaveChangesThrows")),
+                    Result_UserExists = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_UserExists")),
+                    Result_PasswordHash = CsvTestHelper.Get(row, index, "Result_PasswordHash"),
+                    Result_NewPasswordSameAsCurrent = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_NewPasswordSameAsCurrent")),
+                    Result_OtpValid = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_OtpValid")),
+                    Result_OtpMessage = string.IsNullOrWhiteSpace(CsvTestHelper.Get(row, index, "Result_OtpMessage")) ? "Invalid or expired OTP code." : CsvTestHelper.Get(row, index, "Result_OtpMessage"),
+                    Result_SaveChangesThrows = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "Result_SaveChangesThrows")),
                     ExpectedSuccess = CsvTestHelper.ParseBool(CsvTestHelper.Get(row, index, "ExpectedSuccess")),
                     ExpectedMessage = CsvTestHelper.Get(row, index, "ExpectedMessage")
                 });
@@ -95,25 +95,25 @@ public class ResetPasswordServiceTests
         _otp.Reset();
         _passwordHasher.Reset();
 
-        _passwordHasher.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>())).Returns(tc.NewPasswordSameAsCurrent);
+        _passwordHasher.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>())).Returns(tc.Result_NewPasswordSameAsCurrent);
         _passwordHasher.Setup(p => p.HashPassword(It.IsAny<string>())).Returns("hashed");
 
         User? user = null;
-        if (tc.UserExists)
+        if (tc.Result_UserExists)
         {
             user = new User
             {
                 UserId = Guid.NewGuid(),
                 Email = tc.Email.Trim().ToLower(),
-                PasswordHash = string.Equals(tc.PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed"
+                PasswordHash = string.Equals(tc.Result_PasswordHash, "EMPTY", StringComparison.OrdinalIgnoreCase) ? null : "hashed"
             };
         }
         _users.Setup(u => u.FindByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
         _otp.Setup(o => o.ValidateOtpAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((tc.OtpValid, tc.OtpValid ? "OTP verified." : tc.OtpMessage));
+            .ReturnsAsync((tc.Result_OtpValid, tc.Result_OtpValid ? "OTP verified." : tc.Result_OtpMessage));
 
-        if (tc.SaveChangesThrows)
+        if (tc.Result_SaveChangesThrows)
         {
             _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new DbUpdateException("db fail"));
         }
@@ -144,12 +144,12 @@ public class ResetPasswordServiceTests
         public string OtpCode { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
         public string ConfirmPassword { get; set; } = string.Empty;
-        public bool UserExists { get; set; }
-        public string PasswordHash { get; set; } = string.Empty;
-        public bool NewPasswordSameAsCurrent { get; set; }
-        public bool OtpValid { get; set; }
-        public string OtpMessage { get; set; } = string.Empty;
-        public bool SaveChangesThrows { get; set; }
+        public bool Result_UserExists { get; set; }
+        public string Result_PasswordHash { get; set; } = string.Empty;
+        public bool Result_NewPasswordSameAsCurrent { get; set; }
+        public bool Result_OtpValid { get; set; }
+        public string Result_OtpMessage { get; set; } = string.Empty;
+        public bool Result_SaveChangesThrows { get; set; }
         public bool ExpectedSuccess { get; set; }
         public string ExpectedMessage { get; set; } = string.Empty;
         public override string ToString() => UtcId;

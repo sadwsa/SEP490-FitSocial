@@ -88,11 +88,40 @@ public class AdminUserService : IAdminUserService
     {
         try
         {
+            if (adminId.HasValue && adminId.Value == userId && isLocked)
+            {
+                return ApiResponseDto<bool>.Fail("You cannot lock your own account.");
+            }
+
             var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
             if (user == null)
             {
                 return ApiResponseDto<bool>.Fail("User not found.");
             }
+
+            var targetRole = user.RoleCode?.Trim().ToUpperInvariant();
+            if (targetRole == RoleConstants.Admin)
+            {
+                return ApiResponseDto<bool>.Fail("Administrator accounts cannot be locked.");
+            }
+
+            // Only administrators can lock or unlock staff accounts
+            if (user.IsInternal == true || targetRole == RoleConstants.Staff)
+            {
+                if (!adminId.HasValue)
+                {
+                    return ApiResponseDto<bool>.Fail("Only administrators can lock or unlock staff accounts.");
+                }
+
+                var actor = await _userRepository.GetByIdAsync(adminId.Value, cancellationToken);
+                var actorRole = actor?.RoleCode?.Trim().ToUpperInvariant();
+                if (actorRole != RoleConstants.Admin)
+                {
+                    return ApiResponseDto<bool>.Fail("Only administrators can lock or unlock staff accounts.");
+                }
+            }
+
+            var previousIsLocked = user.IsLocked ?? false;
 
             user.IsLocked = isLocked;
             user.LockedBy = isLocked ? adminId : null;
@@ -117,8 +146,22 @@ public class AdminUserService : IAdminUserService
                         entityType: "User",
                         entityId: user.UserId.ToString(),
                         description: desc,
-                        oldValue: new { isLocked = !isLocked },
-                        newValue: new { isLocked, lockedBy = user.LockedBy, updatedAt = user.UpdatedAt },
+                        oldValue: new
+                        {
+                            isLocked = previousIsLocked,
+                            status = previousIsLocked ? "LOCKED" : "ACTIVE",
+                            targetName = user.FullName,
+                            targetEmail = user.Email,
+                            targetRole = user.RoleCode
+                        },
+                        newValue: new
+                        {
+                            isLocked = isLocked,
+                            status = isLocked ? "LOCKED" : "ACTIVE",
+                            targetName = user.FullName,
+                            targetEmail = user.Email,
+                            targetRole = user.RoleCode
+                        },
                         cancellationToken: cancellationToken);
                 }
                 catch
@@ -150,6 +193,9 @@ public class AdminUserService : IAdminUserService
                 return ApiResponseDto<AdminUserDto>.Fail("User not found.");
             }
 
+            var previousWarningCount = user.WarningCount;
+            var previousIsLocked = user.IsLocked ?? false;
+
             user.WarningCount += 1;
             user.UpdatedAt = DateTime.UtcNow;
 
@@ -175,8 +221,21 @@ public class AdminUserService : IAdminUserService
                         entityType: "User",
                         entityId: user.UserId.ToString(),
                         description: desc,
-                        oldValue: new { warningCount = user.WarningCount - 1, isLocked = false },
-                        newValue: new { warningCount = user.WarningCount, isLocked = user.IsLocked, reason },
+                        oldValue: new
+                        {
+                            warningCount = previousWarningCount,
+                            isLocked = previousIsLocked,
+                            targetName = user.FullName,
+                            targetEmail = user.Email
+                        },
+                        newValue: new
+                        {
+                            warningCount = user.WarningCount,
+                            isLocked = user.IsLocked ?? false,
+                            reason = reason,
+                            targetName = user.FullName,
+                            targetEmail = user.Email
+                        },
                         cancellationToken: cancellationToken);
                 }
                 catch
@@ -292,7 +351,6 @@ public class AdminUserService : IAdminUserService
                         oldValue: null,
                         newValue: new
                         {
-                            userId = staffUser.UserId,
                             fullName = staffUser.FullName,
                             email = staffUser.Email,
                             phone = staffUser.PhoneNumber,
@@ -421,7 +479,6 @@ public class AdminUserService : IAdminUserService
                         oldValue: oldValues,
                         newValue: new
                         {
-                            userId = user.UserId,
                             fullName = user.FullName,
                             email = user.Email,
                             phone = user.PhoneNumber

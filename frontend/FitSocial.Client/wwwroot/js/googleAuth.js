@@ -1,7 +1,5 @@
-// Tích hợp nút đăng nhập Google (OAuth2 redirect flow) cho Blazor WASM.
 window.fitSocialGoogle = {
-    // OAuth2 redirect flow (không popup, không FedCM): sang trang Google rồi quay về /login-callback.
-    // Role được nhúng vào đầu state để trang callback gửi kèm lên backend.
+
     signInRedirect: function (clientId, redirectUri, role) {
         var safeRole = (role === "COACH" || role === "TRAINEE") ? role : "";
         var state = safeRole + "." + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -16,7 +14,7 @@ window.fitSocialGoogle = {
     }
 };
 
-window.fitSocialStorage = {
+window.fitConnectStorage = {
     sessionGet: function (key) {
         try {
             var raw = sessionStorage.getItem(key);

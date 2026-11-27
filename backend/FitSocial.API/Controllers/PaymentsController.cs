@@ -31,9 +31,6 @@ public class PaymentsController : ControllerBase
         return ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
     }
 
-    /// <summary>
-    /// Validate the coach draft (model + email availability) BEFORE paying.
-    /// </summary>
     [HttpPost("coach-activation/prepare")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<CoachActivationPreviewDto>), StatusCodes.Status200OK)]
@@ -55,10 +52,6 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Verify OTP + lock in the coach draft, then return a PayOS VietQR payment link.
-    /// Call this when the user clicks Pay on the activation page.
-    /// </summary>
     [HttpPost("coach-activation/create-link")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<ActivationLinkDto>), StatusCodes.Status200OK)]
@@ -83,10 +76,37 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Check the PayOS payment by order code; if paid, unlock the account and sign the coach in.
-    /// Called by the frontend payment-result page after the gateway redirects back.
-    /// </summary>
+    [HttpPost("coach-activation/regenerate")]
+    [Authorize(Roles = $"{RoleConstants.Coach}")]
+    [ProducesResponseType(typeof(ApiResponseDto<ActivationLinkDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RegenerateCoachActivation([FromQuery] string? originUrl = null)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized(ApiResponseDto<ActivationLinkDto>.Fail("Unauthorized"));
+
+        var result = await _paymentService.RegenerateCoachActivationAsync(userId, originUrl ?? string.Empty, null);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    [HttpPost("coach-activation/regenerate-by-email")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponseDto<ActivationLinkDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RegenerateCoachActivationByEmail([FromQuery] string email, [FromQuery] string? originUrl = null)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return BadRequest(ApiResponseDto<ActivationLinkDto>.Fail("Email is required."));
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _paymentService.RegenerateCoachActivationByEmailAsync(email, originUrl ?? string.Empty, ipAddress);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
     [HttpPost("coach-activation/complete")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponseDto<AuthResponseDto>), StatusCodes.Status200OK)]
@@ -102,12 +122,6 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Cancel a pending activation order (user gave up at the gateway).
-    /// </summary>
-    /// <summary>
-    /// Renew/re-activate a coach subscription for an existing coach account.
-    /// </summary>
     [HttpGet("coach-subscription/current")]
     [Authorize(Roles = $"{RoleConstants.Coach}")]
     [ProducesResponseType(typeof(ApiResponseDto<CoachSubscriptionStatusDto>), StatusCodes.Status200OK)]
@@ -157,10 +171,6 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// PayOS webhook (backup for the return-url flow; requires a public URL in production).
-    /// Routes by OrderType: COACH_ACTIVATION unlocks the account, PACKAGE activates enrollment.
-    /// </summary>
     [HttpPost("payos-webhook")]
     [AllowAnonymous]
     public async Task<IActionResult> PayOSWebhook([FromBody] System.Text.Json.JsonElement payload)
@@ -201,19 +211,10 @@ public class PaymentsController : ControllerBase
         }
         catch
         {
-            // Never fail the webhook handshake because of our errors
             return Ok(new { success = false });
         }
     }
 
-    // =====================================================
-    // UC-20: Purchase Training Package (Trainee, Coach)
-    // =====================================================
-
-    /// <summary>
-    /// UC-20 step 2: Order Summary preview (package title, duration, price VND).
-    /// E1: package inactive -&gt; 400, E2: self-purchase -&gt; 400.
-    /// </summary>
     [HttpPost("package/purchase/prepare")]
     [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
     [ProducesResponseType(typeof(ApiResponseDto<PackagePurchasePreviewDto>), StatusCodes.Status200OK)]
@@ -238,9 +239,6 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// UC-20 step 4: create pending order + PayOS VietQR transaction.
-    /// </summary>
     [HttpPost("package/purchase/create-link")]
     [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
     [ProducesResponseType(typeof(ApiResponseDto<PackagePaymentLinkDto>), StatusCodes.Status200OK)]
@@ -270,11 +268,6 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// UC-20 steps 6-7: verify PayOS payment; on success mark COMPLETED + activate TrainingPlan.
-    /// Called by "I've Paid - Verify Now" and by the success page after gateway redirect.
-    /// E3: timeout/failure -&gt; 400 so the user can retry.
-    /// </summary>
     [HttpPost("package/purchase/complete")]
     [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
     [ProducesResponseType(typeof(ApiResponseDto<OrderDto>), StatusCodes.Status200OK)]
@@ -294,9 +287,6 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// UC-20 alternative flow 20.1: cancel pending checkout, keep item in cart.
-    /// </summary>
     [HttpPost("package/purchase/cancel")]
     [Authorize(Roles = $"{RoleConstants.Trainee},{RoleConstants.Coach}")]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]

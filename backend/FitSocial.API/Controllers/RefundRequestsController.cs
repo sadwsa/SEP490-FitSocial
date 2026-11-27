@@ -126,6 +126,26 @@ public class RefundRequestsController : ControllerBase
     }
 
     /// <summary>
+    /// Admin/Staff retries a failed bank disbursement for an approved refund.
+    /// </summary>
+    [HttpPost("{id:guid}/retry-disbursement")]
+    [Authorize(Roles = $"{RoleConstants.Admin},{RoleConstants.Staff}")]
+    [ProducesResponseType(typeof(ApiResponseDto<RefundRequestDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RetryDisbursement(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var staffUserId))
+        {
+            return Unauthorized(ApiResponseDto<RefundRequestDto>.Fail("Unauthorized"));
+        }
+
+        var result = await _refundRequestService.RetryDisbursementAsync(id, staffUserId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Admin/Staff rejects a refund request with a note.
     /// </summary>
     [HttpPost("{id:guid}/reject")]

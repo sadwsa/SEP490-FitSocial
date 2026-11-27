@@ -8,7 +8,7 @@
 @inject IReportService ReportService
 @inject NavigationManager Navigation
 
-<PageTitle>Appeals - FitConnect Staff Console</PageTitle>
+<PageTitle>Appeals - FitConnect Management Portal</PageTitle>
 
 <AuthorizeView Roles="ADMIN,STAFF">
     <Authorized>
@@ -123,6 +123,10 @@
                                 {
                                     <span class="status-badge locked">Locked</span>
                                 }
+                                else if (string.Equals(r.ReportedUserCoachStatus, "BLOCKED", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="status-badge locked">Blocked</span>
+                                }
                                 else
                                 {
                                     <span class="status-badge active">Active</span>
@@ -175,40 +179,11 @@
         </div>
 
         <!-- Pagination -->
-        <div class="pagination-container">
-            <div class="pagination-info">
-                @if (pagedAppeals.TotalCount > 0)
-                {
-                    var start = (currentPage - 1) * pageSize + 1;
-                    var end = Math.Min(currentPage * pageSize, pagedAppeals.TotalCount);
-                    <span>Showing <strong>@start–@end</strong> of <strong>@pagedAppeals.TotalCount</strong> appeals</span>
-                }
-                else
-                {
-                    <span>0 appeals</span>
-                }
-            </div>
-            @if (pagedAppeals.TotalPages > 1)
-            {
-                <div class="pagination-controls">
-                    <button type="button" class="page-btn" disabled="@(!pagedAppeals.HasPreviousPage)" @onclick="() => GoToPageAsync(currentPage - 1)">‹ Prev</button>
-                    @foreach (var p in GetVisiblePageNumbers())
-                    {
-                        if (p == -1) { <span class="page-dots">…</span> }
-                        else { var pn = p; <button type="button" class="page-btn @(pn == currentPage ? "active" : "")" @onclick="() => GoToPageAsync(pn)">@pn</button> }
-                    }
-                    <button type="button" class="page-btn" disabled="@(!pagedAppeals.HasNextPage)" @onclick="() => GoToPageAsync(currentPage + 1)">Next ›</button>
-                </div>
-            }
-            <div class="page-size-selector">
-                <span>Per page:</span>
-                <select value="@pageSize" @onchange="OnPageSizeChangedAsync" class="page-size-select">
-                    <option value="10">10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                </select>
-            </div>
-        </div>
+        <CommonPagination CurrentPage="@currentPage"
+                          PageSize="@pageSize"
+                          TotalCount="@pagedAppeals.TotalCount"
+                          PageChanged="GoToPageAsync"
+                          ItemName="appeals" />
 
         <!-- ======= REVIEW MODAL ======= -->
         @if (showReviewModal && selectedAppeal != null)
@@ -244,6 +219,10 @@
                                         {
                                             <span class="status-badge locked">Account Locked</span>
                                         }
+                                        @if (string.Equals(selectedAppeal.ReportedUserCoachStatus, "BLOCKED", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <span class="status-badge locked">Coach Blocked</span>
+                                        }
                                     </div>
                                 </div>
                             </div>
@@ -272,6 +251,22 @@
                             </div>
                         </div>
 
+                        <!-- Reporter Evidence -->
+                        @if (selectedAppeal.Media != null && selectedAppeal.Media.Any())
+                        {
+                            <div class="info-card">
+                                <div class="info-card-title"><AppIcon Name="image" /><span>Reporter Evidence (@selectedAppeal.Media.Count)</span></div>
+                                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+                                    @foreach (var m in selectedAppeal.Media)
+                                    {
+                                        <a href="@m.MediaUrl" target="_blank" rel="noopener noreferrer" style="display:block;border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;" title="Click to view full image">
+                                            <img src="@m.MediaUrl" alt="Evidence" style="width:72px;height:72px;object-fit:cover;" />
+                                        </a>
+                                    }
+                                </div>
+                            </div>
+                        }
+
                         <!-- Appeal Content -->
                         <div class="info-card" style="background:#f0f9ff;border-color:#bae6fd;">
                             <div class="info-card-title" style="color:#0369a1;">
@@ -287,6 +282,40 @@
                                 @(string.IsNullOrWhiteSpace(selectedAppeal.AppealContent) ? "No appeal content provided." : selectedAppeal.AppealContent)
                             </div>
                         </div>
+
+                        <!-- Appellant Supporting Evidence -->
+                        @if (selectedAppeal.AppealMedia != null && selectedAppeal.AppealMedia.Any())
+                        {
+                            <div class="info-card" style="background:#fdf4ff;border-color:#f0abfc;">
+                                <div class="info-card-title" style="color:#a21caf;"><AppIcon Name="image" /><span>Appellant Supporting Evidence (@selectedAppeal.AppealMedia.Count)</span></div>
+                                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+                                    @foreach (var m in selectedAppeal.AppealMedia)
+                                    {
+                                        var isVideo = string.Equals(m.MediaType, "VIDEO", StringComparison.OrdinalIgnoreCase)
+                                            || (m.MediaUrl?.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ?? false)
+                                            || (m.MediaUrl?.EndsWith(".webm", StringComparison.OrdinalIgnoreCase) ?? false);
+                                        var isDoc = !string.IsNullOrEmpty(m.MediaType) &&
+                                            !string.Equals(m.MediaType, "IMAGE", StringComparison.OrdinalIgnoreCase);
+
+                                        if (isVideo || isDoc)
+                                        {
+                                            <a href="@m.MediaUrl" target="_blank" rel="noopener noreferrer"
+                                               style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:6px;border:1px solid #f0abfc;background:#fff;color:#a21caf;font-size:.75rem;font-weight:600;text-decoration:none;"
+                                               title="Open supporting file">
+                                                <AppIcon Name="doc" />
+                                                <span>@(string.IsNullOrEmpty(m.MediaType) ? "Attachment" : m.MediaType)</span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a href="@m.MediaUrl" target="_blank" rel="noopener noreferrer" style="display:block;border-radius:6px;overflow:hidden;border:1px solid #f0abfc;" title="Click to view full evidence">
+                                                <img src="@m.MediaUrl" alt="Appeal Evidence" style="width:72px;height:72px;object-fit:cover;" />
+                                            </a>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
 
                         <!-- Already reviewed -->
                         @if (!string.Equals(selectedAppeal.AppealStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
@@ -304,6 +333,10 @@
                                     {
                                         <div style="margin-top:4px;">Note: @selectedAppeal.AppealReviewNote</div>
                                     }
+                                    @if (!string.IsNullOrWhiteSpace(selectedAppeal.AppealResolverName))
+                                    {
+                                        <div style="margin-top:4px;">Reviewed by: <strong>@selectedAppeal.AppealResolverName</strong></div>
+                                    }
                                     @if (selectedAppeal.AppealReviewedAt.HasValue)
                                     {
                                         <div style="margin-top:4px;color:#64748b;">Reviewed: @selectedAppeal.AppealReviewedAt.Value.ToLocalTime().ToString("f")</div>
@@ -313,17 +346,18 @@
                         }
                         else
                         {
-                            <!-- Staff Action Area -->
+                            <!-- Reviewer Action Area -->
                             <div class="modal-actions-box">
                                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
                                     <AppIcon Name="shield" />
-                                    <strong style="font-size:.85rem;color:#1e293b;">Staff Actions</strong>
+                                    <strong style="font-size:.85rem;color:#1e293b;">Reviewer Actions</strong>
                                 </div>
 
                                 <!-- Review Note -->
                                 <div style="margin-bottom:12px;">
-                                    <label style="font-size:.75rem;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Review Note (optional):</label>
+                                    <label style="font-size:.75rem;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Review Note (optional, max 1,000 chars):</label>
                                     <textarea @bind="reviewNote"
+                                              maxlength="1000"
                                               style="width:100%;font-size:.78rem;padding:8px;border:1px solid #d1d5db;border-radius:8px;resize:vertical;"
                                               rows="2"
                                               placeholder="Explain your decision..."></textarea>
@@ -391,7 +425,8 @@
     private int currentPage = 1;
     private int pageSize = 10;
     private PagedResult<ReportListItemDto> pagedAppeals = new();
-    private System.Timers.Timer? searchDebounceTimer;
+    private CancellationTokenSource? _searchDebounceCts;
+    private int _loadVersion;
     private bool isLoading = false;
 
     private bool showReviewModal = false;
@@ -406,7 +441,9 @@
 
     private async Task LoadAppealsAsync()
     {
+        var version = ++_loadVersion;
         isLoading = true;
+        LoadingService.Show("Loading appeals...");
         try
         {
             var res = await ReportService.GetAppealsAsync(
@@ -414,6 +451,8 @@
                 searchTerm: searchTerm,
                 pageNumber: currentPage,
                 pageSize: pageSize);
+
+            if (version != _loadVersion) return;
 
             if (res.Success && res.Data != null)
             {
@@ -433,12 +472,17 @@
         }
         catch (Exception ex)
         {
+            if (version != _loadVersion) return;
             toastMessage = $"Unable to load appeals: {ex.Message}";
             toastType = "error";
         }
         finally
         {
-            isLoading = false;
+            if (version == _loadVersion)
+            {
+                isLoading = false;
+                LoadingService.Hide();
+            }
         }
     }
 
@@ -453,23 +497,32 @@
     private void OnSearchInput(ChangeEventArgs e)
     {
         searchTerm = e.Value?.ToString() ?? "";
-        searchDebounceTimer?.Stop();
-        searchDebounceTimer?.Dispose();
-        searchDebounceTimer = new System.Timers.Timer(400) { AutoReset = false };
-        searchDebounceTimer.Elapsed += async (_, _) =>
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _searchDebounceCts = cts;
+        _ = DebounceSearchAsync(cts.Token);
+    }
+
+    private async Task DebounceSearchAsync(CancellationToken ct)
+    {
+        try
         {
+            await Task.Delay(400, ct);
             currentPage = 1;
-            await InvokeAsync(LoadAppealsAsync);
-            await InvokeAsync(StateHasChanged);
-        };
-        searchDebounceTimer.Start();
+            await LoadAppealsAsync();
+            StateHasChanged();
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task HandleSearchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
-            searchDebounceTimer?.Stop();
+            _searchDebounceCts?.Cancel();
             currentPage = 1;
             await LoadAppealsAsync();
         }
@@ -482,39 +535,34 @@
         await LoadAppealsAsync();
     }
 
-    private async Task OnPageSizeChangedAsync(ChangeEventArgs e)
-    {
-        if (int.TryParse(e.Value?.ToString(), out var s) && s > 0)
-        {
-            pageSize = s;
-            currentPage = 1;
-            await LoadAppealsAsync();
-        }
-    }
-
-    private IEnumerable<int> GetVisiblePageNumbers()
-    {
-        var total = pagedAppeals.TotalPages;
-        if (total <= 1) yield break;
-        var d = 2;
-        var l = Math.Max(1, currentPage - d);
-        var r = Math.Min(total, currentPage + d);
-        if (l > 1) { yield return 1; if (l > 2) yield return -1; }
-        for (var i = l; i <= r; i++) yield return i;
-        if (r < total) { if (r < total - 1) yield return -1; yield return total; }
-    }
-
     private async Task OpenAppealModal(ReportListItemDto appeal)
     {
         selectedAppeal = appeal;
         reviewNote = "";
         showReviewModal = true;
+        LoadingService.Show("Loading appeal details...");
         try
         {
             var res = await ReportService.GetReportByIdAsync(appeal.ReportId);
-            if (res.Success && res.Data != null) selectedAppeal = res.Data;
+            if (res.Success && res.Data != null)
+            {
+                selectedAppeal = res.Data;
+            }
+            else if (!res.Success && !string.IsNullOrEmpty(res.Message))
+            {
+                toastMessage = $"Unable to refresh appeal details: {res.Message}";
+                toastType = "error";
+            }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            toastMessage = $"Unable to refresh appeal details: {ex.Message}";
+            toastType = "error";
+        }
+        finally
+        {
+            LoadingService.Hide();
+        }
     }
 
     private void CloseReviewModal()
@@ -529,6 +577,7 @@
     {
         if (selectedAppeal == null || isProcessing) return;
         isProcessing = true;
+        LoadingService.Show("Submitting appeal decision...");
         try
         {
             var request = new ReviewAppealRequest
@@ -567,6 +616,7 @@
         finally
         {
             isProcessing = false;
+            LoadingService.Hide();
         }
     }
 
@@ -592,7 +642,7 @@
 
     public void Dispose()
     {
-        searchDebounceTimer?.Stop();
-        searchDebounceTimer?.Dispose();
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
     }
 }

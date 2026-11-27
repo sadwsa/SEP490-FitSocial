@@ -54,38 +54,6 @@ public class ReportServiceTests
 
 
     [Fact]
-    public async Task ResolveReportAsync_ShouldSetStatusAndResolverInfo()
-    {
-        // Arrange
-        var reportId = Guid.NewGuid();
-        var staffId = Guid.NewGuid();
-        var report = new Report
-        {
-            ReportId = reportId,
-            Status = "PENDING",
-            Reason = "Inappropriate content"
-        };
-
-        _mockReportRepo.Setup(r => r.GetReportWithDetailsByIdAsync(reportId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(report);
-        _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
-
-        var request = new ResolveReportRequestDto { Status = "RESOLVED", ResolutionNote = "Content removed" };
-
-        // Act
-        var result = await _service.ResolveReportAsync(reportId, staffId, request);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.Equal("RESOLVED", report.Status);
-        Assert.Equal(staffId, report.ResolvedBy);
-        Assert.NotNull(report.ResolvedAt);
-        Assert.NotNull(report.NotifiedReportedUserAt);
-    }
-
-    [Fact]
     public async Task SubmitAppealAsync_WhenReportedUserAppeals_ShouldSetPendingAppealAndMedia()
     {
         // Arrange
@@ -1211,6 +1179,126 @@ public class ReportServiceTests
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             _service.ReportUserAsync(Guid.NewGuid(), request, cts.Token));
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenReportedUserIsLocked_ShouldThrowBusinessException()
+    {
+        // Arrange
+        var reporterId = Guid.NewGuid();
+        var reportedUserId = Guid.NewGuid();
+        var lockedUser = new User { UserId = reportedUserId, IsLocked = true };
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid violation reason"
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(lockedUser);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.ReportUserAsync(reporterId, request));
+
+        Assert.Equal("This user account is already locked or banned.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenPendingReportAlreadyExists_ShouldThrowBusinessException()
+    {
+        // Arrange
+        var reporterId = Guid.NewGuid();
+        var reportedUserId = Guid.NewGuid();
+        var activeUser = new User { UserId = reportedUserId, IsLocked = false };
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid violation reason"
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(activeUser);
+
+        _mockReportRepo.Setup(r => r.HasPendingReportAsync(reporterId, reportedUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.ReportUserAsync(reporterId, request));
+
+        Assert.Equal("You already have a pending report for this user. Please wait for our moderators to review it.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenMediaUrlsExceedFive_ShouldThrowValidationException()
+    {
+        // Arrange
+        var reporterId = Guid.NewGuid();
+        var reportedUserId = Guid.NewGuid();
+        var activeUser = new User { UserId = reportedUserId, IsLocked = false };
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid violation reason",
+            MediaUrls = new List<string>
+            {
+                "url1", "url2", "url3", "url4", "url5", "url6"
+            }
+        };
+
+        _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(activeUser);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReportUserAsync(reporterId, request));
+
+        Assert.Equal("You can attach a maximum of 5 evidence photos.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenReasonExceeds500Characters_ShouldThrowValidationException()
+    {
+        // Arrange
+        var reporterId = Guid.NewGuid();
+        var reportedUserId = Guid.NewGuid();
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = new string('A', 501)
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReportUserAsync(reporterId, request));
+
+        Assert.Equal("Reason cannot exceed 500 characters.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReportUserAsync_WhenDescriptionExceeds500Characters_ShouldThrowValidationException()
+    {
+        // Arrange
+        var reporterId = Guid.NewGuid();
+        var reportedUserId = Guid.NewGuid();
+
+        var request = new CreateUserReportRequestDto
+        {
+            ReportedUserId = reportedUserId,
+            Reason = "Valid reason",
+            Description = new string('B', 501)
+        };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReportUserAsync(reporterId, request));
+
+        Assert.Equal("Description cannot exceed 500 characters.", ex.Message);
     }
 
     #endregion

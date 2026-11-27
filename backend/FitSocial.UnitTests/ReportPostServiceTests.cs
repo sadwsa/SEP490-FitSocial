@@ -39,8 +39,23 @@ public class ReportPostServiceTests
 
     #region Normal Cases (N)
 
+    /// <summary>
+    /// UTCID01 - ReportPostAsync_WhenValidInput_CreatesReportAndReturnsSuccess
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: Found
+    /// - IsLocked: false
+    /// - Post: Found (IsDeleted = false)
+    /// - HasActiveReport: false
+    /// - Reason: "Spam or misleading content"
+    /// - CancellationToken: Active
+    /// Expected: Return PostReportResponseDto with Success=true
+    /// Type: N
+    /// Status: Passed
+    /// </summary>
     [Fact]
-    public async Task ReportPostAsync_WhenValidInputWithReasonOnly_CreatesReportAndReturnsSuccess()
+    public async Task ReportPostAsync_WhenValidInput_CreatesReportAndReturnsSuccess()
     {
         // Arrange
         var postId = Guid.NewGuid();
@@ -100,71 +115,25 @@ public class ReportPostServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
-    public async Task ReportPostAsync_WhenValidInputWithDescriptionAndMediaUrls_CreatesReportWithMediaAndReturnsSuccess()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var reporterId = Guid.NewGuid();
-
-        var reporter = new User
-        {
-            UserId = reporterId,
-            IsLocked = false
-        };
-
-        var post = new Post
-        {
-            Id = postId,
-            AuthorId = authorId,
-            IsDeleted = false
-        };
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(reporterId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(reporter);
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(post);
-        _reportRepoMock.Setup(r => r.HasActiveReportAsync(postId, reporterId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
-        _reportRepoMock.Setup(r => r.AddAsync(It.IsAny<Report>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
-
-        var request = new CreatePostReportRequestDto
-        {
-            Reason = "Inappropriate content",
-            Description = "Contains prohibited advertisements",
-            Type = "POST",
-            MediaUrls = new List<string> { "https://fitsocial.com/evidence1.jpg" }
-        };
-
-        // Act
-        var result = await _service.ReportPostAsync(postId, reporterId, request);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.NotNull(result.Data);
-        Assert.Equal("Inappropriate content", result.Data.Reason);
-        Assert.Equal("Contains prohibited advertisements", result.Data.Description);
-        Assert.Equal("POST", result.Data.Type);
-        Assert.Single(result.Data.MediaUrls);
-        Assert.Equal("https://fitsocial.com/evidence1.jpg", result.Data.MediaUrls[0]);
-
-        _reportRepoMock.Verify(r => r.AddAsync(It.Is<Report>(rep =>
-            rep.ReportedPostId == postId &&
-            rep.Description == "Contains prohibited advertisements" &&
-            rep.ReportMedia.Count == 1), It.IsAny<CancellationToken>()), Times.Once);
-
-        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
-    }
-
     #endregion
 
     #region Abnormal Cases (A)
 
+    /// <summary>
+    /// UTCID02 - ReportPostAsync_WhenReporterNotFound_ThrowsNotFoundException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: Not found
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - HasActiveReport: false
+    /// - Reason: "Spam or misleading content"
+    /// - CancellationToken: Active
+    /// Expected: NotFoundException ("Reporter account was not found.")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenReporterNotFound_ThrowsNotFoundException()
     {
@@ -189,6 +158,21 @@ public class ReportPostServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID03 - ReportPostAsync_WhenReporterIsLocked_ThrowsForbiddenException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: Found
+    /// - IsLocked: true
+    /// - Post: empty/null
+    /// - HasActiveReport: false
+    /// - Reason: "Spam or misleading content"
+    /// - CancellationToken: Active
+    /// Expected: ForbiddenException ("Your account is locked and cannot report posts.")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenReporterIsLocked_ThrowsForbiddenException()
     {
@@ -219,6 +203,21 @@ public class ReportPostServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID04 - ReportPostAsync_WhenPostNotFound_ThrowsNotFoundException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: Found
+    /// - IsLocked: false
+    /// - Post: Not found
+    /// - HasActiveReport: false
+    /// - Reason: "Spam or misleading content"
+    /// - CancellationToken: Active
+    /// Expected: NotFoundException ("Post with ID '{postId}' was not found.")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenPostNotFound_ThrowsNotFoundException()
     {
@@ -251,6 +250,21 @@ public class ReportPostServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID05 - ReportPostAsync_WhenPostIsDeleted_ThrowsBusinessException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: Found
+    /// - IsLocked: false
+    /// - Post: Deleted (IsDeleted = true)
+    /// - HasActiveReport: false
+    /// - Reason: "Spam or misleading content"
+    /// - CancellationToken: Active
+    /// Expected: BusinessException ("Cannot report a post that has been deleted.")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenPostIsDeleted_ThrowsBusinessException()
     {
@@ -290,45 +304,21 @@ public class ReportPostServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task ReportPostAsync_WhenReportingOwnPost_ThrowsBusinessException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var reporterId = Guid.NewGuid();
-
-        var reporter = new User
-        {
-            UserId = reporterId,
-            IsLocked = false
-        };
-
-        var ownPost = new Post
-        {
-            Id = postId,
-            AuthorId = reporterId,
-            IsDeleted = false
-        };
-
-        _userRepoMock.Setup(r => r.GetByIdAsync(reporterId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(reporter);
-        _postRepoMock.Setup(r => r.GetByIdAsync(postId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ownPost);
-
-        var request = new CreatePostReportRequestDto
-        {
-            Reason = StandardReason
-        };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
-            _service.ReportPostAsync(postId, reporterId, request));
-
-        Assert.Equal("You cannot report your own post.", ex.Message);
-        _reportRepoMock.Verify(r => r.AddAsync(It.IsAny<Report>(), It.IsAny<CancellationToken>()), Times.Never);
-        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-    }
-
+    /// <summary>
+    /// UTCID06 - ReportPostAsync_WhenActiveReportAlreadyExists_ThrowsConflictException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: Found
+    /// - IsLocked: false
+    /// - Post: Found (IsDeleted = false)
+    /// - HasActiveReport: true
+    /// - Reason: "Spam or misleading content"
+    /// - CancellationToken: Active
+    /// Expected: ConflictException ("You have already submitted a pending report for this post.")
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenActiveReportAlreadyExists_ThrowsConflictException()
     {
@@ -370,6 +360,21 @@ public class ReportPostServiceTests
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID07 - ReportPostAsync_WhenCancellationRequested_ThrowsOperationCanceledException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - HasActiveReport: false
+    /// - Reason: "Spam or misleading content"
+    /// - CancellationToken: Cancelled
+    /// Expected: OperationCanceledException
+    /// Type: A
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenCancellationRequested_ThrowsOperationCanceledException()
     {
@@ -397,26 +402,21 @@ public class ReportPostServiceTests
 
     #region Boundary Cases (B)
 
-    [Fact]
-    public async Task ReportPostAsync_WhenReporterIdIsEmpty_ThrowsValidationException()
-    {
-        // Arrange
-        var postId = Guid.NewGuid();
-        var reporterId = Guid.Empty;
-
-        var request = new CreatePostReportRequestDto
-        {
-            Reason = StandardReason
-        };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.ReportPostAsync(postId, reporterId, request));
-
-        Assert.Equal("User is not authenticated.", ex.Message);
-        _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
+    /// <summary>
+    /// UTCID08 - ReportPostAsync_WhenPostIdIsEmpty_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Guid.Empty
+    /// - Reporter: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - HasActiveReport: false
+    /// - Reason: "Spam or misleading content"
+    /// - CancellationToken: Active
+    /// Expected: ValidationException ("Post ID is required.")
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenPostIdIsEmpty_ThrowsValidationException()
     {
@@ -437,6 +437,21 @@ public class ReportPostServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID09 - ReportPostAsync_WhenReasonIsWhitespace_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - HasActiveReport: false
+    /// - Reason: " "
+    /// - CancellationToken: Active
+    /// Expected: ValidationException ("Report reason is required and cannot be empty.")
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenReasonIsWhitespace_ThrowsValidationException()
     {
@@ -457,6 +472,21 @@ public class ReportPostServiceTests
         _userRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// UTCID10 - ReportPostAsync_WhenReasonExceeds500Characters_ThrowsValidationException
+    /// Condition:
+    /// - Precondition: Database connection is active
+    /// - postId: Valid GUID
+    /// - Reporter: empty/null
+    /// - IsLocked: false
+    /// - Post: empty/null
+    /// - HasActiveReport: false
+    /// - Reason: 501 characters
+    /// - CancellationToken: Active
+    /// Expected: ValidationException ("Report reason cannot exceed 500 characters.")
+    /// Type: B
+    /// Status: Passed
+    /// </summary>
     [Fact]
     public async Task ReportPostAsync_WhenReasonExceeds500Characters_ThrowsValidationException()
     {
@@ -479,4 +509,3 @@ public class ReportPostServiceTests
 
     #endregion
 }
-

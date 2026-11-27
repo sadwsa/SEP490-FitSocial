@@ -4,17 +4,8 @@ namespace FitSocial.Application.Interfaces;
 
 public interface IEkycService
 {
-    /// <summary>
-    /// Verifies front/back ID card + liveness face via Viettel eKYC (or mock when not configured).
-    /// Returns extracted fields that will be stored in CoachEkycVerifications.
-    /// </summary>
     Task<(bool Success, string? Error, EkycExtract Result)> VerifyAsync(EkycVerificationDto request, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Checks if an ID card number is still available (not used by another coach).
-    /// Read-only pre-validation called right after OCR so duplicates surface immediately.
-    /// Returns (Available, Error): Error is set when unavailable or input invalid.
-    /// </summary>
     Task<(bool Available, string? Error)> CheckIdCardAsync(string idCardNumber, string? email, CancellationToken cancellationToken = default);
 }
 

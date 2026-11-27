@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -779,6 +779,8 @@ public class RefundRequestService : IRefundRequestService
                     : $"RF{item.RefundRequestId:N}"[..18].ToUpperInvariant());
 
             // Automated Disbursement via Banking Gateway (PayOS Napas 24/7)
+            bool disbursementSuccess = true;
+            string? disbursementError = null;
             if (_bankTransferGateway != null && bank != null && approvedAmount > 0)
             {
                 var transferReq = new BankTransferRequest(
@@ -790,28 +792,32 @@ public class RefundRequestService : IRefundRequestService
                     Description: $"REFUND ORD {order.OrderId.ToString("N")[..8].ToUpperInvariant()}",
                     Reference: txRef);
 
-                CreatedTransfer transferResult;
+                CreatedTransfer? transferResult = null;
                 try
                 {
                     transferResult = await _bankTransferGateway.CreateTransferAsync(transferReq, cancellationToken);
                 }
                 catch (Exception ex)
                 {
-                    throw new BusinessException($"Banking gateway connection error during refund disbursement: {ex.Message}. The refund request was not approved.");
+                    disbursementSuccess = false;
+                    disbursementError = ex.Message;
                 }
 
-                if (!transferResult.Created || (!transferResult.Succeeded && !string.IsNullOrWhiteSpace(transferResult.FailureReason)))
+                if (disbursementSuccess && (transferResult == null || !transferResult.Created || (!transferResult.Succeeded && !string.IsNullOrWhiteSpace(transferResult.FailureReason))))
                 {
-                    throw new BusinessException($"Bank transfer refund failed: {transferResult.FailureReason ?? "Transaction was not successful"}. The refund request remains in PENDING status.");
+                    disbursementSuccess = false;
+                    disbursementError = transferResult?.FailureReason ?? "Transaction was not successful";
                 }
-
-                if (!string.IsNullOrWhiteSpace(transferResult.TransactionRef))
+                else if (disbursementSuccess && transferResult != null)
                 {
-                    txRef = transferResult.TransactionRef;
-                }
-                else if (!string.IsNullOrWhiteSpace(transferResult.GatewayRef))
-                {
-                    txRef = transferResult.GatewayRef;
+                    if (!string.IsNullOrWhiteSpace(transferResult.TransactionRef))
+                    {
+                        txRef = transferResult.TransactionRef;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(transferResult.GatewayRef))
+                    {
+                        txRef = transferResult.GatewayRef;
+                    }
                 }
             }
 
@@ -819,7 +825,9 @@ public class RefundRequestService : IRefundRequestService
 
             var staffNoteText = dto?.StaffNote?.Trim();
             var bankTransferSummary = bank != null
-                ? $"[Automatic bank transfer of {approvedAmount:N0} VND to {bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)}) - Ref: {txRef}]"
+                ? (disbursementSuccess
+                    ? $"[Automatic bank transfer of {approvedAmount:N0} VND to {bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)}) - Ref: {txRef}]"
+                    : $"[Automatic bank transfer failed: {disbursementError}]")
                 : null;
             var finalStaffNote = string.IsNullOrWhiteSpace(staffNoteText)
                 ? bankTransferSummary
@@ -830,21 +838,25 @@ public class RefundRequestService : IRefundRequestService
 
             try
             {
-                // Update RefundRequest entity (Concurrency token on Status property ensures atomic transition)
-                item.Status = "APPROVED";
+                var previousStaffNote = item.StaffNote;
+                var previousApprovedAmount = item.ApprovedAmount ?? 0m;
+                var previousTxRef = item.RefundTransactionRef;
+
+                // Update RefundRequest entity: separate Approved vs Disbursement Failed
+                item.Status = disbursementSuccess ? RefundConstants.StatusApproved : RefundConstants.StatusDisbursementFailed;
                 item.ApprovedAmount = approvedAmount;
                 item.RefundTransactionRef = txRef;
                 item.ReviewedBy = staffUserId;
                 item.ReviewedAt = now;
-                item.RefundedAt = now;
+                item.RefundedAt = disbursementSuccess ? now : null;
                 item.StaffNote = finalStaffNote;
                 item.UpdatedAt = now;
 
                 // Update Order state
-                order.OrderStatus = PaymentConstants.OrderStatusRefunded;
+                order.OrderStatus = disbursementSuccess ? PaymentConstants.OrderStatusRefunded : PaymentConstants.OrderStatusRefundPending;
 
                 // Update Payment state
-                if (payment != null)
+                if (payment != null && disbursementSuccess)
                 {
                     payment.Status = PaymentConstants.PaymentStatusRefunded;
                     payment.UpdatedAt = now;
@@ -882,8 +894,9 @@ public class RefundRequestService : IRefundRequestService
                 var notificationsToSend = new List<(Guid RecipientId, string Type, string Message)>();
 
                 // 1. Notification for Buyer
-                var buyerBankMsg = bank != null ? $" The funds have been transferred to your {bank.BankName} account ({MaskAccountNumber(plainAccountNumber)})." : "";
-                var buyerMsg = $"Your refund request for \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{buyerBankMsg}";
+                var buyerMsg = disbursementSuccess
+                    ? $"Your refund request for \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND." + (bank != null ? $" The funds have been transferred to your {bank.BankName} account ({MaskAccountNumber(plainAccountNumber)}) - Ref: {txRef}." : "")
+                    : $"Your refund request for \"{packageName}\" was approved ({approvedAmount:N0} VND), but the automated bank disbursement could not be completed: {disbursementError}. Our staff is resolving this and will retry the transfer shortly.";
                 if (_notifications != null)
                 {
                     await _notifications.AddAsync(new Notification
@@ -892,13 +905,13 @@ public class RefundRequestService : IRefundRequestService
                         UserId = item.RequestedBy,
                         ActorId = staffUserId,
                         ReferenceId = item.RefundRequestId,
-                        Type = "REFUND_APPROVED",
+                        Type = disbursementSuccess ? "REFUND_APPROVED" : "REFUND_DISBURSEMENT_FAILED",
                         Description = buyerMsg,
                         IsRead = false,
                         CreatedAt = now
                     }, cancellationToken);
                 }
-                notificationsToSend.Add((item.RequestedBy, "REFUND_APPROVED", buyerMsg));
+                notificationsToSend.Add((item.RequestedBy, disbursementSuccess ? "REFUND_APPROVED" : "REFUND_DISBURSEMENT_FAILED", buyerMsg));
 
                 // 2. Notification for Seller (Coach)
                 var coachEarningMsg = calc.CoachPayoutAmount > 0
@@ -906,7 +919,9 @@ public class RefundRequestService : IRefundRequestService
                     : "";
                 if (coachId.HasValue && coachId.Value != Guid.Empty && coachId.Value != item.RequestedBy)
                 {
-                    var coachMsg = $"A refund request for your training package \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{coachEarningMsg}";
+                    var coachMsg = disbursementSuccess
+                        ? $"A refund request for your training package \"{packageName}\" has been approved. The refund amount is {approvedAmount:N0} VND.{coachEarningMsg}"
+                        : $"A refund request for your training package \"{packageName}\" has been approved by staff ({approvedAmount:N0} VND). Bank disbursement is currently pending resolution.";
                     if (_notifications != null)
                     {
                         await _notifications.AddAsync(new Notification
@@ -924,32 +939,62 @@ public class RefundRequestService : IRefundRequestService
                     notificationsToSend.Add((coachId.Value, "REFUND_APPROVED", coachMsg));
                 }
 
-                // 3. Audit log for APPROVE_REFUND
-                var auditDesc = $"Refund request approved & disbursed.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nCoach Payout Portion: {calc.CoachPayoutAmount:N0} VND\nPolicy Case: {calc.RefundCase} ({calc.CaseTitle})\nTarget Bank: {(bank != null ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})" : "None")}\nTx Ref: {txRef}\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nProcessed By: {staffName}";
+                // 3. Audit log for APPROVE_REFUND or APPROVE_REFUND_DISBURSEMENT_FAILED
+                var auditAction = disbursementSuccess ? "APPROVE_REFUND" : "APPROVE_REFUND_DISBURSEMENT_FAILED";
+                var targetStatus = disbursementSuccess ? RefundConstants.StatusApproved : RefundConstants.StatusDisbursementFailed;
+                var bankDisplay = bank != null ? $"{bank.BankName} ({MaskAccountNumber(plainAccountNumber)})" : null;
+                var reqAmount = item.RequestedAmount ?? snapshotAmount;
+                var cleanOldStaffNote = !string.IsNullOrWhiteSpace(previousStaffNote) && !previousStaffNote.TrimStart().StartsWith("[Policy:", StringComparison.OrdinalIgnoreCase)
+                    ? previousStaffNote.Trim()
+                    : "None";
+                var cleanNewStaffNote = !string.IsNullOrWhiteSpace(staffNoteText) ? staffNoteText : "None";
+                var auditDesc = disbursementSuccess
+                    ? $"Refund request approved & disbursed.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nRefund Amount: {approvedAmount:N0} VND\nCoach Payout Portion: {calc.CoachPayoutAmount:N0} VND\nPolicy Case: {calc.RefundCase} ({calc.CaseTitle})\nTarget Bank: {(bank != null ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})" : "None")}\nTx Ref: {txRef}\nPurchase Date: {(order.CreatedAt.HasValue ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nProcessed By: {staffName}"
+                    : $"Refund request approved by staff, but automated disbursement failed.\nError: {disbursementError}\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nApproved Refund Amount: {approvedAmount:N0} VND\nCoach Payout Portion: {calc.CoachPayoutAmount:N0} VND\nPolicy Case: {calc.RefundCase} ({calc.CaseTitle})\nTarget Bank: {(bank != null ? $"{bank.BankName} - {bank.AccountName} ({MaskAccountNumber(plainAccountNumber)})" : "None")}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nProcessed By: {staffName}";
+
+                var oldAuditSnapshot = new
+                {
+                    status = currentStatus,
+                    requestedAmount = reqAmount,
+                    buyer = buyerName,
+                    order = orderRef,
+                    seller = coachName,
+                    package = packageName,
+                    originalPaidAmount = snapshotAmount,
+                    refundAmount = previousApprovedAmount,
+                    approvedAmount = previousApprovedAmount,
+                    coachPayoutPortion = calc.CoachPayoutAmount,
+                    policyCase = calc.RefundCase,
+                    bankAccount = bankDisplay,
+                    staffNote = cleanOldStaffNote,
+                    refundTransactionRef = !string.IsNullOrWhiteSpace(previousTxRef) ? previousTxRef : "Pending disbursement"
+                };
                 if (_auditLogService != null)
                 {
                     await _auditLogService.LogAsync(
                         actorAccountId: staffUserId,
-                        action: "APPROVE_REFUND",
+                        action: auditAction,
                         entityType: "RefundRequest",
                         entityId: item.RefundRequestId.ToString(),
                         description: auditDesc,
-                        oldValue: new { status = currentStatus, requestedAmount = item.RequestedAmount },
+                        oldValue: oldAuditSnapshot,
                         newValue: new
                         {
+                            status = targetStatus,
+                            requestedAmount = reqAmount,
                             buyer = buyerName,
+                            order = orderRef,
                             seller = coachName,
                             package = packageName,
-                            order = orderRef,
                             originalPaidAmount = snapshotAmount,
                             refundAmount = approvedAmount,
+                            approvedAmount,
                             coachPayoutPortion = calc.CoachPayoutAmount,
                             policyCase = calc.RefundCase,
-                            bankAccount = bank != null ? $"{bank.BankName} ({MaskAccountNumber(plainAccountNumber)})" : null,
-                            status = "APPROVED",
-                            approvedAmount,
+                            bankAccount = bankDisplay,
+                            staffNote = cleanNewStaffNote,
                             refundTransactionRef = txRef,
-                            staffNote = item.StaffNote,
+                            disbursementError = disbursementError,
                             processedBy = staffName,
                             processedAt = now
                         },
@@ -961,25 +1006,28 @@ public class RefundRequestService : IRefundRequestService
                     await _auditLogs.AddAsync(new AuditLog
                     {
                         ActorAccountId = staffUserId,
-                        Action = "APPROVE_REFUND",
+                        Action = auditAction,
                         EntityType = "RefundRequest",
                         EntityId = item.RefundRequestId.ToString(),
-                        OldValue = JsonSerializer.Serialize(new { status = currentStatus, requestedAmount = item.RequestedAmount }),
+                        OldValue = JsonSerializer.Serialize(oldAuditSnapshot),
                         NewValue = JsonSerializer.Serialize(new
                         {
                             description = auditDesc,
+                            status = targetStatus,
+                            requestedAmount = reqAmount,
                             buyer = buyerName,
+                            order = orderRef,
                             seller = coachName,
                             package = packageName,
-                            order = orderRef,
                             originalPaidAmount = snapshotAmount,
                             refundAmount = approvedAmount,
+                            approvedAmount,
                             coachPayoutPortion = calc.CoachPayoutAmount,
                             policyCase = calc.RefundCase,
-                            status = "APPROVED",
-                            approvedAmount,
+                            bankAccount = bankDisplay,
+                            staffNote = cleanNewStaffNote,
                             refundTransactionRef = txRef,
-                            staffNote = item.StaffNote,
+                            disbursementError = disbursementError,
                             processedBy = staffName,
                             processedAt = now
                         }),
@@ -1016,7 +1064,7 @@ public class RefundRequestService : IRefundRequestService
                 }
 
                 // 5. Send email notification asynchronously in the background so staff approval responds immediately
-                if (_emailService != null)
+                if (_emailService != null && disbursementSuccess)
                 {
                     var emailData = PrepareRefundEmail(item, order, approvedAmount, txRef, bank, plainAccountNumber, calc, staffName);
                     if (!string.IsNullOrWhiteSpace(emailData.Email))
@@ -1037,7 +1085,10 @@ public class RefundRequestService : IRefundRequestService
 
                 var resultDto = MapToDto(item);
                 ApplyPolicyToDto(resultDto, calc);
-                return ApiResponseDto<RefundRequestDto>.Ok(resultDto, "Refund request approved and processed successfully.");
+                var responseMsg = disbursementSuccess
+                    ? "Refund request approved and processed successfully."
+                    : $"Refund request approved, but automated bank disbursement failed: {disbursementError}. You can retry disbursement from the management dashboard.";
+                return ApiResponseDto<RefundRequestDto>.Ok(resultDto, responseMsg);
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -1050,6 +1101,184 @@ public class RefundRequestService : IRefundRequestService
                 throw;
             }
         }
+
+    public async Task<ApiResponseDto<RefundRequestDto>> RetryDisbursementAsync(
+        Guid id,
+        Guid staffUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (id == Guid.Empty)
+        {
+            throw new ValidationException("Refund Request ID is required.");
+        }
+
+        if (staffUserId == Guid.Empty)
+        {
+            throw new ValidationException("Staff user ID is required.");
+        }
+
+        var item = await _refundRequestRepository.GetByIdWithDetailsAsync(id, cancellationToken);
+        if (item == null)
+        {
+            throw new NotFoundException("Refund request not found.");
+        }
+
+        var currentStatus = item.Status?.Trim().ToUpperInvariant();
+        if (currentStatus != RefundConstants.StatusDisbursementFailed && !(currentStatus == RefundConstants.StatusApproved && !item.RefundedAt.HasValue))
+        {
+            throw new BusinessException($"Only requests with status '{RefundConstants.StatusDisbursementFailed}' or un-settled approval can be retried. Current status is '{item.Status}'.");
+        }
+
+        var order = item.Order ?? await _orderRepository.GetOrderByIdWithDetailsAsync(item.OrderId, cancellationToken);
+        if (order == null)
+        {
+            throw new NotFoundException("Associated order not found.");
+        }
+
+        var approvedAmount = item.ApprovedAmount ?? item.RequestedAmount ?? order.TotalAmount ?? 0m;
+        if (approvedAmount <= 0)
+        {
+            throw new BusinessException("Approved refund amount must be greater than zero to disburse.");
+        }
+
+        CoachBankAccount? bank = null;
+        string plainAccountNumber = string.Empty;
+        if (_bankAccountRepository != null)
+        {
+            var banks = await _bankAccountRepository.ListActiveByCoachIdAsync(item.RequestedBy, cancellationToken);
+            bank = banks.FirstOrDefault(b => b.IsDefault == true) ?? banks.FirstOrDefault();
+
+            if (bank == null)
+            {
+                throw new BusinessException("The trainee does not have an active payout bank account configured. Please advise the trainee to add a bank account before retrying.");
+            }
+
+            if (_encryptionService != null)
+            {
+                plainAccountNumber = _encryptionService.Decrypt(bank.EncryptedAccountNumber) ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(plainAccountNumber))
+            {
+                throw new BusinessException("Unable to decrypt the trainee's bank account number.");
+            }
+        }
+
+        var txRef = !string.IsNullOrWhiteSpace(item.RefundTransactionRef)
+            ? item.RefundTransactionRef
+            : $"RF{item.RefundRequestId:N}"[..18].ToUpperInvariant();
+
+        bool retrySuccess = true;
+        string? retryError = null;
+
+        if (_bankTransferGateway != null && bank != null && approvedAmount > 0)
+        {
+            var transferReq = new BankTransferRequest(
+                BankCode: bank.BankCode ?? string.Empty,
+                AccountNumber: plainAccountNumber,
+                AccountName: bank.AccountName ?? string.Empty,
+                Amount: approvedAmount,
+                Currency: "VND",
+                Description: $"RETRY REFUND ORD {order.OrderId.ToString("N")[..8].ToUpperInvariant()}",
+                Reference: txRef);
+
+            CreatedTransfer? transferResult = null;
+            try
+            {
+                transferResult = await _bankTransferGateway.CreateTransferAsync(transferReq, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                retrySuccess = false;
+                retryError = ex.Message;
+            }
+
+            if (retrySuccess && (transferResult == null || !transferResult.Created || (!transferResult.Succeeded && !string.IsNullOrWhiteSpace(transferResult.FailureReason))))
+            {
+                retrySuccess = false;
+                retryError = transferResult?.FailureReason ?? "Transaction was not successful";
+            }
+            else if (retrySuccess && transferResult != null)
+            {
+                if (!string.IsNullOrWhiteSpace(transferResult.TransactionRef))
+                {
+                    txRef = transferResult.TransactionRef;
+                }
+                else if (!string.IsNullOrWhiteSpace(transferResult.GatewayRef))
+                {
+                    txRef = transferResult.GatewayRef;
+                }
+            }
+        }
+
+        var now = DateTime.UtcNow;
+
+        if (!retrySuccess)
+        {
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                item.StaffNote = string.IsNullOrWhiteSpace(item.StaffNote)
+                    ? $"[Retry disbursement failed at {now:dd/MM/yyyy HH:mm}: {retryError}]"
+                    : $"{item.StaffNote}\n[Retry disbursement failed at {now:dd/MM/yyyy HH:mm}: {retryError}]";
+                item.UpdatedAt = now;
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            }
+
+            throw new BusinessException($"Retry bank disbursement failed: {retryError}. The refund request remains in status '{RefundConstants.StatusDisbursementFailed}'.");
+        }
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            item.Status = RefundConstants.StatusApproved;
+            item.RefundTransactionRef = txRef;
+            item.RefundedAt = now;
+            item.UpdatedAt = now;
+            item.StaffNote = string.IsNullOrWhiteSpace(item.StaffNote)
+                ? $"[Bank transfer retry succeeded at {now:dd/MM/yyyy HH:mm} - Ref: {txRef}]"
+                : $"{item.StaffNote}\n[Bank transfer retry succeeded at {now:dd/MM/yyyy HH:mm} - Ref: {txRef}]";
+
+            order.OrderStatus = PaymentConstants.OrderStatusRefunded;
+            var payment = item.Payment ?? order.Payments?.FirstOrDefault();
+            if (payment != null)
+            {
+                payment.Status = PaymentConstants.PaymentStatusRefunded;
+                payment.UpdatedAt = now;
+            }
+
+            var packageName = order.OrderDetails?.FirstOrDefault()?.PackageTitle ?? "Training Package";
+            var buyerMsg = $"Funds transferred successfully! {approvedAmount:N0} VND has been deposited to your {bank?.BankName} account ({MaskAccountNumber(plainAccountNumber)}) - Ref: {txRef}.";
+            if (_notifications != null)
+            {
+                await _notifications.AddAsync(new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = item.RequestedBy,
+                    ActorId = staffUserId,
+                    ReferenceId = item.RefundRequestId,
+                    Type = "REFUND_APPROVED",
+                    Description = buyerMsg,
+                    IsRead = false,
+                    CreatedAt = now
+                }, cancellationToken);
+            }
+
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            var resultDto = MapToDto(item);
+            return ApiResponseDto<RefundRequestDto>.Ok(resultDto, "Bank disbursement succeeded and refund finalized.");
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+    }
 
 
     public async Task<ApiResponseDto<RefundRequestDto>> RejectRefundRequestAsync(
@@ -1092,6 +1321,7 @@ public class RefundRequestService : IRefundRequestService
             }
 
             var now = DateTime.UtcNow;
+            var previousStaffNote = item.StaffNote;
 
             item.Status = "REJECTED";
             item.ReviewedBy = staffUserId;
@@ -1162,7 +1392,22 @@ public class RefundRequestService : IRefundRequestService
             }
 
             // 3. Audit log for REJECT_REFUND
+            var cleanOldRejectStaffNote = !string.IsNullOrWhiteSpace(previousStaffNote) && !previousStaffNote.TrimStart().StartsWith("[Policy:", StringComparison.OrdinalIgnoreCase)
+                ? previousStaffNote.Trim()
+                : "None";
             var auditDesc = $"Refund request rejected.\nBuyer: {buyerName}\nSeller: {coachName}\nTraining Package: {packageName}\nOrder: {orderRef}\nOriginal Paid Amount: {snapshotAmount:N0} VND\nPurchase Date: {(order?.CreatedAt.HasValue == true ? order.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")}\nRequested At: {(item.RequestedAt.HasValue ? item.RequestedAt.Value.ToString("dd/MM/yyyy HH:mm") : now.ToString("dd/MM/yyyy HH:mm"))}\nProcessed At: {now:dd/MM/yyyy HH:mm}\nPrevious Status: PENDING\nNew Status: REJECTED\nProcessed By: {staffName}\nRejection Reason: {rejectionReason}";
+            var oldRejectSnapshot = new
+            {
+                status = currentStatus,
+                requestedAmount = snapshotAmount,
+                buyer = buyerName,
+                order = orderRef,
+                seller = coachName,
+                package = packageName,
+                originalPaidAmount = snapshotAmount,
+                staffNote = cleanOldRejectStaffNote,
+                rejectionReason = "None"
+            };
             if (_auditLogService != null)
             {
                 await _auditLogService.LogAsync(
@@ -1171,17 +1416,19 @@ public class RefundRequestService : IRefundRequestService
                     entityType: "RefundRequest",
                     entityId: item.RefundRequestId.ToString(),
                     description: auditDesc,
-                    oldValue: new { status = currentStatus },
+                    oldValue: oldRejectSnapshot,
                     newValue: new
                     {
+                        status = "REJECTED",
+                        requestedAmount = snapshotAmount,
                         buyer = buyerName,
+                        order = orderRef,
                         seller = coachName,
                         package = packageName,
-                        order = orderRef,
-                        status = "REJECTED",
+                        originalPaidAmount = snapshotAmount,
                         staffNote = item.StaffNote,
-                        processedBy = staffName,
                         rejectionReason,
+                        processedBy = staffName,
                         processedAt = now
                     },
                     ipAddress: ipAddress,
@@ -1195,18 +1442,20 @@ public class RefundRequestService : IRefundRequestService
                     Action = "REJECT_REFUND",
                     EntityType = "RefundRequest",
                     EntityId = item.RefundRequestId.ToString(),
-                    OldValue = JsonSerializer.Serialize(new { status = currentStatus }),
+                    OldValue = JsonSerializer.Serialize(oldRejectSnapshot),
                     NewValue = JsonSerializer.Serialize(new
                     {
                         description = auditDesc,
+                        status = "REJECTED",
+                        requestedAmount = snapshotAmount,
                         buyer = buyerName,
+                        order = orderRef,
                         seller = coachName,
                         package = packageName,
-                        order = orderRef,
-                        status = "REJECTED",
+                        originalPaidAmount = snapshotAmount,
                         staffNote = item.StaffNote,
-                        processedBy = staffName,
                         rejectionReason,
+                        processedBy = staffName,
                         processedAt = now
                     }),
                     Ipaddress = ipAddress,

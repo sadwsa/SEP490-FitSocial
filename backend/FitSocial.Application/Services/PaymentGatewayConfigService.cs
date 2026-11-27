@@ -9,6 +9,7 @@ using FitSocial.Application.Exceptions;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace FitSocial.Application.Services;
 
@@ -18,17 +19,20 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
     private readonly IEncryptionService _encryptionService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogService _auditLogService;
+    private readonly ILogger<PaymentGatewayConfigService>? _logger;
 
     public PaymentGatewayConfigService(
         IPaymentGatewayConfigRepository configRepository,
         IEncryptionService encryptionService,
         IUnitOfWork unitOfWork,
-        IAuditLogService auditLogService)
+        IAuditLogService? auditLogService = null,
+        ILogger<PaymentGatewayConfigService>? logger = null)
     {
         _configRepository = configRepository;
         _encryptionService = encryptionService;
         _unitOfWork = unitOfWork;
-        _auditLogService = auditLogService;
+        _auditLogService = auditLogService!;
+        _logger = logger;
     }
 
     public async Task<ApiResponseDto<List<PaymentGatewayConfigDto>>> GetAllConfigsAsync(CancellationToken cancellationToken = default)
@@ -74,9 +78,6 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
             UpdatedAt = now
         };
 
-        // Single-active-per-purpose invariant: at most one active collection
-        // gateway and one active payout gateway. A new row starts Inactive
-        // unless nothing of the same purpose is active, then it becomes active.
         var existing = await _configRepository.GetAllConfigsAsync(cancellationToken)
             ?? new List<PaymentGatewayConfig>();
         config.IsActive = !existing.Any(c => c.IsActive == true && IsPayoutOf(c) == config.IsPayout);
@@ -126,9 +127,6 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         if (dto.IsActive.HasValue) config.IsActive = dto.IsActive.Value;
         if (dto.IsPayout.HasValue) config.IsPayout = dto.IsPayout.Value;
 
-        // Single-active-per-purpose invariant: only one active gateway per
-        // channel. Turning this one on while another of the same channel is
-        // active is rejected — staff must deactivate the current one first.
         if (config.IsActive == true)
         {
             await EnsureNoOtherActiveAsync(id, IsPayoutOf(config), cancellationToken);
@@ -161,7 +159,6 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         var oldValues = Snapshot(config);
         var gatewayName = config.GatewayName;
 
-        // Soft-delete / deactivate
         config.IsActive = false;
         config.UpdatedAt = DateTime.UtcNow;
 
@@ -232,11 +229,6 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         return ApiResponseDto<bool>.Ok(true, "Payment gateway config deactivated successfully.");
     }
 
-    /// <summary>
-    /// Non-sensitive projection of a gateway config used for audit trails.
-    /// API key / checksum key are NEVER included - only whether they were supplied,
-    /// so secrets never reach the "AuditLogs" table.
-    /// </summary>
     private static object Snapshot(PaymentGatewayConfig c, UpdatePaymentGatewayConfigDto? dto = null)
     {
         return new
@@ -253,11 +245,6 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         };
     }
 
-    /// <summary>
-    /// UC-36.x: every Admin action on a payment account (add / edit / activate /
-    /// deactivate / delete) is traced in the shared "AuditLogs" table. Actor,
-    /// role and IP are auto-resolved from the current request by IAuditLogService.
-    /// </summary>
     private async Task WriteAuditAsync(
         string action,
         Guid entityId,
@@ -269,7 +256,7 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
         try
         {
             await _auditLogService.LogAsync(
-                actorAccountId: null, // Auto-resolved from ICurrentUserContext
+                actorAccountId: null,
                 action: action,
                 entityType: "PaymentGatewayConfig",
                 entityId: entityId.ToString(),
@@ -278,9 +265,9 @@ public class PaymentGatewayConfigService : IPaymentGatewayConfigService
                 newValue: newValue,
                 cancellationToken: cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Audit log failure is non-fatal - the business operation already succeeded.
+            _logger?.LogWarning(ex, "Failed to write audit log for action {Action} on entity {EntityId}", action, entityId);
         }
     }
 

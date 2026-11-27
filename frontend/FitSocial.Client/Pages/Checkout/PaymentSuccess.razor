@@ -3,7 +3,6 @@
 @inject FitSocial.Client.Services.Checkout.ICheckoutService CheckoutService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
-@inject FitSocial.Client.Services.Auth.IAuthService AuthService
 @inject AppShellContext Shell
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Orders
@@ -89,10 +88,6 @@
     [SupplyParameterFromQuery(Name = "orderCode")]
     public long? OrderCode { get; set; }
 
-    // PayOS appends these on gateway redirect
-    [SupplyParameterFromQuery(Name = "code")]
-    public string? PayOsCode { get; set; }
-
     [SupplyParameterFromQuery(Name = "cancel")]
     public bool? Cancelled { get; set; }
 
@@ -103,28 +98,8 @@
     private bool isLoading = true;
     private string? errorMessage;
 
-    private string? headerSearchTerm = "";
-    private string userName = "User";
-    private string userInitials = "U";
-    private string userRole = "Trainee";
-
     protected override async Task OnInitializedAsync()
     {
-        // Topbar do AppShellLayout render: đăng ký hành vi tìm kiếm cho trang này
-        Shell.SearchTerm = headerSearchTerm ?? string.Empty;
-        Shell.SearchInputHandler = e =>
-        {
-            HandleHeaderSearchInput(e);
-            return Task.CompletedTask;
-        };
-        Shell.SearchKeyUpHandler = e =>
-        {
-            HandleHeaderSearchKeyUp(e);
-            return Task.CompletedTask;
-        };
-        Shell.SearchExecuteHandler = () => { ExecuteHeaderSearch(); return Task.CompletedTask; };
-        Shell.SearchClearHandler = () => { ClearHeaderSearch(); return Task.CompletedTask; };
-
         await LoadUserInfoAsync();
 
         if (Cancelled == true || string.Equals(PayOsStatus, "CANCELLED", StringComparison.OrdinalIgnoreCase))
@@ -174,7 +149,9 @@
             if (order == null && targetId.HasValue && targetId.Value != Guid.Empty)
             {
                 var res = await CheckoutService.GetOrderByIdAsync(targetId.Value);
-                if (res.Success && res.Data != null)
+                if (res.Success && res.Data != null &&
+                    (string.Equals(res.Data.OrderStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(res.Data.OrderStatus, "PAID", StringComparison.OrdinalIgnoreCase)))
                 {
                     order = res.Data;
                     errorMessage = null;
@@ -204,38 +181,11 @@
         {
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var user = authState.User;
-            if (user.Identity?.IsAuthenticated == true)
-            {
-                userName = user.Identity.Name ?? "User";
-                var isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
-                userRole = isCoach ? "Coach" : "Trainee";
-                var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length > 0)
-                {
-                    userInitials = parts.Length > 1
-                        ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
-                        : parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
-                }
-            }
-            else
+            if (user.Identity?.IsAuthenticated != true)
             {
                 Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}");
             }
         }
-        catch
-        {
-            userInitials = "U";
-        }
+        catch { }
     }
-
-    private async Task HandleLogout()
-    {
-        await AuthService.LogoutAsync();
-        Navigation.NavigateTo("login");
-    }
-
-    private void HandleHeaderSearchInput(ChangeEventArgs e) { headerSearchTerm = e.Value?.ToString(); }
-    private void HandleHeaderSearchKeyUp(KeyboardEventArgs e) { }
-    private void ExecuteHeaderSearch() { }
-    private void ClearHeaderSearch() { headerSearchTerm = string.Empty; }
 }

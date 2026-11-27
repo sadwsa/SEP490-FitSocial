@@ -18,9 +18,11 @@ public interface ITrainingPlanClientService
     Task<ApiResponse<TraineeWorkoutPlanProgressDto>> GetTraineeWorkoutPlanAsync(Guid orderDetailsId);
     Task<ApiResponse<TraineeWorkoutPlanProgressDto>> GetTraineeWorkoutPlanByPackageAsync(Guid packageId);
     Task<ApiResponse<WorkoutCompletionResultDto>> ToggleWorkoutCompletionAsync(ToggleWorkoutCompletionDto dto);
+    Task<ApiResponse<WorkoutCompletionResultDto>> RequestWorkoutCompletionAsync(RequestWorkoutCompletionDto dto);
 
-    // Coach Progress Monitoring
+    // Coach Progress Monitoring & Review
     Task<ApiResponse<CoachTraineeWorkoutProgressDto>> GetCoachTraineeProgressAsync(Guid orderDetailsId);
+    Task<ApiResponse<WorkoutCompletionResultDto>> ReviewWorkoutCompletionAsync(CoachReviewWorkoutDto dto);
 }
 
 public class TrainingPlanClientService : ITrainingPlanClientService
@@ -67,8 +69,18 @@ public class TrainingPlanClientService : ITrainingPlanClientService
         return await _apiClient.PostAsync<ToggleWorkoutCompletionDto, WorkoutCompletionResultDto>("trainee/workout/complete", dto);
     }
 
+    public async Task<ApiResponse<WorkoutCompletionResultDto>> RequestWorkoutCompletionAsync(RequestWorkoutCompletionDto dto)
+    {
+        return await _apiClient.PostAsync<RequestWorkoutCompletionDto, WorkoutCompletionResultDto>("trainee/workout/request-completion", dto);
+    }
+
     public async Task<ApiResponse<CoachTraineeWorkoutProgressDto>> GetCoachTraineeProgressAsync(Guid orderDetailsId)
     {
         return await _apiClient.GetAsync<CoachTraineeWorkoutProgressDto>($"coach/training-plans/trainee-progress/{orderDetailsId}");
+    }
+
+    public async Task<ApiResponse<WorkoutCompletionResultDto>> ReviewWorkoutCompletionAsync(CoachReviewWorkoutDto dto)
+    {
+        return await _apiClient.PostAsync<CoachReviewWorkoutDto, WorkoutCompletionResultDto>("coach/training-plans/review-workout", dto);
     }
 }

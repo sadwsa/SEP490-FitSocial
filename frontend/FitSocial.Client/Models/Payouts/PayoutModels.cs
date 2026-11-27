@@ -63,7 +63,6 @@ public class VestingMonth
     public int Month { get; set; }
     public int Year { get; set; }
     public string Label { get; set; } = string.Empty;
-    /// <summary>PAID, PAYABLE or FUTURE.</summary>
     public string State { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public Guid? PayoutId { get; set; }

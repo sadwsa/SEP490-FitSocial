@@ -34,8 +34,6 @@ namespace FitSocial.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                // Redis outage must not break logout; the access token simply keeps
-                // its natural expiry. Logged for ops visibility.
                 _logger.LogWarning(ex, "Could not write token blacklist entry for {Jti}.", jti);
             }
         }
@@ -50,8 +48,6 @@ namespace FitSocial.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                // Fail-open: a Redis outage must not take down every authorized endpoint.
-                // Tokens keep their JWT lifetime check; revocation resumes when Redis recovers.
                 _logger.LogWarning(ex, "Could not read token blacklist entry for {Jti}. Assuming not revoked.", jti);
                 return false;
             }

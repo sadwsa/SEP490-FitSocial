@@ -4,6 +4,7 @@ using FitSocial.Client.Services.Http;
 using System;
 using System.Collections.Generic;
 using System.Net.Http.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FitSocial.Client.Services.Coaches;
@@ -18,39 +19,34 @@ public class CoachService : ICoachService
         _apiClient = apiClient;
     }
 
-    public async Task<ApiResponse<IEnumerable<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null)
+    public async Task<ApiResponse<PagedResult<CoachListDto>>> GetAllCoachesAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, int pageNumber = 1, int pageSize = 6, CancellationToken cancellationToken = default)
     {
         var queryParts = new List<string>();
         if (!string.IsNullOrWhiteSpace(searchKeyword))
-            queryParts.Add($"searchKeyword={Uri.EscapeDataString(searchKeyword)}");
+            queryParts.Add($"searchKeyword={Uri.EscapeDataString(searchKeyword.Trim())}");
 
         if (minExperience.HasValue && minExperience.Value > 0)
             queryParts.Add($"minExperience={minExperience.Value}");
 
         if (!string.IsNullOrWhiteSpace(sortBy))
-            queryParts.Add($"sortBy={Uri.EscapeDataString(sortBy)}");
+            queryParts.Add($"sortBy={Uri.EscapeDataString(sortBy.Trim())}");
 
-        var queryString = queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "";
-        return await _apiClient.GetAsync<IEnumerable<CoachListDto>>($"{BaseEndpoint}{queryString}");
+        queryParts.Add($"pageNumber={pageNumber}");
+        queryParts.Add($"pageSize={pageSize}");
+
+        var queryString = "?" + string.Join("&", queryParts);
+        return await _apiClient.GetAsync<PagedResult<CoachListDto>>($"{BaseEndpoint}{queryString}", cancellationToken);
     }
 
     public async Task<ApiResponse<List<TopCoachDto>>> GetTopCoachesAsync(int count = 5)
     {
         return await _apiClient.GetAsync<List<TopCoachDto>>($"{BaseEndpoint}/top?count={count}");
     }
-    public async Task<FitSocial.Client.Models.Common.ApiResponse<bool>> SubmitReviewAsync(Guid coachId, FitSocial.Client.Models.Coaches.CreateReviewDto dto)
-    {
-        return await _apiClient.PostAsync<FitSocial.Client.Models.Coaches.CreateReviewDto, bool>($"{BaseEndpoint}/{coachId}/reviews", dto);
-    }
     public async Task<FitSocial.Client.Models.Common.ApiResponse<bool>> UpdateReviewAsync(Guid reviewId, FitSocial.Client.Models.Coaches.UpdateReviewDto dto)
     {
         return await _apiClient.PutAsync<FitSocial.Client.Models.Coaches.UpdateReviewDto, bool>($"{BaseEndpoint}/reviews/{reviewId}", dto);
     }
 
-    public async Task<FitSocial.Client.Models.Common.ApiResponse<bool>> DeleteReviewAsync(Guid reviewId)
-    {
-        return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/reviews/{reviewId}");
-    }
     public async Task<ApiResponse<List<CoachBankAccountDto>>> GetBankAccountsAsync()
     {
         return await _apiClient.GetAsync<List<CoachBankAccountDto>>($"{BaseEndpoint}/bank-accounts");
@@ -61,6 +57,11 @@ public class CoachService : ICoachService
         return await _apiClient.PostAsync<CreateCoachBankAccountDto, CoachBankAccountDto>($"{BaseEndpoint}/bank-accounts", dto);
     }
 
+    public async Task<ApiResponse<CoachBankAccountDto>> UpdateBankAccountAsync(Guid bankId, CreateCoachBankAccountDto dto)
+    {
+        return await _apiClient.PutAsync<CreateCoachBankAccountDto, CoachBankAccountDto>($"{BaseEndpoint}/bank-accounts/{bankId}", dto);
+    }
+
     public async Task<ApiResponse<bool>> SetDefaultBankAccountAsync(Guid bankId)
     {
         return await _apiClient.PutAsync<object, bool>($"{BaseEndpoint}/bank-accounts/{bankId}/default", new { });
@@ -69,6 +70,11 @@ public class CoachService : ICoachService
     public async Task<ApiResponse<bool>> DeleteBankAccountAsync(Guid bankId)
     {
         return await _apiClient.DeleteAsync<bool>($"{BaseEndpoint}/bank-accounts/{bankId}");
+    }
+
+    public async Task<ApiResponse<string?>> LookupBankAccountAsync(string bin, string accountNumber)
+    {
+        return await _apiClient.GetAsync<string?>($"{BaseEndpoint}/bank-accounts/lookup?bin={Uri.EscapeDataString(bin)}&accountNumber={Uri.EscapeDataString(accountNumber)}");
     }
 
     public async Task<ApiResponse<CoachApplicationListResponseDto>> GetCoachApplicationsAsync(
@@ -163,10 +169,4 @@ public class CoachService : ICoachService
 
         return new List<BankItemDto>();
     }
-
-    public async Task<ApiResponse<string?>> LookupAccountNameAsync(string bin, string accountNumber)
-    {
-        return await _apiClient.GetAsync<string?>($"{BaseEndpoint}/bank-accounts/lookup?bin={Uri.EscapeDataString(bin)}&accountNumber={Uri.EscapeDataString(accountNumber)}");
-    }
-
 }

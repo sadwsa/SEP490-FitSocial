@@ -7,6 +7,7 @@ using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
 using System.IdentityModel.Tokens.Jwt;
+using FitSocial.Domain.Constants;
 using FitSocial.Domain.Interfaces;
 using FitSocial.API.Hubs;
 using FitSocial.API.Services;
@@ -15,10 +16,15 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure maximum request body size (100MB for video/media uploads)
+// Configure maximum request body size (250MB for video/media uploads)
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024;
+    options.Limits.MaxRequestBodySize = 250 * 1024 * 1024;
+});
+
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 250 * 1024 * 1024;
 });
 
 // Add services to the container.
@@ -71,6 +77,7 @@ builder.Services.AddScoped<IChatRealtimeNotifier, ChatRealtimeNotifier>();
 builder.Services.AddScoped<INotificationRealtimeNotifier, NotificationRealtimeNotifier>();
 builder.Services.AddHostedService<FitSocial.API.Services.EkycRetentionService>();
 builder.Services.AddHostedService<FitSocial.API.Services.CoachSubscriptionExpiryService>();
+builder.Services.AddHostedService<FitSocial.API.Services.CoachScheduleReminderBackgroundService>();
 builder.Services.AddScoped<IPostRealtimeNotifier, PostRealtimeNotifier>();
 
 // Cloudinary Singleton service registration (reuse HttpClient / SocketsHttpHandler connection pool)
@@ -81,6 +88,7 @@ if (!string.IsNullOrWhiteSpace(cloudName) && !string.IsNullOrWhiteSpace(apiKey) 
 {
     var account = new CloudinaryDotNet.Account(cloudName, apiKey, apiSecret);
     builder.Services.AddSingleton(new CloudinaryDotNet.Cloudinary(account));
+    builder.Services.AddScoped<CloudinaryImageService>();
 }
 
 // JWT Authentication
@@ -133,29 +141,53 @@ builder.Services.AddAuthentication(options =>
         },
         OnTokenValidated = async context =>
         {
-            var userRepository = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
-            var blacklistService = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
-
-            // 1. Get Jti and TokenVersion from the Access Token claims
-            var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
-            var userIdStr = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var tokenVersionStr = context.Principal?.FindFirst("token_version")?.Value;
-
-            // Check Layer 1: whether the token is in the Redis blacklist (logged out)
-            if (!string.IsNullOrEmpty(jti) && await blacklistService.IsTokenRevokedAsync(jti))
+            try
             {
-                context.Fail("Token has been revoked (signed out).");
-                return;
-            }
+                var userRepository = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+                var blacklistService = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
 
-            // Check Layer 2: compare TokenVersion with the database (password change / locked account)
-            if (Guid.TryParse(userIdStr, out var userId) && int.TryParse(tokenVersionStr, out var tokenVersion))
-            {
-                var user = await userRepository.GetByIdAsync(userId);
-                if (user == null || user.IsLocked == true || user.TokenVersion != tokenVersion)
+                // 1. Get Jti and TokenVersion from the Access Token claims
+                var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+                var userIdStr = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var tokenVersionStr = context.Principal?.FindFirst("token_version")?.Value;
+
+                // Check Layer 1: whether the token is in the Redis blacklist (logged out)
+                if (!string.IsNullOrEmpty(jti) && await blacklistService.IsTokenRevokedAsync(jti))
                 {
-                    context.Fail("Account has been locked, password changed, or the session is no longer valid.");
+                    context.Fail("Token has been revoked (signed out).");
+                    return;
                 }
+
+                // Check Layer 2: compare TokenVersion with the database (password change / locked account)
+                if (Guid.TryParse(userIdStr, out var userId) && int.TryParse(tokenVersionStr, out var tokenVersion))
+                {
+                    var user = await userRepository.GetByIdAsync(userId);
+                    // Allow locked coach accounts that have not completed activation payment yet
+                    // to keep using their session (they are redirected to the payment page).
+                    bool isUnpaidCoach = false;
+                    if (user != null && user.IsLocked == true &&
+                        string.Equals(user.RoleCode?.Trim(), RoleConstants.Coach, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            var upgradeRepo = context.HttpContext.RequestServices.GetService<ICoachUpgradeRepository>();
+                            var latest = upgradeRepo?.GetLatestFinishedByCoachIdAsync(user.UserId).GetAwaiter().GetResult();
+                            isUnpaidCoach = latest == null || latest.Status != "ACTIVE";
+                        }
+                        catch { isUnpaidCoach = true; }
+                    }
+
+                    if (user == null || (user.IsLocked == true && !isUnpaidCoach) || user.TokenVersion != tokenVersion)
+                    {
+                        context.Fail("Account has been locked, password changed, or the session is no longer valid.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Resilient fail-safe: log warning on transient DB/Redis network glitches rather than crashing request with 500
+                var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
+                logger?.LogWarning(ex, "[Auth] Transient error in OnTokenValidated: {Message}", ex.Message);
             }
         }
     };

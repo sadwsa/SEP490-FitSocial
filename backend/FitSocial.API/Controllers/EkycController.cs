@@ -16,9 +16,6 @@ public class EkycController : ControllerBase
         _ekycService = ekycService;
     }
 
-    /// <summary>
-    /// Verify front/back ID card + liveness face via Viettel eKYC (or mock).
-    /// </summary>
     [HttpPost("verify")]
     [AllowAnonymous]
     public async Task<IActionResult> Verify([FromBody] EkycVerificationDto request)
@@ -31,9 +28,6 @@ public class EkycController : ControllerBase
         return Ok(new { success = true, data = result.Result });
     }
 
-    /// <summary>
-    /// Check if CCCD has already been used by another coach. Called right after OCR on Step 2 so user sees duplicate immediately on CCCD page.
-    /// </summary>
     [HttpPost("check-idcard")]
     [AllowAnonymous]
     public async Task<IActionResult> CheckIdCard([FromBody] CheckIdCardRequest request)

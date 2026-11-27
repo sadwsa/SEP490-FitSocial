@@ -51,30 +51,52 @@
                 else
                 {
                     <!-- Overview Stats -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div class="p-4 rounded-xl bg-blue-50/60 border border-blue-100">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100">
                             <span class="text-[10px] uppercase font-bold text-blue-600 block mb-1">Completion Rate</span>
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-2xl font-black text-blue-900">@($"{progressData.ProgressPercentage:N0}%")</span>
-                                <span class="text-xs text-blue-700 font-medium">(@progressData.CompletedExercisesCount / @progressData.TotalExercisesCount)</span>
+                            <div class="flex items-baseline gap-1.5">
+                                <span class="text-xl font-black text-blue-900">@($"{progressData.ProgressPercentage:N0}%")</span>
+                                <span class="text-[11px] text-blue-700 font-medium">(@progressData.CompletedExercisesCount/@progressData.TotalExercisesCount)</span>
                             </div>
                             <div class="w-full bg-blue-200/80 h-1.5 rounded-full overflow-hidden mt-2">
                                 <div class="bg-blue-600 h-full rounded-full transition-all duration-500" style="width: @($"{progressData.ProgressPercentage}%")"></div>
                             </div>
                         </div>
 
-                        <div class="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100">
-                            <span class="text-[10px] uppercase font-bold text-emerald-600 block mb-1">Completed Workouts</span>
-                            <div class="text-2xl font-black text-emerald-900">@progressData.CompletedExercisesCount</div>
-                            <span class="text-[11px] text-emerald-700 font-medium">Marked completed by trainee</span>
+                        <div class="p-3.5 rounded-xl bg-purple-50/60 border border-purple-100">
+                            <span class="text-[10px] uppercase font-bold text-purple-600 block mb-1">Adherence Rate</span>
+                            <div class="flex items-baseline gap-1.5">
+                                <span class="text-xl font-black text-purple-900">@($"{progressData.AdherenceRate:N0}%")</span>
+                                <span class="text-[11px] text-purple-700 font-medium">attendance</span>
+                            </div>
+                            <div class="w-full bg-purple-200/80 h-1.5 rounded-full overflow-hidden mt-2">
+                                <div class="bg-purple-600 h-full rounded-full transition-all duration-500" style="width: @($"{progressData.AdherenceRate}%")"></div>
+                            </div>
                         </div>
 
-                        <div class="p-4 rounded-xl bg-amber-50/60 border border-amber-100">
-                            <span class="text-[10px] uppercase font-bold text-amber-600 block mb-1">Remaining Workouts</span>
-                            <div class="text-2xl font-black text-amber-900">@(progressData.TotalExercisesCount - progressData.CompletedExercisesCount)</div>
-                            <span class="text-[11px] text-amber-700 font-medium">Pending trainee sessions</span>
+                        <div class="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100">
+                            <span class="text-[10px] uppercase font-bold text-emerald-600 block mb-1">Completed</span>
+                            <div class="text-xl font-black text-emerald-900">@progressData.CompletedExercisesCount</div>
+                            <span class="text-[10px] text-emerald-700 font-medium">Workouts done</span>
+                        </div>
+
+                        <div class="p-3.5 rounded-xl bg-rose-50/60 border border-rose-100">
+                            <span class="text-[10px] uppercase font-bold text-rose-600 block mb-1">Missed Sessions</span>
+                            <div class="text-xl font-black text-rose-900">@progressData.MissedExercisesCount</div>
+                            <span class="text-[10px] text-rose-700 font-medium">Missed sessions</span>
                         </div>
                     </div>
+
+                    @if (progressData.RemainingDays.HasValue && progressData.RemainingDays.Value <= 5 && progressData.ProgressPercentage < 50 && progressData.TotalExercisesCount > 0 && progressData.CompletedExercisesCount < progressData.TotalExercisesCount)
+                    {
+                        <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                            <svg class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            <div>
+                                <strong class="font-bold">Warning: Trainee package expiring soon!</strong>
+                                Only <strong>@progressData.RemainingDays.Value days remaining</strong> but completed only <strong>@progressData.ProgressPercentage%</strong> of the program. Reach out to encourage your trainee.
+                            </div>
+                        </div>
+                    }
 
                     <!-- Tabs: Weekly Schedule Breakdown vs Recent Activity Log -->
                     <div class="flex items-center gap-2 border-b border-gray-100 pb-2">
@@ -125,13 +147,29 @@
                                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                     @foreach (var ex in day.Exercises)
                                                     {
-                                                        <div class="p-2.5 rounded-lg border text-xs flex flex-col justify-between @(ex.IsCompleted ? "bg-emerald-50/40 border-emerald-200" : "bg-gray-50 border-gray-200/60")">
+                                                        bool isMissed = string.Equals(ex.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase);
+                                                        bool isPendingReview = string.Equals(ex.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase);
+                                                        bool isUncomplete = string.Equals(ex.Status, "UNCOMPLETE", StringComparison.OrdinalIgnoreCase);
+
+                                                        <div class="p-2.5 rounded-lg border text-xs flex flex-col justify-between @(ex.IsCompleted ? "bg-emerald-50/40 border-emerald-200" : isPendingReview ? "bg-amber-50/50 border-amber-300" : isUncomplete ? "bg-rose-50/40 border-rose-200" : isMissed ? "bg-rose-50/30 border-rose-200" : "bg-gray-50 border-gray-200/60")">
                                                             <div>
                                                                 <div class="flex items-start justify-between gap-2 mb-1">
-                                                                    <span class="font-bold text-gray-800 @(ex.IsCompleted ? "text-emerald-900" : "")">@ex.ExerciseName</span>
+                                                                    <span class="font-bold text-gray-800 @(ex.IsCompleted ? "text-emerald-900" : isPendingReview ? "text-amber-900" : isUncomplete ? "text-rose-900" : isMissed ? "text-rose-900" : "")">@ex.ExerciseName</span>
                                                                     @if (ex.IsCompleted)
                                                                     {
                                                                         <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-full flex-shrink-0">✓ Done</span>
+                                                                    }
+                                                                    else if (isPendingReview)
+                                                                    {
+                                                                        <span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full flex-shrink-0 animate-pulse">⏳ Needs Review</span>
+                                                                    }
+                                                                    else if (isUncomplete)
+                                                                    {
+                                                                        <span class="text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.2 rounded-full flex-shrink-0">Needs Work</span>
+                                                                    }
+                                                                    else if (isMissed)
+                                                                    {
+                                                                        <span class="text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.2 rounded-full flex-shrink-0">Missed</span>
                                                                     }
                                                                     else
                                                                     {
@@ -147,8 +185,42 @@
 
                                                             @if (!string.IsNullOrWhiteSpace(ex.TraineeNotes))
                                                             {
-                                                                <div class="mt-1.5 pt-1.5 border-t border-emerald-100 text-[10px] text-emerald-800 italic">
-                                                                    Trainee: "@ex.TraineeNotes"
+                                                                <div class="mt-1.5 pt-1.5 border-t @(isMissed ? "border-rose-100 text-rose-800" : "border-emerald-100 text-emerald-800") text-[10px] italic">
+                                                                    Trainee @(isMissed ? "Missed Reason" : "Note"): "@ex.TraineeNotes"
+                                                                </div>
+                                                            }
+
+                                                            @if (!string.IsNullOrWhiteSpace(ex.MediaUrl))
+                                                            {
+                                                                <div class="mt-1.5 pt-1.5 border-t border-gray-100 flex items-center justify-between">
+                                                                    <a href="@ex.MediaUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 underline font-bold flex items-center gap-1 text-[10px]">
+                                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                                                        View Proof
+                                                                    </a>
+                                                                </div>
+                                                            }
+
+                                                            @if (!string.IsNullOrWhiteSpace(ex.CoachFeedback))
+                                                            {
+                                                                <div class="mt-1.5 pt-1 border-t border-gray-100 text-[10px] text-blue-900 bg-blue-50/60 p-1.5 rounded">
+                                                                    <strong class="text-blue-800 font-semibold">Your Feedback:</strong> "@ex.CoachFeedback"
+                                                                </div>
+                                                            }
+
+                                                            <!-- Coach Review Actions -->
+                                                            @if (isPendingReview || isUncomplete || ex.IsCompleted)
+                                                            {
+                                                                <div class="mt-2.5 pt-1.5 border-t border-gray-200/60 flex items-center gap-1.5">
+                                                                    <button type="button"
+                                                                            @onclick="() => OpenCoachReviewModal(ex, true)"
+                                                                            class="flex-1 py-1 px-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs">
+                                                                        <span>Approve</span>
+                                                                    </button>
+                                                                    <button type="button"
+                                                                            @onclick="() => OpenCoachReviewModal(ex, false)"
+                                                                            class="flex-1 py-1 px-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs">
+                                                                        <span>Reject</span>
+                                                                    </button>
                                                                 </div>
                                                             }
                                                         </div>
@@ -176,22 +248,55 @@
                                 <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
                                     @foreach (var log in progressData.RecentLogs)
                                     {
+                                        bool isMissed = string.Equals(log.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase);
                                         <div class="p-3.5 hover:bg-gray-50 transition flex items-center justify-between gap-3 text-xs">
                                             <div class="flex items-center gap-3">
-                                                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                                                    ✓
+                                                <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold @(isMissed ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")">
+                                                    @(isMissed ? "!" : "✓")
                                                 </div>
                                                 <div>
-                                                    <p class="font-bold text-gray-900">@log.ExerciseName</p>
+                                                    <div class="flex items-center gap-2">
+                                                        <p class="font-bold text-gray-900">@log.ExerciseName</p>
+                                                        @if (string.Equals(log.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
+                                                        {
+                                                            <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 animate-pulse">Needs Review</span>
+                                                        }
+                                                        else if (string.Equals(log.Status, "UNCOMPLETE", StringComparison.OrdinalIgnoreCase))
+                                                        {
+                                                            <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700">Needs Work</span>
+                                                        }
+                                                        else if (isMissed)
+                                                        {
+                                                            <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700">Missed</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">Completed</span>
+                                                        }
+                                                    </div>
                                                     <p class="text-[11px] text-gray-400">Week @log.WeekNumber • Day @log.DayNumber</p>
                                                     @if (!string.IsNullOrWhiteSpace(log.Notes))
                                                     {
-                                                        <p class="text-[11px] text-gray-600 italic mt-0.5">Note: "@log.Notes"</p>
+                                                        <p class="text-[11px] @(isMissed ? "text-rose-700 font-medium" : "text-gray-600") italic mt-0.5">
+                                                            @(isMissed ? "Missed reason: " : "Trainee note: ") "@log.Notes"
+                                                        </p>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(log.MediaUrl))
+                                                    {
+                                                        <a href="@log.MediaUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 underline font-semibold text-[10px] block mt-0.5">
+                                                            View proof photo/video
+                                                        </a>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(log.CoachFeedback))
+                                                    {
+                                                        <p class="text-[10px] text-blue-700 font-medium italic mt-0.5">
+                                                            Your feedback: "@log.CoachFeedback"
+                                                        </p>
                                                     }
                                                 </div>
                                             </div>
                                             <span class="text-[11px] text-gray-400 font-medium flex-shrink-0">
-                                                @log.CompletedAt.ToString("MMM dd, yyyy HH:mm")
+                                                @DateTime.SpecifyKind(log.CompletedAt, DateTimeKind.Utc).ToLocalTime().ToString("MMM dd, yyyy HH:mm")
                                             </span>
                                         </div>
                                     }
@@ -210,6 +315,95 @@
             </div>
         </div>
     </div>
+
+    <!-- Coach Review Modal (Review Workout) -->
+    @if (showReviewModal && reviewingExercise != null)
+    {
+        <div class="fixed inset-0 bg-black/70 backdrop-blur-xs z-[110] flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+                <div class="p-5 border-b border-gray-100 flex items-center justify-between @(reviewDecision == "COMPLETED" ? "bg-emerald-50/60" : "bg-rose-50/60")">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold @(reviewDecision == "COMPLETED" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")">
+                            @(reviewDecision == "COMPLETED" ? "✓" : "✕")
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-black text-gray-900">
+                                @(reviewDecision == "COMPLETED" ? "Approve Workout (Complete)" : "Reject Workout (Uncomplete)")
+                            </h3>
+                            <p class="text-[11px] text-gray-500">Exercise: @reviewingExercise.ExerciseName</p>
+                        </div>
+                    </div>
+                    <button type="button" @onclick="() => showReviewModal = false" class="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center cursor-pointer">
+                        &times;
+                    </button>
+                </div>
+
+                <div class="p-5 flex flex-col gap-4 text-xs">
+                    @if (!string.IsNullOrWhiteSpace(reviewingExercise.MediaUrl))
+                    {
+                        <div class="p-2.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-blue-900">
+                            <span class="font-medium">Trainee Proof:</span>
+                            <a href="@reviewingExercise.MediaUrl" target="_blank" rel="noopener noreferrer" class="font-bold underline text-blue-700 hover:text-blue-800">
+                                Open photo / video
+                            </a>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(reviewingExercise.TraineeNotes))
+                    {
+                        <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-700">
+                            <strong class="text-gray-900 font-bold block mb-0.5">Trainee Notes:</strong>
+                            <p class="italic">"@reviewingExercise.TraineeNotes"</p>
+                        </div>
+                    }
+
+                    <div>
+                        <label class="font-bold text-gray-800 block mb-1">
+                            Coach Feedback:
+                            @if (reviewDecision == "UNCOMPLETE")
+                            {
+                                <span class="text-rose-600 font-normal">(Required when rejecting)</span>
+                            }
+                            else
+                            {
+                                <span class="text-gray-400 font-normal">(Optional encouragement / tips)</span>
+                            }
+                        </label>
+                        <textarea @bind="reviewFeedback"
+                                  maxlength="500"
+                                  rows="3"
+                                  placeholder="@(reviewDecision == "COMPLETED" ? "e.g. Excellent form and execution, keep it up!" : "e.g. Back arched slightly on the last 2 reps, focus on core bracing and resubmit video...")"
+                                  class="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-blue-500 resize-none"></textarea>
+                        <div class="text-right text-[10px] text-gray-400">@((reviewFeedback?.Length ?? 0))/500</div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(reviewModalError))
+                    {
+                        <div class="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold">
+                            @reviewModalError
+                        </div>
+                    }
+                </div>
+
+                <div class="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button type="button" @onclick="() => showReviewModal = false" disabled="@isSubmittingReview" class="px-4 py-2 bg-gray-200 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-300 transition cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="button" @onclick="SubmitReviewAsync" disabled="@isSubmittingReview" class="px-4 py-2 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center gap-1.5 @(reviewDecision == "COMPLETED" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700")">
+                        @if (isSubmittingReview)
+                        {
+                            <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Submitting...</span>
+                        }
+                        else
+                        {
+                            <span>@(reviewDecision == "COMPLETED" ? "Confirm Approval" : "Confirm Rejection")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -233,10 +427,94 @@
     private string? errorMessage;
     private int activeTab = 0;
 
+    private bool showReviewModal = false;
+    private TraineeWorkoutExerciseDto? reviewingExercise;
+    private string reviewDecision = "COMPLETED";
+    private string? reviewFeedback;
+    private string? reviewModalError;
+    private bool isSubmittingReview = false;
+
+    private void OpenCoachReviewModal(TraineeWorkoutExerciseDto ex, bool isApproved)
+    {
+        reviewingExercise = ex;
+        reviewDecision = isApproved ? "COMPLETED" : "UNCOMPLETE";
+        reviewFeedback = ex.CoachFeedback;
+        reviewModalError = null;
+        showReviewModal = true;
+    }
+
+    private async Task SubmitReviewAsync()
+    {
+        if (reviewingExercise == null || progressData == null || isSubmittingReview) return;
+
+        reviewModalError = null;
+        if (reviewDecision == "UNCOMPLETE" && string.IsNullOrWhiteSpace(reviewFeedback))
+        {
+            reviewModalError = "Please provide feedback explaining why the workout was marked uncomplete.";
+            return;
+        }
+
+        isSubmittingReview = true;
+        try
+        {
+            var dto = new CoachReviewWorkoutDto
+            {
+                TrainingPlanExerciseId = reviewingExercise.TrainingPlanExerciseId,
+                TraineeId = progressData.TraineeId,
+                Decision = reviewDecision,
+                Feedback = string.IsNullOrWhiteSpace(reviewFeedback) ? null : reviewFeedback.Trim()
+            };
+
+            var res = await TrainingPlanService.ReviewWorkoutCompletionAsync(dto);
+            if (res.Success && res.Data != null)
+            {
+                reviewingExercise.IsCompleted = res.Data.IsCompleted;
+                reviewingExercise.Status = res.Data.Status;
+                reviewingExercise.CoachFeedback = res.Data.CoachFeedback;
+                reviewingExercise.ReviewedAt = res.Data.ReviewedAt;
+
+                showReviewModal = false;
+                await LoadProgressAsync();
+            }
+            else
+            {
+                reviewModalError = res.Message ?? "An error occurred while reviewing the workout.";
+            }
+        }
+        catch (Exception ex)
+        {
+            reviewModalError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSubmittingReview = false;
+        }
+    }
+
+    private bool _wasOpen;
+    private Guid _loadedOrderDetailsId;
+
     protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && OrderDetailsId != Guid.Empty)
+        if (!IsOpen)
         {
+            if (_wasOpen)
+            {
+                _wasOpen = false;
+                _loadedOrderDetailsId = Guid.Empty;
+                progressData = null;
+                errorMessage = null;
+                activeTab = 0;
+                showReviewModal = false;
+                reviewingExercise = null;
+            }
+            return;
+        }
+
+        if (OrderDetailsId != Guid.Empty && (!_wasOpen || _loadedOrderDetailsId != OrderDetailsId))
+        {
+            _wasOpen = true;
+            _loadedOrderDetailsId = OrderDetailsId;
             await LoadProgressAsync();
         }
     }
@@ -245,18 +523,26 @@
     {
         isLoading = true;
         errorMessage = null;
-
-        var res = await TrainingPlanService.GetCoachTraineeProgressAsync(OrderDetailsId);
-        if (res.Success && res.Data != null)
+        try
         {
-            progressData = res.Data;
+            var res = await TrainingPlanService.GetCoachTraineeProgressAsync(OrderDetailsId);
+            if (res.Success && res.Data != null)
+            {
+                progressData = res.Data;
+            }
+            else
+            {
+                errorMessage = res.Message ?? "Failed to load trainee workout progress.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            errorMessage = res.Message ?? "Failed to load trainee workout progress.";
+            errorMessage = "Error loading workout progress: " + ex.Message;
         }
-
-        isLoading = false;
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private async Task HandleClose()

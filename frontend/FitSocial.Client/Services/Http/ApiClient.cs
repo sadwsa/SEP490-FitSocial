@@ -362,6 +362,43 @@ public class ApiClient
         }
     }
 
+    public async Task<ApiResponse<TResult>> PostMultipartAsync<TResult>(string endpoint, Func<HttpContent> contentFactory)
+    {
+        try
+        {
+            await AttachBearerTokenAsync();
+            using var initialContent = contentFactory();
+            var response = await _http.PostAsync(endpoint, initialContent);
+            if (response.StatusCode == HttpStatusCode.Unauthorized &&
+                await TryRefreshOnceAsync(endpoint, response.StatusCode))
+            {
+                await AttachBearerTokenAsync();
+                using var retryContent = contentFactory();
+                response = await _http.PostAsync(endpoint, retryContent);
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var json = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<TResult>>(json, options);
+                return apiResponse ?? new ApiResponse<TResult> { Success = true };
+            }
+
+            var errorJson = await response.Content.ReadAsStringAsync();
+            return ErrorFrom<TResult>(errorJson, response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            HandleNetworkError();
+            return new ApiResponse<TResult>
+            {
+                Success = false,
+                Message = $"Network Error: {ex.Message}"
+            };
+        }
+    }
+
     public async Task<ApiResponse<TResult>> PutAsync<TRequest, TResult>(string endpoint, TRequest payload)
     {
         try

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.Coaches;
@@ -371,6 +372,67 @@ public class EditOwnReviewServiceTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _coachService.UpdateReviewAsync(reviewId, traineeId, dto));
         Assert.Equal("Database connection failed", ex.Message);
+    }
+
+    [Fact(DisplayName = "UTCID13 - Null UpdateReviewDto payload throws ValidationException")]
+    public async Task UTCID13_UpdateReviewAsync_WhenDtoIsNull_ThrowsValidationException()
+    {
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _coachService.UpdateReviewAsync(Guid.NewGuid(), Guid.NewGuid(), null!));
+        Assert.Equal("Invalid review payload.", ex.Message);
+        _mockReviewRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory(DisplayName = "UTCID14 - Rating outside 1..5 boundaries (0 and 6) throws ValidationException")]
+    [InlineData(0)]
+    [InlineData(6)]
+    public async Task UTCID14_UpdateReviewAsync_WhenRatingOutOfRange_ThrowsValidationException(int invalidRating)
+    {
+        var dto = new UpdateReviewDto { Rating = invalidRating, Comment = "Out of range rating" };
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _coachService.UpdateReviewAsync(Guid.NewGuid(), Guid.NewGuid(), dto));
+        Assert.Equal("Rating must be between 1 and 5.", ex.Message);
+        _mockReviewRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact(DisplayName = "UTCID15 - Comment exceeding 500-character max length (501 chars) throws ValidationException")]
+    public async Task UTCID15_UpdateReviewAsync_WhenCommentExceeds500Chars_ThrowsValidationException()
+    {
+        var dto = new UpdateReviewDto { Rating = 5, Comment = new string('X', 501) };
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _coachService.UpdateReviewAsync(Guid.NewGuid(), Guid.NewGuid(), dto));
+        Assert.Equal("Comment cannot exceed 500 characters.", ex.Message);
+        _mockReviewRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact(DisplayName = "UTCID16 - Editing review when associated order has PENDING or APPROVED refund throws ValidationException")]
+    public async Task UTCID16_UpdateReviewAsync_WhenOrderHasPendingRefund_ThrowsValidationException()
+    {
+        var reviewId = Guid.NewGuid();
+        var traineeId = Guid.NewGuid();
+        var review = CreateReview(reviewId, traineeId, rating: 4, comment: "Original", isEdited: false);
+        var refundedOrder = new Order
+        {
+            OrderId = review.OrderId!.Value,
+            BuyerId = traineeId,
+            RefundRequests = new List<RefundRequest>
+            {
+                new() { OrderId = review.OrderId.Value, Status = "PENDING" }
+            }
+        };
+        var dto = new UpdateReviewDto { Rating = 5, Comment = "Attempt edit during refund" };
+
+        _mockReviewRepo.Setup(r => r.GetByIdAsync(reviewId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(review);
+        _mockOrderRepo.Setup(o => o.GetOrderByIdWithDetailsAsync(review.OrderId.Value, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(refundedOrder);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _coachService.UpdateReviewAsync(reviewId, traineeId, dto));
+        Assert.Equal("Cannot submit or edit a review while a refund request is pending or approved.", ex.Message);
+        _mockReviewRepo.Verify(r => r.Update(It.IsAny<Review>()), Times.Never);
     }
 
     #endregion

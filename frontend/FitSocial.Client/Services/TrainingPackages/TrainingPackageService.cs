@@ -163,8 +163,7 @@ public class TrainingPackageService : ITrainingPackageService
     {
         try
         {
-            using var content = new MultipartFormDataContent();
-
+            var bufferedFiles = new List<(byte[] Bytes, string ContentType, string FileName)>();
             if (files != null)
             {
                 for (int i = 0; i < files.Length; i++)
@@ -172,38 +171,31 @@ public class TrainingPackageService : ITrainingPackageService
                     var file = files[i];
                     using var ms = new MemoryStream();
                     await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
-                    var bytes = ms.ToArray();
-
-                    var byteContent = new ByteArrayContent(bytes);
-                    byteContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
-                    content.Add(byteContent, "files", file.Name);
+                    bufferedFiles.Add((ms.ToArray(), file.ContentType, file.Name));
                 }
             }
 
-            var token = await _tokenStorage.GetItemAsync<string>("authToken");
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            }
-
-            var response = await _httpClient.PostAsync($"{BaseEndpoint}/{packageId}/upload-images", content);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<string>>>();
-
-            if (response.IsSuccessStatusCode && result != null)
-                return result;
-
-            return new ApiResponse<List<string>>
-            {
-                Success = false,
-                Message = result?.Message ?? $"Upload ảnh thất bại (Status code: {response.StatusCode})"
-            };
+            return await _apiClient.PostMultipartAsync<List<string>>(
+                $"{BaseEndpoint}/{packageId}/upload-images",
+                () =>
+                {
+                    var content = new MultipartFormDataContent();
+                    foreach (var f in bufferedFiles)
+                    {
+                        var byteContent = new ByteArrayContent(f.Bytes);
+                        if (!string.IsNullOrWhiteSpace(f.ContentType))
+                            byteContent.Headers.ContentType = new MediaTypeHeaderValue(f.ContentType);
+                        content.Add(byteContent, "files", f.FileName);
+                    }
+                    return content;
+                });
         }
         catch (Exception ex)
         {
             return new ApiResponse<List<string>>
             {
                 Success = false,
-                Message = $"Lỗi khi tải ảnh: {ex.Message}"
+                Message = $"Image upload error: {ex.Message}"
             };
         }
     }

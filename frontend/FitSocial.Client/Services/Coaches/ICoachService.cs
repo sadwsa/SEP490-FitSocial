@@ -12,8 +12,6 @@ public interface ICoachService
     Task<ApiResponse<List<TopCoachDto>>> GetTopCoachesAsync(int count = 5);
     Task<ApiResponse<bool>> UpdateReviewAsync(Guid reviewId, FitSocial.Client.Models.Coaches.UpdateReviewDto dto);
 
-    Task<ApiResponse<bool>> DeleteReviewAsync(Guid reviewId);
-
     Task<ApiResponse<List<CoachBankAccountDto>>> GetBankAccountsAsync();
     Task<ApiResponse<CoachBankAccountDto>> AddBankAccountAsync(CreateCoachBankAccountDto dto);
     Task<ApiResponse<CoachBankAccountDto>> UpdateBankAccountAsync(Guid bankId, CreateCoachBankAccountDto dto);

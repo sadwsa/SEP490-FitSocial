@@ -740,5 +740,31 @@ public class SubmitRatingForCoachServiceTests
         Assert.Equal("Review was modified by another request. Please reload and try again.", ex.Message);
     }
 
+    [Fact(DisplayName = "UTCID21 - Rating below lower boundary (Rating = 0) throws ValidationException")]
+    public async Task UTCID21_SubmitPackageReviewAsync_RatingBelowMinimum_ThrowsValidationException()
+    {
+        var packageId = Guid.NewGuid();
+        var traineeId = Guid.NewGuid();
+        var dto = new CreatePackageReviewDto { OrderId = Guid.NewGuid(), Rating = 0, Comment = "Invalid zero rating" };
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.SubmitPackageReviewAsync(packageId, traineeId, dto));
+        Assert.Equal("Rating must be between 1 and 5.", ex.Message);
+        _mockPackageRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact(DisplayName = "UTCID22 - Rating above upper boundary (Rating = 6) throws ValidationException")]
+    public async Task UTCID22_SubmitPackageReviewAsync_RatingAboveMaximum_ThrowsValidationException()
+    {
+        var packageId = Guid.NewGuid();
+        var traineeId = Guid.NewGuid();
+        var dto = new CreatePackageReviewDto { OrderId = Guid.NewGuid(), Rating = 6, Comment = "Invalid six rating" };
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.SubmitPackageReviewAsync(packageId, traineeId, dto));
+        Assert.Equal("Rating must be between 1 and 5.", ex.Message);
+        _mockPackageRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     #endregion
 }

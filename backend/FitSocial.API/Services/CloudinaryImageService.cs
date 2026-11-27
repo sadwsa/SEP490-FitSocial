@@ -11,6 +11,11 @@ namespace FitSocial.API.Services;
 
 public class CloudinaryImageService : IImageService
 {
+    private static readonly HashSet<string> AllowedImageExtensions = new(System.StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".webp", ".gif"
+    };
+
     private readonly Cloudinary _cloudinary;
 
     public CloudinaryImageService(Cloudinary cloudinary)
@@ -27,11 +32,17 @@ public class CloudinaryImageService : IImageService
 
         foreach (var file in files)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (file.Length == 0)
                 continue;
 
-            // Validate file type (image only)
-            if (!file.ContentType.StartsWith("image/"))
+            // Validate file type (content-type + extension whitelist)
+            var ext = Path.GetExtension(file.FileName);
+            if (string.IsNullOrWhiteSpace(file.ContentType) ||
+                !file.ContentType.StartsWith("image/", System.StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(ext) ||
+                !AllowedImageExtensions.Contains(ext))
                 continue;
 
             // Validate file size (max 10MB)
@@ -46,7 +57,7 @@ public class CloudinaryImageService : IImageService
                 Transformation = new Transformation().Width(1000).Height(1000).Crop("limit").Quality("auto:good")
             };
 
-            var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+            var uploadResult = await _cloudinary.UploadAsync(uploadParams, cancellationToken);
 
             if (uploadResult.SecureUrl != null)
             {

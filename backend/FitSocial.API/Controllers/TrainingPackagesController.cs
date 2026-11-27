@@ -173,7 +173,20 @@ namespace FitSocial.API.Controllers
         [Authorize]
         public async Task<IActionResult> UploadReviewImages(Guid id, IFormFileCollection files, CancellationToken cancellationToken = default)
         {
+            if (files == null || files.Count == 0)
+            {
+                return BadRequest(ApiResponseDto<List<string>>.Fail("No images selected."));
+            }
+            if (files.Count > 5)
+            {
+                return BadRequest(ApiResponseDto<List<string>>.Fail("Maximum 5 images allowed per review."));
+            }
+
             var uploadedUrls = await _imageService.UploadImagesFromFilesAsync(files, cancellationToken);
+            if (uploadedUrls.Count == 0)
+            {
+                return BadRequest(ApiResponseDto<List<string>>.Fail("No valid images were uploaded (accepted: JPG, PNG, WEBP, GIF up to 10MB)."));
+            }
             return Ok(ApiResponseDto<List<string>>.Ok(uploadedUrls, "Images uploaded successfully."));
         }
 
@@ -187,19 +200,9 @@ namespace FitSocial.API.Controllers
             {
                 return Unauthorized(ApiResponseDto<bool>.Fail("Invalid token or user ID"));
             }
-            try
-            {
-                var result = await _service.ReplyToReviewAsync(id, reviewId, coachId, dto, cancellationToken);
-                return Ok(result);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return StatusCode(403, ApiResponseDto<bool>.Fail(ex.Message));
-            }
-            catch (ValidationException ex)
-            {
-                return BadRequest(ApiResponseDto<bool>.Fail(ex.Message));
-            }
+
+            var result = await _service.ReplyToReviewAsync(id, reviewId, coachId, dto, cancellationToken);
+            return Ok(result);
         }
     }
 }

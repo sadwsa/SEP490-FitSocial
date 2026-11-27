@@ -489,9 +489,18 @@
                                                     <div class="flex flex-wrap gap-2 mt-3">
                                                         @foreach (var m in review.Media.OrderBy(x => x.SortOrder))
                                                         {
-                                                            <a href="@m.MediaUrl" target="_blank" class="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:opacity-90 transition">
-                                                                <img src="@m.MediaUrl" alt="review photo" class="w-full h-full object-cover" />
-                                                            </a>
+                                                            var safeUrl = !string.IsNullOrWhiteSpace(m.MediaUrl) &&
+                                                                          (m.MediaUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                                                                           m.MediaUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                                                                           m.MediaUrl.StartsWith("/"))
+                                                                          ? m.MediaUrl
+                                                                          : null;
+                                                            if (safeUrl != null)
+                                                            {
+                                                                <a href="@safeUrl" target="_blank" rel="noopener noreferrer" class="block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:opacity-90 transition">
+                                                                    <img src="@safeUrl" alt="review photo" class="w-full h-full object-cover" />
+                                                                </a>
+                                                            }
                                                         }
                                                     </div>
                                                 }
@@ -511,14 +520,14 @@
                                                     </div>
                                                 }
 
-                                                <!-- COACH REPLY ACTION -->
-                                                @if (isOwnPackage)
+                                                <!-- COACH REPLY ACTION (chỉ hiện khi chưa có reply, khớp rule 1-reply của Backend) -->
+                                                @if (isOwnPackage && string.IsNullOrWhiteSpace(review.Reply))
                                                 {
                                                     @if (activeReplyingReviewId == review.ReviewId)
                                                     {
                                                         <div class="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
                                                             <label class="block text-xs font-bold text-gray-700 mb-1">Your reply:</label>
-                                                            <textarea @bind="replyText" rows="2" class="w-full text-xs p-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500" placeholder="Write a reply to the trainee..."></textarea>
+                                                            <textarea @bind="replyText" maxlength="1000" rows="2" class="w-full text-xs p-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500" placeholder="Write a reply to the trainee..."></textarea>
                                                             <div class="flex justify-end gap-2 mt-2">
                                                                 <button type="button" @onclick="() => activeReplyingReviewId = null" class="px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded-lg transition cursor-pointer">Cancel</button>
                                                                 <button type="button" @onclick="() => SubmitReplyAsync(review.ReviewId)" disabled="@isSubmittingReply" class="px-3 py-1 text-xs font-semibold text-white bg-[#FF5500] hover:bg-orange-600 rounded-lg transition disabled:opacity-50 cursor-pointer">
@@ -531,7 +540,7 @@
                                                     {
                                                         <div class="mt-2 text-right">
                                                             <button type="button" @onclick="() => StartReplying(review)" class="text-xs font-semibold text-[#FF5500] hover:underline cursor-pointer">
-                                                                @(string.IsNullOrWhiteSpace(review.Reply) ? "💬 Reply to review" : "✏️ Edit reply")
+                                                                💬 Reply to review
                                                             </button>
                                                         </div>
                                                     }

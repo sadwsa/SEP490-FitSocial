@@ -1,4 +1,5 @@
 using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.TrainingPackage;
@@ -481,6 +482,39 @@ public class CoachReplyToTraineeReviewServiceTests
         var ex = await Assert.ThrowsAsync<ValidationException>(() =>
             _service.ReplyToReviewAsync(packageId, reviewId, coachId, dto));
         Assert.Equal("Review was modified by another request. Please reload and try again.", ex.Message);
+    }
+
+    [Fact(DisplayName = "UTCID17 - Null ReplyReviewDto payload throws ValidationException")]
+    public async Task UTCID17_ReplyToReviewAsync_WhenDtoIsNull_ThrowsValidationException()
+    {
+        var packageId = Guid.NewGuid();
+        var reviewId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+        var package = CreatePackage(packageId, coachId);
+
+        _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(package);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReplyToReviewAsync(packageId, reviewId, coachId, null!));
+        Assert.Equal("Reply content cannot be empty.", ex.Message);
+        _mockReviewRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact(DisplayName = "UTCID18 - Reply exceeding 1000-character limit (1001 chars) throws ValidationException")]
+    public async Task UTCID18_ReplyToReviewAsync_WhenReplyExceeds1000Chars_ThrowsValidationException()
+    {
+        var packageId = Guid.NewGuid();
+        var reviewId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+        var package = CreatePackage(packageId, coachId);
+        var dto = new ReplyReviewDto { Reply = new string('R', 1001) };
+
+        _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(package);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.ReplyToReviewAsync(packageId, reviewId, coachId, dto));
+        Assert.Equal("Reply cannot exceed 1000 characters.", ex.Message);
+        _mockReviewRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     #endregion

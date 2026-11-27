@@ -18,8 +18,6 @@ public interface ICoachService
     Task<ApiResponseDto<CoachDetailDto>> UpdateCoachProfileAsync(Guid coachId, UpdateCoachProfileDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponseDto<bool>> UpdateReviewAsync(Guid reviewId, Guid traineeId, FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto, CancellationToken cancellationToken = default);
 
-    Task<ApiResponseDto<bool>> DeleteReviewAsync(Guid reviewId, Guid traineeId, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// UC_29: Get paginated coach application requests with searching, filtering, and status counts for Staff/Admin.
     /// </summary>

@@ -759,5 +759,49 @@ public class WriteReviewForCoachServiceTests
         Assert.Equal("Review was modified by another request. Please reload and try again.", ex.Message);
     }
 
+    [Fact(DisplayName = "UTCID21 - Comment exceeding 1000-character limit (1001 chars) throws ValidationException")]
+    public async Task UTCID21_WriteReview_CommentExceedingMax1000Chars_ThrowsValidationException()
+    {
+        var packageId = Guid.NewGuid();
+        var traineeId = Guid.NewGuid();
+        var dto = new CreatePackageReviewDto
+        {
+            OrderId = Guid.NewGuid(),
+            Rating = 5,
+            Comment = new string('A', 1001)
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.SubmitPackageReviewAsync(packageId, traineeId, dto));
+        Assert.Equal("Comment cannot exceed 1000 characters.", ex.Message);
+        _mockPackageRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact(DisplayName = "UTCID22 - Unsafe javascript scheme in ImageUrls throws ValidationException")]
+    public async Task UTCID22_WriteReview_UnsafeJavascriptSchemeInImageUrls_ThrowsValidationException()
+    {
+        var packageId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+        var traineeId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+
+        var package = CreatePackage(packageId, coachId);
+        var order = CreateOrder(orderId, traineeId, packageId, PaymentConstants.OrderStatusPaid);
+        var dto = new CreatePackageReviewDto
+        {
+            OrderId = orderId,
+            Rating = 5,
+            Comment = "Review with unsafe URL",
+            ImageUrls = new List<string> { "javascript:alert(1)" }
+        };
+
+        _mockPackageRepo.Setup(r => r.GetByIdAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(package);
+        _mockOrderRepo.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.SubmitPackageReviewAsync(packageId, traineeId, dto));
+        Assert.Equal("Invalid review image URL.", ex.Message);
+    }
+
     #endregion
 }

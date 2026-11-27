@@ -50,53 +50,57 @@ public class CoachProfileRepository : Repository<CoachProfile>, ICoachProfileRep
     public async Task<(List<CoachProfile> Items, int TotalCount)> GetAllCoachesWithDetailsAsync(string? searchKeyword = null, int? minExperience = null, string? sortBy = null, int pageNumber = 1, int pageSize = 6, CancellationToken cancellationToken = default)
     {
         if (pageNumber < 1) pageNumber = 1;
-        if (pageSize < 1) pageSize = 10;
+        if (pageSize < 1) pageSize = 6;
         if (pageSize > 100) pageSize = 100;
 
-        var query = DbSet
-            .Include(c => c.Coach)
-            .Include(c => c.Locations)
-            .Include(c => c.Reviews)
+        var query = DbSet.AsNoTracking()
             .Where(c => c.Coach != null
                       && (c.Coach.IsLocked == null || c.Coach.IsLocked == false)
                       && c.Coach.RoleCode != null
                       && c.Coach.RoleCode.ToUpper() == RoleConstants.Coach
-                      && (c.ApprovalStatus == null || c.ApprovalStatus.ToUpper() == CoachConstants.ApprovalStatusApproved));
-           
+                      && c.ApprovalStatus != null
+                      && c.ApprovalStatus.ToUpper() == CoachConstants.ApprovalStatusApproved
+                      && (c.Status == null || c.Status.ToUpper() == CoachConstants.StatusActive));
+
         // 1. Tìm kiếm theo tên / giới thiệu
         if (!string.IsNullOrWhiteSpace(searchKeyword))
         {
-            var keyword = searchKeyword.ToLower().Trim();
-            query = query.Where(c => c.Coach != null && ((c.Coach.FullName != null && c.Coach.FullName.ToLower().Contains(keyword)) ||
-                                     (c.Bio != null && c.Bio.ToLower().Contains(keyword))));
+            var trimmed = searchKeyword.Trim();
+            if (trimmed.Length > 200) trimmed = trimmed[..200];
+            var keyword = trimmed.ToLowerInvariant();
+            query = query.Where(c =>
+                (c.Coach.FullName != null && c.Coach.FullName.ToLower().Contains(keyword)) ||
+                (c.Bio != null && c.Bio.ToLower().Contains(keyword)));
         }
+
         // 2. Lọc theo năm kinh nghiệm tối thiểu
         if (minExperience.HasValue && minExperience.Value > 0)
         {
             query = query.Where(c => c.ExperienceYears >= minExperience.Value);
         }
-        // 3. Sắp xếp (Sort)
-        if (!string.IsNullOrWhiteSpace(sortBy))
-        {
-            query = sortBy.ToLower() switch
-            {
-                "exp_desc" => query.OrderByDescending(c => c.ExperienceYears),
-                "exp_asc" => query.OrderBy(c => c.ExperienceYears),
-                "name_asc" => query.OrderBy(c => c.Coach.FullName),
-                "name_desc" => query.OrderByDescending(c => c.Coach.FullName),
-                _ => query.OrderByDescending(c => c.ExperienceYears) // Mặc định
-            };
-        }
-        else
-        {
-            // Mặc định nếu không truyền gì thì xếp kinh nghiệm từ cao xuống thấp
-            query = query.OrderByDescending(c => c.ExperienceYears);
-        }
 
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query.AsNoTracking()
+        if (totalCount == 0)
+        {
+            return (new List<CoachProfile>(), 0);
+        }
+
+        // 3. Sắp xếp (Sort) - luôn kèm tie-breaker theo CoachId để phân trang ổn định
+        query = (sortBy?.Trim().ToLowerInvariant()) switch
+        {
+            "exp_asc"   => query.OrderBy(c => c.ExperienceYears ?? 0).ThenBy(c => c.CoachId),
+            "name_asc"  => query.OrderBy(c => c.Coach.FullName ?? string.Empty).ThenBy(c => c.CoachId),
+            "name_desc" => query.OrderByDescending(c => c.Coach.FullName ?? string.Empty).ThenBy(c => c.CoachId),
+            _           => query.OrderByDescending(c => c.ExperienceYears ?? 0).ThenBy(c => c.CoachId)
+        };
+
+        var items = await query
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
+            .Include(c => c.Coach)
+            .Include(c => c.Locations)
+            .Include(c => c.Reviews)
+            .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);

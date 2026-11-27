@@ -207,23 +207,12 @@ public class CoachesController : ControllerBase
 
     [HttpPut("reviews/{reviewId}")]
     [Authorize(Roles = "TRAINEE")]
-    public async Task<IActionResult> UpdateReview(Guid reviewId, [FromBody] FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto)
+    public async Task<IActionResult> UpdateReview(Guid reviewId, [FromBody] FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto, CancellationToken cancellationToken = default)
     {
         var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(userIdString, out var traineeId)) return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token"));
 
-        var result = await _coachService.UpdateReviewAsync(reviewId, traineeId, dto);
-        return Ok(result);
-    }
-
-    [HttpDelete("reviews/{reviewId}")]
-    [Authorize(Roles = "TRAINEE")]
-    public async Task<IActionResult> DeleteReview(Guid reviewId)
-    {
-        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(userIdString, out var traineeId)) return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token"));
-
-        var result = await _coachService.DeleteReviewAsync(reviewId, traineeId);
+        var result = await _coachService.UpdateReviewAsync(reviewId, traineeId, dto, cancellationToken);
         return Ok(result);
     }
 

@@ -289,6 +289,63 @@ public class ViewCoachListServiceTests
         Assert.Empty(result.Items[0].Locations);
     }
 
+    [Fact(DisplayName = "UTCID25 - Non-positive pageNumber is clamped to 1")]
+    public async Task GetAllCoachesAsync_NonPositivePageNumber_ClampsToOne()
+    {
+        _repo.Reset();
+        _repo.Setup(r => r.GetAllCoachesWithDetailsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                1, 6, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<CoachProfile> { Alice }, 1));
+
+        var sut = CreateSut();
+        var result = await sut.GetAllCoachesAsync(null, null, null, 0, 6, CancellationToken.None);
+
+        _repo.Verify(r => r.GetAllCoachesWithDetailsAsync(
+            null, null, null, 1, 6, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(1, result.PageNumber);
+        Assert.Equal(6, result.PageSize);
+        Assert.Equal(1, result.TotalPages);
+    }
+
+    [Fact(DisplayName = "UTCID26 - Non-positive pageSize falls back to default 6")]
+    public async Task GetAllCoachesAsync_NonPositivePageSize_FallsBackToDefaultSix()
+    {
+        _repo.Reset();
+        _repo.Setup(r => r.GetAllCoachesWithDetailsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                1, 6, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<CoachProfile> { Alice }, 1));
+
+        var sut = CreateSut();
+        var result = await sut.GetAllCoachesAsync(null, null, null, 1, 0, CancellationToken.None);
+
+        _repo.Verify(r => r.GetAllCoachesWithDetailsAsync(
+            null, null, null, 1, 6, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(1, result.PageNumber);
+        Assert.Equal(6, result.PageSize);
+        Assert.Equal(1, result.TotalPages);
+    }
+
+    [Fact(DisplayName = "UTCID27 - Excessive pageSize is capped at 100")]
+    public async Task GetAllCoachesAsync_ExcessivePageSize_CappedAt100()
+    {
+        _repo.Reset();
+        _repo.Setup(r => r.GetAllCoachesWithDetailsAsync(
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                1, 100, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<CoachProfile> { Alice }, 1));
+
+        var sut = CreateSut();
+        var result = await sut.GetAllCoachesAsync(null, null, null, 1, 150, CancellationToken.None);
+
+        _repo.Verify(r => r.GetAllCoachesWithDetailsAsync(
+            null, null, null, 1, 100, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(1, result.PageNumber);
+        Assert.Equal(100, result.PageSize);
+        Assert.Equal(1, result.TotalPages);
+    }
+
     public class ViewCoachListTestCase
     {
         public string UtcId { get; set; } = string.Empty;

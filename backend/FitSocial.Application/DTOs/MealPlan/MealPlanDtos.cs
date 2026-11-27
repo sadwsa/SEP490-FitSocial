@@ -62,7 +62,7 @@ public class TraineeMealPlanDto
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public int? RemainingDays => EndDate.HasValue
-        ? Math.Max(0, (int)Math.Ceiling((EndDate.Value.Date - DateTime.UtcNow.Date).TotalDays))
+        ? Math.Max(0, (int)Math.Ceiling((EndDate.Value.Date - DateTime.UtcNow.AddHours(7).Date).TotalDays))
         : null;
 
     public int TotalMealsCount { get; set; }
@@ -173,7 +173,7 @@ public class CoachTraineeMealProgressDto
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public int? RemainingDays => EndDate.HasValue
-        ? Math.Max(0, (int)Math.Ceiling((EndDate.Value.Date - DateTime.UtcNow.Date).TotalDays))
+        ? Math.Max(0, (int)Math.Ceiling((EndDate.Value.Date - DateTime.UtcNow.AddHours(7).Date).TotalDays))
         : null;
     public int TotalMealsCount { get; set; }
     public int CompletedMealsCount { get; set; }

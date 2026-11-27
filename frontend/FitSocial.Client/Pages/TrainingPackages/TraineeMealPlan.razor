@@ -617,12 +617,22 @@
         return date.HasValue && date.Value.Date < BusinessToday;
     }
 
+    private Guid _loadedOrderDetailsId;
+
     protected override async Task OnInitializedAsync()
     {
         // This page has no search bar -> disable shared topbar search
         Shell.ShowSearch = false;
+        await Task.CompletedTask;
+    }
 
-        await LoadMealPlanAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrderDetailsId != Guid.Empty && OrderDetailsId != _loadedOrderDetailsId)
+        {
+            _loadedOrderDetailsId = OrderDetailsId;
+            await LoadMealPlanAsync();
+        }
     }
 
     public void Dispose()
@@ -741,9 +751,11 @@
         showProofModal = true;
     }
 
-    private void CloseSubmitProofModal()
+    private void CloseSubmitProofModal() => ResetSubmitProofModal(false);
+
+    private void ResetSubmitProofModal(bool force)
     {
-        if (isSubmittingProof || isUploadingProof) return;
+        if (!force && (isSubmittingProof || isUploadingProof)) return;
         showProofModal = false;
         submittingMeal = null;
         proofMediaUrl = null;
@@ -809,7 +821,7 @@
                 submittingMeal.TraineeNotes = res.Data.Notes;
                 submittingMeal.MealCompletionLogId = res.Data.MealCompletionLogId;
 
-                CloseSubmitProofModal();
+                ResetSubmitProofModal(force: true);
                 ShowToast("🎉 Meal proof submitted! Please wait for coach review.");
             }
             else

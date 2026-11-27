@@ -234,49 +234,42 @@ public class ReportService : IReportService
 
     public async Task<ApiResponse<List<string>>> UploadReportImagesAsync(IBrowserFile[] files)
     {
+        if (files == null || files.Length == 0)
+        {
+            return new ApiResponse<List<string>> { Success = false, Message = "No images selected." };
+        }
+
         try
         {
-            using var content = new MultipartFormDataContent();
-
-            if (files != null)
+            var buffered = new List<(byte[] Bytes, string FileName, string ContentType)>(files.Length);
+            foreach (var file in files)
             {
-                for (int i = 0; i < files.Length; i++)
+                using var ms = new MemoryStream();
+                await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+                var contentType = string.IsNullOrWhiteSpace(file.ContentType)
+                    ? "application/octet-stream"
+                    : file.ContentType;
+                buffered.Add((ms.ToArray(), file.Name, contentType));
+            }
+
+            return await _apiClient.PostMultipartAsync<List<string>>($"{BaseEndpoint}/upload-images", () =>
+            {
+                var content = new MultipartFormDataContent();
+                foreach (var item in buffered)
                 {
-                    var file = files[i];
-                    using var ms = new MemoryStream();
-                    await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
-                    var bytes = ms.ToArray();
-
-                    var byteContent = new ByteArrayContent(bytes);
-                    byteContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
-                    content.Add(byteContent, "files", file.Name);
+                    var byteContent = new ByteArrayContent(item.Bytes);
+                    byteContent.Headers.ContentType = new MediaTypeHeaderValue(item.ContentType);
+                    content.Add(byteContent, "files", item.FileName);
                 }
-            }
-
-            var token = await _tokenStorage.GetItemAsync<string>("authToken");
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            }
-
-            var response = await _httpClient.PostAsync($"{BaseEndpoint}/upload-images", content);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<string>>>();
-
-            if (response.IsSuccessStatusCode && result != null)
-                return result;
-
-            return new ApiResponse<List<string>>
-            {
-                Success = false,
-                Message = result?.Message ?? $"Upload ảnh thất bại (Status code: {response.StatusCode})"
-            };
+                return content;
+            });
         }
         catch (Exception ex)
         {
             return new ApiResponse<List<string>>
             {
                 Success = false,
-                Message = $"Lỗi khi tải ảnh: {ex.Message}"
+                Message = $"Error uploading images: {ex.Message}"
             };
         }
     }

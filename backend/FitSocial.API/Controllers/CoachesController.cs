@@ -109,7 +109,7 @@ public class CoachesController : ControllerBase
     /// Gets the list of bank accounts registered by the user (coach or trainee).
     /// </summary>
     [HttpGet("bank-accounts")]
-    [Authorize]
+    [Authorize(Roles = "COACH,TRAINEE")]
     [ProducesResponseType(typeof(ApiResponseDto<List<CoachBankAccountDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetBankAccounts(CancellationToken cancellationToken = default)
     {
@@ -128,7 +128,7 @@ public class CoachesController : ControllerBase
     /// Adds a new bank account with encrypted account number.
     /// </summary>
     [HttpPost("bank-accounts")]
-    [Authorize]
+    [Authorize(Roles = "COACH,TRAINEE")]
     [ProducesResponseType(typeof(ApiResponseDto<CoachBankAccountDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AddBankAccount([FromBody] CreateCoachBankAccountDto dto, CancellationToken cancellationToken = default)
@@ -148,7 +148,7 @@ public class CoachesController : ControllerBase
     /// Updates an existing bank account.
     /// </summary>
     [HttpPut("bank-accounts/{bankId:guid}")]
-    [Authorize]
+    [Authorize(Roles = "COACH,TRAINEE")]
     [ProducesResponseType(typeof(ApiResponseDto<CoachBankAccountDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
@@ -169,7 +169,7 @@ public class CoachesController : ControllerBase
     /// Sets a bank account as default.
     /// </summary>
     [HttpPut("bank-accounts/{bankId:guid}/default")]
-    [Authorize]
+    [Authorize(Roles = "COACH,TRAINEE")]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetDefaultBankAccount(Guid bankId, CancellationToken cancellationToken = default)
@@ -189,7 +189,7 @@ public class CoachesController : ControllerBase
     /// Deletes a bank account.
     /// </summary>
     [HttpDelete("bank-accounts/{bankId:guid}")]
-    [Authorize]
+    [Authorize(Roles = "COACH,TRAINEE")]
     [ProducesResponseType(typeof(ApiResponseDto<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseDto<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteBankAccount(Guid bankId, CancellationToken cancellationToken = default)
@@ -202,17 +202,6 @@ public class CoachesController : ControllerBase
         }
 
         var result = await _bankAccountService.DeleteAccountAsync(currentUserId, bankId, cancellationToken);
-        return Ok(result);
-    }
-
-    [HttpPut("reviews/{reviewId}")]
-    [Authorize(Roles = "TRAINEE")]
-    public async Task<IActionResult> UpdateReview(Guid reviewId, [FromBody] FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto, CancellationToken cancellationToken = default)
-    {
-        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(userIdString, out var traineeId)) return Unauthorized(FitSocial.Application.DTOs.Common.ApiResponseDto<bool>.Fail("Invalid token"));
-
-        var result = await _coachService.UpdateReviewAsync(reviewId, traineeId, dto, cancellationToken);
         return Ok(result);
     }
 

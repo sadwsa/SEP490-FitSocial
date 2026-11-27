@@ -23,6 +23,7 @@ public class MealPlanRepository : IMealPlanRepository
         CancellationToken ct = default)
     {
         return await _context.MealPlans
+            .AsSplitQuery()
             .AsNoTracking()
             .Include(mp => mp.MealPlanItems.OrderBy(i => i.WeekNumber).ThenBy(i => i.DayNumber).ThenBy(i => i.SortOrder))
                 .ThenInclude(i => i.MealCompletionLogs)
@@ -69,7 +70,10 @@ public class MealPlanRepository : IMealPlanRepository
     {
         return await _context.OrderDetails
             .Include(od => od.Order)
+                .ThenInclude(o => o!.Buyer)
             .Include(od => od.Package)
+                .ThenInclude(p => p!.Coach)
+                    .ThenInclude(c => c!.Coach)
             .FirstOrDefaultAsync(od => od.OrderDetailsId == orderDetailsId, ct);
     }
 
@@ -106,6 +110,7 @@ public class MealPlanRepository : IMealPlanRepository
     public async Task<MealCompletionLog?> GetMealLogAsync(Guid mealPlanItemId, Guid traineeId, CancellationToken ct = default)
     {
         return await _context.MealCompletionLogs
+            .OrderByDescending(l => l.CreatedAt)
             .FirstOrDefaultAsync(l => l.MealPlanItemId == mealPlanItemId && l.TraineeId == traineeId, ct);
     }
 
@@ -117,6 +122,7 @@ public class MealPlanRepository : IMealPlanRepository
     public async Task<MealPlan?> GetCoachMealPlanWithLogsAsync(Guid orderDetailsId, Guid coachId, CancellationToken ct = default)
     {
         return await _context.MealPlans
+            .AsSplitQuery()
             .AsNoTracking()
             .Include(mp => mp.OrderDetails)
                 .ThenInclude(od => od!.Order)

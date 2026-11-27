@@ -32,6 +32,7 @@ public class ReportListItemDto
 
     // Reported User Moderation & Status Details
     public string? ReportedUserRole { get; set; }
+    public string? ReportedUserCoachStatus { get; set; }
     public int ReportedUserViolationCount { get; set; }
     public bool? ReportedUserIsLocked { get; set; }
     public bool? HasSoldTrainingPackage { get; set; }

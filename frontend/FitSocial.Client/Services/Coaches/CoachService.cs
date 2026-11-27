@@ -169,10 +169,4 @@ public class CoachService : ICoachService
 
         return new List<BankItemDto>();
     }
-
-    public async Task<ApiResponse<string?>> LookupAccountNameAsync(string bin, string accountNumber)
-    {
-        return await _apiClient.GetAsync<string?>($"{BaseEndpoint}/bank-accounts/lookup?bin={Uri.EscapeDataString(bin)}&accountNumber={Uri.EscapeDataString(accountNumber)}");
-    }
-
 }

@@ -148,9 +148,9 @@ public class ViewAppealListServiceTests
     }
 
     [Fact]
-    public async Task ReportsController_GetReports_WhenNameIdentifierIsWhitespace_ShouldPassNullCurrentUserId()
+    public async Task ReportsController_GetReports_WhenNameIdentifierIsWhitespace_ShouldReturnUnauthorized()
     {
-        // Controller UTCID05 - Boundary: Whitespace NameIdentifier parses as null currentUserId
+        // Controller UTCID05 - Boundary: Whitespace NameIdentifier is rejected with 401 Unauthorized
         var mockService = new Mock<IReportService>();
         var controller = CreateControllerWithClaims(
             mockService,
@@ -158,14 +158,11 @@ public class ViewAppealListServiceTests
             new Claim(ClaimTypes.Role, RoleConstants.Staff));
 
         var query = new GetReportsQueryDto { AppealStatus = "ALL" };
-        mockService.Setup(s => s.GetReportsAsync(query, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ApiResponseDto<PagedResultDto<ReportListItemDto>>.Ok(
-                PagedResultDto<ReportListItemDto>.Create(new List<ReportListItemDto>(), 0, 1, 10)));
 
         var actionResult = await controller.GetReports(query, CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(actionResult);
-        mockService.Verify(s => s.GetReportsAsync(query, null, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.IsType<UnauthorizedObjectResult>(actionResult);
+        mockService.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -450,8 +447,9 @@ public class ViewAppealListServiceTests
         _mockReportRepo.Setup(r => r.GetPagedReportsAsync(
                 null, "POST", null, null, null, null, 1, 10, null, "ALL", It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Report> { report }, 1));
-        _mockOrderRepo.Setup(o => o.HasSoldTrainingPackageAsync(coach.UserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        _mockOrderRepo.Setup(o => o.GetCoachIdsWithSoldPackagesAsync(
+                It.Is<IEnumerable<Guid>>(ids => ids.Contains(coach.UserId)), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HashSet<Guid> { coach.UserId });
 
         var query = new GetReportsQueryDto { AppealStatus = "ALL", TargetType = " post " };
         var result = await _service.GetReportsAsync(query, staff.UserId);
@@ -461,7 +459,8 @@ public class ViewAppealListServiceTests
         Assert.Equal("POST", item.TargetType);
         Assert.Equal(coach.UserId, item.ReportedUserId);
         Assert.True(item.HasSoldTrainingPackage);
-        _mockOrderRepo.Verify(o => o.HasSoldTrainingPackageAsync(coach.UserId, It.IsAny<CancellationToken>()), Times.Once);
+        _mockOrderRepo.Verify(o => o.GetCoachIdsWithSoldPackagesAsync(
+            It.Is<IEnumerable<Guid>>(ids => ids.Contains(coach.UserId)), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -483,17 +482,15 @@ public class ViewAppealListServiceTests
     }
 
     [Fact]
-    public async Task ReportService_GetReportsAsync_WhenNoViewerIdProvided_ShouldSkipUserCheckAndQueryRepository()
+    public async Task ReportService_GetReportsAsync_WhenNoViewerIdProvided_ShouldReturnUnauthenticatedFail()
     {
-        // Service UTCID06 - Normal: When both currentUserId and query.CurrentUserId are null, skips user lookup
-        _mockReportRepo.Setup(r => r.GetPagedReportsAsync(
-                null, null, null, null, null, null, 1, 10, null, "ALL", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new List<Report>(), 0));
-
+        // Service UTCID06 - Abnormal: When both currentUserId and query.CurrentUserId are null, rejects unauthenticated access
         var result = await _service.GetReportsAsync(new GetReportsQueryDto { AppealStatus = "ALL" }, (Guid?)null);
 
-        Assert.True(result.Success);
+        Assert.False(result.Success);
+        Assert.Equal("User is not authenticated.", result.Message);
         _mockUserRepo.Verify(u => u.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockReportRepo.VerifyNoOtherCalls();
     }
 
     [Fact]

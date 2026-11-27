@@ -19,7 +19,7 @@ namespace FitSocial.UnitTests;
 /// ReportService.ReportUserAsync(Guid reporterId, CreateUserReportRequestDto request, CancellationToken cancellationToken)
 /// Covers:
 /// - Normal test cases (UTCID01 - UTCID08): Standard report with media, null Type defaulting to USER, uppercase type conversion, empty/null media, blanks filtering, whitespace trimming, null description
-/// - Boundary test cases (UTCID09 - UTCID15): Reason 1 char (min valid), Reason 500 chars (max valid), Reason 501 chars (invalid), Description 1000 chars (max valid), Description 1001 chars (invalid), MediaUrls 5 items (max valid), MediaUrls 6 items (invalid)
+/// - Boundary test cases (UTCID09 - UTCID15): Reason 1 char (min valid), Reason 500 chars (max valid), Reason 501 chars (invalid), Description 500 chars (max valid), Description 501 chars (invalid), MediaUrls 5 items (max valid), MediaUrls 6 items (invalid)
 /// - Abnormal test cases (UTCID16 - UTCID24): Unauthenticated reporter, null request, empty reportedUserId, self-reporting, blank reason, reported user not found, reported user locked/banned, pending report exists, database exception
 /// </summary>
 public class ReportUserServiceTests
@@ -404,19 +404,19 @@ public class ReportUserServiceTests
     }
 
     [Fact]
-    public async Task ReportUserAsync_WhenDescriptionIsExactly1000Characters_ShouldSucceed()
+    public async Task ReportUserAsync_WhenDescriptionIsExactly500Characters_ShouldSucceed()
     {
-        // UTCID12 - Boundary: Description length is exactly 1000 characters (maximum valid boundary)
+        // UTCID12 - Boundary: Description length is exactly 500 characters (maximum valid boundary matching varchar(500))
         var reporterId = Guid.NewGuid();
         var reportedUserId = Guid.NewGuid();
         var reportedUser = CreateActiveReportedUser(reportedUserId);
-        var desc1000 = new string('D', 1000);
+        var desc500 = new string('D', 500);
 
         var request = new CreateUserReportRequestDto
         {
             ReportedUserId = reportedUserId,
             Reason = "Valid violation reason",
-            Description = desc1000
+            Description = desc500
         };
 
         _mockUserRepo.Setup(r => r.GetByIdAsync(reportedUserId, It.IsAny<CancellationToken>()))
@@ -431,13 +431,13 @@ public class ReportUserServiceTests
         Assert.NotNull(result);
         Assert.True(result.Success);
         _mockReportRepo.Verify(r => r.AddAsync(It.Is<Report>(rep =>
-            rep.Description!.Length == 1000), It.IsAny<CancellationToken>()), Times.Once);
+            rep.Description!.Length == 500), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task ReportUserAsync_WhenDescriptionIs1001Characters_ShouldThrowValidationException()
+    public async Task ReportUserAsync_WhenDescriptionIs501Characters_ShouldThrowValidationException()
     {
-        // UTCID13 - Boundary: Description length is 1001 characters (upper invalid boundary)
+        // UTCID13 - Boundary: Description length is 501 characters (upper invalid boundary)
         var reporterId = Guid.NewGuid();
         var reportedUserId = Guid.NewGuid();
 
@@ -445,13 +445,13 @@ public class ReportUserServiceTests
         {
             ReportedUserId = reportedUserId,
             Reason = "Valid violation reason",
-            Description = new string('D', 1001)
+            Description = new string('D', 501)
         };
 
         var ex = await Assert.ThrowsAsync<ValidationException>(() =>
             _service.ReportUserAsync(reporterId, request));
 
-        Assert.Equal("Description cannot exceed 1000 characters.", ex.Message);
+        Assert.Equal("Description cannot exceed 500 characters.", ex.Message);
     }
 
     [Fact]

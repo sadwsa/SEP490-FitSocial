@@ -16,10 +16,10 @@ namespace FitSocial.UnitTests;
 
 /// <summary>
 /// Unit test suite for View Purchased Training Packages Details feature:
-/// OrderService.GetOrderByIdAsync(Guid orderId, Guid currentUserId, CancellationToken cancellationToken)
+/// OrderService.GetOrderByIdAsync(Guid orderId, Guid currentUserId, CancellationToken cancellationToken, bool isAdmin)
 /// Covers:
-/// - Normal test cases (UTCID01 - UTCID10): Trainee/Coach access, multiple details, fallbacks, statuses
-/// - Boundary test cases (UTCID11 - UTCID16): 0 details, zero/high amount, same buyer&coach, Guid.Empty boundaries
+/// - Normal test cases (UTCID01 - UTCID10, UTCID21): Trainee/Coach/Admin access, multiple details, fallbacks, statuses
+/// - Boundary test cases (UTCID11 - UTCID16, UTCID22): 0 details, zero/high amount, same buyer&coach, Guid.Empty, package coach fallback
 /// - Abnormal test cases (UTCID17 - UTCID20): Order not found, Forbidden access, DB error, CancellationToken
 /// </summary>
 public class ViewPurchasedTrainingPackageDetailsServiceTests
@@ -564,6 +564,54 @@ public class ViewPurchasedTrainingPackageDetailsServiceTests
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             _service.GetOrderByIdAsync(orderId, currentUserId, cts.Token));
+    }
+
+    [Fact]
+    public async Task UTCID21_GetOrderByIdAsync_AdminViewsAnyOrder_ReturnsOrderDtoSuccessfully()
+    {
+        // Arrange
+        var orderId = Guid.NewGuid();
+        var buyerId = Guid.NewGuid();
+        var coachId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var order = CreateSampleOrder(orderId, buyerId, coachId);
+
+        _mockOrderRepo.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(order);
+
+        // Act
+        var result = await _service.GetOrderByIdAsync(orderId, adminId, isAdmin: true);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(orderId, result.Data!.OrderId);
+    }
+
+    [Fact]
+    public async Task UTCID22_GetOrderByIdAsync_PackageCoachViewsOrderWhenOrderCoachIdNull_ReturnsOrderDtoSuccessfully()
+    {
+        // Arrange
+        var orderId = Guid.NewGuid();
+        var buyerId = Guid.NewGuid();
+        var orderCoachId = Guid.NewGuid();
+        var packageCoachId = Guid.NewGuid();
+        var order = CreateSampleOrder(orderId, buyerId, orderCoachId);
+        order.CoachId = null;
+        order.OrderDetails.First().Package!.CoachId = packageCoachId;
+
+        _mockOrderRepo.Setup(r => r.GetOrderByIdWithDetailsAsync(orderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(order);
+
+        // Act
+        var result = await _service.GetOrderByIdAsync(orderId, packageCoachId, isAdmin: false);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(orderId, result.Data!.OrderId);
     }
 
     #endregion

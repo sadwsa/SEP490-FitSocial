@@ -278,6 +278,12 @@
                                                 class="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
                                             <AppIcon Name="chart" Size="14" Class="text-blue-600" />
                                             <span>Monitor Progress</span>
+                                            @if (pkg.PendingWorkoutReviewsCount > 0)
+                                            {
+                                                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                                                    @pkg.PendingWorkoutReviewsCount
+                                                </span>
+                                            }
                                         </button>
                                         <button type="button"
                                                 @onclick="() => OpenTrainingPlanModal(pkg, trainee?.FullName, isUpdate: true)"
@@ -343,6 +349,12 @@
                                                 class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0">
                                             <AppIcon Name="chart" Size="14" Class="text-emerald-600" />
                                             <span>Monitor Meal Progress</span>
+                                            @if (pkg.PendingMealReviewsCount > 0)
+                                            {
+                                                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                                                    @pkg.PendingMealReviewsCount
+                                                </span>
+                                            }
                                         </button>
                                         <button type="button"
                                                 @onclick="() => OpenMealPlanModal(pkg, trainee?.FullName, isUpdate: true)"
@@ -565,9 +577,10 @@
         showMonitorProgressModal = true;
     }
 
-    private void CloseMonitorProgressModal()
+    private async Task CloseMonitorProgressModal()
     {
         showMonitorProgressModal = false;
+        await LoadTraineeDetailAsync();
     }
 
     private void OpenMonitorMealProgressModal(CoachTraineePackageOrderDto pkg, string? name)
@@ -578,9 +591,10 @@
         showMonitorMealProgressModal = true;
     }
 
-    private void CloseMonitorMealProgressModal()
+    private async Task CloseMonitorMealProgressModal()
     {
         showMonitorMealProgressModal = false;
+        await LoadTraineeDetailAsync();
     }
 
     private void OpenTrainingPlanModal(CoachTraineePackageOrderDto pkg, string? name, bool isUpdate)

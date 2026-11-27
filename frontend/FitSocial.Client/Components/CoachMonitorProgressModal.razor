@@ -208,18 +208,21 @@
                                                             }
 
                                                             <!-- Coach Review Actions -->
-                                                            <div class="mt-2.5 pt-1.5 border-t border-gray-200/60 flex items-center gap-1.5">
-                                                                <button type="button"
-                                                                        @onclick="() => OpenCoachReviewModal(ex, true)"
-                                                                        class="flex-1 py-1 px-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs">
-                                                                    <span>✓ Approve</span>
-                                                                </button>
-                                                                <button type="button"
-                                                                        @onclick="() => OpenCoachReviewModal(ex, false)"
-                                                                        class="flex-1 py-1 px-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs">
-                                                                    <span>✕ Reject</span>
-                                                                </button>
-                                                            </div>
+                                                            @if (isPendingReview || isUncomplete || ex.IsCompleted)
+                                                            {
+                                                                <div class="mt-2.5 pt-1.5 border-t border-gray-200/60 flex items-center gap-1.5">
+                                                                    <button type="button"
+                                                                            @onclick="() => OpenCoachReviewModal(ex, true)"
+                                                                            class="flex-1 py-1 px-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs">
+                                                                        <span>Approve</span>
+                                                                    </button>
+                                                                    <button type="button"
+                                                                            @onclick="() => OpenCoachReviewModal(ex, false)"
+                                                                            class="flex-1 py-1 px-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs">
+                                                                        <span>Reject</span>
+                                                                    </button>
+                                                                </div>
+                                                            }
                                                         </div>
                                                     }
                                                 </div>
@@ -293,7 +296,7 @@
                                                 </div>
                                             </div>
                                             <span class="text-[11px] text-gray-400 font-medium flex-shrink-0">
-                                                @log.CompletedAt.ToString("MMM dd, yyyy HH:mm")
+                                                @DateTime.SpecifyKind(log.CompletedAt, DateTimeKind.Utc).ToLocalTime().ToString("MMM dd, yyyy HH:mm")
                                             </span>
                                         </div>
                                     }
@@ -488,10 +491,30 @@
         }
     }
 
+    private bool _wasOpen;
+    private Guid _loadedOrderDetailsId;
+
     protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && OrderDetailsId != Guid.Empty)
+        if (!IsOpen)
         {
+            if (_wasOpen)
+            {
+                _wasOpen = false;
+                _loadedOrderDetailsId = Guid.Empty;
+                progressData = null;
+                errorMessage = null;
+                activeTab = 0;
+                showReviewModal = false;
+                reviewingExercise = null;
+            }
+            return;
+        }
+
+        if (OrderDetailsId != Guid.Empty && (!_wasOpen || _loadedOrderDetailsId != OrderDetailsId))
+        {
+            _wasOpen = true;
+            _loadedOrderDetailsId = OrderDetailsId;
             await LoadProgressAsync();
         }
     }
@@ -500,18 +523,26 @@
     {
         isLoading = true;
         errorMessage = null;
-
-        var res = await TrainingPlanService.GetCoachTraineeProgressAsync(OrderDetailsId);
-        if (res.Success && res.Data != null)
+        try
         {
-            progressData = res.Data;
+            var res = await TrainingPlanService.GetCoachTraineeProgressAsync(OrderDetailsId);
+            if (res.Success && res.Data != null)
+            {
+                progressData = res.Data;
+            }
+            else
+            {
+                errorMessage = res.Message ?? "Failed to load trainee workout progress.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            errorMessage = res.Message ?? "Failed to load trainee workout progress.";
+            errorMessage = "Error loading workout progress: " + ex.Message;
         }
-
-        isLoading = false;
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private async Task HandleClose()

@@ -749,9 +749,9 @@ public class RequestTrainingCompletionServiceTests
     }
 
     [Fact]
-    public async Task UTCID23_ReviewWorkoutCompletion_WhenNoExistingLog_CreatesNewWorkoutLog()
+    public async Task UTCID23_ReviewWorkoutCompletion_WhenNoExistingLogOrIncomplete_ThrowsBusinessException()
     {
-        // Normal: Coach reviews directly when existingLog == null -> creates new WorkoutCompletionLog via AddWorkoutLogAsync
+        // Abnormal: Coach cannot review when trainee has not submitted a completion request (existingLog == null or INCOMPLETE)
         var traineeId = Guid.NewGuid();
         var coachId = Guid.NewGuid();
         var (plan, exercise) = CreateExerciseHierarchy(traineeId, coachId);
@@ -760,23 +760,32 @@ public class RequestTrainingCompletionServiceTests
             .ReturnsAsync(exercise);
         _mockPlanRepo.Setup(r => r.GetWorkoutLogAsync(exercise.TrainingPlanExerciseId, traineeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((WorkoutCompletionLog?)null);
-        _mockPlanRepo.Setup(r => r.GetTraineePlanWithLogsAsync(plan.OrderDetailsId!.Value, traineeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(plan);
 
-        var result = await _service.ReviewWorkoutCompletionAsync(coachId, new CoachReviewWorkoutDto
+        var dto = new CoachReviewWorkoutDto
         {
             TrainingPlanExerciseId = exercise.TrainingPlanExerciseId,
             TraineeId = traineeId,
             Decision = "COMPLETED",
-            Feedback = "Verified in person."
-        });
+            Feedback = "Approved"
+        };
 
-        Assert.True(result.IsCompleted);
-        Assert.Equal("COMPLETED", result.Status);
-        _mockPlanRepo.Verify(r => r.AddWorkoutLogAsync(It.Is<WorkoutCompletionLog>(l =>
-            l.TraineeId == traineeId &&
-            l.Status == "COMPLETED" &&
-            l.ReviewedBy == coachId), It.IsAny<CancellationToken>()), Times.Once);
+        var exNull = await Assert.ThrowsAsync<BusinessException>(() => _service.ReviewWorkoutCompletionAsync(coachId, dto));
+        Assert.Equal("Trainee has not submitted a completion request for this exercise yet.", exNull.Message);
+
+        _mockPlanRepo.Setup(r => r.GetWorkoutLogAsync(exercise.TrainingPlanExerciseId, traineeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WorkoutCompletionLog
+            {
+                WorkoutCompletionLogId = Guid.NewGuid(),
+                TraineeId = traineeId,
+                TrainingPlanExerciseId = exercise.TrainingPlanExerciseId,
+                Status = "INCOMPLETE"
+            });
+
+        var exIncomplete = await Assert.ThrowsAsync<BusinessException>(() => _service.ReviewWorkoutCompletionAsync(coachId, dto));
+        Assert.Equal("Trainee has not submitted a completion request for this exercise yet.", exIncomplete.Message);
+
+        _mockPlanRepo.Verify(r => r.AddWorkoutLogAsync(It.IsAny<WorkoutCompletionLog>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockUow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

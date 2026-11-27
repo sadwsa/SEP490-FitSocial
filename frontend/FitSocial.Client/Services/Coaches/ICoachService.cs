@@ -44,6 +44,4 @@ public interface ICoachService
         Guid certificateId,
         ReviewCertificateRequestModel request);
     Task<List<BankItemDto>> GetVietnameseBanksAsync();
-    Task<ApiResponse<string?>> LookupAccountNameAsync(string bin, string accountNumber);
-
 }

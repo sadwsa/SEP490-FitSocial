@@ -51,16 +51,8 @@ public class CoachMealPlansController : ControllerBase
             return Unauthorized(ApiResponseDto<TraineeMealPlanDto>.Fail("Unauthorized: Invalid coach identity in token."));
         }
 
-        try
-        {
-            var result = await _mealPlanService.CreateMealPlanAsync(coachId, dto, cancellationToken);
-            return Ok(ApiResponseDto<TraineeMealPlanDto>.Ok(result, "Meal plan created successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachMealPlans] Error creating meal plan for coach {CoachId}: {Message}", coachId, ex.Message);
-            throw;
-        }
+        var result = await _mealPlanService.CreateMealPlanAsync(coachId, dto, cancellationToken);
+        return Ok(ApiResponseDto<TraineeMealPlanDto>.Ok(result, "Meal plan created successfully."));
     }
 
     /// <summary>
@@ -83,16 +75,8 @@ public class CoachMealPlansController : ControllerBase
             return Unauthorized(ApiResponseDto<TraineeMealPlanDto>.Fail("Unauthorized: Invalid coach identity in token."));
         }
 
-        try
-        {
-            var result = await _mealPlanService.UpdateMealPlanAsync(coachId, planId, dto, cancellationToken);
-            return Ok(ApiResponseDto<TraineeMealPlanDto>.Ok(result, "Meal plan updated successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachMealPlans] Error updating meal plan {PlanId} for coach {CoachId}: {Message}", planId, coachId, ex.Message);
-            throw;
-        }
+        var result = await _mealPlanService.UpdateMealPlanAsync(coachId, planId, dto, cancellationToken);
+        return Ok(ApiResponseDto<TraineeMealPlanDto>.Ok(result, "Meal plan updated successfully."));
     }
 
     /// <summary>
@@ -113,16 +97,8 @@ public class CoachMealPlansController : ControllerBase
             return Unauthorized(ApiResponseDto<TraineeMealPlanDto?>.Fail("Unauthorized: Invalid coach identity in token."));
         }
 
-        try
-        {
-            var result = await _mealPlanService.GetCoachMealPlanByOrderDetailsAsync(coachId, orderDetailsId, cancellationToken);
-            return Ok(ApiResponseDto<TraineeMealPlanDto?>.Ok(result, "Meal plan retrieved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachMealPlans] Error getting meal plan for order detail {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
-            throw;
-        }
+        var result = await _mealPlanService.GetCoachMealPlanByOrderDetailsAsync(coachId, orderDetailsId, cancellationToken);
+        return Ok(ApiResponseDto<TraineeMealPlanDto?>.Ok(result, "Meal plan retrieved successfully."));
     }
 
     /// <summary>
@@ -141,16 +117,8 @@ public class CoachMealPlansController : ControllerBase
         if (coachId == Guid.Empty)
             return Unauthorized(ApiResponseDto<CoachTraineeMealProgressDto>.Fail("Unauthorized: Invalid coach identity in token."));
 
-        try
-        {
-            var result = await _mealPlanService.GetCoachTraineeMealProgressAsync(coachId, orderDetailsId, cancellationToken);
-            return Ok(ApiResponseDto<CoachTraineeMealProgressDto>.Ok(result, "Trainee meal progress retrieved successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachMealPlans] Error getting meal progress for order detail {OrderDetailsId}: {Message}", orderDetailsId, ex.Message);
-            throw;
-        }
+        var result = await _mealPlanService.GetCoachTraineeMealProgressAsync(coachId, orderDetailsId, cancellationToken);
+        return Ok(ApiResponseDto<CoachTraineeMealProgressDto>.Ok(result, "Trainee meal progress retrieved successfully."));
     }
 
     /// <summary>
@@ -170,16 +138,8 @@ public class CoachMealPlansController : ControllerBase
         if (coachId == Guid.Empty)
             return Unauthorized(ApiResponseDto<MealCompletionResultDto>.Fail("Unauthorized: Invalid coach identity in token."));
 
-        try
-        {
-            var result = await _mealPlanService.ReviewMealCompletionAsync(coachId, dto, cancellationToken);
-            return Ok(ApiResponseDto<MealCompletionResultDto>.Ok(result, "Meal review submitted successfully."));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CoachMealPlans] Error reviewing meal item {MealPlanItemId} by coach {CoachId}: {Message}", dto?.MealPlanItemId, coachId, ex.Message);
-            throw;
-        }
+        var result = await _mealPlanService.ReviewMealCompletionAsync(coachId, dto, cancellationToken);
+        return Ok(ApiResponseDto<MealCompletionResultDto>.Ok(result, "Meal review submitted successfully."));
     }
 
     private Guid GetCurrentCoachId()

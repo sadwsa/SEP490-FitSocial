@@ -221,63 +221,6 @@ public class CoachService : ICoachService
         return await GetCoachDetailsAsync(coachId, cancellationToken);
     }
 
-    public async Task<ApiResponseDto<bool>> UpdateReviewAsync(Guid reviewId, Guid traineeId, FitSocial.Application.DTOs.Coaches.UpdateReviewDto dto, CancellationToken cancellationToken = default)
-    {
-        if (dto == null)
-        {
-            throw new ValidationException("Invalid review payload.");
-        }
-        if (dto.Rating < 1 || dto.Rating > 5)
-        {
-            throw new ValidationException("Rating must be between 1 and 5.");
-        }
-        if (dto.Comment != null && dto.Comment.Length > 500)
-        {
-            throw new ValidationException("Comment cannot exceed 500 characters.");
-        }
-
-        var review = await _reviewRepository.GetByIdAsync(reviewId, cancellationToken);
-        if (review == null) throw new NotFoundException("Review not found.");
-
-        // Chặn không cho phép sửa review của người khác
-        if (review.TraineeId != traineeId) throw new UnauthorizedAccessException("You can only edit your own review.");
-
-        // Quy tắc: chỉ được sửa 1 lần
-        if (review.IsEdited == true)
-        {
-            throw new ValidationException("This review has been edited once and cannot be edited further.");
-        }
-
-        // Chặn sửa review khi đơn hàng đang chờ hoặc đã được hoàn tiền
-        if (review.OrderId.HasValue && _orderRepository != null)
-        {
-            var order = await _orderRepository.GetOrderByIdWithDetailsAsync(review.OrderId.Value, cancellationToken);
-            if (order?.RefundRequests != null && order.RefundRequests.Any(r =>
-                string.Equals(r.Status, "PENDING", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(r.Status, "APPROVED", StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new ValidationException("Cannot submit or edit a review while a refund request is pending or approved.");
-            }
-        }
-
-        review.Rating = dto.Rating;
-        review.Comment = dto.Comment;
-        review.UpdatedAt = DateTime.UtcNow;
-        review.IsEdited = true;
-
-        _reviewRepository.Update(review);
-        try
-        {
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
-        {
-            throw new ValidationException("Review was modified by another request. Please reload and try again.");
-        }
-
-        return ApiResponseDto<bool>.Ok(true, "Review updated successfully.");
-    }
-
     public async Task<ApiResponseDto<CoachApplicationListResponseDto>> GetCoachApplicationsAsync(
         string? search = null,
         string? status = null,

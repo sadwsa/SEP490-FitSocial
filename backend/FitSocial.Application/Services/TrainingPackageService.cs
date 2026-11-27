@@ -200,190 +200,123 @@ namespace FitSocial.Application.Services
 
             var dtos = (orderDetails ?? new List<OrderDetail>())
                 .Where(od => od.Package != null)
-                .Select(od =>
-                {
-                    var pkg = od.Package!;
-                    var dto = MapToDto(pkg);
-
-                    // Ưu tiên dữ liệu Snapshot lúc mua từ OrderDetail
-                    dto.Title = !string.IsNullOrWhiteSpace(od.PackageTitle) ? od.PackageTitle : dto.Title;
-                    dto.Price = od.PackagePrice ?? dto.Price;
-                    dto.DurationDays = od.PackageDurationDays ?? dto.DurationDays;
-                    dto.CoachName = !string.IsNullOrWhiteSpace(od.CoachName) ? od.CoachName : dto.CoachName;
-                    dto.PackageType = od.PackageType ?? pkg.PackageType ?? "BOTH";
-
-                    dto.OrderDetailsId = od.OrderDetailsId;
-                    dto.OrderId = od.OrderId;
-                    dto.OrderCreatedAt = od.Order?.CreatedAt ?? od.CreatedAt;
-                    dto.OrderStatus = od.Order?.OrderStatus;
-
-                    var latestRefund = od.Order?.RefundRequests?
-                        .OrderByDescending(r => r.RequestedAt ?? r.CreatedAt)
-                        .FirstOrDefault();
-                    if (latestRefund != null)
-                    {
-                        dto.RefundStatus = latestRefund.Status;
-                        if (string.Equals(latestRefund.Status, "REJECTED", StringComparison.OrdinalIgnoreCase)
-                            && !string.IsNullOrWhiteSpace(latestRefund.StaffNote)
-                            && !latestRefund.StaffNote.TrimStart().StartsWith("[Policy:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            dto.RefundStaffNote = latestRefund.StaffNote.Trim();
-                        }
-                    }
-                    else if (string.Equals(od.Order?.OrderStatus, "REFUND_PENDING", StringComparison.OrdinalIgnoreCase))
-                    {
-                        dto.RefundStatus = "PENDING";
-                    }
-                    else if (string.Equals(od.Order?.OrderStatus, "REFUNDED", StringComparison.OrdinalIgnoreCase))
-                    {
-                        dto.RefundStatus = "APPROVED";
-                    }
-
-                    var plan = od.TrainingPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
-                    if (plan != null)
-                    {
-                        dto.TrainingPlanId = plan.TrainingPlanId;
-                        dto.PlanStatus = plan.Status;
-                    }
-
-                    var mealPlan = od.MealPlans?.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
-                    if (mealPlan != null)
-                    {
-                        dto.MealPlanId = mealPlan.MealPlanId;
-                        dto.MealPlanStatus = mealPlan.Status;
-                    }
-
-                    // 1. Tính Ngày hết hạn (ExpiresAt / RemainingDays) và Trạng thái hiệu lực (EnrollmentStatus)
-                    var durationDays = dto.DurationDays ?? 30;
-                    if (dto.OrderCreatedAt.HasValue && durationDays > 0)
-                    {
-                        var purchaseUtc = DateTime.SpecifyKind(dto.OrderCreatedAt.Value, DateTimeKind.Utc);
-                        dto.ExpiresAt = purchaseUtc.AddDays(durationDays);
-                    }
-
-                    var isRefundApproved = string.Equals(dto.RefundStatus, "APPROVED", StringComparison.OrdinalIgnoreCase)
-                                        || string.Equals(dto.OrderStatus, "REFUNDED", StringComparison.OrdinalIgnoreCase);
-                    var isRefundPending = string.Equals(dto.RefundStatus, "PENDING", StringComparison.OrdinalIgnoreCase)
-                                       || string.Equals(dto.OrderStatus, "REFUND_PENDING", StringComparison.OrdinalIgnoreCase);
-
-                    var normalizedPkgType = (dto.PackageType ?? "BOTH").Trim().ToUpperInvariant();
-                    var planCompleted = string.Equals(dto.PlanStatus?.Trim(), "COMPLETED", StringComparison.OrdinalIgnoreCase);
-                    var mealCompleted = string.Equals(dto.MealPlanStatus?.Trim(), "COMPLETED", StringComparison.OrdinalIgnoreCase);
-                    var isProgramCompleted = (normalizedPkgType == "WORKOUT" && planCompleted)
-                                          || (normalizedPkgType == "MEAL" && mealCompleted)
-                                          || (normalizedPkgType == "BOTH" && planCompleted && (!dto.MealPlanId.HasValue || mealCompleted));
-
-                    if (isRefundApproved)
-                    {
-                        dto.EnrollmentStatus = "REFUNDED";
-                        dto.RemainingDays = 0;
-                    }
-                    else if (isRefundPending)
-                    {
-                        dto.EnrollmentStatus = "REFUND_PENDING";
-                        dto.RemainingDays = dto.ExpiresAt.HasValue
-                            ? Math.Max(0, (int)Math.Ceiling((dto.ExpiresAt.Value - nowUtc).TotalDays))
-                            : 0;
-                    }
-                    else if (isProgramCompleted)
-                    {
-                        dto.EnrollmentStatus = "COMPLETED";
-                        dto.RemainingDays = dto.ExpiresAt.HasValue
-                            ? Math.Max(0, (int)Math.Ceiling((dto.ExpiresAt.Value - nowUtc).TotalDays))
-                            : 0;
-                    }
-                    else if (dto.ExpiresAt.HasValue && nowUtc >= dto.ExpiresAt.Value)
-                    {
-                        dto.EnrollmentStatus = "EXPIRED";
-                        dto.RemainingDays = 0;
-                    }
-                    else
-                    {
-                        dto.EnrollmentStatus = "ACTIVE";
-                        dto.RemainingDays = dto.ExpiresAt.HasValue
-                            ? Math.Max(0, (int)Math.Ceiling((dto.ExpiresAt.Value - nowUtc).TotalDays))
-                            : null;
-                    }
-
-                    // Review của học viên cho đơn hàng này (hỗ trợ cả fallback review cũ chưa gán OrderId)
-                    var userReview = pkg.Reviews?.FirstOrDefault(r => r.TraineeId == currentUserId && r.OrderId == od.OrderId)
-                                  ?? pkg.Reviews?.FirstOrDefault(r => r.TraineeId == currentUserId && r.OrderId == null);
-                    if (userReview != null)
-                    {
-                        dto.HasReviewed = true;
-                        dto.IsReviewEdited = userReview.IsEdited ?? false;
-                        dto.UserRating = userReview.Rating;
-                        dto.UserComment = userReview.Comment;
-                        dto.UserReviewImageUrls = userReview.ReviewMedia?
-                            .OrderBy(m => m.SortOrder)
-                            .Select(m => m.MediaUrl)
-                            .ToList() ?? new List<string>();
-                    }
-                    else
-                    {
-                        dto.HasReviewed = false;
-                        dto.IsReviewEdited = false;
-                        dto.UserReviewImageUrls = new List<string>();
-                    }
-
-                    // 5. Kiểm tra điều kiện Đánh giá (CanReview & CannotReviewReason) theo tiến độ/trạng thái đơn hàng
-                    bool workoutReady = dto.TrainingPlanId.HasValue
-                                     && !string.IsNullOrWhiteSpace(dto.PlanStatus)
-                                     && !string.Equals(dto.PlanStatus, "PENDING_COACH", StringComparison.OrdinalIgnoreCase)
-                                     && !string.Equals(dto.PlanStatus, "DRAFT", StringComparison.OrdinalIgnoreCase);
-                    bool mealReady = dto.MealPlanId.HasValue
-                                  && !string.IsNullOrWhiteSpace(dto.MealPlanStatus)
-                                  && !string.Equals(dto.MealPlanStatus, "PENDING_COACH", StringComparison.OrdinalIgnoreCase)
-                                  && !string.Equals(dto.MealPlanStatus, "DRAFT", StringComparison.OrdinalIgnoreCase);
-
-                    if (isRefundApproved)
-                    {
-                        dto.CanReview = false;
-                        dto.CannotReviewReason = "This order has been refunded and cannot be reviewed.";
-                    }
-                    else if (isRefundPending)
-                    {
-                        dto.CanReview = false;
-                        dto.CannotReviewReason = "Cannot submit or edit a review while a refund request is pending.";
-                    }
-                    else if (dto.HasReviewed && dto.IsReviewEdited)
-                    {
-                        dto.CanReview = false;
-                        dto.CannotReviewReason = "Review edited once (Maximum 1 edit reached).";
-                    }
-                    else if (!dto.HasReviewed)
-                    {
-                        if (normalizedPkgType == "WORKOUT" && !workoutReady)
-                        {
-                            dto.CanReview = false;
-                            dto.CannotReviewReason = "You can review this package once your workout plan is active.";
-                        }
-                        else if (normalizedPkgType == "MEAL" && !mealReady)
-                        {
-                            dto.CanReview = false;
-                            dto.CannotReviewReason = "You can review this package once your meal plan is active.";
-                        }
-                        else if (normalizedPkgType != "WORKOUT" && normalizedPkgType != "MEAL" && !workoutReady && !mealReady)
-                        {
-                            dto.CanReview = false;
-                            dto.CannotReviewReason = "You can review this package once your workout or meal plan is active.";
-                        }
-                        else
-                        {
-                            dto.CanReview = true;
-                            dto.CannotReviewReason = null;
-                        }
-                    }
-                    else
-                    {
-                        dto.CanReview = true;
-                        dto.CannotReviewReason = null;
-                    }
-
-                    return dto;
-                }).ToList();
+                .Select(od => MapPurchasedOrderDetailToDto(od, currentUserId, nowUtc))
+                .ToList();
 
             return PagedResultDto<TrainingPackageResponseDto>.Create(dtos, totalCount, pageNumber, pageSize);
+        }
+
+        private static TrainingPackageResponseDto MapPurchasedOrderDetailToDto(OrderDetail od, Guid currentUserId, DateTime nowUtc)
+        {
+            var pkg = od.Package!;
+            var dto = MapToDto(pkg);
+
+            // Ưu tiên dữ liệu Snapshot lúc mua từ OrderDetail
+            dto.Title = !string.IsNullOrWhiteSpace(od.PackageTitle) ? od.PackageTitle : dto.Title;
+            dto.Price = od.PackagePrice ?? dto.Price;
+            dto.DurationDays = od.PackageDurationDays ?? dto.DurationDays;
+            dto.CoachName = !string.IsNullOrWhiteSpace(od.CoachName) ? od.CoachName : dto.CoachName;
+            dto.PackageType = od.PackageType ?? pkg.PackageType ?? "BOTH";
+
+            dto.OrderDetailsId = od.OrderDetailsId;
+            dto.OrderId = od.OrderId;
+            dto.OrderCreatedAt = od.Order?.CreatedAt ?? od.CreatedAt;
+            dto.OrderStatus = od.Order?.OrderStatus;
+
+            var state = PurchasedPackageEnrollmentPolicy.Resolve(od, nowUtc);
+            dto.RefundStatus = state.RefundStatus;
+            dto.RefundStaffNote = state.RefundStaffNote;
+            dto.TrainingPlanId = state.TrainingPlanId;
+            dto.PlanStatus = state.PlanStatus;
+            dto.MealPlanId = state.MealPlanId;
+            dto.MealPlanStatus = state.MealPlanStatus;
+            dto.ExpiresAt = state.ExpiresAt;
+            dto.EnrollmentStatus = state.EnrollmentStatus;
+            dto.RemainingDays = state.RemainingDays;
+
+            // Review của học viên cho đơn hàng này (hỗ trợ cả fallback review cũ chưa gán OrderId)
+            var userReview = pkg.Reviews?.FirstOrDefault(r => r.TraineeId == currentUserId && r.OrderId == od.OrderId)
+                          ?? pkg.Reviews?.FirstOrDefault(r => r.TraineeId == currentUserId && r.OrderId == null);
+            if (userReview != null)
+            {
+                dto.HasReviewed = true;
+                dto.UserReviewId = userReview.ReviewId;
+                dto.IsReviewEdited = userReview.IsEdited ?? false;
+                dto.UserRating = userReview.Rating;
+                dto.UserComment = userReview.Comment;
+                dto.UserReviewImageUrls = userReview.ReviewMedia?
+                    .OrderBy(m => m.SortOrder)
+                    .Select(m => m.MediaUrl)
+                    .ToList() ?? new List<string>();
+            }
+            else
+            {
+                dto.HasReviewed = false;
+                dto.UserReviewId = null;
+                dto.IsReviewEdited = false;
+                dto.UserReviewImageUrls = new List<string>();
+            }
+
+            ApplyReviewEligibility(dto, state.IsRefundApproved, state.IsRefundPending);
+            return dto;
+        }
+
+        private static bool IsPlanStatusActive(string? status) =>
+            !string.IsNullOrWhiteSpace(status)
+            && !string.Equals(status, "PENDING_COACH", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(status, "DRAFT", StringComparison.OrdinalIgnoreCase);
+
+        private static void ApplyReviewEligibility(TrainingPackageResponseDto dto, bool isRefundApproved, bool isRefundPending)
+        {
+            if (isRefundApproved)
+            {
+                dto.CanReview = false;
+                dto.CannotReviewReason = "This order has been refunded and cannot be reviewed.";
+                return;
+            }
+            if (isRefundPending)
+            {
+                dto.CanReview = false;
+                dto.CannotReviewReason = "Cannot submit or edit a review while a refund request is pending.";
+                return;
+            }
+            if (dto.HasReviewed && dto.IsReviewEdited)
+            {
+                dto.CanReview = false;
+                dto.CannotReviewReason = "Review edited once (Maximum 1 edit reached).";
+                return;
+            }
+            if (dto.HasReviewed)
+            {
+                dto.CanReview = true;
+                dto.CannotReviewReason = null;
+                return;
+            }
+
+            bool workoutReady = dto.TrainingPlanId.HasValue && IsPlanStatusActive(dto.PlanStatus);
+            bool mealReady = dto.MealPlanId.HasValue && IsPlanStatusActive(dto.MealPlanStatus);
+            var normalizedPkgType = (dto.PackageType ?? "BOTH").Trim().ToUpperInvariant();
+
+            if (normalizedPkgType == "WORKOUT" && !workoutReady)
+            {
+                dto.CanReview = false;
+                dto.CannotReviewReason = "You can review this package once your workout plan is active.";
+            }
+            else if (normalizedPkgType == "MEAL" && !mealReady)
+            {
+                dto.CanReview = false;
+                dto.CannotReviewReason = "You can review this package once your meal plan is active.";
+            }
+            else if (normalizedPkgType != "WORKOUT" && normalizedPkgType != "MEAL" && !workoutReady && !mealReady)
+            {
+                dto.CanReview = false;
+                dto.CannotReviewReason = "You can review this package once your workout or meal plan is active.";
+            }
+            else
+            {
+                dto.CanReview = true;
+                dto.CannotReviewReason = null;
+            }
         }
 
         public async Task<ApiResponseDto<PackageReviewSummaryDto>> GetPackageReviewsAsync(Guid packageId, CancellationToken cancellationToken = default)
@@ -507,40 +440,25 @@ namespace FitSocial.Application.Services
             }
 
             var existingReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
-            var isNewReview = existingReview == null;
-            Review targetReview;
-
             if (existingReview != null)
             {
-                if (existingReview.IsEdited == true)
-                {
-                    throw new ValidationException("This review has been edited once and cannot be edited further.");
-                }
-                existingReview.Rating = dto.Rating;
-                existingReview.Comment = dto.Comment;
-                existingReview.UpdatedAt = DateTime.UtcNow;
-                existingReview.IsEdited = true;
-                _reviewRepository.Update(existingReview);
-                targetReview = existingReview;
+                throw new ValidationException("You have already reviewed this order. Please edit your existing review instead.");
             }
-            else
+
+            var review = new Review
             {
-                var review = new Review
-                {
-                    ReviewId = Guid.NewGuid(),
-                    PackageId = packageId,
-                    OrderId = dto.OrderId,
-                    CoachId = package.CoachId,
-                    TraineeId = traineeId,
-                    Rating = dto.Rating,
-                    Comment = dto.Comment,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = null,
-                    IsEdited = false
-                };
-                await _reviewRepository.AddAsync(review);
-                targetReview = review;
-            }
+                ReviewId = Guid.NewGuid(),
+                PackageId = packageId,
+                OrderId = dto.OrderId,
+                CoachId = package.CoachId,
+                TraineeId = traineeId,
+                Rating = dto.Rating,
+                Comment = dto.Comment,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = null,
+                IsEdited = false
+            };
+            await _reviewRepository.AddAsync(review);
 
             try
             {
@@ -548,61 +466,30 @@ namespace FitSocial.Application.Services
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
             {
-                var concurrentReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
-                if (concurrentReview == null)
-                    throw;
-                if (concurrentReview.IsEdited == true)
-                    throw new ValidationException("This review has been edited once and cannot be edited further.");
-                concurrentReview.Rating = dto.Rating;
-                concurrentReview.Comment = dto.Comment;
-                concurrentReview.UpdatedAt = DateTime.UtcNow;
-                concurrentReview.IsEdited = true;
-                _reviewRepository.Update(concurrentReview);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                targetReview = concurrentReview;
-                isNewReview = false;
+                throw new ValidationException("You have already reviewed this order. Please edit your existing review instead.");
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
             {
-                var concurrentReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken);
-                if (concurrentReview == null)
-                    throw;
-                if (concurrentReview.IsEdited == true)
-                    throw new ValidationException("This review has been edited once and cannot be edited further.");
                 throw new ValidationException("Review was modified by another request. Please reload and try again.");
             }
 
             // Save ReviewMedia immediately after Review persistence (before best-effort SMTP/Notification)
-            if (dto.ImageUrls != null && _reviewMediaRepository != null)
+            if (dto.ImageUrls != null && dto.ImageUrls.Count > 0 && _reviewMediaRepository != null)
             {
-                var persistedReview = await _reviewRepository.GetReviewByOrderIdAndTraineeAsync(dto.OrderId, traineeId, cancellationToken)
-                                      ?? (dto.ImageUrls.Count > 0 ? targetReview : null);
-                if (persistedReview != null)
+                for (int i = 0; i < dto.ImageUrls.Count; i++)
                 {
-                    var existingMedia = await _reviewMediaRepository.GetMediaByReviewIdAsync(persistedReview.ReviewId, cancellationToken);
-                    if (existingMedia != null)
+                    await _reviewMediaRepository.AddAsync(new ReviewMedia
                     {
-                        foreach (var media in existingMedia)
-                        {
-                            _reviewMediaRepository.Remove(media);
-                        }
-                    }
-
-                    for (int i = 0; i < dto.ImageUrls.Count; i++)
-                    {
-                        await _reviewMediaRepository.AddAsync(new ReviewMedia
-                        {
-                            ReviewMediaId = Guid.NewGuid(),
-                            ReviewId = persistedReview.ReviewId,
-                            MediaUrl = dto.ImageUrls[i].Trim(),
-                            MediaType = "image",
-                            SortOrder = i,
-                            CreatedAt = DateTime.UtcNow
-                        }, cancellationToken);
-                    }
-
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        ReviewMediaId = Guid.NewGuid(),
+                        ReviewId = review.ReviewId,
+                        MediaUrl = dto.ImageUrls[i].Trim(),
+                        MediaType = "image",
+                        SortOrder = i,
+                        CreatedAt = DateTime.UtcNow
+                    }, cancellationToken);
                 }
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
             // Send notification + email to coach (best-effort)
@@ -614,7 +501,6 @@ namespace FitSocial.Application.Services
                 {
                     var traineeName = traineeUser?.FullName ?? "A customer";
                     var packageTitle = package.Title ?? "this package";
-                    var actionText = isNewReview ? "left a new" : "updated their";
 
                     var notification = new Notification
                     {
@@ -622,8 +508,8 @@ namespace FitSocial.Application.Services
                         UserId = package.CoachId,
                         ActorId = traineeId,
                         ReferenceId = dto.OrderId,
-                        Type = isNewReview ? "NEW_REVIEW" : "REVIEW_UPDATED",
-                        Description = $"{traineeName} {actionText} {dto.Rating}-star review on your package \"{packageTitle}\".",
+                        Type = "NEW_REVIEW",
+                        Description = $"{traineeName} left a new {dto.Rating}-star review on your package \"{packageTitle}\".",
                         IsRead = false,
                         CreatedAt = DateTime.UtcNow
                     };
@@ -639,11 +525,11 @@ namespace FitSocial.Application.Services
 
                         await _emailService.SendEmailAsync(
                             coachUser.Email,
-                            "[FitConnect] " + (isNewReview ? "New review" : "Review updated") + " on your training package",
+                            "[FitConnect] New review on your training package",
                             "<div style=\"font-family: Arial, sans-serif;\">" +
-                            "<h2>" + (isNewReview ? "New review received" : "Review updated") + "</h2>" +
+                            "<h2>New review received</h2>" +
                             "<p>Hi " + safeCoachName + ",</p>" +
-                            "<p>" + safeTraineeName + " " + actionText + " " + dto.Rating + "-star review on your package <strong>" + safePackageTitle + "</strong>:</p>" +
+                            "<p>" + safeTraineeName + " left a new " + dto.Rating + "-star review on your package <strong>" + safePackageTitle + "</strong>:</p>" +
                             "<blockquote style=\"border-left: 4px solid #FF5500; padding-left: 12px; color: #555;\">" + safeComment + "</blockquote>" +
                             "<p>Log in to FitConnect to view and reply.</p>" +
                             "</div>");
@@ -656,6 +542,138 @@ namespace FitSocial.Application.Services
             }
 
             return ApiResponseDto<bool>.Ok(true, "Review submitted successfully.");
+        }
+
+        public async Task<ApiResponseDto<bool>> UpdatePackageReviewAsync(Guid packageId, Guid reviewId, Guid traineeId, UpdatePackageReviewDto dto, CancellationToken cancellationToken = default)
+        {
+            if (dto == null)
+                throw new ValidationException("Invalid review payload.");
+            if (dto.Rating < 1 || dto.Rating > 5)
+                throw new ValidationException("Rating must be between 1 and 5.");
+            if (dto.Comment != null && dto.Comment.Length > 1000)
+                throw new ValidationException("Comment cannot exceed 1000 characters.");
+
+            if (dto.ImageUrls != null)
+            {
+                if (dto.ImageUrls.Count > 5)
+                    throw new ValidationException("Maximum 5 images allowed per review.");
+                if (dto.ImageUrls.Any(u => string.IsNullOrWhiteSpace(u) || !IsSafeMediaUrl(u)))
+                    throw new ValidationException("Invalid review image URL.");
+            }
+
+            var review = await _reviewRepository.GetByIdAsync(reviewId, cancellationToken);
+            if (review == null || (review.PackageId.HasValue && review.PackageId.Value != packageId))
+                throw new NotFoundException("Review not found.");
+
+            if (review.TraineeId != traineeId)
+                throw new UnauthorizedAccessException("You can only edit your own review.");
+
+            if (review.IsEdited == true)
+                throw new ValidationException("This review has been edited once and cannot be edited further.");
+
+            if (review.OrderId.HasValue)
+            {
+                var order = await _orderRepository.GetOrderByIdWithDetailsAsync(review.OrderId.Value, cancellationToken);
+                if (order?.RefundRequests != null && order.RefundRequests.Any(r =>
+                    string.Equals(r.Status, "PENDING", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(r.Status, "APPROVED", StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new ValidationException("Cannot submit or edit a review while a refund request is pending or approved.");
+                }
+            }
+
+            review.Rating = dto.Rating;
+            review.Comment = dto.Comment;
+            review.UpdatedAt = DateTime.UtcNow;
+            review.IsEdited = true;
+
+            _reviewRepository.Update(review);
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+            {
+                throw new ValidationException("Review was modified by another request. Please reload and try again.");
+            }
+
+            if (dto.ImageUrls != null && _reviewMediaRepository != null)
+            {
+                var existingMedia = await _reviewMediaRepository.GetMediaByReviewIdAsync(review.ReviewId, cancellationToken);
+                if (existingMedia != null)
+                {
+                    foreach (var media in existingMedia)
+                    {
+                        _reviewMediaRepository.Remove(media);
+                    }
+                }
+
+                for (int i = 0; i < dto.ImageUrls.Count; i++)
+                {
+                    await _reviewMediaRepository.AddAsync(new ReviewMedia
+                    {
+                        ReviewMediaId = Guid.NewGuid(),
+                        ReviewId = review.ReviewId,
+                        MediaUrl = dto.ImageUrls[i].Trim(),
+                        MediaType = "image",
+                        SortOrder = i,
+                        CreatedAt = DateTime.UtcNow
+                    }, cancellationToken);
+                }
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            try
+            {
+                var coachUser = await _userRepository.GetByIdAsync(review.CoachId, cancellationToken);
+                var traineeUser = await _userRepository.GetByIdAsync(traineeId, cancellationToken);
+                var package = await _repository.GetByIdAsync(packageId, cancellationToken);
+                if (coachUser != null)
+                {
+                    var traineeName = traineeUser?.FullName ?? "A customer";
+                    var packageTitle = package?.Title ?? "this package";
+
+                    var notification = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = review.CoachId,
+                        ActorId = traineeId,
+                        ReferenceId = review.OrderId,
+                        Type = "REVIEW_UPDATED",
+                        Description = $"{traineeName} updated their {dto.Rating}-star review on your package \"{packageTitle}\".",
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _notificationRepository.AddAsync(notification, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    if (!string.IsNullOrWhiteSpace(coachUser.Email))
+                    {
+                        var safeCoachName = System.Net.WebUtility.HtmlEncode(coachUser.FullName ?? "Coach");
+                        var safeTraineeName = System.Net.WebUtility.HtmlEncode(traineeName);
+                        var safePackageTitle = System.Net.WebUtility.HtmlEncode(packageTitle);
+                        var safeComment = System.Net.WebUtility.HtmlEncode(dto.Comment ?? "");
+
+                        await _emailService.SendEmailAsync(
+                            coachUser.Email,
+                            "[FitConnect] Review updated on your training package",
+                            "<div style=\"font-family: Arial, sans-serif;\">" +
+                            "<h2>Review updated</h2>" +
+                            "<p>Hi " + safeCoachName + ",</p>" +
+                            "<p>" + safeTraineeName + " updated their " + dto.Rating + "-star review on your package <strong>" + safePackageTitle + "</strong>:</p>" +
+                            "<blockquote style=\"border-left: 4px solid #FF5500; padding-left: 12px; color: #555;\">" + safeComment + "</blockquote>" +
+                            "<p>Log in to FitConnect to view and reply.</p>" +
+                            "</div>");
+                    }
+                }
+            }
+            catch
+            {
+                // Don't fail the whole review update if notification/email fails
+            }
+
+            return ApiResponseDto<bool>.Ok(true, "Review updated successfully.");
         }
     private static TrainingPackageResponseDto MapToDto(TrainingPackage entity)
     {

@@ -29,5 +29,5 @@ public partial class CoachBankAccount
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual CoachProfile? Coach { get; set; }
+    public virtual User? Coach { get; set; }
 }

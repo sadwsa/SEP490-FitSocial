@@ -474,21 +474,24 @@ public class ViewTransactionHistoryServiceTests
     }
 
     [Fact]
-    public async Task TransactionService_GetMyTransactionsAsync_WhenPageSizeIsZero_ShouldReturnZeroTotalPagesWithoutDivByZero()
+    public async Task TransactionService_GetMyTransactionsAsync_WhenPageSizeIsZero_ShouldClampTo10AndComputeTotalPagesSafely()
     {
-        // Service UTCID06 - Boundary: PageSize = 0 avoids DivideByZeroException in PagedResultDto.TotalPages
+        // Service UTCID06 - Boundary: PageSize = 0 clamps to 10 in service before repository & PagedResultDto
         var mockRepo = new Mock<ITransactionRepository>();
         var service = new TransactionService(mockRepo.Object);
         var userId = Guid.NewGuid();
 
         mockRepo.Setup(r => r.GetUserTransactionsAsync(
-                userId, "TRAINEE", null, null, null, 1, 0, It.IsAny<CancellationToken>()))
+                userId, "TRAINEE", null, null, null, 1, 10, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Array.Empty<TransactionRecord>(), 5));
 
         var result = await service.GetMyTransactionsAsync(userId, "TRAINEE", new TransactionFilterDto { PageIndex = 1, PageSize = 0 });
 
-        Assert.Equal(0, result.TotalPages);
+        Assert.Equal(10, result.PageSize);
+        Assert.Equal(1, result.TotalPages);
         Assert.False(result.HasNextPage);
+        mockRepo.Verify(r => r.GetUserTransactionsAsync(
+            userId, "TRAINEE", null, null, null, 1, 10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

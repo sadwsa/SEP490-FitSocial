@@ -353,8 +353,9 @@ public class ViewReportListServiceTests
             null, null, null, null, null, null, 1, 10, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Report> { report }, 1));
 
-        _orderRepoMock.Setup(o => o.HasSoldTrainingPackageAsync(coachId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        _orderRepoMock.Setup(o => o.GetCoachIdsWithSoldPackagesAsync(
+                It.Is<IEnumerable<Guid>>(ids => ids.Contains(coachId)), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HashSet<Guid> { coachId });
 
         // Act
         var result = await _service.GetReportsAsync(query, staff.UserId);
@@ -368,7 +369,8 @@ public class ViewReportListServiceTests
         Assert.Contains("BLOCK", item.AvailableActions);
         Assert.DoesNotContain("LOCK", item.AvailableActions);
 
-        _orderRepoMock.Verify(o => o.HasSoldTrainingPackageAsync(coachId, It.IsAny<CancellationToken>()), Times.Once);
+        _orderRepoMock.Verify(o => o.GetCoachIdsWithSoldPackagesAsync(
+            It.Is<IEnumerable<Guid>>(ids => ids.Contains(coachId)), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion
@@ -513,26 +515,25 @@ public class ViewReportListServiceTests
     /// Status: Passed
     /// </summary>
     [Fact]
-    public async Task GetReportsAsync_WhenCancellationRequested_ReturnsFailResult()
+    public async Task GetReportsAsync_WhenCancellationRequested_PropagatesOperationCanceledException()
     {
         // Arrange
+        var staff = new User { UserId = Guid.NewGuid(), RoleCode = RoleConstants.Staff, IsLocked = false };
         var query = new GetReportsQueryDto();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
+        _userRepoMock.Setup(u => u.GetByIdAsync(staff.UserId, cts.Token))
+            .ReturnsAsync(staff);
         _reportRepoMock.Setup(r => r.GetPagedReportsAsync(
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<DateTime?>(),
             It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(),
             It.IsAny<string?>(), It.IsAny<string?>(), cts.Token))
             .ThrowsAsync(new OperationCanceledException(cts.Token));
 
-        // Act
-        var result = await _service.GetReportsAsync(query, cts.Token);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Contains("Error retrieving reports", result.Message);
+        // Act & Assert
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            _service.GetReportsAsync(query, staff.UserId, cts.Token));
     }
 
     #endregion

@@ -130,6 +130,12 @@
                                     <p class="text-[11px] text-gray-400 truncate mt-1">
                                         Last order: @(t.LatestPurchasedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "N/A")
                                     </p>
+                                    @if (t.TotalPendingReviewsCount > 0)
+                                    {
+                                        <span class="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                                            @t.TotalPendingReviewsCount pending review@(t.TotalPendingReviewsCount > 1 ? "s" : "")
+                                        </span>
+                                    }
                                 </div>
                             </div>
 

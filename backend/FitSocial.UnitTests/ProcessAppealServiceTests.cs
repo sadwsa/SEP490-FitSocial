@@ -599,9 +599,9 @@ public class ProcessAppealServiceTests
     [Fact]
     public async Task ReviewAppealAsync_WhenAppealReviewNoteIsNullAndAppealsEmpty_ShouldSucceed()
     {
-        // Service UTCID12 - Boundary: Null AppealReviewNote and empty Appeals list handled safely
+        // Service UTCID12 - Boundary: Null AppealReviewNote and empty Appeals list handled safely when PENDING
         var reportId = Guid.NewGuid();
-        var report = new Report { ReportId = reportId, AppealStatus = null, Appeals = new List<Appeal>() };
+        var report = new Report { ReportId = reportId, AppealStatus = "PENDING", Appeals = new List<Appeal>() };
 
         _mockReportRepo.Setup(r => r.GetReportWithDetailsByIdAsync(reportId, It.IsAny<CancellationToken>())).ReturnsAsync(report);
         _mockUow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
@@ -615,6 +615,22 @@ public class ProcessAppealServiceTests
         Assert.True(result.Success);
         Assert.Null(report.AppealReviewNote);
         Assert.Equal("REJECTED", report.AppealStatus);
+    }
+
+    [Fact]
+    public async Task ReviewAppealAsync_WhenExistingAppealStatusIsNotPending_ShouldThrowBusinessException()
+    {
+        // Abnormal: Non-pending (null) appeal cannot be reviewed
+        var reportId = Guid.NewGuid();
+        var report = new Report { ReportId = reportId, AppealStatus = null, Appeals = new List<Appeal>() };
+
+        _mockReportRepo.Setup(r => r.GetReportWithDetailsByIdAsync(reportId, It.IsAny<CancellationToken>())).ReturnsAsync(report);
+
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.ReviewAppealAsync(reportId, Guid.NewGuid(), new ReviewAppealRequestDto { AppealStatus = "REJECTED" }));
+
+        Assert.Contains("Only pending appeals", ex.Message);
+        _mockUow.VerifyNoOtherCalls();
     }
 
     [Fact]

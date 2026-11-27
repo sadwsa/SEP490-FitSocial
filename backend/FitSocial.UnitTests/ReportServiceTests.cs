@@ -1281,7 +1281,7 @@ public class ReportServiceTests
     }
 
     [Fact]
-    public async Task ReportUserAsync_WhenDescriptionExceeds1000Characters_ShouldThrowValidationException()
+    public async Task ReportUserAsync_WhenDescriptionExceeds500Characters_ShouldThrowValidationException()
     {
         // Arrange
         var reporterId = Guid.NewGuid();
@@ -1291,14 +1291,14 @@ public class ReportServiceTests
         {
             ReportedUserId = reportedUserId,
             Reason = "Valid reason",
-            Description = new string('B', 1001)
+            Description = new string('B', 501)
         };
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ValidationException>(() =>
             _service.ReportUserAsync(reporterId, request));
 
-        Assert.Equal("Description cannot exceed 1000 characters.", ex.Message);
+        Assert.Equal("Description cannot exceed 500 characters.", ex.Message);
     }
 
     #endregion

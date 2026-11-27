@@ -1,13 +1,12 @@
 @page "/wallet/history"
 @implements IDisposable
+@attribute [Authorize]
 @using FitSocial.Client.Layout
 @using FitSocial.Client.Models.Transactions
 @using FitSocial.Client.Services.Transactions
-@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
 @inject ITransactionService TransactionService
 @inject AuthenticationStateProvider AuthStateProvider
-@inject FitSocial.Client.Services.Auth.IAuthService AuthService
-@inject NavigationManager Navigation
 @inject AppShellContext Shell
 
 <PageTitle>Transaction History - FitConnect</PageTitle>
@@ -143,6 +142,15 @@
                 <p class="text-sm text-gray-500 font-medium">Loading transactions...</p>
             </div>
         }
+        else if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="p-12 text-center flex flex-col items-center justify-center">
+                <p class="text-sm font-bold text-red-600 mb-3">@errorMessage</p>
+                <button @onclick="LoadDataAsync" class="px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-black transition cursor-pointer">
+                    Try Again
+                </button>
+            </div>
+        }
         else if (transactions == null || !transactions.Any())
         {
             <div class="p-16 text-center flex flex-col items-center justify-center">
@@ -213,7 +221,7 @@
                                     @(tx.Amount > 0 ? "+" : "")@(tx.Amount.ToString("N0")) @tx.Currency
                                 </p>
                                 <div class="mt-1.5">
-                                    @if (tx.Status == "COMPLETED" || tx.Status == "PROCESSED" || tx.Status == "ACTIVE")
+                                    @if (tx.Status == "COMPLETED" || tx.Status == "PROCESSED" || tx.Status == "ACTIVE" || tx.Status == "PAID" || tx.Status == "APPROVED")
                                     {
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 uppercase tracking-wider">
                                             Completed
@@ -267,6 +275,7 @@
 
     private List<TransactionHistoryDto> transactions = new();
     private bool isLoading = true;
+    private string? errorMessage;
 
     private int currentPage = 1;
     private int pageSize = 10;
@@ -276,6 +285,7 @@
     private bool hasPrevious = false;
 
     private string currentType = "ALL";
+    private string? _lastAppliedTypeQuery;
     private DateTime? fromDate;
     private DateTime? toDate;
 
@@ -283,18 +293,26 @@
     private decimal totalOutflow = 0;
 
     private bool isCoach = false;
-    private string userName = "User";
 
     protected override async Task OnInitializedAsync()
     {
+        Shell.ShowSearch = false;
         await LoadUserInfoAsync();
+    }
 
-        if (!string.IsNullOrWhiteSpace(TypeFromQuery))
+    protected override async Task OnParametersSetAsync()
+    {
+        var requestedType = !string.IsNullOrWhiteSpace(TypeFromQuery)
+            ? TypeFromQuery.Trim().ToUpperInvariant()
+            : "ALL";
+
+        if (_lastAppliedTypeQuery != requestedType)
         {
-            currentType = TypeFromQuery.ToUpper();
+            _lastAppliedTypeQuery = requestedType;
+            currentType = requestedType;
+            currentPage = 1;
+            await LoadDataAsync();
         }
-
-        await LoadDataAsync();
     }
 
     public void Dispose()
@@ -305,38 +323,58 @@
     private async Task LoadDataAsync()
     {
         isLoading = true;
+        errorMessage = null;
 
-        var filter = new TransactionFilterDto
+        try
         {
-            PageIndex = currentPage,
-            PageSize = pageSize,
-            Type = currentType == "ALL" ? null : currentType,
-            FromDate = fromDate,
-            ToDate = toDate
-        };
+            var filter = new TransactionFilterDto
+            {
+                PageIndex = currentPage,
+                PageSize = pageSize,
+                Type = currentType == "ALL" ? null : currentType,
+                FromDate = fromDate,
+                ToDate = toDate
+            };
 
-        var result = await TransactionService.GetMyTransactionsAsync(filter);
-        if (result != null)
-        {
-            transactions = result.Items ?? new List<TransactionHistoryDto>();
-            totalPages = result.TotalPages;
-            totalItems = result.TotalCount;
-            hasNext = result.HasNextPage;
-            hasPrevious = result.HasPreviousPage;
+            var response = await TransactionService.GetMyTransactionsAsync(filter);
+            if (response.Success && response.Data != null)
+            {
+                transactions = response.Data.Items ?? new List<TransactionHistoryDto>();
+                totalPages = response.Data.TotalPages;
+                totalItems = response.Data.TotalCount;
+                hasNext = response.Data.HasNextPage;
+                hasPrevious = response.Data.HasPreviousPage;
 
-            // Tính toán nhanh inflow và outflow cho trang hiện tại
-            totalInflow = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
-            totalOutflow = transactions.Where(t => t.Amount < 0).Sum(t => Math.Abs(t.Amount));
+                totalInflow = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
+                totalOutflow = transactions.Where(t => t.Amount < 0).Sum(t => Math.Abs(t.Amount));
+            }
+            else
+            {
+                errorMessage = response.Message ?? "Failed to load transaction history.";
+                transactions = new();
+                totalInflow = 0;
+                totalOutflow = 0;
+                totalItems = 0;
+                totalPages = 1;
+                hasNext = false;
+                hasPrevious = false;
+            }
         }
-        else
+        catch (Exception ex)
         {
+            errorMessage = $"Error loading transactions: {ex.Message}";
             transactions = new();
             totalInflow = 0;
             totalOutflow = 0;
             totalItems = 0;
+            totalPages = 1;
+            hasNext = false;
+            hasPrevious = false;
         }
-
-        isLoading = false;
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private async Task SetTypeFilter(string type)
@@ -387,7 +425,6 @@
             var user = authState.User;
             if (user.Identity?.IsAuthenticated == true)
             {
-                userName = user.Identity.Name ?? "User";
                 isCoach = user.IsInRole("COACH") || user.IsInRole("Coach") || user.IsInRole("coach");
             }
         }

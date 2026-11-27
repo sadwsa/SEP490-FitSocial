@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -10,6 +11,7 @@ using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Constants;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace FitSocial.Application.Services;
 
@@ -72,6 +74,18 @@ public class ReportService : IReportService
         CancellationToken cancellationToken = default)
         => await GetReportsAsync(query, query?.CurrentUserId, cancellationToken);
 
+    private static readonly ConcurrentDictionary<(Guid ReporterId, Guid ReportedUserId), SemaphoreSlim> PendingReportLocks = new();
+
+    private static readonly HashSet<string> AllowedAppealFilterStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ALL", "PENDING", "APPROVED", "REJECTED"
+    };
+
+    private static readonly HashSet<string> AllowedUserReportTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "USER", "COACH"
+    };
+
     public async Task<ApiResponseDto<PagedResultDto<ReportListItemDto>>> GetReportsAsync(
         GetReportsQueryDto query,
         Guid? currentUserId,
@@ -82,24 +96,26 @@ public class ReportService : IReportService
             query ??= new GetReportsQueryDto();
 
             var viewerId = currentUserId ?? query.CurrentUserId;
-            if (viewerId.HasValue)
+            if (!viewerId.HasValue || viewerId.Value == Guid.Empty)
             {
-                var viewer = await _userRepository.GetByIdAsync(viewerId.Value, cancellationToken);
-                if (viewer == null)
-                {
-                    return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("User not found.");
-                }
+                return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("User is not authenticated.");
+            }
 
-                if (viewer.IsLocked == true)
-                {
-                    return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("Account is locked.");
-                }
+            var viewer = await _userRepository.GetByIdAsync(viewerId.Value, cancellationToken);
+            if (viewer == null)
+            {
+                return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("User not found.");
+            }
 
-                if (!string.Equals(viewer.RoleCode, RoleConstants.Staff, StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(viewer.RoleCode, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase))
-                {
-                    return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("Access denied. User is not authorized to view reports.");
-                }
+            if (viewer.IsLocked == true)
+            {
+                return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("Account is locked.");
+            }
+
+            if (!string.Equals(viewer.RoleCode, RoleConstants.Staff, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(viewer.RoleCode, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("Access denied. User is not authorized to view reports.");
             }
 
             var pageNumber = query.PageNumber < 1 ? 1 : query.PageNumber;
@@ -113,6 +129,12 @@ public class ReportService : IReportService
                 return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("Invalid target type. Allowed values are 'POST' or 'USER'.");
             }
 
+            var normalizedAppealStatus = query.AppealStatus?.Trim().ToUpperInvariant();
+            if (!string.IsNullOrEmpty(normalizedAppealStatus) && !AllowedAppealFilterStatuses.Contains(normalizedAppealStatus))
+            {
+                return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Fail("Invalid appeal status. Allowed values are 'ALL', 'PENDING', 'APPROVED', or 'REJECTED'.");
+            }
+
             var (items, totalCount) = await _reportRepository.GetPagedReportsAsync(
                 status: query.Status?.Trim(),
                 targetType: normalizedTargetType,
@@ -123,7 +145,7 @@ public class ReportService : IReportService
                 pageNumber: pageNumber,
                 pageSize: pageSize,
                 type: query.Type?.Trim(),
-                appealStatus: query.AppealStatus?.Trim(),
+                appealStatus: string.IsNullOrEmpty(normalizedAppealStatus) ? null : normalizedAppealStatus,
                 cancellationToken: cancellationToken);
 
             var coachIds = items
@@ -133,24 +155,25 @@ public class ReportService : IReportService
                 .Distinct()
                 .ToList();
 
-            var coachSoldDict = new Dictionary<Guid, bool>();
-            if (_orderRepository != null)
-            {
-                foreach (var cId in coachIds)
-                {
-                    coachSoldDict[cId] = await _orderRepository.HasSoldTrainingPackageAsync(cId, cancellationToken);
-                }
-            }
+            var soldCoachIds = (_orderRepository != null && coachIds.Count > 0)
+                ? await _orderRepository.GetCoachIdsWithSoldPackagesAsync(coachIds, cancellationToken)
+                : new HashSet<Guid>();
 
             var dtos = items.Select(r =>
             {
                 var targetUser = r.ReportedUser ?? r.ReportedPost?.Author;
-                bool? sold = (targetUser != null && coachSoldDict.TryGetValue(targetUser.UserId, out var s)) ? s : null;
+                bool? sold = (targetUser != null && coachIds.Contains(targetUser.UserId))
+                    ? soldCoachIds.Contains(targetUser.UserId)
+                    : null;
                 return MapToReportDto(r, sold);
             }).ToList();
 
             var pagedResult = PagedResultDto<ReportListItemDto>.Create(dtos, totalCount, pageNumber, pageSize);
             return ApiResponseDto<PagedResultDto<ReportListItemDto>>.Ok(pagedResult, "Reports retrieved successfully.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -250,6 +273,12 @@ public class ReportService : IReportService
             throw new ValidationException("AppealStatus is required.");
         }
 
+        var trimmedNote = request.AppealReviewNote?.Trim();
+        if (!string.IsNullOrEmpty(trimmedNote) && trimmedNote.Length > 1000)
+        {
+            throw new ValidationException("AppealReviewNote cannot exceed 1000 characters.");
+        }
+
         var report = await _reportRepository.GetReportWithDetailsByIdAsync(reportId, cancellationToken);
         if (report == null)
         {
@@ -269,79 +298,112 @@ public class ReportService : IReportService
             throw new BusinessException($"This appeal has already been reviewed ({report.AppealStatus}). Re-reviewing is not permitted to prevent data inconsistency.");
         }
 
+        if (!string.Equals(report.AppealStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Only pending appeals can be reviewed.");
+        }
+
+        var targetUserId = report.ReportedUserId ?? report.ReportedPost?.AuthorId;
+        if (targetUserId.HasValue && targetUserId.Value == staffId)
+        {
+            throw new ForbiddenException("You cannot review your own appeal.");
+        }
+
         var now = DateTime.UtcNow;
-        report.AppealStatus = normalizedStatus;
-        report.AppealReviewedBy = staffId;
-        report.AppealReviewedAt = now;
-        report.AppealReviewNote = request.AppealReviewNote?.Trim();
-
-        // Also update any active record in Appeals table
-        if (report.Appeals != null && report.Appeals.Any())
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
         {
-            foreach (var appeal in report.Appeals.Where(a => a.Status == "PENDING"))
-            {
-                appeal.Status = normalizedStatus;
-                appeal.ReviewedBy = staffId;
-                appeal.ReviewedAt = now;
-                appeal.ReviewNote = request.AppealReviewNote?.Trim();
-                appeal.UpdatedAt = now;
-            }
-        }
+            report.AppealStatus = normalizedStatus;
+            report.AppealReviewedBy = staffId;
+            report.AppealReviewedAt = now;
+            report.AppealReviewNote = trimmedNote;
 
-        if (_notificationRepository != null && report.ReportedUserId.HasValue)
-        {
-            var notif = new Notification
+            // Also update any active record in Appeals table
+            if (report.Appeals != null && report.Appeals.Any())
             {
-                Id = Guid.NewGuid(),
-                UserId = report.ReportedUserId.Value,
-                ActorId = staffId,
-                Type = "ProcessAppeal",
-                Description = normalizedStatus == "APPROVED"
-                    ? "Your report appeal has been approved by staff."
-                    : "Your report appeal has been reviewed and rejected.",
-                ReferenceId = report.ReportId,
-                IsRead = false,
-                CreatedAt = now
-            };
-            await _notificationRepository.AddAsync(notif, cancellationToken);
-        }
-
-        // If appeal was approved, apply requested actions
-        if (normalizedStatus == "APPROVED" && report.ReportedUserId.HasValue)
-        {
-            var reportedUser = await _userRepository.GetByIdAsync(report.ReportedUserId.Value, cancellationToken);
-            if (reportedUser != null)
-            {
-                if (request.RemoveViolation && reportedUser.WarningCount > 0)
+                foreach (var appeal in report.Appeals.Where(a => string.Equals(a.Status, "PENDING", StringComparison.OrdinalIgnoreCase)))
                 {
-                    reportedUser.WarningCount -= 1;
-                    reportedUser.UpdatedAt = now;
+                    appeal.Status = normalizedStatus;
+                    appeal.ReviewedBy = staffId;
+                    appeal.ReviewedAt = now;
+                    appeal.ReviewNote = trimmedNote;
+                    appeal.UpdatedAt = now;
                 }
+            }
 
-                if (request.UnblockAccount)
+            if (_notificationRepository != null && targetUserId.HasValue)
+            {
+                var notif = new Notification
                 {
-                    if (reportedUser.IsLocked == true)
+                    Id = Guid.NewGuid(),
+                    UserId = targetUserId.Value,
+                    ActorId = staffId,
+                    Type = "ProcessAppeal",
+                    Description = normalizedStatus == "APPROVED"
+                        ? "Your report appeal has been approved by staff."
+                        : "Your report appeal has been reviewed and rejected.",
+                    ReferenceId = report.ReportId,
+                    IsRead = false,
+                    CreatedAt = now
+                };
+                await _notificationRepository.AddAsync(notif, cancellationToken);
+            }
+
+            // If appeal was approved, apply requested actions
+            if (normalizedStatus == "APPROVED" && targetUserId.HasValue)
+            {
+                var reportedUser = await _userRepository.GetByIdAsync(targetUserId.Value, cancellationToken);
+                if (reportedUser != null)
+                {
+                    if (request.RemoveViolation && reportedUser.WarningCount > 0)
                     {
-                        reportedUser.IsLocked = false;
-                        reportedUser.LockedBy = null;
+                        reportedUser.WarningCount -= 1;
                         reportedUser.UpdatedAt = now;
                     }
 
-                    // Also unblock coach profile if coach was blocked
-                    if (_coachProfileRepository != null)
+                    if (request.UnblockAccount)
                     {
-                        var coachProfile = await _coachProfileRepository.GetByIdAsync(report.ReportedUserId.Value, cancellationToken);
-                        if (coachProfile != null && string.Equals(coachProfile.Status, "BLOCKED", StringComparison.OrdinalIgnoreCase))
+                        if (reportedUser.IsLocked == true)
                         {
-                            coachProfile.Status = "ACTIVE";
-                            coachProfile.UpdatedAt = now;
+                            reportedUser.IsLocked = false;
+                            reportedUser.LockedBy = null;
+                            reportedUser.UpdatedAt = now;
+                        }
+
+                        // Also unblock coach profile if coach was blocked
+                        if (_coachProfileRepository != null)
+                        {
+                            var coachProfile = await _coachProfileRepository.GetByIdAsync(targetUserId.Value, cancellationToken);
+                            if (coachProfile != null && string.Equals(coachProfile.Status, "BLOCKED", StringComparison.OrdinalIgnoreCase))
+                            {
+                                coachProfile.Status = "ACTIVE";
+                                coachProfile.UpdatedAt = now;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            if (_auditLogService != null)
+            {
+                await _auditLogService.LogAsync(
+                    actorAccountId: staffId,
+                    action: $"APPEAL_{normalizedStatus}",
+                    entityType: "ReportAppeal",
+                    entityId: report.ReportId.ToString(),
+                    description: $"Staff processed appeal on report {report.ReportId} with decision {normalizedStatus}.",
+                    newValue: new { appealStatus = normalizedStatus, removeViolation = request.RemoveViolation, unblockAccount = request.UnblockAccount, note = trimmedNote },
+                    cancellationToken: cancellationToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
 
         return ApiResponseDto<ReportListItemDto>.Ok(MapToReportDto(report), "Appeal reviewed successfully.");
     }
@@ -378,9 +440,9 @@ public class ReportService : IReportService
         }
 
         var trimmedDescription = request.Description?.Trim();
-        if (!string.IsNullOrWhiteSpace(trimmedDescription) && trimmedDescription.Length > 1000)
+        if (!string.IsNullOrWhiteSpace(trimmedDescription) && trimmedDescription.Length > 500)
         {
-            throw new ValidationException("Description cannot exceed 1000 characters.");
+            throw new ValidationException("Description cannot exceed 500 characters.");
         }
 
         var reportedUser = await _userRepository.GetByIdAsync(request.ReportedUserId, cancellationToken);
@@ -389,27 +451,45 @@ public class ReportService : IReportService
             throw new NotFoundException("Reported user not found.");
         }
 
+        if (string.Equals(reportedUser.RoleCode, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(reportedUser.RoleCode, RoleConstants.Staff, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("You cannot report an administrator or staff member.");
+        }
+
         if (reportedUser.IsLocked == true)
         {
             throw new BusinessException("This user account is already locked or banned.");
         }
 
-        // Chặn trùng lặp báo cáo: Mỗi người dùng chỉ được phép có tối đa 1 báo cáo ở trạng thái PENDING đối với cùng một người dùng mục tiêu
-        var hasPendingReport = await _reportRepository.HasPendingReportAsync(reporterId, request.ReportedUserId, cancellationToken);
-        if (hasPendingReport)
+        var normalizedType = string.IsNullOrWhiteSpace(request.Type) ? "USER" : request.Type.Trim().ToUpperInvariant();
+        if (!AllowedUserReportTypes.Contains(normalizedType))
         {
-            throw new BusinessException("You already have a pending report for this user. Please wait for our moderators to review it.");
+            throw new ValidationException("Invalid report type. Allowed values are 'USER' or 'COACH'.");
         }
 
-        // Khống chế số lượng ảnh bằng chứng: Tối đa 5 ảnh
+        // Khống chế số lượng ảnh bằng chứng: Tối đa 5 ảnh & validate URL
         var validMediaUrls = request.MediaUrls?
             .Where(u => !string.IsNullOrWhiteSpace(u))
             .Select(u => u.Trim())
             .ToList();
 
-        if (validMediaUrls != null && validMediaUrls.Count > 5)
+        if (validMediaUrls != null)
         {
-            throw new ValidationException("You can attach a maximum of 5 evidence photos.");
+            if (validMediaUrls.Count > 5)
+            {
+                throw new ValidationException("You can attach a maximum of 5 evidence photos.");
+            }
+
+            foreach (var url in validMediaUrls)
+            {
+                if (url.Length > 2048 ||
+                    !Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                {
+                    throw new ValidationException("Each evidence URL must be a valid HTTP or HTTPS URL (maximum 2048 characters).");
+                }
+            }
         }
 
         var now = DateTime.UtcNow;
@@ -420,7 +500,7 @@ public class ReportService : IReportService
             ReportedUserId = request.ReportedUserId,
             Reason = trimmedReason,
             Description = trimmedDescription,
-            Type = string.IsNullOrWhiteSpace(request.Type) ? "USER" : request.Type.Trim().ToUpperInvariant(),
+            Type = normalizedType,
             Status = "PENDING",
             CreatedAt = now
         };
@@ -443,8 +523,33 @@ public class ReportService : IReportService
             }
         }
 
-        await _reportRepository.AddAsync(report, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        // Tuần tự hóa theo cặp (ReporterId, ReportedUserId) để tránh tạo 2 report PENDING khi double-submit
+        var pairLock = PendingReportLocks.GetOrAdd((reporterId, request.ReportedUserId), _ => new SemaphoreSlim(1, 1));
+        await pairLock.WaitAsync(cancellationToken);
+        try
+        {
+            var hasPendingReport = await _reportRepository.HasPendingReportAsync(reporterId, request.ReportedUserId, cancellationToken);
+            if (hasPendingReport)
+            {
+                throw new BusinessException("You already have a pending report for this user. Please wait for our moderators to review it.");
+            }
+
+            await _reportRepository.AddAsync(report, cancellationToken);
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (
+                string.Equals(ex.InnerException?.GetType().GetProperty("SqlState")?.GetValue(ex.InnerException) as string, "23505", StringComparison.Ordinal) ||
+                ex.InnerException?.Message?.Contains("UX_Reports_Reporter_ReportedUser_Pending", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                throw new BusinessException("You already have a pending report for this user. Please wait for our moderators to review it.");
+            }
+        }
+        finally
+        {
+            pairLock.Release();
+        }
 
         var detailedReport = await _reportRepository.GetReportWithDetailsByIdAsync(report.ReportId, cancellationToken);
         return ApiResponseDto<ReportListItemDto>.Ok(MapToReportDto(detailedReport ?? report, null), "User reported successfully.");
@@ -931,6 +1036,7 @@ public class ReportService : IReportService
             ReportedUserAvatarUrl = targetUser?.AvatarUrl,
 
             ReportedUserRole = role,
+            ReportedUserCoachStatus = targetUser?.CoachProfileCoach?.Status,
             ReportedUserViolationCount = violationCount,
             ReportedUserIsLocked = isLocked,
             HasSoldTrainingPackage = hasSoldPackages,
@@ -961,18 +1067,36 @@ public class ReportService : IReportService
             NotifiedReportedUserAt = r.NotifiedReportedUserAt,
 
             Media = r.ReportMedia != null
-                ? r.ReportMedia.OrderBy(m => m.SortOrder).Select(m => new ReportMediaItemDto
-                {
-                    MediaId = m.MediaId,
-                    MediaUrl = m.MediaUrl,
-                    MediaType = m.MediaType,
-                    MediaFor = m.MediaFor,
-                    SortOrder = m.SortOrder
-                }).ToList()
+                ? r.ReportMedia
+                    .Where(m => !string.Equals(m.MediaFor, "APPEAL", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(m => m.SortOrder)
+                    .Select(m => new ReportMediaItemDto
+                    {
+                        MediaId = m.MediaId,
+                        MediaUrl = m.MediaUrl,
+                        MediaType = m.MediaType,
+                        MediaFor = m.MediaFor,
+                        SortOrder = m.SortOrder
+                    }).ToList()
                 : new List<ReportMediaItemDto>(),
 
-            AppealMedia = r.Appeals != null && r.Appeals.Any()
-                ? r.Appeals.SelectMany(a => a.AppealMedia)
+            AppealMedia = GetLatestAppealMedia(r),
+
+            CreatedAt = r.CreatedAt
+        };
+    }
+
+    private static List<ReportMediaItemDto> GetLatestAppealMedia(Report r)
+    {
+        if (r.Appeals != null && r.Appeals.Any())
+        {
+            var latestAppeal = r.Appeals
+                .OrderByDescending(a => a.CreatedAt)
+                .FirstOrDefault();
+
+            if (latestAppeal?.AppealMedia != null && latestAppeal.AppealMedia.Any())
+            {
+                return latestAppeal.AppealMedia
                     .OrderBy(m => m.SortOrder)
                     .Select(m => new ReportMediaItemDto
                     {
@@ -981,11 +1105,28 @@ public class ReportService : IReportService
                         MediaType = m.MediaType,
                         MediaFor = "APPEAL",
                         SortOrder = m.SortOrder
-                    }).ToList()
-                : new List<ReportMediaItemDto>(),
+                    }).ToList();
+            }
 
-            CreatedAt = r.CreatedAt
-        };
+            return new List<ReportMediaItemDto>();
+        }
+
+        if (r.ReportMedia != null)
+        {
+            return r.ReportMedia
+                .Where(m => string.Equals(m.MediaFor, "APPEAL", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(m => m.SortOrder)
+                .Select(m => new ReportMediaItemDto
+                {
+                    MediaId = m.MediaId,
+                    MediaUrl = m.MediaUrl,
+                    MediaType = m.MediaType,
+                    MediaFor = "APPEAL",
+                    SortOrder = m.SortOrder
+                }).ToList();
+        }
+
+        return new List<ReportMediaItemDto>();
     }
 }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace FitSocial.Client.Models.TrainingPackages;
@@ -9,6 +9,13 @@ public class CreatePackageReviewDto
     public int Rating { get; set; } = 5;
     public string? Comment { get; set; }
     public List<string> ImageUrls { get; set; } = new();
+}
+
+public class UpdatePackageReviewDto
+{
+    public int Rating { get; set; } = 5;
+    public string? Comment { get; set; }
+    public List<string>? ImageUrls { get; set; } = new();
 }
 
 public class ReplyReviewDto

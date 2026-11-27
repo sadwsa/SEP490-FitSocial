@@ -22,7 +22,8 @@ public interface IOrderService
     Task<ApiResponseDto<OrderDto>> GetOrderByIdAsync(
         Guid orderId,
         Guid currentUserId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool isAdmin = false);
 
 
     Task<ApiResponseDto<List<CoachTraineeGroupDto>>> GetCoachTraineeOrdersAsync(

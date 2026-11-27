@@ -5,16 +5,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using FitSocial.Application.DTOs.MealPlan;
 using FitSocial.Application.Exceptions;
+using FitSocial.Application.Helpers;
 using FitSocial.Application.Interfaces;
 using FitSocial.Domain.Entities;
 using FitSocial.Domain.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace FitSocial.Application.Services;
 
 public class MealPlanService : IMealPlanService
 {
-    private static readonly TimeSpan BusinessTimeZoneOffset = TimeSpan.FromHours(7);
-    public static DateTime GetBusinessToday() => DateTime.UtcNow.Add(BusinessTimeZoneOffset).Date;
+    public static DateTime GetBusinessToday() => PlanScheduleHelper.GetBusinessToday();
 
     private readonly IMealPlanRepository _mealPlanRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -30,32 +31,8 @@ public class MealPlanService : IMealPlanService
         _notifications = notifications;
     }
 
-    private static readonly HashSet<string> AllowedTraineeOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
-    {
-        FitSocial.Domain.Constants.PaymentConstants.OrderStatusPaid,
-        FitSocial.Domain.Constants.PaymentConstants.OrderStatusActive,
-        FitSocial.Domain.Constants.PaymentConstants.OrderStatusCompleted,
-        FitSocial.Domain.Constants.PaymentConstants.OrderStatusRefundPending
-    };
-
     private static void ValidateOrderStatusForTraineeAccess(Order? order)
-    {
-        if (order == null || string.IsNullOrWhiteSpace(order.OrderStatus))
-        {
-            return;
-        }
-
-        var status = order.OrderStatus.Trim();
-        if (string.Equals(status, FitSocial.Domain.Constants.PaymentConstants.OrderStatusRefunded, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ForbiddenException("This package has been refunded and its meal plan is no longer accessible.");
-        }
-
-        if (!AllowedTraineeOrderStatuses.Contains(status))
-        {
-            throw new ForbiddenException($"Meal plan is not accessible for order with status '{order.OrderStatus}'.");
-        }
-    }
+        => PlanScheduleHelper.ValidateOrderStatusForTraineeAccess(order, "meal plan");
 
     public async Task<TraineeMealPlanDto?> GetTraineeMealPlanAsync(
         Guid traineeId,
@@ -91,22 +68,27 @@ public class MealPlanService : IMealPlanService
             return null;
         }
 
-        if (plan.OrderDetails?.Order != null)
+        var orderBuyerId = plan.OrderDetails?.Order?.BuyerId;
+        if (!orderBuyerId.HasValue || orderBuyerId.Value != traineeId)
         {
-            if (plan.OrderDetails.Order.BuyerId != traineeId)
-            {
-                throw new ForbiddenException("You do not have permission to view this meal plan.");
-            }
-            ValidateOrderStatusForTraineeAccess(plan.OrderDetails.Order);
+            throw new ForbiddenException("You do not have permission to view this meal plan.");
         }
+        ValidateOrderStatusForTraineeAccess(plan.OrderDetails?.Order);
 
         var isDraftOrPending = string.Equals(plan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase)
                             || string.Equals(plan.Status, "PENDING_COACH", StringComparison.OrdinalIgnoreCase);
-        if (!isDraftOrPending)
+        if (isDraftOrPending)
         {
-            await BackfillIncompleteLogsAsync(plan, traineeId, ct);
+            var draftDto = MapToDto(plan, traineeId);
+            draftDto.Weeks = new List<MealPlanWeekDto>();
+            draftDto.TotalMealsCount = 0;
+            draftDto.CompletedMealsCount = 0;
+            draftDto.MissedMealsCount = 0;
+            draftDto.AdherenceRate = 0;
+            return draftDto;
         }
 
+        await BackfillIncompleteLogsAsync(plan, traineeId, ct);
         return MapToDto(plan, traineeId);
     }
 
@@ -417,17 +399,10 @@ public class MealPlanService : IMealPlanService
     }
 
     public static DateTime GetStartMonday(DateTime startDate)
-    {
-        int dayOfWeek = (int)startDate.DayOfWeek;
-        int daysSinceMonday = (dayOfWeek == 0 ? 7 : dayOfWeek) - 1;
-        return startDate.Date.AddDays(-daysSinceMonday);
-    }
+        => PlanScheduleHelper.GetStartMonday(startDate);
 
     public static DateTime GetSessionDate(DateTime startDate, short weekNumber, short dayNumber)
-    {
-        var startMonday = GetStartMonday(startDate);
-        return startMonday.AddDays((weekNumber - 1) * 7 + (dayNumber - 1));
-    }
+        => PlanScheduleHelper.GetSessionDate(startDate, weekNumber, dayNumber);
 
     public static void ValidatePlanConstraints(
         OrderDetail? orderDetail,
@@ -560,7 +535,14 @@ public class MealPlanService : IMealPlanService
 
         if (created)
         {
-            await _unitOfWork.SaveChangesAsync(ct);
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Concurrent backfill inserted logs for the same day/trainee; safe to continue.
+            }
         }
     }
 
@@ -590,22 +572,31 @@ public class MealPlanService : IMealPlanService
             throw new NotFoundException("Meal item not found.");
 
         var orderBuyerId = item.MealPlan?.OrderDetails?.Order?.BuyerId;
-        if (orderBuyerId.HasValue && orderBuyerId.Value != traineeId)
+        if (!orderBuyerId.HasValue || orderBuyerId.Value != traineeId)
             throw new ForbiddenException("You are not authorized to submit completion for this meal.");
 
         ValidateOrderStatusForTraineeAccess(item.MealPlan?.OrderDetails?.Order);
 
         var parentPlan = item.MealPlan;
+        if (parentPlan != null &&
+            (string.Equals(parentPlan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(parentPlan.Status, "PENDING_COACH", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(parentPlan.Status, "DELETED", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new BusinessException("This meal plan is not active yet.");
+        }
+
         var businessToday = GetBusinessToday();
         DateTime? scheduledDate = null;
 
         if (parentPlan != null && parentPlan.StartDate.HasValue)
         {
             scheduledDate = ResolveScheduledDate(parentPlan.StartDate, parentPlan.EndDate, item.WeekNumber ?? 1, item.DayNumber ?? 1);
-            if (scheduledDate.HasValue && scheduledDate.Value.Date != businessToday)
-            {
+            if (!scheduledDate.HasValue)
+                throw new ValidationException("This meal is outside the scheduled meal plan dates.");
+
+            if (scheduledDate.Value.Date != businessToday)
                 throw new ValidationException($"You can only complete meals scheduled for today ({businessToday:dd/MM/yyyy}). This meal is scheduled for {scheduledDate.Value:dd/MM/yyyy}.");
-            }
         }
 
         var existingLog = await _mealPlanRepository.GetMealLogAsync(dto.MealPlanItemId, traineeId, ct);
@@ -621,6 +612,9 @@ public class MealPlanService : IMealPlanService
             existingLog.Status = "PENDING_REVIEW";
             existingLog.MediaUrl = mediaUrl;
             if (savedNotes != null) existingLog.Notes = savedNotes;
+            existingLog.CoachFeedback = null;
+            existingLog.ReviewedBy = null;
+            existingLog.ReviewedAt = null;
             existingLog.CreatedAt = now;
             logId = existingLog.MealCompletionLogId;
         }
@@ -706,19 +700,36 @@ public class MealPlanService : IMealPlanService
             throw new NotFoundException("Meal item not found.");
 
         var orderBuyerId = item.MealPlan?.OrderDetails?.Order?.BuyerId;
-        if (orderBuyerId.HasValue && orderBuyerId.Value != traineeId)
+        if (!orderBuyerId.HasValue || orderBuyerId.Value != traineeId)
             throw new ForbiddenException("You are not authorized to update this meal.");
 
         ValidateOrderStatusForTraineeAccess(item.MealPlan?.OrderDetails?.Order);
+
+        var parentPlan = item.MealPlan;
+        if (parentPlan != null &&
+            (string.Equals(parentPlan.Status, "DRAFT", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(parentPlan.Status, "PENDING_COACH", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(parentPlan.Status, "DELETED", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new BusinessException("This meal plan is not active yet.");
+        }
+
+        DateTime? scheduledDate = null;
+        if (parentPlan != null && parentPlan.StartDate.HasValue)
+        {
+            scheduledDate = ResolveScheduledDate(parentPlan.StartDate, parentPlan.EndDate, item.WeekNumber ?? 1, item.DayNumber ?? 1);
+            if (!scheduledDate.HasValue || scheduledDate.Value.Date >= GetBusinessToday())
+                throw new ValidationException("You can only add a missed reason for past scheduled meals.");
+        }
 
         var existingLog = await _mealPlanRepository.GetMealLogAsync(dto.MealPlanItemId, traineeId, ct);
         if (existingLog != null && string.Equals(existingLog.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase))
             throw new ValidationException("Completed meals cannot be marked incomplete.");
 
+        if (existingLog != null && string.Equals(existingLog.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
+            throw new ValidationException("Meals pending coach review cannot be marked incomplete.");
+
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-        var scheduledDate = item.MealPlan != null
-            ? ResolveScheduledDate(item.MealPlan.StartDate, item.MealPlan.EndDate, item.WeekNumber ?? 1, item.DayNumber ?? 1)
-            : null;
         var trimmedNote = dto.Notes.Trim();
 
         if (existingLog != null)
@@ -790,32 +801,23 @@ public class MealPlanService : IMealPlanService
         if (!isOwner || parentPlan == null)
             throw new ForbiddenException("You are not authorized to review meals for this meal plan.");
 
-        var existingLog = await _mealPlanRepository.GetMealLogAsync(dto.MealPlanItemId, dto.TraineeId, ct);
-        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        var orderBuyerId = parentPlan.OrderDetails?.Order?.BuyerId;
+        if (!orderBuyerId.HasValue || orderBuyerId.Value != dto.TraineeId)
+            throw new ForbiddenException("You are not authorized to review meals for this trainee.");
 
-        if (existingLog == null)
+        ValidateOrderStatusForTraineeAccess(parentPlan.OrderDetails?.Order);
+
+        var existingLog = await _mealPlanRepository.GetMealLogAsync(dto.MealPlanItemId, dto.TraineeId, ct);
+        if (existingLog == null || string.Equals(existingLog.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase))
         {
-            existingLog = new MealCompletionLog
-            {
-                MealCompletionLogId = Guid.NewGuid(),
-                TraineeId = dto.TraineeId,
-                MealPlanItemId = dto.MealPlanItemId,
-                LogDate = now,
-                Status = normalizedDecision,
-                CoachFeedback = feedback,
-                ReviewedBy = coachId,
-                ReviewedAt = now,
-                CreatedAt = now
-            };
-            await _mealPlanRepository.AddMealLogAsync(existingLog, ct);
+            throw new BusinessException("Trainee has not submitted a completion request for this meal yet.");
         }
-        else
-        {
-            existingLog.Status = normalizedDecision;
-            existingLog.CoachFeedback = feedback;
-            existingLog.ReviewedBy = coachId;
-            existingLog.ReviewedAt = now;
-        }
+
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        existingLog.Status = normalizedDecision;
+        existingLog.CoachFeedback = feedback;
+        existingLog.ReviewedBy = coachId;
+        existingLog.ReviewedAt = now;
 
         await _unitOfWork.SaveChangesAsync(ct);
 
@@ -942,9 +944,7 @@ public class MealPlanService : IMealPlanService
         int totalCount = weeks.Sum(w => w.TotalMeals);
         int completedCount = weeks.Sum(w => w.CompletedMeals);
         int missedCount = weeks.Sum(w => w.MissedMeals);
-        double adherenceRate = (completedCount + missedCount) > 0
-            ? Math.Round((double)completedCount / (completedCount + missedCount) * 100, 1)
-            : (totalCount > 0 ? 100 : 0);
+        double adherenceRate = PlanScheduleHelper.CalculateAdherenceRate(completedCount, missedCount, totalCount);
 
         return new CoachTraineeMealProgressDto
         {
@@ -986,9 +986,7 @@ public class MealPlanService : IMealPlanService
         int totalCount = weeks.Sum(w => w.TotalMeals);
         int completedCount = weeks.Sum(w => w.CompletedMeals);
         int missedCount = weeks.Sum(w => w.MissedMeals);
-        double adherenceRate = (completedCount + missedCount) > 0
-            ? Math.Round((double)completedCount / (completedCount + missedCount) * 100, 1)
-            : (totalCount > 0 ? 100 : 0);
+        double adherenceRate = PlanScheduleHelper.CalculateAdherenceRate(completedCount, missedCount, totalCount);
 
         return new TraineeMealPlanDto
         {
@@ -1107,19 +1105,5 @@ public class MealPlanService : IMealPlanService
     }
 
     private static DateTime? ResolveScheduledDate(DateTime? planStartDate, DateTime? planEndDate, short weekNumber, short dayNumber)
-    {
-        if (!planStartDate.HasValue)
-        {
-            return null;
-        }
-
-        var date = GetSessionDate(planStartDate.Value.Date, weekNumber, dayNumber);
-
-        if (planEndDate.HasValue && date.Date > planEndDate.Value.Date)
-        {
-            return null;
-        }
-
-        return date;
-    }
+        => PlanScheduleHelper.ResolveScheduledDate(planStartDate, planEndDate, weekNumber, dayNumber);
 }

@@ -449,16 +449,7 @@ namespace FitSocial.Application.Services
                 throw new ValidationException("Coach of this package is not available for review.");
             }
 
-            // Validate OrderId
-            if (dto.OrderId == Guid.Empty)
-            {
-                // Fallback: nếu đang sửa review cũ (chưa có OrderId), lấy OrderId từ review hiện có
-                var existingByPackage = await _reviewRepository.GetReviewByPackageAndTraineeAsync(packageId, traineeId, cancellationToken);
-                if (existingByPackage?.OrderId != null)
-                {
-                    dto.OrderId = existingByPackage.OrderId.Value;
-                }
-            }
+         
             if (dto.OrderId == Guid.Empty)
                 throw new ValidationException("OrderId is required to submit a review.");
 

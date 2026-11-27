@@ -195,7 +195,7 @@ public class TrainingPackageService : ITrainingPackageService
             return new ApiResponse<List<string>>
             {
                 Success = false,
-                Message = $"Lỗi khi tải ảnh: {ex.Message}"
+                Message = $"Image upload error: {ex.Message}"
             };
         }
     }

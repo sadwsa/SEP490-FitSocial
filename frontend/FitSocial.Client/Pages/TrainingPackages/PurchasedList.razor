@@ -1289,7 +1289,7 @@
 
         if (reviewImageUrls.Count + files.Length > 5)
         {
-            reviewImageUploadError = "Tối đa 5 ảnh cho mỗi đánh giá.";
+            reviewImageUploadError = "Maximum 5 images allowed per review.";
             return;
         }
 
@@ -1305,12 +1305,12 @@
             }
             else
             {
-                reviewImageUploadError = uploaded.Message ?? "Tải ảnh thất bại.";
+                reviewImageUploadError = uploaded.Message ?? "Failed to upload images.";
             }
         }
         catch (Exception ex)
         {
-            reviewImageUploadError = $"Lỗi tải ảnh: {ex.Message}";
+            reviewImageUploadError = $"Image upload error: {ex.Message}";
         }
         finally
         {
@@ -1332,7 +1332,7 @@
 
         if (selectedOrderId == Guid.Empty)
         {
-            reviewErrorMessage = "Không tìm thấy đơn hàng hợp lệ để đánh giá.";
+            reviewErrorMessage = "No valid order found for review.";
             isSubmittingReview = false;
             return;
         }

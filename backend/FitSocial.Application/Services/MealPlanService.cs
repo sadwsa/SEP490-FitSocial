@@ -729,6 +729,9 @@ public class MealPlanService : IMealPlanService
         if (existingLog != null && string.Equals(existingLog.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
             throw new ValidationException("Meals pending coach review cannot be marked incomplete.");
 
+        if (existingLog != null && string.Equals(existingLog.Status, "UNCOMPLETE", StringComparison.OrdinalIgnoreCase))
+            throw new ValidationException("Rejected meals cannot be marked with a missed reason.");
+
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
         var trimmedNote = dto.Notes.Trim();
 
@@ -811,6 +814,11 @@ public class MealPlanService : IMealPlanService
         if (existingLog == null || string.Equals(existingLog.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase))
         {
             throw new BusinessException("Trainee has not submitted a completion request for this meal yet.");
+        }
+
+        if (!string.Equals(existingLog.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("This meal submission has already been reviewed.");
         }
 
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);

@@ -14,10 +14,19 @@
     <!-- Toast Notification -->
     @if (!string.IsNullOrWhiteSpace(toastMessage))
     {
-        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white font-medium text-sm rounded-2xl shadow-xl transition-all duration-300 animate-in fade-in slide-in-from-top-4">
-            <svg class="w-5 h-5 fill-current" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-            </svg>
+        <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[200] flex items-center gap-3 px-5 py-3 @(toastIsError ? "bg-rose-600" : "bg-emerald-600") text-white font-medium text-sm rounded-2xl shadow-xl transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+            @if (toastIsError)
+            {
+                <svg class="w-5 h-5 fill-current shrink-0" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+            }
+            else
+            {
+                <svg class="w-5 h-5 fill-current shrink-0" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+            }
             <span>@toastMessage</span>
         </div>
     }
@@ -399,7 +408,7 @@
                                         }
 
                                         <!-- Trainee Notes (if logged, not duplicated by Missed Reason section) -->
-                                        @if (!string.IsNullOrWhiteSpace(ex.TraineeNotes) && (!IsDayPast(ex) || ex.IsCompleted || string.Equals(ex.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase)))
+                                        @if (!string.IsNullOrWhiteSpace(ex.TraineeNotes) && (!IsDayPast(ex) || ex.IsCompleted || string.Equals(ex.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase) || string.Equals(ex.Status, "UNCOMPLETE", StringComparison.OrdinalIgnoreCase)))
                                         {
                                             <div class="text-xs text-emerald-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/60 mt-1 flex items-start gap-2">
                                                 <svg class="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.5L19 7.5V19a2 2 0 01-2 2z"></path></svg>
@@ -447,7 +456,7 @@
                                         }
 
                                         <!-- Missed Reason for Past Workout -->
-                                        @if (!ex.IsCompleted && IsDayPast(ex) && !string.Equals(ex.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
+                                        @if (!ex.IsCompleted && IsDayPast(ex) && !string.Equals(ex.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase) && !string.Equals(ex.Status, "UNCOMPLETE", StringComparison.OrdinalIgnoreCase))
                                         {
                                             <div class="mt-2.5 flex flex-col gap-1.5">
                                                 @if (!string.IsNullOrWhiteSpace(ex.TraineeNotes))
@@ -505,19 +514,38 @@
                                         }
                                         else if (string.Equals(ex.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
                                         {
-                                            <button type="button"
-                                                    @onclick="() => OpenSubmitProofModal(ex)"
-                                                    class="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5 hover:bg-amber-100 transition cursor-pointer"
-                                                    title="Click to view or update your proof">
-                                                <span>⏳ Needs Review</span>
-                                            </button>
+                                            @if (CurrentDay?.IsToday ?? false)
+                                            {
+                                                <button type="button"
+                                                        @onclick="() => OpenSubmitProofModal(ex)"
+                                                        class="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5 hover:bg-amber-100 transition cursor-pointer"
+                                                        title="Click to view or update your proof">
+                                                    <span>⏳ Needs Review</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5 select-none"
+                                                      title="Submitted proof is waiting for coach review">
+                                                    <span>⏳ Pending Review</span>
+                                                </span>
+                                            }
                                         }
                                         else if (!(CurrentDay?.IsToday ?? false))
                                         {
                                             @* Past or future day: the Complete action is not available. *@
-                                            <span class="px-4 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 select-none @(IsDayPast(ex) ? "bg-gray-100 text-gray-500 border-gray-200" : "bg-blue-50 text-blue-600 border-blue-100")">
-                                                @(IsDayPast(ex) ? "Missed" : "Upcoming")
-                                            </span>
+                                            @if (string.Equals(ex.Status, "UNCOMPLETE", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="px-4 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 select-none bg-rose-50 text-rose-700 border-rose-200">
+                                                    Rejected
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="px-4 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 select-none @(IsDayPast(ex) ? "bg-gray-100 text-gray-500 border-gray-200" : "bg-blue-50 text-blue-600 border-blue-100")">
+                                                    @(IsDayPast(ex) ? "Missed" : "Upcoming")
+                                                </span>
+                                            }
                                         }
                                         else
                                         {
@@ -570,6 +598,13 @@
                 </div>
 
                 <div class="p-5 flex flex-col gap-4 text-xs">
+                    @if (!string.IsNullOrWhiteSpace(proofErrorMessage))
+                    {
+                        <div class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                            @proofErrorMessage
+                        </div>
+                    }
+
                     <!-- File Upload -->
                     <div>
                         <label class="font-bold text-gray-700 block mb-1">Workout Photo or Video Proof: <span class="text-red-500">*</span></label>
@@ -633,6 +668,8 @@
     private bool isLoading = true;
     private string? errorMessage;
     private string? toastMessage;
+    private bool toastIsError = false;
+    private int _toastVersion = 0;
     private bool showReportCoachModal = false;
 
     private short selectedWeekNumber = 1;
@@ -784,7 +821,7 @@
         var note = GetExerciseNote(ex.TrainingPlanExerciseId);
         if (string.IsNullOrWhiteSpace(note))
         {
-            ShowToast("Please enter the reason for missing this workout.");
+            ShowToast("Please enter the reason for missing this workout.", isError: true);
             return;
         }
 
@@ -809,12 +846,12 @@
             }
             else
             {
-                ShowToast(res.Message ?? "Failed to save missed workout reason.");
+                ShowToast(res.Message ?? "Failed to save missed workout reason.", isError: true);
             }
         }
         catch (Exception exception)
         {
-            ShowToast($"Error: {exception.Message}");
+            ShowToast($"Error: {exception.Message}", isError: true);
         }
         finally
         {
@@ -828,12 +865,15 @@
         ShowToast("Coach report submitted successfully. Our team will review it.");
     }
 
-    private void ShowToast(string message)
+    private void ShowToast(string message, bool isError = false)
     {
         toastMessage = message;
+        toastIsError = isError;
+        var version = ++_toastVersion;
         StateHasChanged();
         _ = Task.Delay(3500).ContinueWith(_ =>
         {
+            if (version != _toastVersion) return;
             toastMessage = null;
             InvokeAsync(StateHasChanged);
         });
@@ -866,6 +906,7 @@
     private TraineeWorkoutExerciseDto? submittingExercise;
     private string? proofMediaUrl;
     private string? proofNotes;
+    private string? proofErrorMessage;
     private bool isUploadingProof = false;
     private bool isSubmittingProof = false;
 
@@ -875,6 +916,7 @@
         proofMediaUrl = ex.MediaUrl;
         var inlineNote = GetExerciseNote(ex.TrainingPlanExerciseId);
         proofNotes = string.IsNullOrWhiteSpace(inlineNote) ? ex.TraineeNotes : inlineNote;
+        proofErrorMessage = null;
         showProofModal = true;
     }
 
@@ -887,6 +929,7 @@
         submittingExercise = null;
         proofMediaUrl = null;
         proofNotes = null;
+        proofErrorMessage = null;
     }
 
     private async Task HandleProofFileUpload(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
@@ -894,6 +937,7 @@
         var file = e.File;
         if (file == null) return;
 
+        proofErrorMessage = null;
         isUploadingProof = true;
         try
         {
@@ -905,12 +949,14 @@
             }
             else
             {
-                ShowToast(res.Message ?? "Failed to upload file.");
+                proofErrorMessage = res.Message ?? "Failed to upload file.";
+                ShowToast(proofErrorMessage, isError: true);
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Upload error: {ex.Message}");
+            proofErrorMessage = $"Upload error: {ex.Message}";
+            ShowToast(proofErrorMessage, isError: true);
         }
         finally
         {
@@ -922,9 +968,11 @@
     {
         if (submittingExercise == null || isSubmittingProof) return;
 
+        proofErrorMessage = null;
         if (string.IsNullOrWhiteSpace(proofMediaUrl) && string.IsNullOrWhiteSpace(proofNotes))
         {
-            ShowToast("Please attach proof photo/video or add workout notes.");
+            proofErrorMessage = "Please attach proof photo/video or add workout notes.";
+            ShowToast(proofErrorMessage, isError: true);
             return;
         }
 
@@ -954,12 +1002,14 @@
             }
             else
             {
-                ShowToast(res.Message ?? "Failed to submit workout completion request.");
+                proofErrorMessage = res.Message ?? "Failed to submit workout completion request.";
+                ShowToast(proofErrorMessage, isError: true);
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Error: {ex.Message}");
+            proofErrorMessage = $"Error: {ex.Message}";
+            ShowToast(proofErrorMessage, isError: true);
         }
         finally
         {

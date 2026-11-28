@@ -793,9 +793,19 @@ public class TrainingPlanService : ITrainingPlanService
             }
             else
             {
-                // existingLog có trạng thái INCOMPLETE
+                // existingLog có trạng thái PENDING_REVIEW, UNCOMPLETE hoặc INCOMPLETE
                 if (string.Equals(dto.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (string.Equals(existingLog.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new ValidationException("Exercises pending coach review cannot be marked incomplete.");
+                    }
+
+                    if (string.Equals(existingLog.Status, "UNCOMPLETE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new ValidationException("Rejected exercises cannot be marked with a missed reason.");
+                    }
+
                     if (dto.Notes != null) existingLog.Notes = dto.Notes;
                     isNowCompleted = false;
                     logId = existingLog.WorkoutCompletionLogId;
@@ -1158,6 +1168,11 @@ public class TrainingPlanService : ITrainingPlanService
         if (existingLog == null || string.Equals(existingLog.Status, "INCOMPLETE", StringComparison.OrdinalIgnoreCase))
         {
             throw new BusinessException("Trainee has not submitted a completion request for this exercise yet.");
+        }
+
+        if (!string.Equals(existingLog.Status, "PENDING_REVIEW", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("This workout submission has already been reviewed.");
         }
 
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
